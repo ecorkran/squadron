@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Production `BehavioralProfile` call site in `build_profiles()` is not covered \u2014 the server will raise `TypeError` at startup",
+   "description": "Task 2.2 scopes the update to *\"all `BehavioralProfile` call sites **in tests**\"* and lists only test files. `src/migratory_server/simulation.py:18-25` constructs `BehavioralProfile(max_speed=\u2026, query_radius=\u2026, cohesion_weight=\u2026, separation_weight=\u2026, alignment_weight=\u2026, separation_radius=\u2026)`. The slice design mandates the two new fields be **required with no defaults**, so this call raises `TypeError: missing 2 required positional arguments`. Consequences: `Server.run()` (`src/migratory_server/server.py:71`) fails at startup, `tests/test_simulation.py::TestBuildProfiles` (3 tests) fail, and `tests/test_main.py::test_starts_with_default_config` fails because the subprocess exits non-zero \u2014 i.e. Section 6.1 cannot pass. A task must update this call site and decide explicitly how the herding weights reach it: either extend `ProfileConfig` (`src/migratory_server/config.py:51`) + `config/default.yaml` with `leadership_weight`/`momentum_weight`, or pass `0.0` for both in `build_profiles()`. Note that `ProfileConfig` currently defaults the flocking weights to `0.0` in `_validate_profile()`, so there is precedent for either route \u2014 but the decision must be recorded, not left implicit. (The `ProfileConfig`/config-schema route also touches `config/default.yaml`, which no task mentions.)",
+   "location": "src/migratory_server/simulation.py:18"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "`EntityManager.spawn_population()` merges AgentState arrays manually and omits the new `leadership` array",
+   "description": "`spawn_population()` bypasses `add_agent()`/`remove_agent()` and concatenates `positions`, `velocities`, `accelerations` and `profile_indices` directly onto `self._state`. After Task 1.1 adds `leadership` to `AgentState`, this merge leaves `state.leadership` at its original length (0 on a fresh manager) while `state.count` becomes 100 \u2014 the SoA invariant (\"all arrays length N\") is broken. `LeadershipForce` then does `state.leadership[neighbors]` and will `IndexError` on any neighbor index \u2265 the leadership array length. `EntityManager.spawn_population()` is called at server startup (`src/migratory_server/server.py:78`), so this is the live path, and it is exactly the path slice 107 (migration) and slice 103 (pack leaders) depend on for \"per-agent leadership available in `AgentState`\". Task 1.1 only enumerates `create()`, `add_agent()` and `remove_agent()`. Add a task to update `spawn_population()`'s merge (including `leadership`), with a test asserting `state.leadership.shape == (state.count,)` after a population spawn.",
+   "location": "src/migratory_server/entities.py:136-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The slice design's \"no nested Python loops\" technical requirement is dropped from both force implementation tasks",
+   "description": "The slice design's Technical Requirements state: *\"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\"* The Slice 101 breakdown carried this as an explicit bullet in each force implementation task (*\"Use vectorized NumPy within each neighborhood \u2014 no `for neighbor in neighbors` inner loop\"*, 101-tasks \u00a72.1/\u00a73.1/\u00a74.1). Tasks 3.1 and 4.1 here specify the formulas but never state the vectorization constraint, and nothing verifies it. Given the architecture's hot-loop goal (`project-documents/user/architecture/100-arch.behavior-engine.md:33`), a junior implementer could write a per-neighbour Python loop in `LeadershipForce` and still pass every listed check. Restore the vectorization bullet in 3.1 and 4.1.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`neighbor_lists` alignment with a subset of active agents is not specified, risking an index bug in both forces",
+   "description": "`tick()` builds `neighbor_lists` **only for active agents**, in `eval_indices` order, so entry `list_idx` corresponds to `eval_indices[list_idx]`, not to agent `list_idx`. The existing flocking forces handle this with `for list_idx, agent_idx in enumerate(eval_indices)` (`src/migratory/engine/flocking.py:37-43`). Tasks 3.1 and 4.1 say only *\"When `active_indices` is `None`, iterate over all agents\"*, which leaves the natural-but-wrong implementation `neighbor_lists[agent_idx]`. That is silently correct when `active_indices is None` and wrong for any subset \u2014 exactly the case the slice's \"Forces respect `active_indices`\" success criterion covers, and the case where the misalignment would not be caught by the `active_indices` isolation tests if `neighbor_lists` were built for the full population. State the `enumerate(eval_indices)` pattern explicitly in both force tasks, and add a test that passes a subset `active_indices` with a `neighbor_lists` list of matching (not full) length.",
+   "location": "src/migratory/engine/tick.py:37-42"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Profile-differentiation assertion is disjunctive and can pass without demonstrating a measurable difference",
+   "description": "Task 5.3 asserts *\"herding heading variance < flocking heading variance, **or** herding mean eastward component > flocking mean eastward component\"*. A disjunction of two different metrics is satisfiable by accident and does not establish the slice design's requirement that the two profiles *\"produce statistically different movement patterns\"*. Task 5.2's assertion (*\"mean heading has positive x-component\"*) is likewise satisfiable by the random initial velocities alone (~50% of random seeds) and therefore does not demonstrate a *leadership-caused* bias. Tighten to a single pre-declared primary metric (e.g. mean east-component of the final heading strictly greater in the herding run **and** the flocking control's east-component below a stated threshold), fix the seed for both runs, and state the metric and threshold up front so the test is deterministic rather than flaky.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Missing CHANGELOG and status-update tasks (project convention for delivered slices)",
+   "description": "Every other completed slice includes a documentation close-out: slice 301 task \u00a73.2 (\"Update `CHANGELOG.md` with tick loop additions under `[Unreleased]`\"), 302 \u00a74.4, 303 \u00a74.4, each also updating frontmatter `status: complete` / `dateUpdated`. The 102 breakdown ends at \"6.3 Final commit \u2014 `docs: complete slice 102`\" with no CHANGELOG entry and no status/`dateUpdated` update for either the task file or `project-documents/user/slices/102-slice.herding-and-leadership.md` (still `status: not_started`). Add a final documentation task covering the CHANGELOG entry (new forces, new `AgentState`/`BehavioralProfile` fields, new tests) and the frontmatter status updates. The final commit message should also use `chore:` (as 301/302/303 do) rather than `docs:` for a slice close-out that includes code.",
+   "location": "CHANGELOG.md:14"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Existing 80 tests\" baseline in the task file is stale",
+   "description": "The context summary and Section 6.1 both say \"existing 80\" tests. That count was accurate at Slice 101 completion, but the world-server slices (300/301/302/303) added roughly 130 more; the current tree contains on the order of 213 test functions across `tests/` (e.g. `tests/test_config.py` ~45, `tests/test_entities.py` ~24, `tests/test_server.py` ~22, `tests/test_server_tick.py` ~18, `tests/test_simulation.py` ~15, `tests/test_state.py` ~18, plus the engine suites). Reword to \"all existing tests\" so the implementer is not surprised by the suite size \u2014 and because the two FAIL findings above surface as failures in `tests/test_simulation.py` and `tests/test_main.py`, which are not part of the \"80\".",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No scale/load verification for two additional per-agent forces; repo has no CI",
+   "description": "The architecture goal *\"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\"* is the parent's stated goal, and this slice adds two more Python-level per-agent passes to the hot loop (five forces are now summed per tick). There is no `tests/load/` directory and no CI configuration anywhere in the repository (no `.github/`), so nothing gates regressions. The slice design itself sets no numeric NFR and the parent slice plan does not restate one, so this is not a missing deliverable for 102 \u2014 but it is worth raising for slice 105 (spatial query optimization), which will need a regression baseline that includes the herding forces.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:33"
+  }
+ ]
+}

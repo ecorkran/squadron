@@ -1,0 +1,47 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Gate workload `mid-flock-50k` contains N=100000, not the N=50k operating point the gates define",
+   "description": "The design's default gate config is \"mid-flock-50k workload, S=3, max_neighbors=32\", and Step 3's gate commands run that workload. But `bench/workloads/mid-flock-50k.yaml` as it exists declares `n: 100000` in a 1536\u00d71536 world (its own description text still claims \"N=50k operating point\u2026 World scaled to [400,400]\" \u2014 the file is internally stale). The 38-TPS baseline and the A2/A3 gates are defined at N=50k on the 756\u00d7756 density-matched world recorded in `145-notes.fused-tick-measurements.md`. Running the named workload as-is would measure N=100k and compare it against an N=50k baseline, invalidating both A2 (\u22655\u00d7 vs baseline) and A3 (\u2265100 TPS at N=50k). The design does not include a workload-file correction or a new workload definition in its scope, leaving the gate measurements unrunnable as specified. Either fix the workload file (n: 50000, world 756\u00d7756, cluster geometry to match the 145-notes series) or name the corrected workload explicitly as a deliverable of this slice.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough is not executable as written \u2014 nonexistent script and CLI flags",
+   "description": "Every bench invocation in the walkthrough uses `python scripts/bench.py` with `--config`, `--N`, `--ticks`, `--subdivision-factor`, and `--parity-check` flags. No `scripts/bench.py` exists (the `scripts/` directory holds only the two slice-148 measurement scripts), and the actual harness entry point (`python -m migratory.bench.cli`) exposes only `--workload`, `--backend`, `--workload-dir`, `--results-dir`, and the two `--list-*` flags \u2014 none of the flags the walkthrough relies on. Slices 145 and 148 both deliver walkthroughs that are reproducible by an external agent on a fresh checkout with exact commands; this one is not, and the \"draft demo script; it will be refined after implementation\" hedge does not restore that property. Step 4's spill check is similarly unexecutable (\"`TI_PRINT_KERNEL_STATS=1` or equivalent\" \u2014 slice 148 used concrete `cuobjdump --dump-resource-usage` / `qd.profiler.print_kernel_profiler_info()` methods). Step 1 also asks pytest to \"check that `--subdivision-factor 3` produces statistically equivalent results,\" which confuses a bench-CLI flag (that doesn't exist yet) with a pytest switch. The commands need to be rewritten against the real CLI, and any new flags (`--subdivision-factor`, a parity mode) named as in-scope harness work.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#verification-walkthrough"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "cell_size/S integration point mislocated \u2014 the real change site is never named",
+   "description": "The design states \"cell_size feeds `build_spatial_hash` (lines 411\u2013462) which computes `grid_w` and `grid_h`\u2026 The bench harness passes `cell_size` at setup; it reads from config.\" All three claims mismatch the code the slice depends on: `build_spatial_hash` takes only the state object and computes no grid dimensions; `grid_w`, `grid_h`, `n_cells`, and `cell_size` are all derived inside `GpuAgentState.setup()` (`cell_size = max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER`), which is also where the existing `MAX_CELLS_SANITY_CAP` guard lives; and the bench harness never passes `cell_size` \u2014 it is derived, not configured. The component diagram's \"BenchConfig\" object does not exist in the codebase (the config surface is the frozen `Workload` dataclass from YAML plus a hard-coded profile registry), so where `S` lives \u2014 a new Workload schema field, a CLI flag, or a state-container parameter \u2014 is unspecified, as is where the S validation code resides and how it interacts with the existing cells sanity cap. Intervention 2 therefore has a hidden dependency on `GpuAgentState.setup()` that the design does not acknowledge; naming that change site (and the Workload-schema extension it implies, including how a per-run `max_neighbors=32` would override the registry value) is required before implementation.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Plan entry's 7-neighbor benchmark operating point is dropped",
+   "description": "The slice-plan entry for 149 states: \"real starling murmurations interact with ~7 nearest neighbors; `max_neighbors=32` is an intentional physics stress; the 7-neighbor operating point is a benchmark target.\" The slice document mentions `max_neighbors=32` only \u2014 the 7-neighbor benchmark appears nowhere in the success criteria, the default gate config, or the verification walkthrough. This matters beyond documentation: the early-exit gain scales with `candidates_scanned / max_neighbors`, so the 7-neighbor point is where the intervention's leverage is largest and it is the biologically meaningful target the architecture's murmuration demo is ultimately priced against. The requirement left unmet is the plan-assigned benchmark measurement at the 7-neighbor operating point; either add it as a gate-adjacent benchmark run (a single additional bench configuration) or explicitly defer it with a named follow-on.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No failure-mode handling strategy for gate misses, unlike sibling slices",
+   "description": "Slice 145 defined stop-the-line gates with re-diagnosis rules, and slice 148 defined explicit R1\u2013R5 decision rules producing \"a definite next action.\" Slice 149 has no risk or failure-mode section at all, and its two interventions both change which neighbors are accepted: early exit truncates the scan at the cap, and subdivision changes candidate visit order across a different cell grid \u2014 so the first-k-found accepted set differs from slice 145's, and A4 (20% statistical parity) is the only thing standing between the change and a silent behavioral regression. The design asserts parity \"should\" hold (carrying the 148-notes argument) but specifies nothing about what happens if A4 fails at S=3 (is subdivision's visit-order change implicated? does S=1-only early exit ship?), or if A3's 100 TPS is missed after A2 passes. The warp-divergence failure mode is analyzed well and the S-validation failure mode is explicit \u2014 the parity and TPS-miss modes need the same treatment, even if brief given the plan entry's Low risk rating.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Plan wording says both interventions \"use\" the A7 seam; the chosen design supersedes the seam's gating",
+   "description": "The plan entry states \"Both interventions use the `getNeighbors` seam already designed in slice 145 (A7).\" The design's recommended Option A preserves the seam as the documented swap point but moves the actual cap-gating to a caller-side `break` before the seam call, which makes the seam's accept logic vestigial until the distance-ranked swap lands. This is a defensible and transparently reasoned deviation (Option B's cleanup is considered and rejected to keep the A7 swap point intact), recorded here only so the divergence from the plan's phrasing is visible rather than silent.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-49"
+  }
+ ]
+}

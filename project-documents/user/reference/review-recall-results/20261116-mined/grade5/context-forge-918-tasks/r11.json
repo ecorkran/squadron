@@ -1,0 +1,19 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`cf list slices` table rendering is verified indirectly",
+   "description": "The success criterion says `cf list slices` \"renders the entry with the existing `\u2298 deprecated` display\", but Task 10 asserts only JSON output (`status: 'deprecated'`, `isNext: false`). The table rendering flows through the pre-existing `renderEntryStatus()` case, which the design confirms needs no change, so this is covered indirectly rather than a gap. If desired, an assertion on the rendered table string would close the last sliver of this criterion.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md#task-10"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 9's initializer-fallback change goes slightly beyond the design's stated one-line addition",
+   "description": "Slice design Decision 4 says `slice.ts` gets \"the same one-line addition to its inline `deriveEntryStatus()` call\". Task 9 additionally updates the `derivedStatus` initializer for the `detectDocuments`-throws path. The task justifies this well (a filesystem error would otherwise report a `[~]` entry as `not-started`), and it traces to the \"renders deprecated\" criterion, so it is justified, small scope \u2014 but it is a design-level delta the PM should be aware of.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md#task-9"
+  }
+ ]
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All slice success criteria trace to tasks; no scope creep",
+      "description": "Functional criteria map 1:1: fresh-clone build + short SHA on stderr (18, 20, 21), clean `--json` stdout (21, D4), `Checkout: not initialized` read-only (12, 24), `out_of_sync` warns without acting (17, 18, 21), `--strategy manual` deprecation + `Method: tarball` (5, 7, 8), config-sourced alias (5, 6), `cf init --strategy tarball` with no `.gitmodules` (26, 27), three strategies in both `--help` surfaces (25, 27), managed line in `cf guides info` + README strategy section with the D6 rationale (28, 29, 30), malformed config fails the install (5, 6). Technical criteria map to Tasks 2, 9, 12, 18, 27, 32. No task exceeds the design's Included list; `GUIDE_METHOD_DEPRECATED_ALIASES` (Task 1) and `CHECKOUT_STATE_LABELS` (Task 10) are demanded by D5 and F005 respectively, not invented.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Real-git submodule fixture is placed where CLI and MCP tests cannot consume it",
+      "description": "Task 9 adds the three-state fixture helper \"under `packages/core/tests/guides/`\", and Tasks 12/16/18 (core) can use it. But Task 21 (`packages/cli/tests/commands/build.test.ts`, `prompt.test.ts`, `setup-ide.test.ts`) and Task 23 (`packages/mcp-server/tests/`) are told to use \"the Task 9 fixture `cloned()`\" from two different packages. `packages/core` publishes only `dist` (`.` / `./node` exports; `outDir: ./dist`, `rootDir: ./src`), so a helper under `packages/core/tests/` is not importable from `packages/cli/tests` or `packages/mcp-server/tests`, and there is no task that exports, relocates, or duplicates it. The gap leaves success criterion 1/2 evidence (CLI `cf build` on a fresh clone with stdout/stderr split) unproducible as specified. Either place the helper in a shared test-helpers location both packages can import, or give Task 21/23 an explicit \"duplicate or hoist the helper\" step.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 1 and 10 break existing core tests; no task owns those updates",
+      "description": "Task 10 adds `checkout` to `GuideInfo` as a required field. `GuideManager.test.ts:72-95` (`notInstalledInfo`, `installedInfo`, `cloneInstalledInfo`) are annotated `GuideInfo` literals and will fail to typecheck until they carry `checkout`. Similarly, `GuideDetector.test.ts:28-32` sets a default `mockGitExec.mockRejectedValue(...)` in `beforeEach`, so the three existing submodule-detection cases (`detects submodule even when .git/ also exists`, `detects submodule method when .gitmodules contains path`, `uses operationPath for guidePath`) enter Task 11's new throw path. Task 4 updates only the `manual`\u2192`tarball` expectations, and Task 12 only adds new cases \u2014 neither mentions the annotated literals or the mocked-gitExec submodule cases. The requirement left unmet is \"All existing tests pass\" (Technical criterion) with a clear junior-AI path; add explicit lines to Task 4 and Task 11/12 naming these files and the `checkout` field.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/guides/GuideManager.test.ts:72-95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11 moves error\u2192throw into `detect()`, deviating from the design's data flow",
+      "description": "The design's Data Flow puts `'error' \u2192 throw` inside `ensureCheckout()` after its own `checkSyncStatus()` call, and D1 limits the `detect()` addition to \"records the result in `GuideInfo.checkout`\". Task 11 instead makes `detect()` throw when `checkSyncStatus()` returns `'error'`. `detect()` is called by six existing paths \u2014 `status()`, `install()` (already-installed probe), `update()`, `uninstall()`, `syncWorktrees()`, and MCP `guide_status` \u2014 none of which the design authorizes to start throwing for a non-repo/git-missing guide directory. The behavior change is defensible (Task 17 relies on it to avoid a second `checkSyncStatus()` call) but it is a design deviation with unscoped blast radius, and success criterion \"cf guides info ... reports Checkout: not initialized and does not modify the checkout\" now depends on a throw path with no task testing \"git unavailable \u2192 what does `cf guides info` do\". Either keep the throw in `ensureCheckout()` per the diagram, or amend the task to state the `detect()` contract change and its effect on the other five call sites.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/guides/GuideDetector.ts:64-95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Enumerated line refs for `cf prompt get` allow the guard to land after a guide read",
+      "description": "Task 20's list pins the `prompt.ts` wiring to \"~lines 60 and 116\", but in the `get` action `resolvePhaseInput(phase, opPath)` runs at line 114, and for a shorthand (`P1`) it reads the guide via `getPhaseShorthands` \u2192 `phaseShorthand.ts:22` (`PROMPT_FILE_RELATIVE_PATH`). Placing `await ensureGuideReady(...)` at the enumerated line 116 leaves the shorthand path failing ENOENT on exactly the fresh-clone state the slice exists to fix. Task 21's prompt case only asserts \"the command proceeds\" and does not specify the shorthand input, so the test can be green while the bug survives. Tighten Task 20 to \"immediately after `opPath` is resolved, before `resolvePhaseInput`/`getPhaseShorthands`\" and have Task 21 use a `P1` shorthand for at least one `prompt get` case. Also note `template_preview` shares `generateContext()` (`contextTools.ts:57`), so Task 22's placement there silently covers a tool the design did not enumerate \u2014 worth one line saying that is intended.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/prompt.ts:112-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task count is heavier than the change set; four impl/test pairs should merge",
+      "description": "32 tasks / 5 parts for roughly ten source files plus tests and docs, with 12 separate test tasks. Four are effort-1 units that only exist to hold one assertion or one signature and are meaningless without their neighbor: 13+14 (a single optional `{ timeoutMs }` parameter plus one timeout test), 25+26 (two effort-1 CLI-surface edits, jointly tested only at 27), 28+29 (one constant plus two assertions), and 10+11 (type declarations whose success criterion is explicitly deferred to 11 \u2014 \"typecheck passes once Task 11 populates the field\"). Task 19 also has no test until Task 21, two implementation tasks later. Merging to ~26\u201327 tasks preserves every current `**Commit**:` marker position (4, 6, 8, 12, 14/13, 16, 18, 21, 23, 24, 27, 29, 31, 32) \u2014 the commit cadence itself is correct, working-tested points at part boundaries rather than after every task, and not front-loaded to the end. Cut the count, not the coverage.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Existing guide tests already create temp repos\" is false; they all mock git and fs",
+      "description": "The design's Technical criterion parenthetical and the task file's Context Summary both assert an existing real-git temp-repo pattern, and Task 9 spends a step on \"check whether `SubmoduleStrategy.test.ts` already has a temp-repo helper; extend it rather than duplicating.\" Verified: every file under `packages/core/tests/guides/` uses `vi.mock('fs')` + `vi.mock('.../gitExec.js')` (`SubmoduleStrategy.test.ts:5,10`; `GuideDetector.test.ts:7,12`; `TarballStrategy.test.ts:5,13`; `GuideManager.test.ts:7,14`); `mkdtemp`/`tmpdir` appear only in `tests/config`, `tests/introspection`, `tests/services`, `tests/storage`. The task's \"check whether\" hedge keeps the implementer honest, but a junior AI may cite the design as evidence that a fixture exists. Recommend the step read \"there is no existing real-git helper in `tests/guides/` \u2014 create one.\"",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts:5-23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3's verification grep is narrower than the rename it is checking",
+      "description": "The success criterion is `grep -rn \"'manual'\" packages/core/src` returning only the alias entry and the enum line, but the remaining user-facing strategy hints are double-quoted or bare prose: `CloneStrategy.ts:34` (`'use the \"manual\" strategy instead'`), `SubmoduleStrategy.ts:39` (same), `SubmoduleStrategy.ts:45` (`--strategy manual`), and the comment at `GuideManager.ts:135`. Task 3 does list `CloneStrategy.ts` and `SubmoduleStrategy.ts` in the sweep, so the work is assigned \u2014 only the check is weak, and it cannot demonstrate \"no `manual` literal outside the alias table and enum\" (Technical criterion). Use `grep -rn \"manual\" packages/core/src` and expect the two remaining prose hits to read `tarball`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/core/src/guides/strategies/CloneStrategy.ts:34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "MCP `readOnlyHint` annotations become inaccurate once auto-init writes and fetches",
+      "description": "`prompt_list` and `prompt_get` register with `readOnlyHint: true`, and `template_preview` with `readOnlyHint: true, idempotentHint: true`. After Task 22 those tools call `ensureCheckout()`, which may run `git submodule update --init` (network fetch plus filesystem writes) \u2014 matching the `cf guides info`-stays-read-only exception in D3, this is a real side-effect for the read-annotated tools. No task updates the annotations, and no criterion requires it; clients that gate confirmations on `readOnlyHint` will be told the wrong thing. One line in Task 22 to flip `readOnlyHint` to false (or record the deliberate choice otherwise) closes it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:236-282"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All slice success criteria trace to tasks; no scope creep",
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Real-git submodule fixture is placed where CLI and MCP tests cannot consume it",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Tasks 1 and 10 break existing core tests; no task owns those updates",
+      "location": "packages/core/tests/guides/GuideManager.test.ts:72-95",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 11 moves error\u2192throw into `detect()`, deviating from the design's data flow",
+      "location": "packages/core/src/guides/GuideDetector.ts:64-95",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Enumerated line refs for `cf prompt get` allow the guard to land after a guide read",
+      "location": "packages/cli/src/commands/prompt.ts:112-118",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task count is heavier than the change set; four impl/test pairs should merge",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "\"Existing guide tests already create temp repos\" is false; they all mock git and fs",
+      "location": "packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts:5-23",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 3's verification grep is narrower than the rename it is checking",
+      "location": "packages/core/src/guides/strategies/CloneStrategy.ts:34",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "MCP `readOnlyHint` annotations become inaccurate once auto-init writes and fetches",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:236-282",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-17T11:50:48.091921",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 253600,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 631451,
+  "cached_tokens": 528384,
+  "cache_write_tokens": null,
+  "completion_tokens": 68761,
+  "reasoning_tokens": 64351,
+  "duration_seconds": 893.3918559160084,
+  "cost_usd": 0.05570348,
+  "cost_basis": "alias_pricing"
+}

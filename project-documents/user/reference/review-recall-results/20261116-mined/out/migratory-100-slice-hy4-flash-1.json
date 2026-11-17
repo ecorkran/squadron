@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent Force protocol has no consumer in the tick interface",
+      "description": "The design defines a per-agent `Force` protocol, states \"The tick loop prefers the bulk variant when available,\" and lists a success criterion that \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths.\" But the documented `tick()` signature (`#Tick Function Signature`) accepts only `forces: list[BulkForce]`, and no mechanism is described for adapting a per-agent `Force` into that call. As written, the `Force` protocol is an abstraction with no integration point, and the \"both paths\" success criterion is unsatisfiable through the public interface. Either specify the union/adaptation path in the tick, or cut/defer the per-agent `Force` protocol and drop that success criterion \u2014 the architecture's GPU principle only requires the bulk path.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Force Protocol"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Engine-scale throughput NFR not restated; slice adopts a lower scale target",
+      "description": "The parent architecture states the NFR \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" and requires the hot loop to stay compatible with GPU offload. The slice restates the determinism NFR but not this throughput target. Instead it declares the brute-force query \"acceptable for the hundreds-of-agents scale this slice targets,\" with no statement that the SoA/vectorized/`BulkForce` design must still preserve the engine-level tens-of-thousands target once brute force is replaced by slice 105. Restate the specific engine NFR and explicitly frame brute force as a deliberately temporary, replaceable implementation so the interfaces are not designed down to the hundreds scale.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scalar SpatialQuery mandates a Python-level per-agent loop in the tick",
+      "description": "Data Flow step 3 specifies \"For each active agent, `SpatialQuery.query_radius(...)`,\" and the `SpatialQuery` protocol is scalar (one position in, index array out), which forces a Python-level loop over agents inside the tick. This is in tension with the slice's own Technical Requirement \"No Python-level per-agent loops in the hot path\" and with the architecture's GPU guidance (\"bulk array-in/array-out operations with no Python-level per-agent branching ... no callbacks into Python during the hot loop\"). It is defensible for the brute-force reference at this slice's scale, but the design should acknowledge the loop and state whether a bulk query variant is needed for the later spatial-hash/GPU path rather than leaving the contradiction implicit.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Data Flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Environment interface intentionally deferred is consistent with scope",
+      "description": "The architecture lists \"Environment as input surface\" as a principle and describes the envisioned tick as receiving environmental context, yet this slice's tick has no environment parameter. This is consistent with the slice-plan entry for (100), which does not include environment, and adding an unused interface here would introduce an abstraction nothing in this slice consumes. Noted only so the deferred integration point stays visible for later slices.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick Function Signature"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "Per-agent Force protocol has no consumer in the tick interface",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Force Protocol",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Engine-scale throughput NFR not restated; slice adopts a lower scale target",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Scalar SpatialQuery mandates a Python-level per-agent loop in the tick",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Data Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Environment interface intentionally deferred is consistent with scope",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick Function Signature",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-17T08:03:10.242905",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 44007,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 46574,
+  "cached_tokens": 33024,
+  "cache_write_tokens": null,
+  "completion_tokens": 10498,
+  "reasoning_tokens": 9349,
+  "duration_seconds": 63.212708374951035,
+  "cost_usd": 0.001993506,
+  "cost_basis": "alias_pricing"
+}

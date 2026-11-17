@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Load test is added but CI gating is never tasked or verified",
+   "description": "Task 22a adds `tests/load/test_run_listing_scale.py` for the restated NFR (`sq runs list --all` under 1 s with a few hundred files), which satisfies the load-test requirement. But the only CI statement is a dismissal inside a success line \u2014 \"no new CI wiring is needed because `testpaths = [\"tests\"]` already collects `tests/load/`\" \u2014 and the task's success criterion is only \"test passes locally\". No task establishes or verifies the CI gate; CI gating is asserted in prose and left unverified. I checked `.github/workflows/ci.yml` (`uv run pytest`) and `pyproject.toml:82` (`testpaths = [\"tests\"]`), so the gate does exist today, which makes the fix small: add a CI wiring/verification task (or extend 22a's success criteria) that confirms CI collects and fails on the new load test. The completed slice 931 Task 11 did exactly this with an explicit confirmation run; this breakdown omits it.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:318"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Unknown-process WARNING drops the run-id required by D3",
+   "description": "The design requires \"WARNING naming run and PID\" for an unknown process check (slice design:175, D3 technical decision, and the Error handling summary row at :373). Task 9 instead says \"WARNING naming the PID (the run-id is logged by the caller that has it)\". That delegation is never implemented: `process_alive(pid) -> bool | None` has no run-id parameter, none of the consumer tasks (19 wait, 21 listing, 33 prune) log a run-id when `process_alive` returns `None`, and Task 10's test only asserts \"`None` plus WARNING\" without checking the message. A junior following the breakdown will silently drop the design's diagnostic requirement. Fix: log the run-id inside `assess_liveness` (which has `state.run_id`) or pass it into the check, and assert the warning text in Task 10.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:142"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Validated config readers added in Task 8 are never wired to the two read sites",
+   "description": "Task 8 adds \"a typed reader for each that raises `ValueError` naming the key when the value is `<= 0`\" and tests it in `tests/test_config.py`, which is D1's \"Each is validated > 0 where it is read\". No task wires those readers to the actual reads: Task 15 says only \"pass `idle_s=foreground_idle_timeout_s`\" in `_collect_turns`, and Task 13 never names where `RunHeartbeat(state_mgr, run_id, interval, ...)` or `RunOwner.current(heartbeat_interval_s)` obtain the interval in `_run_pipeline_sdk`. The existing `_background_idle_timeout_s()` in `src/squadron/pipeline/sdk_session.py` calls `get_typed_config` directly with no positivity check, so mirroring it is the obvious implementation path \u2014 leaving the validated readers unused and non-positive values accepted at runtime while Task 8's tests still pass. Add explicit wiring steps at both read sites plus an assertion that a `0` value fails at the call site.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:122"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Commit markers are at tested points but use checkbox form",
+   "description": "The 17 commit markers are spread across Parts A\u2013G, each after a test task reporting passing tests (7, 10, 12, 14, 18, 20, 22, 22a, 24, 26, 28, 31, 35, 37, 39), plus docs/close-out (40, 42) \u2014 working, tested points, not after every granular implementation task and not only at the end. They are written as `- [ ] Commit: ...` checkboxes rather than plain `**Commit**:` lines. AGENTS.md requires a `[ ]` checkbox for every task item and subitem, so this matches project convention while differing from the plain-line marker form; informational only.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  }
+ ]
+}

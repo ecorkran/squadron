@@ -1,0 +1,47 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "3.2a and 3.7 commit at points where the declared full test suites cannot pass",
+   "description": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass before committing the render removal, and task 3.7 requires `pnpm -r test` to pass before committing the seam removal. Those checkpoints occur before `packages/core/tests/adoption/adoptionBuild.integration.test.ts` is deleted in 4.1 and before all brownfield assertions are removed from `packages/core/tests/pipeline-integration.test.ts`. Specifically, `packages/core/tests/adoption/adoptionBuild.integration.test.ts:99-102` still expects `### Adoption Facts`, and `packages/core/tests/pipeline-integration.test.ts:159-188` still expects probe JSON/warnings and a `Comprehension:` line. After 3.1/3.2 remove rendering and 3.3 removes the resolver wiring, those assertions fail; 4.1 deletes `adoptionBuild.integration.test.ts` only after 3.7. This leaves the declared success checkpoints and the Technical Requirement \u201cFormat, lint, typecheck and the full test suite pass\u201d unmet at commit points. Fix by moving deletion/rewriting of those tests before 3.2a/3.7, or by narrowing the checkpoint commands to exclude tests that are intentionally updated later.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99-134"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "3.5 CLI test checkpoint lacks the CLI build its integration tests require",
+   "description": "Task 3.5 requires `pnpm --filter @context-forge/cli test` to pass immediately after source edits. The CLI integration suite spawns `packages/cli/dist/index.js` from `packages/cli/tests/integration/build.integration.test.ts#runBuild`; no `dist/` directory is present in the checkout, and the only earlier build step is `pnpm --filter @context-forge/core build` in 3.4. A junior following the task cannot reliably pass this checkpoint in a fresh checkout. Add `pnpm --filter @context-forge/cli build` or `pnpm -r build` before the CLI test, or defer that CLI integration test to 3.7/6.1 where the full build is already scheduled. This leaves the \u201cfull test suite pass\u201d checkpoint in 3.5 ambiguous.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Import-grep success checks fail on a retained comment",
+   "description": "Task 3.3 and 6.2 require `grep -rn \"adoption/\\|detection/\" packages/core/src/services` to print nothing, which is meant to prove the Technical Requirement that `services/` imports nothing from `adoption/` or `detection/`. However `packages/core/src/services/ContextIntegrator.ts:9` currently contains the comment `// contracts.ts only (never adoption/index.ts): keeps services/ and adoption/ from importing each other's internals.` Task 3.3 says to remove imports, but not to delete or rewrite that comment. If the comment survives, the grep prints a line and the declared success criterion cannot be met. Add an explicit comment-cleanup step or narrow the grep to import statements.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:109"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "6.2 code-gone grep contradicts its own kept `fileComprehension` exception",
+   "description": "Task 6.2 says `grep -rn \"resolveAdoptionFn\\|adoptionFacts\\|runSquadronProbe\\|writeAdoptionState\\|fileComprehension\\|adoptionStateWrites\\|ContextToolOptions\" packages/*/src` prints nothing, then immediately allows `COMPREHENSION_PROFILE_VARIABLE = 'fileComprehension'` in `packages/core/src/detection/comprehensionAnalysis.ts:15` to remain. That retained line matches the grep pattern, so \u201cprints nothing\u201d is impossible as written. State the expected exception as one allowed line, exclude that file, or change the pattern so the success check is mechanically achievable.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:198"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "6.2 export audit can remove symbols the design explicitly keeps",
+   "description": "Task 6.2\u2019s export audit tells the implementer to accept only symbols with a production consumer listed under the design\u2019s Interfaces Required, or symbols belonging to `history`, `comprehensionAnalysis` or `adoptionOutcome`. That conflicts with kept requirements elsewhere: task context and 4.3 keep `AdoptionError`, `readAdoptionState` and the `ADOPTION_STATES` re-export; the design says `AdoptionError` is still thrown by kept detection modules, and `packages/core/src/introspection/adoptionNavigation.ts:201` consumes `readAdoptionState` until 270. Those consumers are not listed in Interfaces Required. A junior could remove kept exports to satisfy the audit, leaving \u201cNo exported symbol remains that only the deleted code used\u201d ambiguous and breaking navigation until 270. Add explicit allowances for the kept symbols and name their consumers.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "6.3 walkthrough does not verify concept output with the current CLI output mode",
+   "description": "Task 6.3 says to run the design\u2019s Verification Walkthrough using `node packages/cli/dist/index.js`, and its success claims the output is the concept prompt with `Adoption Facts` absent. Design step 1 uses `cf build > /tmp/out.md`, but `packages/cli/src/commands/build.ts#registerBuildCommand` writes the context to stdout only in the `--json` branch via `printJson`; the non-JSON branch writes status/help text to stderr and no context to stdout. As written, `/tmp/out.md` can be empty, so the walkthrough does not verify the concept-prompt requirement or the `Adoption Facts` count. Use `cf build --json` and assert on the parsed `.context` field, or adjust the success criterion to name the exact output source.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:203-204"
+  }
+ ]
+}

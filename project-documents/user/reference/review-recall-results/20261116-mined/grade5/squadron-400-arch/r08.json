@@ -1,0 +1,75 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Snapshotting arbitrary commits conflicts with the non-modification and dirty-tree rules",
+   "description": "Envisioned State opens \"A project can be measured at any commit\" and defines per-slice before/after as \"the snapshot at its fork point against the snapshot at its merge.\" But Architectural Principles (\"A snapshot measures a commit\") describes checkout-state measurement \u2014 \"A dirty working tree is either refused or recorded with an explicit dirty marker, never silently attributed to the HEAD commit\" \u2014 and \"Taking a snapshot doesn't modify the measured repository.\" Static tools (complexity, duplication, lint, type counts) need a materialized tree at the target SHA: `git worktree add` mutates repository metadata and leaves state behind; `git archive` to a temp dir avoids mutation, but then there is no dirty tree to refuse and tool-config resolution changes. The pipeline-hook path happens to work (HEAD is the right commit at fork and at post-merge), but the doc itself anticipates failed boundary snapshots (\"A failed snapshot must never fail the pipeline step it's attached to \u2026 recorded as absent\") \u2014 recovering that slice's before/after requires historical-commit snapshotting whose interaction with the dirty-tree and non-modification rules is unspecified. Fix the constraints or name the mechanism.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Snapshot comparability identity omits the measured environment",
+   "description": "The comparability key is \"project, commit, language, tool versions, rule set and exclusions,\" and the Design Goal claims \"Every snapshot metric gives the same value on the same commit with the same tool versions.\" That is false for type-error counts and coverage: pyright's numbers move with the resolved dependency versions in the environment, and coverage depends on which tests ran. For the brownfield case (\"Works on code squadron didn't write\"), the environment is exactly what is least pinned. Since Envisioned State promises \"The record identifies everything that would make two snapshots incomparable\" and reports \"refuse to diff across a tool change without flagging it,\" the environment needs the same identity treatment (lockfile/lock hash or resolved dependency fingerprint) \u2014 or the comparability rule must name environment-dependent metrics as never-comparable across machines rather than comparable-with-tool-versions.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Normalized review findings get no instrument identity, breaking the doc's own comparability rule",
+   "description": "\"Tool identity is part of the measurement \u2026 reports refuse to diff across a tool change without flagging it. This is the same reasoning 320 applied to judge template versions\" \u2014 yet normalized review findings, an LLM instrument, are specified only as \"tied to project, commit and slice where known\" (Envisioned State). A review-template edit or model change shifts category distributions exactly as a tool upgrade shifts metric values; 320 resolved this exact tension with template content hashes and `audit_prompt_hash` (323 Decision 10), and 320's Technical Considerations records the write-path wrinkle that `ReviewResult` carries no template version. Categorizing reviews into the audit vocabulary makes finding counts *more* template-sensitive, not less. The design needs an instrument identity on the normalized-finding records (template name + content hash, model) and a split-or-flag rule for trend reports \u2014 otherwise \"over time\" across a template edit silently pools incompatible category distributions, the precise failure the Tool-identity principle forbids. Historical read-side-mapped findings are marked; write-time findings across template revisions are not.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The adapter contract's hard requirement \u2014 cross-analyzer metric agreement \u2014 is asserted, not designed",
+   "description": "\"The adapter contract has to define each metric well enough that adapters agree on what they report\" is the load-bearing difficulty of the entire static-metric capability, and no amount of contract text makes analyzers agree: cyclomatic complexity is computed differently per analyzer and per language's construct handling, which the doc itself notes one sentence earlier. It is also in tension with \"A complexity number from tool A version 1 and one from tool B version 2 are different measurements\": if each language adapter runs its own tool, per-metric tool identity already makes cross-language numbers non-comparable, and the stated mitigation (\"cross-language comparisons in a report have to be labelled as such\") collapses into \"don't compare.\" No concrete tool is named for complexity or duplication even for the Python keystone (radon? lizard? jscpd?), so the keystone slice inherits both the tool choice and the comparability semantics. Name which metric families are comparable across adapters and which are per-language-only, and fix the Python tools at the architecture level rather than letting each adapter redefine \"complexity.\"",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Where a project declares its size limits is unspecified, and squadron itself has no machine-readable limits",
+   "description": "\"Limits come from the project. File and function length are checked against limits the project declares in its own config\" names no config file, format, or key. The keystone slice is \"proven on Python against squadron itself,\" but squadron's limits are prose \u2014 \"~300-line files, ~50-line functions \u2026 where practical\" in AGENTS.md/CLAUDE.md \u2014 so the slice must invent the declaration format *and* decide what a hedged \"~300, where practical\" means as an exact deterministic threshold. That is a load-bearing decision (it defines the headline metric of capability 1) left implicit. Compounding it: the brownfield goal is \"without editing the project's config files,\" so adopted projects will have no declared limits and the snapshot reports distributions only \u2014 meaning capability 1's \"against the project's limits\" check delivers nothing for exactly the adoption case the baseline command serves. Fine as a fallback, but the config format for the case that does declare limits should be fixed here.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Review-finding normalization changes the review write path, but the dependency is undeclared",
+   "description": "Frontmatter declares `dependencies: [100, 320]`, and Scope says the store, envelope, identity, harness and noise-floor method \"are 320's and are reused as they are.\" But capability (b) requires \"a write-path change to review templates and output parsing\" (Technical Considerations, \"Where review categorization happens\"). Review templates and the parser are shipped artifacts of the review subsystem (`ReviewResult`/`StructuredFinding` are 300-band models; templates date to 105/143-band work), and judge templates are review templates \u2014 so the change reaches the judging path's output shape too. 320 treated an equivalent write-path change (the template-version field) as \"a coordinated write-path change, coordinated as a dependency,\" named explicitly; here the same class of change rides under \"exploratory\" slices with no named coordination. Related Work lists 300 only as the owner of gating. Either declare the review-subsystem dependency and the coordination, or scope capability (b) to ingest-side normalization only.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Overview"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Pooling review findings into `AuditCategory` conflates defects-in-a-diff with debt-in-a-codebase and corrupts `other`'s meaning",
+   "description": "\"One category vocabulary\" uses the example \"error-handling findings: 4 from review, 2 from audit,\" but those are different populations: an audit finding is debt present at a commit (323 measured `other` at ~4% on that population), while a review finding is a defect in a change \u2014 logic bugs, API misuse, missing edge handling \u2014 much of which has no audit-debt category and will normalize to `other`. Per 323 Decision 3, a rising `other` share is defined as \"a signal the vocabulary is wrong\"; once review findings pool into the same buckets, that signal stops meaning \"wrong for the audit\" and mixes denominators (per-diff findings vs per-project audit counts) in one column. The Non-Goal concedes the fit is unproven (\"If the vocabulary turns out not to fit review findings, that's a finding to report\"), which makes capability (b)'s value contingent on an unvalidated assumption, and no evidence in this doc or 323's verification shows review categories distribute across the ten buckets. At minimum: report `other` share per source, restrict shared-bucket rollups to categories where both populations share semantics, and validate the fit on real review findings before the ingest slice. Secondary detail for that slice: persisted `StructuredFinding.category` coerces `None` to the literal `\"uncategorized\"` (`ReviewResult.structured_findings`), so read-side mapping of historical reviews sees a sentinel string, not `None`.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Per-slice audit counts imply per-slice LLM audit runs the cost story doesn't price and the measured noise floor can't support",
+   "description": "The rollup capability promises per-slice reports \"across static metrics, audit counts and review findings.\" An audit run is a whole-project LLM measurement at a pinned commit (323); a *per-slice* audit count means audit runs at slice boundaries. The doc prices only the baseline command (\"three audit runs plus the baseline run \u2026 report its expected scope before spending\"), while the fork/merge pipeline hooks make snapshot capture cheap and audit capture anything but. Worse, 323's own verification measured 35\u2013111% relative run-to-run spread at n=3, growing with repo size \u2014 so a per-slice audit delta is undetectable noise on any large project. The lighter option that meets the stated need: scope audit numbers to the project/commit grain the instrument is actually measured at (plus 324's before/after against the floor), and let per-slice rollups cover static metrics and review findings. Slice-boundary audit capture should be cut or explicitly made opt-in with its cost stated.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Overview"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Unflagged departure from the initiative plan's \"language-agnostic tools\" constraint",
+   "description": "Plan entry 14 (the declared parent) states \"Tools must be language-agnostic, because brownfield projects are not Python\"; this architecture goes the other way \u2014 per-language pluggable adapters with per-language tools, noting \"Language-agnostic tools exist for some metrics \u2026 and not others.\" The direction is defensible and better serves brownfield adoption, but the departure from the governing plan is never remarked.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Snapshot accumulation has no retention or payload-size story",
+   "description": "Per-commit snapshot records \u2014 optionally auto-captured at every fork and merge, each carrying length distributions, exclusion sets and per-metric tool identity \u2014 accumulate unbounded in the JSON record store whose readers scan records (`list_*` conventions) and whose migration to a query engine 323 already declined behind a trip-wire. \"Over time\" trend reports make full-store scans the normal case. Not urgent initially, but the architecture should say whether snapshot payloads are bounded (distributions vs per-file tables) and who prunes old snapshots.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Anticipated Slices"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`aiModel` meaning change reaches metrology identity and external gates; declared, but the one-time identity shift deserves visibility at rollout",
+   "description": "D10 correctly identifies that `aiModel` now names the answering model and that `metrology/identity.py` keys judge identity on `_FM_MODEL = \"aiModel\"` (identity.py:35, 235), so OpenAI-direct judges will change identity once (alias \u2192 dated snapshot). The design declares this as intended calibration behavior and keeps `requestedModel` presence as the machine-readable substitution signal, which is the right contract shape. This is informational: the consequence is stated rather than hidden, frontmatter changes are additive except for this one redefined key, and the CHANGELOG bullet in the success criteria is the right place to name the metrology identity shift so calibration consumers aren't surprised by split judge series.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "D9's substitution rule leans on Phase 6 live-id capture for alias-shaped false positives; the stated cost bounds make this acceptable",
+   "description": "If `requested` reaches `run_review_with_profile` as an alias rather than a resolved id (e.g., a template default), D9's exact rule reports a substitution \u2014 the design names this failure direction explicitly (\"a false report costs one extra frontmatter key and a WARNING\") and the Risk Assessment/Mitigation pair (walkthrough step 6 captures each profile's real ids pre-merge, with fixes as tested explicit forms rather than looser rules) addresses it. The `requested is None` case (SDK default model) is handled. Noting only because the capture-before-merge step is what keeps this from shipping as per-run WARNING noise on an alias-heavy profile; the design already makes it a verification requirement, so no change is needed.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+  }
+ ]
+}

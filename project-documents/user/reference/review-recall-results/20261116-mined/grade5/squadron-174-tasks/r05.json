@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items instead of plain `**Commit**:` lines",
+   "description": "All 17 commit markers in this file are written as checklist items (`- [ ] Commit: \\`feat: ...\\``, e.g. lines 112, 157, 187, 217, 264, 320, 508, 527), rather than plain `**Commit**: \\`...\\`` lines. This deviates from the repo's established convention \u2014 every other task file I checked (e.g. `144-tasks.utility-actions.md`, `128-tasks.review-transport-unification-provider-decoupling.md`) uses the plain non-checkbox `**Commit**:` form, which is what the review convention calls for (\"plain lines, never checkboxes\"). Any tooling that greps for `**Commit**:` to find tested commit points will find none here. The placement itself is correct (after impl+test pairs, not every task, not only at the end), so only the marker format needs fixing.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Load test adds a time assertion the design deliberately omitted \u2014 consistent with review requirements",
+   "description": "The design's Special Considerations state \"There is still no assertion on time in tests\" and rely on walkthrough step 8 for wall-clock measurement. Task 22a introduces a hard 1.0 s assertion, a small addition beyond the design text, but it is appropriate: the review criteria require a load test when the slice restates an NFR, and the bound is described as generous for CI jitter. No action needed; noted only for awareness of the design/task difference.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  }
+ ]
+}

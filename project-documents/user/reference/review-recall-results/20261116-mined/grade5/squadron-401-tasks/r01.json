@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are formatted as checklist items",
+   "description": "The commit instructions use `- [ ] Commit: ...` rather than plain `**Commit**:` lines. This is repeated throughout the task file; reformat the markers while keeping them at the tested checkpoints.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The duplication-limit test does not verify other metrics remain unaffected",
+   "description": "Task 11 tests the token ceiling at the generic duplication-measurement level, but does not verify Success Criterion 10\u2019s requirement that exceeding the ceiling leaves the adapter\u2019s other metrics unchanged. Add an adapter-level test for that outcome.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:137-139"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A malformed line number has no corresponding reader test",
+   "description": "Task 19 requires a failure for a non-integer `<line number>`, but Task 20 tests `hits=\"x\"` and does not cover a malformed `number`. Add a test asserting the failure and its diagnostic, as required by the failure-mode testing requirement.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:204-206"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No load test covers the stated duplication scaling bound",
+   "description": "The design states that duplication\u2019s time and memory are linear in tokens and sets a four-million-token ceiling. The task breakdown tests the ceiling with a lowered constant, but has no load test in `tests/load/` covering that stated bound. Add a load-test task and an explicit CI task to gate on it.",
+   "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:163-166"
+  }
+ ]
+}

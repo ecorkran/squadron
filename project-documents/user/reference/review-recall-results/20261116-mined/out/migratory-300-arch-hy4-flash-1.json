@@ -1,0 +1,134 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Tick as transaction\" atomicity is asserted but has no implementing mechanism",
+      "description": "The \"Tick as transaction\" principle promises each tick is \"discrete, atomic: read current state, compute next state, commit\" and that \"between ticks, the world is consistent and queryable.\" Nothing in the design implements a staging/commit. Slice 303 (Behavior Engine Integration) has `engine.tick(state=entity_manager.state, ...)` mutate canonical state **in place**, and the document's own step 4 (\"Apply the updated entity state as the new canonical state\") describes no shadow buffer. A mid-tick exception in a force, query, or integration call therefore leaves positions partially updated and velocities stale \u2014 a torn state that is exactly what the principle rules out. No rollback, double-buffering, or validation (e.g., NaN check) is specified. Either define read/compute/commit with rollback on error, or drop the atomicity claim and document that a failed tick leaves partial state.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick/asyncio coexistence fails under overrun \u2014 the event loop can be starved exactly when it matters",
+      "description": "\"Tick loop and asyncio coexistence\" says the boundary is \"run the tick synchronously, then yield to the async event loop for I/O between ticks,\" asserting I/O is not starved. But the tick body wired in slice 303 is a fully synchronous `sim.step()` with no await point, and slice 301 skips `asyncio.sleep()` entirely when `remaining < 0`. Under sustained overruns \u2014 precisely when CPU-bound NumPy ticks are heavy \u2014 there is no suspension anywhere: `await tick_body()` on a coroutine that never awaits does not yield, and the sleep is skipped. WebSocket handlers starve and clients go unserved, contradicting the \"Observable by default\" goal. The \"offload the tick to a thread or process (NumPy releases the GIL)\" upgrade path also conflates the two: a process has its own GIL and gains nothing from NumPy's GIL release, and it would reintroduce the IPC/state-copying that \"single-process simplicity\" forbids. Need an unconditional yield (e.g., `await asyncio.sleep(0)` every tick) and a thread-based, not process-based, offload story with explicit state ownership.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The one-way server-push protocol cannot carry the per-client culling the design depends on",
+      "description": "\"State flows outward \u2014 Nothing flows back from clients into simulation state in v1\" (## Design Goals) and the slice-305 \"server-push only\" protocol conflict with the \"Network egress is the second scaling wall\" paragraph and slice 309, which require \"per-client spatial culling\" where \"each client declares a viewport or region of interest\" and receives only what is \"within their view frustum.\" A frustum/ROI is client\u2192server data, and v1 defines no channel for it, yet culling is the stated answer to the 120 MB/s egress problem. The claim that the protocol \"should not preclude adding them later\" is asserted with no mechanism. Either define a minimal client\u2192server ROI/subscription message as an explicit exception to the push-only rule and build it into the protocol slice (306) so it is not retrofitted, or defer culling and accept full-snapshot egress in v1.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment-layer ownership is contradictory and creates a dependency cycle",
+      "description": "",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Tick as transaction\" atomicity is asserted but has no implementing mechanism",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Tick/asyncio coexistence fails under overrun \u2014 the event loop can be starved exactly when it matters",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The one-way server-push protocol cannot carry the per-client culling the design depends on",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Environment-layer ownership is contradictory and creates a dependency cycle",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-300-arch"
+  },
+  "timestamp": "2026-11-17T08:03:30.834029",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 53312,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 54110,
+  "cached_tokens": 24064,
+  "cache_write_tokens": null,
+  "completion_tokens": 14171,
+  "reasoning_tokens": 11581,
+  "duration_seconds": 89.46611850010231,
+  "cost_usd": 0.003071646,
+  "cost_basis": "alias_pricing"
+}

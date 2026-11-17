@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough cannot isolate the two interventions; no early-exit toggle is specified",
+      "description": "Step 3 prescribes four ablation runs: baseline (counter-gating, S=1), early-exit only, subdivision only, and both. But the design changes `get_neighbors_first_k`'s counter-gating to an unconditional `break` (Intervention 1) and defines no mechanism to disable early exit. All four commands are identical except `--subdivision-factor`, so:\n\n- Runs 1 and 2 are the same command, as are runs 3 and 4 \u2014 the matrix collapses to two configurations.\n- The \"baseline (S=1, counter-gating \u2014 should reproduce slice 145 ~38 TPS)\" run is unreachable after the change lands, because counter-gating no longer exists in the kernel.\n\nThe parent plan entry and the 148 re-diagnosis note both frame the interventions as complementary and worth comparing, and the design itself discusses their interaction \u2014 so the ablation is part of what this slice should demonstrate. The design needs either (a) a config/CLI toggle that restores counter-gating for ablation runs, or (b) an explicit statement that the baseline numbers are carried over from the slice 145/148 measurement records rather than re-run, with the walkthrough reduced to the configurations that are actually reachable. As written, an implementer following the walkthrough cannot produce the comparison the design claims to make.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Candidate-count arithmetic contradicts the cited slice 148 re-diagnosis note",
+      "description": "The \"Interaction with Intervention 1\" paragraph states: \"With early exit alone at S=1: agents still load 45,000 candidates but exit after ~32. With S=3 alone: candidates loaded drops to ~5000. With both: candidates loaded ~555.\" The source this rests on (148-notes.rediagnosis.md) gives different numbers:\n\n- S=3 alone: per-cell occupancy drops to ~555, but the 7\u00d77 scan covers 49 cells \u00d7 555 \u2248 **27,000** candidates, not ~5,000. The note states this explicitly.\n- With both interventions: early exit truncates candidates scanned to roughly the first ~32\u201350 qualifying candidates (the note estimates \"~50\"), not ~555 \u2014 555 is the per-cell occupancy, not the scanned count.\n- \"Early exit alone \u2026 agents still load 45,000 candidates but exit after ~32\" is internally contradictory; with the break, candidates scanned drops to ~50.\n\nThe success criteria are empirical gates so this doesn't invalidate them, but the paragraph is the design's central justification for why the two interventions compose, and it materially overstates subdivision's incremental value once early exit is in place (with early exit, subdivision mostly improves the acceptance rate by trimming out-of-radius corner candidates, rather than cutting 45,000 \u2192 555). Correct the figures to match the re-diagnosis note so expectations going into the CUDA gate runs are calibrated.",
+      "file_ref": null,
+      "category": "correctness-of-rationale",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plan-assigned 7-neighbor benchmark operating point is absent from the design",
+      "description": "The plan 140 entry for slice 149 states: \"the 7-neighbor operating point is a benchmark target,\" and the 148 re-diagnosis note reinforces it: \"At `max_neighbors=7` the counter-gating waste is even more severe \u2026 The early-exit gain scales with `candidates_scanned / max_neighbors`, so lower `max_neighbors` \u2192 higher gain. The 7-neighbor target is a meaningful operating point to benchmark at.\" The slice design benchmarks only `max_neighbors=32` (Success Criteria default config, Verification Walkthrough steps 3 and 5) and never mentions the 7-neighbor point. The requirement this leaves unmet: a measurement confirming the early-exit gain at the biologically realistic operating point the plan names for this slice. This is cheap to add \u2014 one additional bench run with `max_neighbors=7` in step 3 \u2014 or, if it is being deliberately deferred, say so explicitly.",
+      "file_ref": null,
+      "category": "missing-item",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#verification-walkthrough"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A5's primary verification tool is known to be unavailable on the CUDA host",
+      "description": "A5 cites \"confirmed via `nvcc --ptxas-info` or benchmark log.\" The slice 148 envelope-measurement note (148-notes.envelope-measurement.md, \u00a72A) records that `ptxas`, `cuobjdump`, and `nvcc` are **not installed** on the CUDA host \u2014 slice 148 obtained the zero-local-memory confirmation by inspecting the Quadrants PTX cache directly. The \"or benchmark log\" alternative and Step 4's log-based approach cover this, but A5 should lead with the demonstrated mechanism (PTX cache inspection / bench log) rather than a tool known to be absent on the gate host.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architecture alignment is otherwise sound",
+      "description": "Positive confirmations: (1) Profile-first principle honored \u2014 the slice is grounded in slice 148 Phase 2 measurements and the R5 re-diagnosis rather than assumed bottlenecks. (2) The Tier 2 NFR (60 TPS at N=50k on CUDA) is restated in the Success Criteria section with the slice's own \u2265100 TPS headroom gate. (3) Boundaries respected: no changes to `TickResult`, world-server wiring, numpy/numba backends, or the `quadrants-fused` external API \u2014 slice 146's consumption contract is preserved and the dependency direction (149 \u2192 145, 146 consumes unchanged API) matches the plan. (4) The A7 seam is deliberately preserved (Option A), matching slice 145's documented swap point. (5) Config validation fails explicitly at config-load time (`ValueError`, no silent clamp), consistent with project conventions, and the S\u22648 bound is justified. (6) Scope is proportional: two interventions plus validation, with distance-ranked k-nearest and GPU prefix sum correctly deferred to Out of Scope per the plan.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Verification walkthrough cannot isolate the two interventions; no early-exit toggle is specified",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-176",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness-of-rationale",
+      "raw_category": null,
+      "summary": "Candidate-count arithmetic contradicts the cited slice 148 re-diagnosis note",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "missing-item",
+      "raw_category": null,
+      "summary": "Plan-assigned 7-neighbor benchmark operating point is absent from the design",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#verification-walkthrough",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "A5's primary verification tool is known to be unavailable on the CUDA host",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Architecture alignment is otherwise sound",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T13:31:09.548763",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 169310,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 389157,
+  "cached_tokens": 344704,
+  "cache_write_tokens": null,
+  "completion_tokens": 46549,
+  "reasoning_tokens": 43768,
+  "duration_seconds": 1205.1170397503302,
+  "cost_usd": 0.4371408,
+  "cost_basis": "alias_pricing"
+}

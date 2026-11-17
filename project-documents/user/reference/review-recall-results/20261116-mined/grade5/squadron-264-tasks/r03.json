@@ -1,0 +1,12 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 5.2 offers a fragile alternative for asserting the child process is gone",
+   "description": "The timeout test should \"capture the child PID via the fake server printing it to a temp file at startup, **or scan for the fixture's command line**.\" The command-line-scan fallback is unreliable: multiple test cases spawn the identical fixture command, an earlier test's lingering server would match the scan, and command-line enumeration is not portable (Windows). Since Task 3 owns the fixture, the PID-file approach is strictly better and should be the only specified mechanism (pass the temp-file path via env or argv, write `os.getpid()` at startup, assert liveness with `os.kill(pid, 0)`/`ProcessLookupError`). The task is completable as written, but pinning one method would prevent a junior implementer from picking the flaky path.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167"
+  }
+ ]
+}

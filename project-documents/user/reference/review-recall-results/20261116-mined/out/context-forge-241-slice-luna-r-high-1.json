@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The design\u2019s scope and review-type model diverge from the architecture",
+      "description": "The architecture says v1 implements slice-level transitions only and defers the `pre-slice-plan` arch gate. It also describes the review type for each transition as configurable. This design instead includes the arch gate in 241 and makes review types position-derived, leaving the shipped per-gate `review_type` keys inert. The slice plan records those as deliberate changes, but the architecture still states the earlier scope and goals. Reconcile the architecture with this design\u2019s model, or keep 241 within the architecture\u2019s stated scope.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Recommendation examples conflict with the runner-facing vocabulary",
+      "description": "The architecture requires stable recommendation values `review` and `blocked` for downstream consumers. TD-7 describes those as new recommendation values but its examples put human-readable text such as `Review required before advancing` and `Blocked: review verdict does not clear threshold` in the `recommendation` field. Clarify that the field carries the stable tokens and that the explanatory text belongs in another field, so consumers do not receive a changed or ambiguous contract.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parse failures lose the cause required in the rationale",
+      "description": "The architecture requires the returned rationale to name a parse failure explicitly. The design says `parseFrontmatter()` returns the same empty result for read/parse errors and for missing or malformed frontmatter, then maps the missing verdict to `UNKNOWN`. With that interface, the gate cannot distinguish a parse/read failure from an absent verdict, and the rationale requirements only specify naming the verdict and threshold. Specify how the failure cause is preserved or surfaced while still ensuring it cannot silently clear the gate.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Dependencies"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Invalid persisted gate configuration has no explicit failure strategy",
+      "description": "The architecture requires invalid thresholds and unrecognized per-gate configuration to fail fast. This design has `resolveGateConfig()` read values through `ConfigManager.get()` but does not specify validation or explicit error behavior for invalid values already present in TOML. Define how invalid loaded values are detected and surfaced rather than allowing them to be interpreted implicitly.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The stated worktree-scoped configuration resolution is not reflected in the wiring",
+      "description": "The architecture requires review policy to be resolvable at worktree scope. This section claims that scope is inherited, but the specified surface wiring constructs `ConfigManager(project.projectPath)`. Since `ConfigManager` resolves project configuration from the path it is given, the design should specify how a worktree-resolved config path is passed\u2014or clarify that these settings are project-scoped and update the integration expectation accordingly.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Config-Injection-resolves-the-one-open-design-decision"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The design\u2019s scope and review-type model diverge from the architecture",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Recommendation examples conflict with the runner-facing vocabulary",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Parse failures lose the cause required in the rationale",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Invalid persisted gate configuration has no explicit failure strategy",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The stated worktree-scoped configuration resolution is not reflected in the wiring",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Config-Injection-resolves-the-one-open-design-decision",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "against": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-241-slice"
+  },
+  "timestamp": "2026-11-17T12:42:33.924325",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 44095,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 644042,
+  "cached_tokens": 547475,
+  "cache_write_tokens": null,
+  "completion_tokens": 32170,
+  "reasoning_tokens": 30196,
+  "duration_seconds": 355.93597724987194,
+  "cost_usd": 0.03121645,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2.2's \"both groups non-empty\" real-file assertion cannot pass against the interim fixture",
+   "description": "Task 2.2 requires a real-file test \"asserting both groups are non-empty and their counts sum to the file's checkbox count,\" using `384-tasks.post-findings-to-the-pr.md` \"until then\" (i.e. until 385's own file has checked items). I verified by grep that 384's file has **no `- [ ]` lines at all** \u2014 every checkbox is `- [x]` (status: complete) \u2014 so its `unchecked` group is empty and the \"both groups are non-empty\" assertion fails against the named interim fixture. The other candidate, 385's own file at authoring time, is entirely unchecked (status: not_started), so its `checked` group is empty and it fails the same assertion. The technical success criterion only guarantees \"a test fixture using this slice's own task file **once it exists**\" \u2014 mid-implementation \u2014 and never guarantees both groups in the interim. As specified, the load-bearing real-file test is un-passable when Task 2.2 lands, contradicting CLAUDE.md's \"the test fixture must include the actual format that parser will consume in production.\" Fix: either seed a real file containing mixed states, or restate the success assertion to \"both groups' counts sum to the file's checkbox total\" (dropping the non-empty requirement), or defer the real-file assertion to Task 16 after items are checked off.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:96-102"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 6 consumes a `local_sha` that no task or helper produces",
+   "description": "`check_head_pushed(..., local_sha: str, ...)` compares the host sha against a *local* head sha for the \"behind\" refusal (D2). Task 3 (the git-helpers task) adds `current_branch` and `commits_in_range` only \u2014 neither returns the local HEAD sha. Task 13.1's data-flow bullet (\"preconditions \u2026 local head sha == remote sha\") names the comparison but does not assign its read. No task writes a `git rev-parse HEAD` helper, so a junior implementer must either invent a read or silently reuse `resolve_reviewed_sha` (`src/squadron/review/persistence.py:132`), which returns `str | None` and is not mentioned anywhere in the slice or tasks. This leaves the task not independently completable and forces an implicit dependency on a `None`-returning helper into a strict-typed signature (`local_sha: str`). Fix: add a `local_head_sha` (or state reuse of `resolve_reviewed_sha`, handling its `None`) as an explicit step in Task 3 and thread it through Task 13.1.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:137-141"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Identity precondition (`identify_operator` no-login refusal) has tests but no implementation step",
+   "description": "The functional criterion \"With the adapter unable to identify the operator, the command exits non-zero, names the reason, and makes no write\" and the design's precondition block (`identify_operator(host)` \u2192 no login \u2192 refuse, exit 1) require an identity check. It is covered by tests (Task 13.2 \"identity refusal exits 1 with no write\"; Task 14.1 parametrizes the `identify_operator` site), but no implementation step tells the worker where the call and its refusal are written. Task 6 is scoped only to the pushed-branch checks; Task 13.1 mentions identity solely inside the ordering bullet \"preconditions (identity, then pushed)\" without a step, success clause, or exit-1 behavior. The implementation requirement is thus met only by inference from the tests, so an implementer may miss the no-login `OperatorUnidentifiedError` path until Task 13.2 fails. Fix: add an explicit step (in Task 6 or 13.1) that calls `identify_operator`, renders a refusal via `render_code_host_error`, and exits before the base/model work.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:297-311"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`git rev-list` membership source for the review scan (Task 8) is unstated",
+   "description": "Task 8.1 says \"Keep those whose sha is in `git rev-list <base>..<head>`,\" but no task adds a `rev-list` helper. The in-range sha set is already derivable from `commits_in_range`'s return (Task 3, which lists exactly the `base..head` commits), so membership is `sha in {c.sha for c in commits}`. The instruction is satisfiable without a new helper, but naming the source would prevent a redundant second git call. Non-blocking.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:179"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Functional criterion's \"the same command\" conflicts with D2's two different commands",
+   "description": "The functional criterion says a behind-branch \"fails the same way with the same command,\" but D2 explicitly prescribes `git push -u <remote> <head>` for *missing* and `git push <remote> <head>` for *behind*, and Task 6.2 asserts \"the two refusals name different commands.\" The tasks faithfully implement the authoritative design; the slice's summary prose is the sloppy line. Flagging so a future reviewer does not re-open this as a task gap \u2014 the task is correct, the criterion wording is imprecise.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md (Success Criteria \u2192 Functional; D2)"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`tests/pr/` package is created without an `__init__.py`",
+   "description": "Seven test files land under `tests/pr/` but no task creates `tests/pr/__init__.py`. Every substantive test subpackage in the repo carries one (`tests/codehost`, `tests/review`, `tests/cli/commands`, \u2026), so this deviates from convention. Risk is low because `pyproject.toml` sets no `import-mode` and I confirmed no basename collisions with existing `test_branch/tasks/base/body/inputs/assembly/preconditions.py` (none exist), and `tests/load`/`tests/scripts` already ship without `__init__.py`. Non-blocking; add the marker file in Task 1.2 for consistency.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:47"
+  }
+ ]
+}

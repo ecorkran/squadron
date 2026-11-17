@@ -1,0 +1,110 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 9.4 writes a merge as a task and as a success criterion",
+   "description": "The squadron root CLAUDE.md (Git Rules, Branch Naming, \"Merging (Phase 7 only, after code review passes)\") says never to write a merge or push as a task, sub-item, or success criterion in a task file, and to merge only in Phase 7 after review. Task 9.4 (lines 309-311) and the \"plus the merge commit\" clause (lines 315-316) do both, with no review gate before them. Remove 9.4 and the merge clause; the close-out ends at 9.3, and the Phase 7 merge is a separate step after review. A worktree-level copy of CLAUDE.md under `project-documents/user/reference/` says a slice branch merges \"when its implementation is done,\" which conflicts with the root file. Confirm which copy is current.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:309-316"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 4.3 tells the implementer to catch `McpError`, the pattern the design records as defect F001",
+   "description": "Line 148 maps \"`McpError` / closed-stream transport errors\" to `is_error=True`. The design (slice design lines 152-162) says the SDK wraps in-band protocol errors in a `BaseExceptionGroup`, so a plain `except McpError` never matches, and the catch-all then reports \"unhandled errors in a TaskGroup.\" It also requires checking spawn failure before protocol error. The Context Summary (lines 25-45) omits this fact, even though the design's `dateUpdated` matches the task file's. A junior following 4.3 would reintroduce F001. Add the group-flattening requirement and the check order to 4.3, and add the fact to the Context Summary.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:148"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The protocol-error row may have no test that reaches it",
+   "description": "Task 5.1 says `test_unknown_tool_name` covers the protocol-error row. Nothing establishes that an unknown tool name raises a transport error. The server may instead return an `isError` result, which is the server-error row. The design says an earlier test passed while this row was unimplemented (lines 159-162), so a test that does not force the exception-group path can pass without covering the row. Name a trigger that really raises, such as a fake-server mode that exits mid-call, and assert the WARNING on it. I could not confirm which path the unknown-tool call takes because the implementation is not in this checkout.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:169-171"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The \"join all text blocks with `\\n`\" mapping rule has no test",
+   "description": "SC2 requires mapping \"per the Result mapping rules,\" and rule 1 is the join. No task asserts it. The fake server's `echo` returns one block, and `nontext` returns \"optional text\" (line 112) without requiring two text blocks. Make one fake tool return two text blocks plus a non-text block, and assert the `\\n` join in 5.1.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:139"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The live contract probe has no budget, and skip-on-failure can hide drift",
+   "description": "The design walkthrough (lines 366-368) says the contract test allows 180 s for its availability probe, because a cold `npx -y` fetch is slow. Task 8.1 gives no budget. A junior may reuse `cf.mcp_timeout_s` (60 s), so a cold machine skips the module silently. The design also says a skip \"hides the breakage\" when a bad override is left set (lines 418-420). State the 180 s budget, and make a probe timeout distinct from \"command not found\" in the skip reason.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:265-268"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The commit protocol omits `ruff check` and the task-checker step",
+   "description": "Steps 1\u20133 run `ruff format` and `git add`. The design's walkthrough (lines 507-508) says format does not sort imports and that `I001` findings go unreported unless `uv run ruff check .` runs before the commit. The squadron CLAUDE.md also orders work as implement \u2192 task-checker \u2192 commit, so check-offs land in the commit. The protocol mentions neither. Add `ruff check` to step 1 and a task-checker step before `git add`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57-61"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 2 is too granular to stand as its own top-level task",
+   "description": "Task 2 is two default-value tests for keys Task 1 adds, with a separate commit. Fold 2.1 into Task 1 as sub-items so the `feat:` commit includes its tests. The test-with ordering is already correct; this only removes a top-level task and a commit point.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:86-96"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 4 commits failure-handling code that no automated test covers yet",
+   "description": "Task 4's only checks are a manual smoke and `pyright`. Task 5 follows immediately with the automated tests, so the test-with pattern holds. The Task 4 commit point is still untested. Acceptable as written, but an automated echo test in Task 4's criteria would make the commit point honest.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-157"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Env ownership is stated two ways",
+   "description": "Task 4.1 says the bridge uses `get_default_environment()` as the process env, with callers building `StdioServerParameters`. Task 6.3 has the caller pass `env=get_default_environment()`. A junior may do both or neither. Assign one owner.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:134-136"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The spawn-failure test does not assert its own WARNING",
+   "description": "5.3 asserts `is_error` only. 5.4 covers the WARNING with a blanket statement and points the protocol-error case at 5.1. SC4 needs the WARNING. Put the `caplog` assertion in 5.3 so each test is self-contained.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:178-186"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The walkthrough \u00a74 bullet contradicts itself",
+   "description": "The bullet says to leave step 4 \"open\" with its checkbox unchecked, then records it as resolved and checked on 20260901. The work is complete, so keep the resolution and drop the open-state instruction.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:300-308"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Step 3 leaves the config override set if the check fails",
+   "description": "9.1 says \"unset the key afterwards.\" The design (lines 418-420) says a lingering override breaks later calls. Require the unset even when the failure check fails, and require `sq config get cf.mcp_command` to show the default before 9.1 closes. Walkthrough step 2b (the ephemeral-context check, design lines 370-397) has no line in 9.1. It is not a success criterion, so this is optional.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:292"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The missing-argument path logs nothing, which the project's failure-mode rule may not allow",
+   "description": "`review-code.md` says each failure mode must be observable at WARNING or above, or as a metric. The design (line 147) and Task 6.3 deliberately skip logging for missing arguments, treating them as input validation rather than I/O. The result text does reach the model. Confirm the validation exemption with the Project Manager, or accept the gap explicitly.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:212-213"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "No CI job runs the live contract test",
+   "description": "SC5 is met by a local run. Drift is caught only when someone runs the test with node present. The design's success criteria do not require CI, and the load-test CI gate does not apply because this is not a load test. Raise it only if the Project Manager wants drift caught automatically.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:262-283"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Test file placement and the fake-server tool list differ from the design's file table",
+   "description": "The design puts result mapping and failure-mode tests in `test_cf_tools.py`. The task file puts them in `test_mcp_bridge.py`, which fits the layering rule. The fake server also gains `empty`, `nontext`, and `--pid-file`, which the mapping rules and the teardown test require. Both changes are justified. Update the design table so the two documents match.",
+   "location": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md:215-218"
+  }
+ ]
+}

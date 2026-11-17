@@ -1,0 +1,22 @@
+{
+ "case": "migratory-152-slice",
+ "kind": "slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Overview: \"at the architecture's Tier 3 target (N=200k)\" and \"our current Tier 3 milestone of 200k\". `140-arch` (Tier 3 \"250k\") and `140-slices` (\"Tier 3 (250k, NVIDIA CUDA ...)\") both say 250k; 200k appears only in this slice. **VALID**: contradicts its parent and the architecture. Needs: doc alone. Raised by the original review (F001)."
+  },
+  {
+   "id": "F2",
+   "text": "Technical Scope item 7 and Technical Decisions: `k_first` \"is removed entirely from the kernel\", configs using it \"raise a `ConfigurationError`\", \"no silent migration\". Risk Mitigation: \"ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning) ... flip the default and remove `k_first` parsing in the final commit\"; Default flip: change the default from `\"k_first\"` to `\"k_nearest\"` as the last commit. But Development Approach step 2 rewrites the inner loop to the two-mode form (`if radius_only ... else k_nearest`), which has no `k_first` branch, while the default and the accepted values still say `k_first` until step 4. Between those commits a default config would silently run `k_nearest`, the silent migration the design forbids. **VALID**: self-contradiction. Needs: doc alone."
+  },
+  {
+   "id": "F3",
+   "text": "Walkthrough steps 2-5 use `python -m migratory.bench parity ...` and `python -m migratory.bench run ... --neighbor-mode ... --ticks`. `bench/cli.py` at `4b2edc8` has no subcommands and no `--neighbor-mode` or `--ticks` option (only `--workload`, `--backend`, `--workload-dir`, `--results-dir`, `--list-*`), and the slice adds none. **VALID** (minor): the steps cannot run as written. Needs: code."
+  },
+  {
+   "id": "F4",
+   "text": "Success path raises `ConfigurationError`; the config module defines `ConfigError`. **VALID** (minor): contradicts code. Needs: code."
+  }
+ ]
+}

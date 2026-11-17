@@ -1,0 +1,75 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Bulk-vectorization design goal contradicts the document's own tick description and the built hot loop",
+   "description": "Design Goals commits that \"the hot loop must be structured for vectorized computation over arrays of agent state, not object-by-object iteration\" and claims \"tens of thousands of agents at full behavioral fidelity on a single CPU process.\" Yet Envisioned State describes the tick as \"For each active agent, queries nearby neighbors\u2026 Evaluates forces\" \u2014 an object-by-object loop in prose, inside the same document. The document never specifies the one load-bearing choice that decides which is true: the data structure through which neighborhood results reach force computation (a bulk CSR/padded neighbor matrix, or a per-agent index list). The completed foundation slices resolved it the other way: slice 100's `BulkForce` protocol takes `neighbor_lists: list[NDArray[np.intp]]` (one array per active agent, built by per-agent `query_radius` calls), and slice 101 (complete, verified 20260330) explicitly decides on \"a Python-level loop over active agents,\" calling padded-matrix vectorization \"premature optimization.\" Consequences the document does not address: (a) the \"not object-by-object iteration\" goal is false for the engine as built; (b) the \"tens of thousands at full fidelity\" claim is unsupported \u2014 300-arch's 10K\u201350K \"comfortable\" tier assumes \"NumPy-vectorized spatial hashing,\" and slice 105 only replaces neighbor *finding*, not the per-agent force loop; (c) the GPU paragraph's claim that \"The BulkForce pattern\u2026 is structurally identical to a GPU compute dispatch\" and demands \"no dynamic allocation, and no callbacks into Python during the hot loop\" does not hold for a force interface whose primary input is a Python list of per-agent arrays produced by per-agent queries. The document (dateUpdated 20260320) predates the slice 101 decision and was never amended. Fix: either amend the design goal to the actual per-agent-loop strategy with a measured performance envelope (and correct the GPU-compatibility claim to name the required interface change), or specify a bulk neighborhood contract (`query_all(positions, radii) -> CSR`) and plan the force layer to consume it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Profile-index state model has no representation for per-agent variation or inter-profile rules",
+   "description": "The state model is \"positions, velocities, profile indices\" \u2014 all agents sharing an index share one parameter set. But archetypes this document itself names require per-agent individuality: territorial \"home-range attraction\" needs a per-agent home center; herding \"leadership tendency\" (experienced individuals influencing group heading) must distinguish leaders from followers within one herd; pack hunting needs a current target per agent or per pack. Technical Considerations acknowledges that \"Profile-to-profile interaction rules add a combinatorial dimension to the parameter space,\" but names no data structure for it (a P\u00d7P weight table? per-force rule lists keyed by profile pair?). Neither per-agent attribute arrays (home position, role, target index) nor the inter-profile rule representation is part of the SoA layout decision the document leaves open (\"needs validation against the actual force computation patterns\"). Slices 102\u2013104 will each have to invent these ad hoc, and the choice affects serialization, the \"profile as data\" principle, and the array-layout decision. The document should commit to the representation before the archetypes that need it are built.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No mechanism for world-bounds containment anywhere in the engine design",
+   "description": "The force list (cohesion, separation, alignment, attraction, repulsion, flight response) contains no boundary force; the environment input surface (terrain elevation, resource locations, threat zones, seasonal parameters) contains no world geometry; and no anticipated slice covers containment. 300-arch configures finite \"world bounds\" but treats boundary-driven removal only as a future event source, and v1 entities \"persist for the lifetime of the server.\" As specified, an agent at the edge of the world \u2014 or a migrating herd heading out \u2014 drifts outside the world with no force to turn it back and no lifecycle event to remove it. The document should name the containment strategy (boundary repulsion force, world bounds exposed through the environment surface, wraparound, or server-side despawn) and assign ownership, since each option lands in a different component.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Swarm/stigmergy archetype is in the fidelity goals but unrepresentable in the stated model",
+   "description": "\"Archetype fidelity\" promises distinguishable behavior for all five archetypes including swarm intelligence, and \"Profile parameter space\" asserts \"The initial parameter set should cover the five identified archetypes.\" But Envisioned State says swarm agents \"respond to environmental stigmergy (reinforced paths) rather than direct neighbor forces\" \u2014 that requires agents to *deposit* markers, which contradicts the \"Environment as input surface\" principle (\"queries environmental state\u2026 through a read-only interface. It does not own or manage environmental data\"). No listed force is environment-writing, and Anticipated Slices contains no swarm entry at all. The slice plan (100-slices) defers swarm to future work (106), gated on the Environment Layer initiative. The document must reconcile the three positions: add a mechanism (an environment write-back interface, or classify the trail field as engine-owned state) plus a slice, or drop swarm from the \"initial parameter set covers the five archetypes\" claim and the archetype-fidelity goal, and mark it environment-dependent future work. As written, the goal is unachievable within the document's own principles.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The environment query interface \u2014 a committed tick input \u2014 is never defined",
+   "description": "Envisioned State step 1 says the tick \"Receives the current agent state array, environmental context,\" and step 3 evaluates forces \"against its local neighborhood and environment,\" but the document never specifies the environmental interface: what a query is (elevation at point? nearest resource? inside threat zone?), its method shape, or its cost profile. Per-agent terrain/resource lookup has the same cost-dominance and vectorization character as neighbor queries (bulk grid sampling vs. per-agent interpolation), and the document's \"Neighbor query cost dominance\" analysis stops at neighbors. No anticipated slice builds the first environment-driven force, and the completed slice 100 `tick()` signature has no environment parameter at all \u2014 so every later slice that needs environment (territorial boundary effects, slice 107's migration) must retrofit the input surface. The hard part (shape of \"environmental context\" and how per-agent queries are batched) is deferred by silence, exactly where the document's \"Clean boundaries\" goal requires a contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Related Work links to a nonexistent world server architecture document",
+   "description": "Related Work cites `[200-arch.world-server-foundation.md](200-arch.world-server-foundation.md)`; no such file exists. The actual document is `300-arch.worldserver-foundation.md` (different index band *and* different name). This document contradicts itself: Overview says the tick loop \"is owned by the world server (300-arch).\" The scaling rationale in this document (multi-resolution tiers 10K\u21924M+, aggregation presented \"through the same neighbor query interface\") is sourced from that file, so a link that 404s misdirects both audience classes (`audience: [human, ai]`) to a nonexistent 200-band document. The slice plan 100-slices carries the same bad link; both should be corrected.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Related Work"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Circular dependency between 100-arch and 300-arch is not declared",
+   "description": "300-arch's frontmatter declares `dependsOn: [001-concept.migratory, 100-arch.behavior-engine]`, and the initiative plan states \"300 depends on 100.\" But this document's design goals and interface requirements are derived from 300-arch's content (multi-resolution simulation, scaling tiers, aggregate-entity presentation), while its `dependsOn` lists only the concept. The two architecture documents are mutually dependent: a change to 300-arch's aggregation strategy can invalidate 100-arch's \"subset-evaluable tick\" and \"aggregation interface support\" commitments, and vice versa. Not blocking \u2014 the commitments are cheap and directionally sound \u2014 but the dependency should be made explicit (e.g., add 300-arch to `dependsOn`, or note \"informs\" in both documents) so that reviewers re-check both when either changes.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Anticipated Slices has drifted from the actual slice plan",
+   "description": "This document lists \"Spatial query abstraction\" (define the interface + first concrete strategy) as a standalone anticipated slice, but the slice plan folded that into slice 100, which is already complete with the `SpatialQuery` protocol and `BruteForceQuery`. It lists \"Aggregation interface support\" as a current anticipated slice, while the slice plan demotes it to future work (108) gated on the world server's multi-resolution implementation. It omits swarm entirely, while the slice plan carries it as future work (106). The slice list in this document is stale relative to the plan it parents; update it or designate the slice plan as authoritative for ordering.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Anticipated Slices"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Determinism goal does not account for subset-driven, observer-dependent evolution or seeded randomness",
+   "description": "\"Tick determinism \u2014 Given the same state and inputs, a tick produces the same outputs\" is claimed to \"enable replay.\" Two consequences of this document's own choices are unaddressed: (a) subset evaluation makes world evolution depend on which agents the caller activates, and the caller's choice is observer-driven (300-arch: full fidelity near observers, reduced elsewhere) \u2014 so the \"persistent world\u2026 source of truth\" is observer-dependent, and replay must log the active subset per tick, not just initial state plus spawns/removals (300-arch's replay note lists exactly the latter); (b) forces this document names \u2014 pack \"convergence-on-target behavior,\" \"target selection\" \u2014 will need random or contested selection, and the document does not state that any randomness must be seeded and part of the tick's deterministic input. A short addition to the determinism goal (inputs include the active subset and RNG seed; both are replay-relevant) would close the gap.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Ownership of agent registration is stated two contradictory ways",
+   "description": "The document says \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it. No setup, no teardown,\" but the same section says the engine \"presents a narrow interface: tick the simulation forward, query agent state, register/remove agents.\" If the caller owns the arrays, registration and state queries are caller-side operations; 300-arch explicitly assigns entity IDs, array allocation, and lifecycle to the server (\"The server assigns entity IDs, allocates space in the state arrays\u2026 The behavior engine operates on whatever entities the server provides \u2014 it does not manage the entity lifecycle itself\"). As written, this document claims both statelessness and a lifecycle API. Slice 100 resolved it by building add/remove as `AgentState` helpers (arrays are caller-owned, engine provides mutation helpers) \u2014 the document should state that reading as the contract so the two architecture documents agree on who owns mutable state.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+  }
+ ]
+}

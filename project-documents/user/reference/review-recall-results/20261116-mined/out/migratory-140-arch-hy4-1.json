@@ -1,0 +1,386 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The \"tick return type contract\" targets an interface that does not exist",
+      "description": "The document's stated raison d'\u00eatre is defining \"the shared boundary \u2014 the tick return type contract\" (Overview, line 20 area), and line 80 states \"Currently `tick()` returns NumPy arrays (positions, velocities)\"; line 76 claims \"The behavior engine's external interface (`tick() \u2192 state arrays`) is preserved at every tier\"; `001-initiative-plan.migratory.md` says the Quadrants port \"changes the tick() return type contract\". None of this matches the code. `src/migratory/engine/tick.py` declares `def tick(...) -> None` and mutates `AgentState` in place; `src/migratory_server/simulation.py::SimulationManager.step()` also returns `None`; `src/migratory_server/server.py`'s `tick_body` discards the executor result (`await loop.run_in_executor(executor, sim.step, tick_number)`) and then reads `em.state` directly. `100-arch.behavior-engine.md` confirms the intent: \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it\" and \"The caller (world server) owns the spatial index.\" There is no return boundary to contract, which makes options (a)/(b)/(c) incoherent and makes the entire \"Quadrants integration and tick pipeline \u2014 tick return type contract implementation\" slice (line 109) target a phantom interface. The real boundary is shared mutable `AgentState` arrays consumed by at least four modules: `client_manager.broadcast`, `make_snapshot_builder`, `sim_logger.write_tick`, and `apply_bounds_policy`.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:80"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The single load-bearing decision is deferred, then triplicated",
+      "description": "The Overview and `001-initiative-plan.migratory.md` both assign this document exactly one job: define the tick return type contract, \"which requires a joint design decision.\" The Technical Considerations section instead lists three options and concludes \"The architecture should support all three behind an abstraction, with the choice made per-platform.\" That is the decision the document exists to make, left unmade. Worse, \"support all three\" contradicts the Design Goals at line 32 (\"the tick return type contract is the **single** shared interface\", \"the architecture must not create implicit coupling\") \u2014 option (b) is explicitly described as leaking the compute substrate into the server, option (c) requires DLPack support \"throughout the pipeline\" that does not exist, and \"the choice made per-platform\" has no config key in `SpatialConfig` / `_VALID_SPATIAL_BACKENDS` (`src/migratory_server/config.py` allows only `adaptive|grid|brute|kdtree`) despite 300-arch's \"Configuration over convention\". No abstraction signature, memory ownership, lifetime, sync, or failure behavior is specified. Per CLAUDE.md's \"Always resist adding complexity\", pick one (option (a) is what the code already does \u2014 see FAIL 1), delete (b) and (c), and drop the DLPack/zero-copy line of work until a GPU backend is actually chosen.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A GPU field substrate cannot sit \"behind the existing SpatialQuery and BulkForce interfaces\"",
+      "description": "Line 30 asserts \"The Quadrants substrate operates behind the existing `SpatialQuery` and `BulkForce` interfaces\" and line 32 asserts \"the world server should not need to know whether forces are computed by NumPy or Quadrants\". Check the actual contracts: `src/migratory/engine/forces.py::BulkForce.__call__` takes `(state: AgentState, neighbors: CSRNeighborData, profiles: list[BehavioralProfile], active_indices)` and returns `NDArray[np.float64]`; `CSRNeighborData` is a frozen dataclass of NumPy arrays; `AgentState` (`src/migratory/engine/state.py`) holds `np.float64` arrays with `.create`/`.add_agent`/`.remove_agent`; `SpatialQuery.query_knn_batch`'s default in `interface.py` calls NumPy `exclude_self`/`apply_neighbor_cap`. Numba `@njit` cannot accept those Python objects, and Taichi-style `@ti.kernel` arguments must be `ti.field` or `ti.types.ndarray` with a disjoint Python subset. Downstream, `protocol.serialize_state_update` calls `state.positions[:count].tobytes()`, `bounds_enforcement._apply_wrap` calls `np.mod(..., out=positions[:, 0])`, and `EntityManager.spawn_population` uses `np.concatenate`. Keeping the world server ignorant therefore requires rewriting `AgentState`, `EntityManager`, `SpatialQuery`, every force class, bounds enforcement, serialization, and logging \u2014 not a boundary adapter. The \"single shared interface\" is actually ~8 modules, and the document names none of them.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The wire-protocol baseline is false, making two tier milestones no-ops",
+      "description": "\"The wire protocol is currently uncompressed JSON over WebSocket. At N=3,500 this is approximately 84 KB/tick (24 bytes \u00d7 3,500 agents).\" State updates have been binary since slice 306 \u2014 `CHANGELOG.md:196`: \"state updates and snapshots now sent as binary WebSocket frames (previously JSON text)\". `src/migratory_server/protocol.py::serialize_state_update` packs `<BII` + `float64` positions (16 B/agent) + `float64` velocities (16 B/agent) = **32 B/agent**, so 3,500 agents is ~112 KB/tick and 10,000 is ~320 KB/tick, not 84/240 KB. Slice 317 already ships per-message dtype selection, zstd/LZ4 compression, and chunked transport for TERRAIN. Consequently Tier 1's \"Current wire protocol\" (line 66) is wrong, Tier 2's \"Binary WebSocket replaces JSON\" (line 68) is already shipped work, and \"Delta compression \u2014 ... binary WebSocket\" (line 101) lists shipped infrastructure as new scope. Every bandwidth figure and the \"at N=50,000+ the wire becomes a bottleneck\" threshold is computed from the wrong per-agent size.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Current State\" mixes a fabricated live baseline with an unrelated synthetic bench",
+      "description": "\"At N=3,500 on Apple Silicon (M3 Max), the simulation runs at 57 TPS with the following per-tick budget (from performance journal Entry 8, N=2492 synthetic bench...)\". Entry 8's phase table sums to 9.42 ms \u2192 \"**TPS ceiling 106**\", and its live figures are ~59 TPS at 2492, ~79 at 2500, ~43 at 4500. There is no 3,500-entity / 57 TPS measurement anywhere in `900-notes.performance-journal.md` (the only \"3500\" there is a tick index in the Entry 4 addendum). So 57 TPS is not derivable from the very table it is attached to, and the Overview's \"3,500 entities at 57 TPS \u2192 2 million at 60 TPS \u2248 570\u00d7\" baseline is invented. Line 58 also misreads the journal: \"indicating spatial and force costs scale proportionally\" where Entry 8's addendum says the opposite \u2014 \"the KD-tree query is no longer the bottleneck at these scales; work that scales more strictly with N has taken over\" (force_total, CSR assembly). Every tier projection inherits these two errors.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tier 1's 10k @ 60 TPS is contradicted by the document's own N-scaling data",
+      "description": "At 4,500 agents the journal measured 43 TPS \u2248 23.3 ms/tick; linear O(n) scaling to 10k gives ~51.7 ms \u2248 19 TPS. Slice 118's own projection (\"3\u20135\u00d7 on `force_total`, 3.1 \u2192 0.7 ms, shifting the tick ceiling from ~106 to ~150+ TPS and enabling 10k agents at 60 TPS\") is arithmetically wrong: 9.42 \u2192 ~6.98 ms = 143 TPS at N=2492; \u00d74 for 10k \u2248 27.9 ms \u2248 36 TPS. Adding slice 119's ~3\u00d7 on the 5.67 ms query (\u21921.89 ms) gives ~5.2 ms \u2192 ~192 TPS at 2492 \u2192 ~48 TPS at 10k. Neither reaches 60, and both assume perfect linearity while ignoring `spatial.build`: `src/migratory/engine/tick.py` step 1 rebuilds the cKDTree from the FULL population every tick (O(n log n)), which staggering 1/3 of the queries does not reduce. Line 42's \"Staggered neighbor updates (algorithmic: O(n/k) spatial work per tick)\" is a constant-factor win (O(n/3) is O(n)), mislabeled under the document's own \"algorithmic wins before constant-factor wins\" principle. The first tier has no defensible budget model.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:66"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No quantitative path for the ~450\u00d7 gap to 2M agents",
+      "description": "60 TPS means a 16.67 ms budget. From Entry 8's 9.42 ms at N=2492, linear scaling to N=2,000,000 is ~7,560 ms \u2014 roughly a 450\u00d7 speedup required. The document's quantified mechanisms are Numba 3\u20135\u00d7 on the ~33% of tick spent in forces and staggering ~3\u00d7 on the ~33% spent in queries; everything from Tier 2 onward is \"compiled GPU kernels\", \"GPU spatial hash\", \"Quadrants CUDA tuned\" with no throughput, occupancy, memory-bandwidth, kernel-launch-latency, or host\u2194device sync figures. No GPU memory budget is given: at k=14, `flat_neighbors` alone is 2M \u00d7 14 \u00d7 8 B = 224 MB, plus radix-sort key/value buffers, prefix-sum arrays, cell counts, and the state fields; at 60 Hz any `field.to_numpy()` is a blocking device\u2192host copy plus implicit sync. 300-arch's \"memory is never the bottleneck \u2014 500K entities \u2248 24MB\" was computed for a 24-byte CPU record, not a GPU CSR pipeline at 2M. Tiers 2\u20135 are milestone labels, not a feasible path.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The GPU spatial hash is described as \"single-kernel\", hiding the hard part",
+      "description": "\"sort agents by cell index (parallel radix sort), compute cell boundaries (prefix sum), gather neighbors from adjacent cells ... works on GPU because the sort and gather are single-kernel operations with no Python dispatch overhead.\" A radix sort is multiple passes/launches; a prefix-sum scan is multiple launches; the gather yields a variable neighbor count per agent, so it needs a count pass, a scan for CSR offsets, and a scatter/compaction pass \u2014 \u22655 kernels with global syncs per tick. Taichi fields have compile-time-fixed shapes, while `flat_neighbors`/`counts` change length every tick with formation (the journal documents 185k \u2192 32k edge swings on `wide.yaml` alone), requiring either a fixed max-capacity field and a length counter or a dynamic `ti.ndarray`. The section also omits top-k selection entirely: the existing `SpatialQuery.query_knn_batch` fast path (`src/migratory/spatial/interface.py`, `src/migratory/spatial/kd_tree.py`) returns the k-nearest via `cKDTree.query(k=...)`, whereas a cell gather returns all in-cell candidates \u2014 behavioral parity with slices 116/117 needs a per-row top-k on GPU, another divergence-heavy kernel. This is \"step 3: magic happens\" on the initiative's hardest component.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Same code, different backend\" is impossible between Numba and Taichi kernels",
+      "description": "\"The Numba implementations serve as the verified reference for the Quadrants port: explicit loops over CSR segments, which is exactly what `@ti.kernel` (Quadrants) wants.\" `@njit` compiles a Python/NumPy subset via llvmlite; Taichi's `@ti.kernel` uses its own AST transform with a different, narrower subset (no arbitrary Python objects, no NumPy calls inside kernels, typed `ti.field`/`ti.types.ndarray` args, compile-time-known field shapes). There is no shared source to compile to two targets, so the \"verified reference\" is only a behavioral oracle, not a port. Slice 118's \"The `BulkForce` interface is unchanged\" (`100-slices.behavior-engine.md`) is likewise infeasible: `@njit` cannot take `AgentState`, `CSRNeighborData`, or `list[BehavioralProfile]`, so an array-extraction adapter is needed per force per tick. Neither `numba` nor any Taichi/Quadrants package appears in `pyproject.toml` (deps are numpy, opensimplex, pyyaml, scipy, websockets, zstandard) or `uv.lock`; the project is pinned to Python 3.12 (`requires-python>=3.12`, `ruff target-version py312`, `pyright pythonVersion 3.12`, CLAUDE.md and 300-arch), while the journal's bench machine reports Python 3.13.7. Numba's CPython-version lag and ARM64 macOS support are unaddressed.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Quadrants choice fights the stack's named GPU path; DLPack and unified-memory claims are unsupported",
+      "description": "The concept doc's \"Long-Term Architecture Considerations\" names PyTorch (MPS on Apple Silicon, CUDA elsewhere) or JAX as the server GPU path, plus CuPy and WebGPU; 300-arch mentions \"optional CuPy/numba\". This document introduces a fourth stack \u2014 \"Quadrants (Taichi fork) 0.7.2 released 2026-04-27\", i.e. the same day as the document, \"young fork (June 2025) ... limited community history\" \u2014 with no comparison against those options, despite `riskLevel: medium` and the Design Goal that \"GPU compute solutions must support Metal as a first-class backend\". PyTorch MPS satisfies that goal natively and provides `torch.utils.dlpack` for the exact handles option (c) wants. Two of the section's technical claims are wrong: \"On Apple Silicon unified memory, option (a) may be nearly free (no actual copy, just cache flush)\" \u2014 Taichi `field.to_numpy()` performs a synchronous device\u2192host copy into a new NumPy allocation on every backend; unified memory removes the PCIe bus, not the copy or the sync. And option (c) \"engine returns DLPack handles, server consumes zero-copy\" has no consumer: `websockets`' `send()` accepts `bytes`/`str`, `protocol.serialize_state_update` calls `.tobytes()`, and there is no GPU-direct path from a DLPack capsule to a WebSocket frame. A DLPack capsule also carries no ownership semantics \u2014 the document never says who frees the field or who may write it while the sim kernel runs on the single-worker executor.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delta accumulation is incompatible with the approved drop policy, the int16 math is wrong, and it duplicates slice 319",
+      "description": "\"The client reconstructs by accumulating deltas onto its last-known positions.\" 300-arch's NFR explicitly permits \"backpressure-driven drops on STATE_UPDATE acceptable up to 5% under saturation\" and `src/migratory_server/clients.py::_enqueue_for_broadcast` implements drop-oldest on a full queue. With pure accumulation a single dropped frame diverges the client permanently; the document's only error mechanism is \"detect 'large delta' events (teleportation, spawn)\", which handles jumps, not missing frames. Slice 319 in `300-slices.worldserver-foundation.md` already solves this (DELTA 0x06, keyframe flag, unconditional keyframes every N ticks, client handshake flag) but uses a dead-band/omission scheme, not int16 quantization \u2014 the architecture never references 319 and proposes a second design for the same slice (DRY violation). 319 also explicitly excludes \"per-client delta streams diverging from a shared canonical state\", which is exactly what frustum culling plus per-client accumulators require. \"int16 ... ~32\u00d7 compression over float32 positions\" is arithmetically wrong: 8 B \u2192 4 B is 2\u00d7, or ~8\u00d7 against the actual 32 B/agent f64 wire, and only if velocities (currently sent) are dropped. Finally, `config/default.yaml` uses `policy: wrap`, so every boundary crossing produces a ~1000-unit jump that the \"large delta \u2192 teleport\" rule would misclassify; agents entering the view frustum have no last-known position and are not covered at all.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frustum culling duplicates slice 311, breaks the server's unidirectional-flow contract, and its ~50k assumption fails in the target scenario",
+      "description": "`300-slices.worldserver-foundation.md` already has `[ ] (311) Client Spatial Culling` \u2014 \"Each client declares a viewport ... aggregate descriptors for distant groups, nothing beyond a relevance horizon\". The architecture lists \"Server-side frustum culling\" as new work and says Tier 3 \"sends only camera-visible agents\", dropping the aggregate descriptors 311 requires. The section does acknowledge \"inverts the current data flow (server \u2192 client only)\" but never reconciles with 300-arch's Design Goals (\"Clients receive state; they do not contribute to it\", \"Nothing flows back from clients into simulation state in v1\", \"No client-to-server simulation commands exist in v1\") or with the implementation: `src/migratory_server/clients.py::handle_connection` has no receive loop (`await websocket.wait_closed()` only), `server.py` wires `serve(lambda ws: client_manager.handle_connection(...))`, and `protocol.py` reserves 0x01\u20130x05 with 319 claiming 0x06 \u2014 no opcode, framing, or per-client camera-state ownership/lifetime is defined. Most importantly, the Motivation's target is \"a player camera standing **inside a collision** between two populations of one million agents each\"; inside a dense collision the visible set is not \"~50k visible at ground level\" \u2014 that figure is borrowed from a sparse-world view and is invalid in exactly the scenario the initiative exists to deliver. The document also never says how visibility is computed over 2M agents or at what rate.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Decoupled stream rate (sim 60, stream 30)\" has no hook and violates a release-blocking NFR",
+      "description": "`src/migratory_server/tick.py::TickLoop.run` has one `tick_rate` and one `tick_body`; `server.py`'s `tick_body` calls `client_manager.broadcast(em.state, tick_number, em.count)` unconditionally every tick. There is no sim/stream separation, no decimation counter, and no stream-rate config field. 300-arch's NFR requires \"p99 STATE_UPDATE inter-arrival: < 1.5 \u00d7 tick budget under steady state\" with `tests/load/` load tests as a release blocker; emitting at half the sim rate makes inter-arrival 2\u00d7 the tick budget, failing that NFR as written. `ClientManager._tick_budget = 1/tick_rate` also drives `TickBarrier.wait_for_next_tick(timeout=2\u00d7tick_budget)` for new-client snapshots \u2014 ambiguous once the two rates diverge. And the Scope line excludes \"viewer/client rendering optimization\" while Tier 2 requires \"client interpolation\" and the delta-accumulating client from line 88; initiative 600 (Client Layer) is `not_started` in `001-initiative-plan.migratory.md`, so Tier 2 is gated on a not-started initiative even as line 46 claims \"the wire optimizations ... should not be gated on the compute substrate migration\".",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The architecture abandons the project's documented scaling strategy and ignores the existing subset-evaluable hook",
+      "description": "100-arch designates \"Subset-evaluable tick\" as \"the foundation for the world server's multi-resolution simulation: variable-rate ticking ... spatial prioritization ... graceful degradation under load\"; `src/migratory/engine/tick.py` already accepts `active_indices`, but `SimulationManager.step()` never passes it. 300-arch states \"The key future strategy is **multi-resolution simulation**: full per-entity evaluation near observers, reduced-rate ticking at mid-distance, and statistical aggregate 'flock entities' for distant groups\" with tiers 50K\u2013500K CPU, 500K\u20134M+ GPU; the concept doc's Model C likewise uses \"1M+ ghost agents as aggregates\". This architecture instead simulates all 2M at full fidelity every tick and applies culling only to the wire \u2014 culling reduces egress, not compute. It never mentions aggregation, variable-rate ticking, LOD, distribution, or `active_indices`, and never explains why the prior strategy was abandoned. Result: the existing extension points go unused, and the stated future work (620 Distribution & Scaling; 300-slices Future Work item 1 \"Multi-Resolution Entity Simulation\") no longer composes \u2014 a GPU-only full-fidelity design has no place for the heterogeneous aggregate neighbor rows (centroid/heading/dispersion/count) that 100-arch explicitly requires `SpatialQuery` to carry.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Neighbor caching breaks statelessness, determinism/replay, and index stability",
+      "description": "100-arch requires \"The engine is stateless between ticks\" and \"**Tick determinism** \u2014 Given the same state and inputs, a tick produces the same outputs. This enables replay\"; 300-arch's \"Logging format and replay fidelity\" relies on that (\"logging only the initial state plus any non-deterministic inputs is sufficient\"). Slice 119's `NeighborCache`, which this document endorses, introduces mutable cross-tick state keyed on `agent_index % stagger_period == tick_count % stagger_period`, so tick output depends on `tick_count` \u2014 replay from a log with a different starting tick count diverges. Line 84 concedes the trajectory difference but only says it \"must be documented as a behavioral change\", never defining the tolerance for the mandatory \"regression testing against the existing force implementations\" goal (the existing suite asserts bit-equivalence, e.g. slice 116's parity tests, and `apply_neighbor_cap` documents non-stable `argpartition` tie-breaking that GPU gathers will re-order). Also, the cache stores neighbor **indices**: `src/migratory_server/entities.py::remove_entity` uses `np.delete` and re-maps every subsequent index, while `spawn_entity` appends \u2014 no cache invalidation on lifecycle events is described, so a cached index silently points at a different agent. The same omission affects the \"large delta (spawn)\" handling at line 88.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Additive / coexist\" contradicts \"replacing\", and the tiers are not independently deployable",
+      "description": "Scope and `001-initiative-plan.migratory.md` say \"replacing NumPy/cKDTree with Quadrants GPU kernels\"; line 82 says \"the Quadrants port is additive, not replacing existing code paths. Both backends can coexist behind the `SpatialQuery` and `BulkForce` interfaces.\" These are opposite strategies with different state ownership (see the technology finding above) \u2014 one of them must be chosen before any slice can be scoped. Likewise, line 30 requires \"Incremental migration with **no big-bang transitions**. Each scaling tier must be deployable independently\" and line 46 says the wire \"should not be gated on the compute substrate migration\", but Tier 2 (line 68) bundles \"All forces, spatial queries, and integration run as compiled GPU kernels\" (a single big-bang compute swap) *with* delta compression, decoupled stream rate, and binary WebSocket; Tier 5 (line 74) requires \"All tiers converging\". And \"Each tier ... should produce a demonstrable artifact \u2014 screenshot, video, or live demo\" contradicts the Scope exclusion of viewer/client rendering optimization, since such artifacts require initiative 600's viewer.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight architecture: cut Tiers 3\u20135, the render path, the three-way contract abstraction, and the milestone/demo machinery",
+      "description": "Five tiers, three tracks, 11+ slices, three tick-return options, three wire mechanisms, a full GPU substrate port, a cross-platform benchmark harness, a \"Vulkan framebuffer \u2192 H.264 stream\" server-render path (which would delete the entire wire track the document says is independently valuable), dedicated 10G/25G LAN hardware, five demo artifacts, and biome fragment-shader work \u2014 for an initiative whose only measured evidence is N=2492 at ~59 TPS, whose two CPU slices (118/119) are `not_started`, and which has no slice plan of its own. The concept doc's own \"What NOT to do now\" says \"**Do not optimize today for Model B/C/D** ... **Trigger:** Model A hits its ceiling on a simulation we actually want to run. Not before\", and calls Model A (5\u201320k agents) \"probably for the foreseeable creative-world work\". No trigger evidence is offered. Cut or defer: Tiers 3\u20135, Quadrants CUDA/Vulkan, the server-render path, dedicated LAN, the five demo milestones, the biome shading paragraph (also a direct Scope contradiction \u2014 it specifies Three.js fragment shaders and a JSON biome config while `500-arch.environment-layer.md` already defines a sim-side Biome layer with `biome_id`/`movement_cost`/`traversability` and a YAML environment specification, creating two same-named configuration artifacts), the cross-platform harness, and options (b)/(c) of the tick contract. Keep slices 118\u2013119, the already-planned 319/311 work, and a single decision record on the shared state boundary. \"The architecture should support all three behind an abstraction\" is abstraction and configuration nothing uses yet.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No error handling, JIT warm-up plan, backend config, or verification tolerance across the design",
+      "description": "This is a cross-cutting omission across Overview, Envisioned State, Technical Considerations, and Anticipated Slices, so I cannot pin it to one line. (a) No failure strategy for a 0.7.2 fork with \"rapid release cadence\": Metal/CUDA backend unavailability, `@ti.kernel` API breakage, kernel launch or compile failure \u2014 300-arch demands \"Explicit lifecycle \u2014 No silent failures, no undefined states\" and CLAUDE.md requires every `except` to re-raise via `logger.exception` or handle a specifically justified exception. (b) No JIT warm-up plan: the first `@njit` call and the first Taichi kernel compile take seconds and would blow the 16.67 ms budget inside the single-worker executor on tick 1; `TickLoop` merely increments `overrun_count`. (c) No runtime fallback beyond \"the Numba tier provides a working fallback at 10k\" \u2014 Tiers 3\u20135 have none and no backend-switch mechanism exists. (d) No compute-backend config surface (see FAIL 2) and no startup-time validation, contrary to 300-arch's \"Failures should be explicit and immediate\". (e) \"Every optimization must produce outputs verifiable against the current NumPy implementation\" is never given an acceptance criterion \u2014 bit-equivalence, numeric tolerance, or statistical equivalence \u2014 even though stagger phases, GPU reduction order, `argpartition` ties, and int16 quantization all change trajectories. Without these, the \"mandatory regression testing at each tier transition\" goal is untestable.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The \"tick return type contract\" targets an interface that does not exist",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The single load-bearing decision is deferred, then triplicated",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "A GPU field substrate cannot sit \"behind the existing SpatialQuery and BulkForce interfaces\"",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The wire-protocol baseline is false, making two tier milestones no-ops",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:60",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Current State\" mixes a fabricated live baseline with an unrelated synthetic bench",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:52",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Tier 1's 10k @ 60 TPS is contradicted by the document's own N-scaling data",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:66",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "No quantitative path for the ~450\u00d7 gap to 2M agents",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The GPU spatial hash is described as \"single-kernel\", hiding the hard part",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "\"Same code, different backend\" is impossible between Numba and Taichi kernels",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:44",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The Quadrants choice fights the stack's named GPU path; DLPack and unified-memory claims are unsupported",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:82",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Delta accumulation is incompatible with the approved drop policy, the int16 math is wrong, and it duplicates slice 319",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Frustum culling duplicates slice 311, breaks the server's unidirectional-flow contract, and its ~50k assumption fails in the target scenario",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:90",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Decoupled stream rate (sim 60, stream 30)\" has no hook and violates a release-blocking NFR",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:68",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The architecture abandons the project's documented scaling strategy and ignores the existing subset-evaluable hook",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:74",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Neighbor caching breaks statelessness, determinism/replay, and index stability",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:84",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Additive / coexist\" contradicts \"replacing\", and the tiers are not independently deployable",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Overweight architecture: cut Tiers 3\u20135, the render path, the three-way contract abstraction, and the milestone/demo machinery",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No error handling, JIT warm-up plan, backend config, or verification tolerance across the design",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/140-arch.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-140-arch"
+  },
+  "timestamp": "2026-11-17T09:52:17.584978",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 229411,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 19,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 15,
+  "prompt_tokens": 1169356,
+  "cached_tokens": 1019392,
+  "cache_write_tokens": null,
+  "completion_tokens": 63200,
+  "reasoning_tokens": 55528,
+  "duration_seconds": 685.1212720000185,
+  "cost_usd": 0.16294222,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Overwrite guard is placed on a function the CLI review path does not use",
+   "description": "T12 adds archive-on-overwrite to `save_review_file` only. `save_review_result`, whose docstring calls it the interface used by `cli/commands/review.py`, writes with its own `path.write_text(...)` calls and never calls `save_review_file`. Only the pipeline action (`pipeline/actions/review.py:272`) goes through `save_review_file`.\n\nAs written, T12/T13 can be fully green while two criteria stay unmet on the path they name:\n- \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns.\"\n- \"A failed or unverifiable archive copy aborts the overwrite\" (F003).\n\nT13 tests `save_review_file` directly, so it would not catch this. Fix: put the guard in one shared helper that both write paths use, and add a T13 test that re-saves through `save_review_result`. Note that `save_review_result` returns `Path`, not `Path | None`, so the abort contract needs deciding for that path.",
+   "location": "src/squadron/review/persistence.py:291-312"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "T3 instructs a review\u2192pipeline import, the inversion the relocation exists to remove",
+   "description": "T3 says the `RoundDiff` import from `pipeline.actions.findings_addressed.screens` \"stays as a cross-package import in the pipeline\u2192review direction\". Once `verification.py` lives in `review/addressed/`, that import is review\u2192pipeline. The design's \"Dependency direction (review F002)\" section rules this out as a review \u2194 pipeline package cycle.\n\n- **Same problem in T5:** `judge_residue_core` takes `diff` and today's `judge.py:21` imports `RoundDiff` from `screens`; T5 does not say where the type comes from after the move.\n- **Runtime risk:** importing `screens` runs `findings_addressed/__init__.py`, which imports the judge wrapper, which imports `review.addressed`. After T7 populates `review/addressed/__init__.py` with `verify_outcomes`, this is a real circular-import hazard, not only a layering one.\n- **T1 also:** `models.py:14` imports `squadron.pipeline.models.ActionResult` for `read_findings`, so the \"verbatim\" move carries a second review\u2192pipeline import. It is not a runtime cycle, since `pipeline/models.py` has no squadron imports. The design itself places `read_findings` in `review/addressed/models.py`, so this needs an explicit decision in the task rather than silence.\n\nFix: add a step moving `RoundDiff` (a plain dataclass) into `review/addressed/`, with `screens.py` importing it from there, and correct T3's direction statement.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "\"305 suite passes unchanged\" cannot hold under T5 and T7 as written",
+   "description": "Two instructions make T6's stop condition fire deterministically:\n\n- **Patch target (T5/T6):** the judge and e2e tests patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile` (also `test_findings_addressed_e2e.py:27`). After T5 the transport call lives in `review/addressed/judge.py`, so the patch no longer intercepts it. T6 then says \"if a test needed rewriting, stop and reconcile with the design\".\n- **Removed re-exports (T7/T8):** the tests import the moved names from the package root (`from squadron.pipeline.actions.findings_addressed import (...)`, e.g. `test_findings_addressed.py:18`). T7 drops those re-exports with no shim, so the imports must be edited. T1 already tells the implementer to edit the four test files, while T2 claims the suite passes \"unchanged\".\n\nFix: state what \"unchanged\" means (assertions and test bodies unchanged; import paths and patch targets may be updated) and add those updates as explicit steps in T5 and T7. Otherwise keep the transport lookup or the re-exports in the pipeline module. The slice criterion \"305's full test suite passes unchanged\" needs the same clarification.",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T14 is sequenced after Part D's commit, against the design's Phase 5 note",
+   "description": "The design requires the cf `archive/`-scanning check \"sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme\". T14 is numbered after T12/T13, and T13 carries the `fix:` commit, so Part D is committed before the answer is known. The task file compensates with \"do not mark T12 done until T14\" notes in three places, which a sequential executor will handle poorly. Fix: move T14 ahead of T12 and delete the cross-reference caveats.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-296"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T11 tests the stamp on only one of the two persistence paths",
+   "description": "The criterion requires `reviewedSha` \"from both the CLI and the pipeline persistence paths\". T11's integration test covers `save_review_result` \"or the pipeline review action, whichever is more directly testable\". T10 wires both; one can be left untested or unwired without a failing test. Fix: require an assertion for each path.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:219-222"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Part 0 is over-split for a mechanical relocation",
+   "description": "Part 0 uses eight tasks and four commits for moves the design calls \"mechanical (import-path updates)\".\n- **Merge T1\u2013T4:** T2 and T4 are the same pytest/pyright command run twice; make it one move task with one verify and one commit.\n- **Merge T7 into T5:** the `__all__` changes cannot be separated from the moves anyway, because the package `__init__` must import from the new locations as soon as T1 lands.\n\nThat leaves two implement/verify pairs: relocate, then extract the judge core.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:76-184"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commit markers are sub-bullets, not plain `**Commit**:` lines",
+   "description": "Markers appear as `- Commit: ...` list items inside verify tasks. They are correctly not checkboxes and sit at tested points, but the expected form is a plain `**Commit**:` line.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+  }
+ ]
+}

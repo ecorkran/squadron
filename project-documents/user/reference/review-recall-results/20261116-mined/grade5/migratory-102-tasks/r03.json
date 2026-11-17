@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2.2 omits the production BehavioralProfile construction site in migratory_server",
+   "description": "Description: Task 2.1 makes `leadership_weight` and `momentum_weight` required with no defaults, and task 2.2 (\"Update all BehavioralProfile call sites in tests\") restricts its update sweep to `tests/` (\"search for `BehavioralProfile(` across `tests/`\"). But `build_profiles()` in `src/migratory_server/simulation.py:18` constructs `BehavioralProfile` with only the 7 existing fields \u2014 a non-test source call site no task covers. That function is exercised by `tests/test_simulation.py` (the `build_profiles` tests at lines 29, 39, 45) and `tests/test_server.py` (`TestSimulationManagerIntegration`). After task 2.1, those tests will raise `TypeError`, making 2.2's verification gate (\"all existing tests still pass\") and 6.1's full-suite gate unattainable as written. This leaves the slice's technical requirement \u2014 \"all affected tests are updated within this slice\" (backward-incompatible update handled end-to-end) \u2014 unmet. The task file needs a step (or small task) in Section 2 to update `build_profiles`, and a decision on whether `ProfileConfig` in `src/migratory_server/config.py` gains the two fields (its optional-weight pattern at `_validate_profile` suggests that) or `build_profiles` passes explicit values \u2014 the latter being the choice consistent with the \"never use silent fallback values\" convention.",
+   "location": "src/migratory_server/simulation.py:18"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"No nested Python loops\" vectorization requirement is tracked by no task",
+   "description": "Description: The slice's Technical Requirements state: \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" No task in the breakdown restates or verifies this, and the task file contains no mention of vectorization anywhere. The risk is concrete: task 4.1 (LeadershipForce) is written in per-element index notation \u2014 `weighted_heading = sum(velocity[i] * leadership[i]) / sum(leadership)` \u2014 which a junior implementer can plausibly translate into a nested `for neighbor in neighbors` loop, and nothing in the verification steps (3.2, 4.2, 6.1, 6.2) would catch it, since no test observes loop structure. The established pattern in `src/migratory/engine/flocking.py` (single loop over agents, numpy operations within each neighborhood) is the intended one. One line added to tasks 3.1 and 4.1 \u2014 e.g. \"follow the flocking.py pattern: one loop over agents, vectorized ops within the neighborhood; no per-neighbor Python loops\" \u2014 closes the gap.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-123"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Minor: 6.3 commit prefix may not match its content",
+   "description": "Description: Task 6.3 says \"Git add any remaining changes and commit: `docs: complete slice 102`\". If \"remaining changes\" includes code (e.g., the `simulation.py` fix from the first finding landing late), the `docs:` prefix would misdescribe the commit against CLAUDE.md's semantic-commit rule. Informational \u2014 the implementer should re-check `git status` contents before choosing the prefix.\n\nVerdict rationale: no FAIL \u2014 the plan is executable and its own verification gates would surface the `simulation.py` break quickly at task 2.2; the fix is small and local. The two gaps above should be patched into the task file before a junior AI starts work, hence CONCERNS rather than PASS.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:180-182"
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`arch` boundary has no derivable slice index \u2014 the `NNN-review.arch.*` artifact cannot be located",
+   "description": "The `pre-slice-plan` boundary is defined as \"arch file exists, no slice plan,\" and the gate must look for `arch` review artifacts. But `detectDocuments(projectPath, index, reviewType)` matches on a **numeric slice index** (`${idx}-review.${reviewType}.`), and the `arch`/`slices` artifacts live under `project-documents/user/architecture/` with the *initiative* index (e.g. `240-arch...`, `240-slices...`), not the slice index. In the `no-active-slice` path there is no active slice at all, so there is no index to pass. The design's own \"Boundary \u2192 signal\" table lists \"file presence (existing)\" for this boundary, and `detectDocuments`'s `architecture`/`slicePlan` slots are keyed by the same `idx`. As written, the `arch` gate either cannot run or will silently look up a nonexistent `<sliceIndex>-review.arch.*` path and always report `pending-review`. The design must state explicitly how the arch review is located (e.g. derive the initiative index from `project.fileArch` / `project.fileSlicePlan`, and scan `project-documents/user/reviews/` with that index), and how that maps onto 240's `detectDocuments(path, index, reviewType?)` signature \u2014 otherwise the \"success criterion: the same clears/pending/failed behavior holds at the `arch` boundary\" is unmet.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:130-141"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`resolveGateConfig` is specified as reading `ConfigManager`, but `ConfigManager.get()` is async \u2014 the pure-module contract in TD-1 is wrong",
+   "description": "TD-1 declares `reviewGate.ts` exports \"pure, side-effect-free functions\" and lists `resolveGateConfig(config): ResolvedGate | null` among them, and the data flow shows `resolveGateConfig(config)` called synchronously. `ConfigManager.get(key)` is `async` (returns `Promise<ConfigResult>`) and does file I/O on every call. The function therefore cannot be synchronous or pure as described, and the \"Stateless\u2026 pure functions\" framing in \u00a7State Management is inaccurate for this member. Either `resolveGateConfig` becomes async (and is no longer \"pure\" in the TD-1 sense \u2014 it must be documented as the one I/O-bearing function, or the I/O should move to the navigator), or the navigator should read the raw config values and hand them to a pure `resolveGateConfig(enabled, threshold, unknownAs, override)`. As written, the implementer will hit a type error and the \"pure module\" property that 242 relies on is left undefined.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:176-193"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Invalid `review_threshold` / `review_unknown_as` values at read time are not handled, contradicting the arch's fail-fast principle",
+   "description": "The arch lists \"Fail-fast on configuration errors \u2014 an invalid `workflow.review_threshold` value or an unrecognized per-gate config is a config error surfaced immediately, not a silent pass or silent block\" as an architectural principle, and 240 shipped `enum` validation on those keys at *write* time. However, a hand-edited `.context-forge.toml` bypasses `ConfigManager.set` validation entirely, so `ConfigManager.get()` returns the raw string without validation. The design's `resolveGateConfig` narrows \"explicitly\" but specifies no behavior for an unrecognized token: it does not say whether it throws, or falls back to the default threshold. Given the arch's explicit fail-fast principle, the design must state the handling strategy (surface a config error rather than silently treating an invalid token as a threshold). As written, the invalid-token case is an implicit hole in a \"conservative by default\" design.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:143-169"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Per-gate `threshold` override resolution is under-specified: key spelling and boundary\u2192key mapping are not pinned down",
+   "description": "TD-4 says `resolveGateConfig` \"uses the per-boundary threshold override when set, else the global `review_threshold`\", but never states the actual config key string to read. 240 shipped keys with **underscore** transition names (`workflow.review_gates.pre_advance.threshold`, `pre_slice_plan`, `pre_tasks`, `pre_implementation`) while TD-1 of this slice defines the `Boundary` union with **camelCase** names (`preSlicePlan`, `preTasks`, `preImplementation`, `preAdvance`). The mapping between the two vocabularies is exactly the \"scattered comparison values\" the project conventions forbid, and it is nowhere defined. The design needs an explicit `BOUNDARY_CONFIG_KEY` map (or a stated naming convention) so the boundary and the config key are bound in one place, and the success criterion \"Per-boundary `threshold` override (if set) takes precedence over global `review_threshold`\" is otherwise not implementable deterministically.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:224-232"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The `review_type` per-gate keys are left shipped-but-unread, but 240's `review_type` config values are unvalidated free strings",
+   "description": "TD-4 decides to leave `workflow.review_gates.*.review_type` \"defined but unread.\" 240 shipped them as free-form strings with no enum (its own tasks note: \"`.review_type` is a free string for now (its vocabulary is gate logic, 241)\"). Leaving them unread means a user who sets `workflow.review_gates.pre_advance.review_type = \"code\"` will observe **no effect**, and nothing in CF will warn them \u2014 the keys look active in `cf config get` output but are silently ignored. The design defers only the *documentation* of this to 243, but the *behavior* (a visible, settable, ignored key) is a user-facing trap created by this slice's decision. The design should either (a) remove the keys in 241 as 240's slice plan explicitly permits (\"241 leaves them defined-but-unread \u2026 OR 241 removes them; the design (Phase 4) makes that call\"), or (b) have `resolveGateConfig` detect a non-empty `review_type` and surface a config warning/error naming the inert key. Silently ignoring a settable key conflicts with the project's \"Never use silent fallback values\" principle.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:224-232"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Worktree-scoped config is claimed to be inherited \"for free\" but the construction instruction contradicts it",
+   "description": "\u00a7Config Injection states \"**Worktree scope inherited for free** \u2014 the CLI already resolves the worktree-aware path before constructing the navigator, so the gate reads config at the scope 180 established,\" and the Technical Scope / Development Approach instruct the surfaces to construct `ConfigManager(project.projectPath)`. In `cf next` and `cf status`, `project.projectPath` *is* replaced by the worktree path by `applyWorktreeOverlay` (`packages/core/src/utils/worktree-overlay.ts:9`), so `ConfigManager(project.projectPath)` would read `<worktreePath>/.context-forge.toml` \u2014 a path that typically does not exist. In the MCP `workflow_status`/`workflow_next` tools the project is resolved with `resolveProject(store, id, args.worktreeId)`, so `project.projectPath` may or may not be overlaid depending on whether `worktreeId` was supplied; but `workflowTools.ts` uses `store.getById(resolvedId)` in some paths (e.g. `workflow_check`) and `resolveProject` in others. The design asserts worktree scoping works \"for free\" without identifying *which* path string must be passed to `ConfigManager` to get project-scope vs worktree-scope resolution \u2014 these are two different files (`<projectPath>/.context-forge.toml` vs `<worktreePath>/.context-forge.toml`). The arch (240-arch \u00a7Related Work) explicitly requires the `workflow.review_*` keys to be resolvable at worktree scope as well as project scope. The wiring instruction must be precise about which path goes into `ConfigManager` and how the two scopes are distinguished, or the gate will read config from the wrong scope.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:97-113"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The `pending-review` / `review-failed` statuses are added to `SliceStatus`, but downstream status consumers are not enumerated",
+   "description": "`SliceStatus.status` is a closed union consumed in several places that switch on it \u2014 the MCP `workflow_status` tool description hardcodes the vocabulary (\"needs-design, needs-tasks, in-implementation, complete\") in `packages/mcp-server/src/tools/workflowTools.ts:128`, and `buildSummary` in `WorkflowNavigator.ts:547` renders the status string. The design adds two new values but its \"Provides to Other Slices\" only says they are \"consumed by the visualizer and any status reader\" \u2014 the visualizer is not named, and the MCP tool description string is a concrete surface that will now emit values its own description does not list. The design should enumerate the known consumers that must be updated in this slice (MCP tool description; CLI `status` output already prints `status.activeSlice.status` generically) or explicitly assign them to a named slice.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:301-320"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`STATUS` const introduction expands this slice's scope beyond the gate and partially duplicates slice 910",
+   "description": "TD-6 introduces `STATUS` as an `as const` object plus a derived `NormalizedStatus` type in `introspection/types.ts`, and states the ~50-site sweep is deferred to 910. This is a real but small scope addition relative to the gate logic: the slice only needs `STATUS.Complete` (TD-5) and a handful of literal statuses in its new code. Introducing the const also changes the shape of `NormalizedStatus` for every downstream consumer at once, and creates a partial-duplication state (const exists, ~50 sites still use bare literals) that 910 must finish. The slice plan assigns 241 only \"Introduce the `STATUS` const (referenced by 910)\" \u2014 so the const itself is in scope \u2014 but the design goes further by also deriving `NormalizedStatus` from it (\"union stays byte-identical\"), which is 910's stated job (\"`type NormalizedStatus = (typeof STATUS)[keyof typeof STATUS]`, keeping the union byte-identical\"). Either keep the const with its literal type and let 910 perform the type derivation, or state explicitly that 241 performs the derivation and 910 only sweeps call sites, so the two slices do not both claim the same edit.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:237-251"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Boundary evaluation is folded into `deriveSliceStatus`, which changes `getStatus()` semantics beyond `getNext()`",
+   "description": "TD-3's choice to derive `pending-review` / `review-failed` inside status derivation means the *status* of a slice changes when gating is on \u2014 e.g. a slice whose tasks are all checked reports `pending-review` rather than `complete`. That is the intended arch goal (\"First-class status representation\"), but it is worth noting that `deriveSliceStatus` currently returns `complete` and `getNext()` has separate branches for `complete` (with and without a slice plan). The design says the gate branch maps the new statuses to `review`/`blocked`, but does not say what the `complete`-with-no-slice-plan branch (`GUARD: complete-no-plan`) does when the status is `pending-review`/`review-failed` \u2014 those branches check `slice.status === 'complete'` exactly, so a gated slice would fall through to the final \"Review project status\" fallback. The design should specify the interaction with the `complete-no-plan` fallback and the `complete \u2192 advance` branch ordering explicitly.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:220-223"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`parseFrontmatter` flattens frontmatter to strings, so a non-string `verdict` cannot occur \u2014 but `normalizeVerdict` is documented as taking `string | undefined`",
+   "description": "The design's \"Interfaces Required\" correctly states that `parseFrontmatter` never throws and returns `{ found: false, data: {} }` on read/parse failure, and that this maps to `UNKNOWN`. This matches the implementation in `packages/core/src/introspection/parsers/frontmatterParser.ts`. Worth noting for the implementer: that parser is a naive line-based `key: value` splitter (not a YAML parser), so a `verdict` written as a nested/quoted YAML construct will not be found \u2014 `normalizeVerdict` will then see `undefined` and produce `UNKNOWN`, which is the safe direction but should be understood as a behavior, not a bug. The design's \"unparseable file \u21d2 UNKNOWN\" coverage is adequate here.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:76-82"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "No NFR restatement is required \u2014 the parent documents state no latency/throughput target for this path",
+   "description": "Neither 240-arch nor 240-slices states a latency, throughput, or other quantitative NFR for the workflow-navigator path, so there is nothing for this slice to restate. For completeness: 160-arch \u00a7Staleness notes that the navigator re-reads and re-parses files on each call and explicitly says a cache \"should not be built speculatively.\" This slice adds a config read (one TOML parse) and one frontmatter read per gated boundary, consistent with the read-heavy architecture \u2014 no finding.",
+   "location": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md"
+  }
+ ]
+}

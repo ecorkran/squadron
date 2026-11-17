@@ -1,0 +1,242 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Capability 1's external contract has no validation, compatibility, or field-level error strategy",
+      "description": "Description: The design treats `knowledge-graph.json` as an unversioned third-party contract pinned to a description, not a check. There is no schema validation of required fields, no plugin-version compatibility gate (the doc records \"v2.8.1\" as current state but defines no supported range and no behavior when the installed plugin is newer), and no defined behavior when the file *exists* but `tour[]` is missing/empty (e.g. the user ran an old or different phase), a `nodes[]` entry lacks `summary`, or the JSON is truncated mid-write. The only failure handling defined anywhere is the missing-file stop (\"report the exact command to run and stop\") and the commit-hash staleness warn. The doc's own named genuine failure mode \u2014 \"a confidently wrong concept doc built on a stale graph\" \u2014 is the same failure class as a confidently wrong concept doc built on a *format-shifted* graph, yet only staleness gets a provenance mechanism. The \"Graph is an input, not a dependency\" principle is about not re-implementing the plugin's engine; it does not justify skipping a load-shape check before drafting a `docType: concept` document from the result.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The concept file has no regeneration or already-exists policy",
+      "description": "Description: The output is a *fixed-name* file, `project-documents/user/project-guides/000-concept.{project}.md`, but the document only specifies behavior for the file's absence. It never says: (a) what a second `/sq:analysis understand` run does when `000-concept.{project}.md` already exists \u2014 refuse, warn, overwrite, or fork to a new index; (b) what happens when a concept exists but was hand-authored rather than generated, given that the \"User-Provided Concept\" section is \"sacred per project convention and never rewritten\" \u2014 an overwrite would violate that convention the document itself cites; (c) whether the fixed `000-` name is exempt from the \"increment per run, each run is an independent sample\" convention that Output Conventions applies to generated documents. The Motivation section says real engagements start from existing codebases \u2014 but the \"never planned in squadron\" framing means the skill's happy path (no concept exists) is the rarer case, and the already-exists case is where the sacred-section collision bites. A generated draft that claims to be the project's concept, with interview answers frozen as User-Provided, also needs a stated status and a statement of how a PM later amends it \u2014 none of that is specified.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Index allocation contradicts itself: overflow is both \"sanctioned\" and \"no new convention\"",
+      "description": "Description: Output Conventions says \"**Overflow into 950+ is sanctioned.** \u2026 generated documents take remaining slots in the 900 band as needed rather than stopping at 949.\" Resolved Design Decisions (20260818, i.e. *after* the arch was written) says \"Output location and docType \u2014 existing `user/analysis/` directory and `docType: analysis`, **in the 940-949 reserved range. No new convention, no gate change.**\" These cannot both be the settled decision: one explicitly authorizes allocation beyond the reserved range, the other asserts the allocation stays inside it. The initiative plan entry (item 12 in `001-initiative-plan.squadron.md`) echoes both sentences side by side without reconciling them. A slice implementer who lands an overview in 947 and then hits 950 will find the arch telling them either \"fine, sanctioned\" or \"you violated the reserved range\" depending on which section they read.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#resolved-design-decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The interview's entire structure is derived from a guide that is not in the repo or pinned",
+      "description": "Description: The interview scope table is \"derived from the concept guide's own section list,\" and unknowns are \"written per the concept guide's 'flag unknowns explicitly' rule.\" That guide lives in `project-documents/ai-project-guide/` \u2014 a git submodule (per `.gitmodules`) that is **not initialized in this checkout** (the directory is empty), so neither the section list, the rules, nor the required frontmatter for `docType: concept` could be verified from this repo. The architecture hardcodes a mapping (\"Problem & Motivation\", \"Target Users\", \"Solution Approach\", \"Initial Technical Direction\") of a document it cannot see, with no fallback or validation when the guide reorganizes \u2014 the same drift class the project's own slice-172 work (drift test that *fails* when the submodule disagrees with enums) exists to prevent. Relatedly, the Outputs section names the sections \"User-Provided Concept\" and \"Refined Concept's Solution Approach\" while the interview table lists bare \"Solution Approach\" \u2014 the doc never states the guide's actual top-level section names, so the two tables cannot be cross-checked against each other or the target.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#interview-scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The client-facing artifact \u2014 the liability the doc itself names \u2014 is guarded only by prompt-level rules",
+      "description": "Description: Capability (b)'s field schema is a 9-field table and its safety argument is entirely prose rules: \"Derive, never invent\", \"Status is honest\", \"Strip internal vocabulary\". Nothing in the design mechanically enforces any of it: there is no requirement that each Benefits entry carry a source pointer to the initiative plan, no check that the emitted document contains only the nine schema fields, no prohibition-enforcement on indices/phase numbers, and no review or validation step before a client sees the output \u2014 the only human gate anywhere in the design is for initiative-plan *candidates* (Capability 1), which the doc treats as a commitment document, while the client overview \u2014 which it calls \"a liability, not a deliverable\" if wrong \u2014 ships on generation. This sits in tension with the document's own reasoning elsewhere (it justifies Output Conventions by noting the frontmatter gate validates enums mechanically because \"a new type would require a gate change before anything could be committed\") and with the project convention's core premise that prose rules are suggestions agents do not reliably follow. Even one structural check (e.g. a \"Sources:\" appendix per field, or a `sq validate`-style pass over the emitted file) is within this initiative's skill-level scope and is absent.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Skill-level\" conflates two different delivery vehicles in the Overview and Scope",
+      "description": "Description: The Overview declares \"**Scope:** Skill-level document transforms.\" and the design goals say \"Neither adds runtime machinery to the engine\" \u2014 both capabilities are then described as \"skills\". But Delivery explicitly splits the vehicles: capability (a) is a *pack skill* in `commands/analysis/` (340's manifest/installer machinery), while capability (b) is \"a first-party command in `commands/sq/`, **not as a pack skill**.\" So one of the two in-scope capabilities is, by the document's own delivery section, not a skill. The conflation matters because 340's machinery (receipts, `sq skills list/doctor` integration, the dispatcher) applies to only one of the two, and the Overview's shared-shape claim (\"Two capabilities share that shape and nothing else\") is true for the transforms but false for the delivery. Minor, but it's the kind of vocabulary drift that makes the slice plan harder to write.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several load-bearing mechanics are left implicit without being assigned to slice design",
+      "description": "Description: The Open Questions section names only two deferrals (interview wording; `analyze-codebase-prompt.md` reuse), but at least four more user-visible mechanics are load-bearing and unassigned: (1) **plugin-install detection** \u2014 \"Verify the plugin is installed\" has no defined detection mechanism (which marketplace/config file or state the skill inspects, and its behavior when that state is unreadable); (2) the **provenance block** \u2014 staleness warnings \"must appear in the generated document's provenance\" but its format, location, and fields (graph commit, HEAD, distance, generation date, model) are never specified, yet it is the design's primary anti-silent-failure mechanism; (3) **where confirmed initiative-plan candidates are written** \u2014 no path, index, or file shape is given for the output of Capability 1's third artifact, only \"offered for PM review\u2026 written only on explicit confirmation\"; (4) how `{project}` in `000-concept.{project}.md` and `001-initiative-plan.{project}.md` is resolved (cf project name? git directory? frontmatter?) \u2014 the existing plan's own frontmatter points at `000-concept.squadron.md`, so the skill must interoperate with an existing naming reality. Each individually is small; collectively they are the parts where two implementations of this architecture would diverge.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test or fixture strategy for either capability, despite output contracts defined in prose",
+      "description": "Description: The design never states how either capability will be verified: no fixture `knowledge-graph.json` (the repo contains none \u2014 the only graph-shaped sample in the repo is `reference/repowire-probe-sample.json`, a different tool's format), no golden output, no statement that the squadron repo itself is a test subject (which it clearly should be, since the doc calls the absence-of-concept case \"the tested path\"). The project's parsing conventions explicitly warn that tests passing on a format the real data never uses \"only provides false confidence,\" and the tech-debt-audit lineage in this repo already defines an independent-run variance harness (323). The graph contract here is third-party and *unversioned* (see the validation finding), which makes a real captured `knowledge-graph.json` fixture and a golden-concept comparison the minimum evidence that the \"graph is structure, interview is intent\" attribution rule actually holds on real input. \"Tested path\" is asserted without the design committing to the test.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#open-questions-for-slice-design"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Grep the graph before reading\" is format-fragile, and the tracked-graph hygiene cost is unquantified",
+      "description": "Description: Two feasibility details are asserted rather than checked. (1) \"Read discipline: the graph is large. Grep for the needed section before reading\" \u2014 if the plugin emits the JSON pretty-printed this works; if it emits it minified or single-line, grepping for a section returns the whole file, the exact thing the rule exists to prevent. The design should name the actual extraction mechanism (e.g. `jq`/python filtering on `nodes[].type`) instead of a format-dependent one. (2) \"Ignore the scratch, track the artifacts\" commits squadron to keeping `knowledge-graph.json` in git for *every* target project. Slice 344's own record describes the plugin's artifacts as part of a 33 MB-class system; a graph for a large repo plausibly reaches megabytes, and the staleness mechanism (`meta.json.gitCommitHash` vs `HEAD`) means the tracked JSON will churn on essentially every re-analysis. The doc's stated reason \u2014 staleness \"visible in review\" \u2014 holds for `meta.json` (tiny) and does not require the full graph in history. At minimum the design should state an expected size bound or justify tracking over, e.g., tracking only `meta.json` plus the graph in the working tree.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verified claims about the current state check out against the repo",
+      "description": "Description: For the record, the falsifiable current-state and delivery claims were verified true: `commands/sq/analysis.md` lists exactly `Valid skills: tech-debt-audit` and needs the three claimed edits for a new skill; `commands/analysis/` contains only `tech-debt-audit.md`; `commands/sq/summary.md` exists (the `summary` name collision claim); `project-documents/user/analysis/` contains exactly the 940/941/942 tech-debt-audit series plus slice-indexed `review` docs (so no 940+ collision with those); `project-documents/user/project-guides/` contains no `000-concept` file; the root `.gitignore` has no `understand` or `trash` entry; the 344 deprecation rationale in the 340 slice plan matches the doc's account; and the status enum cited (`complete, in_progress, not_started, deprecated, deferred`) matches slice 172's canonical set. The `file-naming-conventions.md`-specific claims (940-949 reservation, 15 docTypes, `topic:` field requirements) could **not** be verified because the `ai-project-guide` submodule is not initialized in this checkout \u2014 the 940 start is corroborated by the tech-debt-audit skill text itself, but the exact 940-949 reservation and its label should be re-confirmed against the guide before the slice plan relies on it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#current-state"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Capability 1's external contract has no validation, compatibility, or field-level error strategy",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The concept file has no regeneration or already-exists policy",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Index allocation contradicts itself: overflow is both \"sanctioned\" and \"no new convention\"",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#resolved-design-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The interview's entire structure is derived from a guide that is not in the repo or pinned",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#interview-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The client-facing artifact \u2014 the liability the doc itself names \u2014 is guarded only by prompt-level rules",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Skill-level\" conflates two different delivery vehicles in the Overview and Scope",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Several load-bearing mechanics are left implicit without being assigned to slice design",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No test or fixture strategy for either capability, despite output contracts defined in prose",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#open-questions-for-slice-design",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Grep the graph before reading\" is format-fragile, and the tracked-graph hygiene cost is unquantified",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Verified claims about the current state check out against the repo",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#current-state",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T12:19:30.220783",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 243604,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 882552,
+  "cached_tokens": 775040,
+  "cache_write_tokens": null,
+  "completion_tokens": 61729,
+  "reasoning_tokens": 57112,
+  "duration_seconds": 555.396928332746,
+  "cost_usd": 0.20035868,
+  "cost_basis": "alias_pricing"
+}

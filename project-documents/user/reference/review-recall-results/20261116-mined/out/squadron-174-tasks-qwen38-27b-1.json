@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All success criteria are covered by tasks, including the ones easy to miss",
+      "description": "Description: I cross-referenced each design Success Criterion bullet against the tasks. Full mapping: owner-at-creating-write / no ownerless `running` window \u2192 12, 14 (new-run case) and 22 (dead-PID row lists `orphaned`); `heartbeat_at` advances \u2192 14; `active_step`/`active_item` set and cleared at finalize \u2192 7, 11\u201312; kill -9 \u2192 `orphaned` + wait exit 8 \u2192 20, 22, 42 (walkthrough step 6); v4 file \u2192 `running`/`UNOWNED`, wait keeps waiting \u2192 20, 22; overdue-heartbeat `stale` (one WARNING, keeps waiting, not in default prune) \u2192 20, 35; foreground stall (error prefix `dispatch stalled:`, WARNING, next dispatch succeeds) \u2192 15\u201318; prune preview/`--yes`/live-never/unowned-and-paused protection \u2192 33\u201339; no per-run warnings + summary line + `-v` details \u2192 21, 25, 26; TTY width/ellipsis/floor-8/no truncation piped \u2192 23\u201324, 26; `pipelines list` aligned/no boxes/`-v` params \u2192 27\u201328; `pipelines show` (source, path, bytes, `--path`, not-found, mode-000) \u2192 29\u201331; D3-row unit tests \u2192 10; RunHeartbeat test battery \u2192 14; dispatch WARNING-without-traceback test \u2192 18; `plan_prune`/`apply_prune` batteries (incl. unwritable dir) \u2192 35, 37; `fit_widths` battery \u2192 24; wait ORPHANED/STALE + exit-8 mapping \u2192 20; I/O-bounds test +20 running runs with `process_alive` exactly 20 times \u2192 22; hermetic real fixtures \u2192 Context Summary + 10/12/14/37; integration requirement (sq run/--resume/--item/--status/prompt-only unchanged, resumed reads `running`) \u2192 12 (claim), 13 (prompt-only owner=None), 14 (three SDK paths, existing tests unchanged), 42 (baseline match). The traceability line (line 31) is accurate. I verified the cited source anchors exist: `executor.py:390/427/576`, `state.py:267`, `cli/commands/run.py:251`, `sdk_session.py:218` (`idle_s=None`), `run_wait.py` `WAIT_EXIT_CODES`, `batch_report.py:60`, `run_listing.py:90/115`, `config/keys.py` `CONFIG_KEYS`.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31"
+    },
+    {
+      "severity": "PASS",
+      "title": "Restated NFR has a tests/load/ task, and the \"no new CI wiring\" claim is verified true",
+      "description": "Description: The design restates 199's advisory NFR (\"`sq runs list --all` under 1 s with a few hundred run-state files\"). Task 22a adds `tests/load/test_run_listing_scale.py`, modelled on the real `tests/load/test_usage_reader_loop.py` (which I read: module docstring naming the slice/NFR, named bound constants). The task's justification that \"no new CI wiring is needed because `testpaths = [\"tests\"]` already collects `tests/load/`\" checks out: pyproject.toml line 82 has `testpaths = [\"tests\"]` with no addopts/marker exclusion, and `.github/workflows/ci.yml` runs `uv run pytest` in its test job; the four existing `tests/load/` tests carry no skip markers, so the new load test will run and gate the build. CI gating is not left implicit. Notably, the design's Special Considerations admits \"There is still no assertion on time in tests\" \u2014 Task 22a closes that gap, which the design alone left open.",
+      "file_ref": null,
+      "category": "load-test",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern, and commit placement are correct",
+      "description": "Description: Dependencies hold with no cycles: `ActiveItem` defined in Task 4 before use in Tasks 5 and 8 (which explicitly says \"do not redefine it\"); config keys in Task 8 precede their reads in Tasks 13 and 15; `run_liveness` (Task 9) precedes all consumers (11, 19, 21, 33\u201334); `scan_runs` (Task 32) precedes `plan_prune` (Task 33) which takes `scan`; `cli/columns` (Task 23) precedes all renderers (25, 27, 38 preview); Task 22a sits after the `list_run_summaries` return-type change (Task 21) it consumes. Test tasks immediately follow their implementations (4\u20135\u21926\u20137, 9\u219210, 11\u219212, 13\u219214, 15\u201316\u219217, 18 self-tests, 19\u219220, 21\u219222, 23\u219224, 25\u219226, 27\u219228, 29\u201330\u219231, 33\u201334\u219235, 36\u219237, 38\u219239). The 17 commit items sit at working, tested points at the end of logical units \u2014 not after every task (Tasks 1, 2, 3, 4, 5, 6, 9, 11, 13, 15, 16, 19, 21, 23, 25, 27, 29, 30, 32, 33, 34, 36, 38, 41 have none) and not only at the end; each commit line follows an explicit \"tests pass\" success item, all use valid semantic prefixes, and no merge is written as a task (Phase 7 per AGENTS.md). Commit items use the `- [ ] Commit:` checklist form, which is the established convention in this repo's task files (e.g. 199) and matches AGENTS.md's mandate that every item carry a checkbox. Granularity is proportional: 42 tasks in one file for a 3/5-effort six-feature slice mirrors slice 199's 36-task single file, and no task is too large to delegate (each has explicit per-item success criteria a junior implementer can verify).",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 22a's wall-clock bound has a thin margin over the single local measurement",
+      "description": "Description: `MAX_LISTING_S = 1.0` is asserted over \"a few hundred\" seeded files, but the only measurement behind it is the design's \"0.67 s for 188 runs\", presumably local; that is a ~1.5x margin, and the load test now gates CI (`uv run pytest` on ubuntu-latest runners, plus the hermetic job). The repo's load-test precedent (`test_usage_reader_loop.py`) deliberately uses bounds generous to CI jitter. Nothing to change before starting \u2014 the test will reveal the real CI cost at Task 22a \u2014 but if it proves flaky on CI, the fix is to lower the seed count for CI or widen the constant with a recorded rationale, not to remove the assertion.",
+      "file_ref": null,
+      "category": "load-test",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:316"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 42 runs walkthrough step 8 under a scratch HOME, not the design's \"real runs dir\"",
+      "description": "Description: The design's walkthrough step 8 measures `sq runs list --all` against the real runs directory (188 runs); Task 42 runs it in the scratch HOME seeded with ~5 runs. This is a legitimate refinement \u2014 the design marks the walkthrough \"Draft, to be refined in Phase 6\", and the actual few-hundred-files cost measurement is enforced by Task 22a \u2014 but it means the walkthrough step only smoke-checks the listing path; the real assertion lives in the load test. No action required; recorded so the deviation is a conscious one.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:520"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All success criteria are covered by tasks, including the ones easy to miss",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "load-test",
+      "raw_category": null,
+      "summary": "Restated NFR has a tests/load/ task, and the \"no new CI wiring\" claim is verified true",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern, and commit placement are correct",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "load-test",
+      "raw_category": null,
+      "summary": "Task 22a's wall-clock bound has a thin margin over the single local measurement",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:316",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 42 runs walkthrough step 8 under a scratch HOME, not the design's \"real runs dir\"",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:520",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-17T12:04:23.334342",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 384999,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 612782,
+  "cached_tokens": 552640,
+  "cache_write_tokens": null,
+  "completion_tokens": 106049,
+  "reasoning_tokens": 102123,
+  "duration_seconds": 364.48382870759815,
+  "cost_usd": 0.27537388000000007,
+  "cost_basis": "alias_pricing"
+}

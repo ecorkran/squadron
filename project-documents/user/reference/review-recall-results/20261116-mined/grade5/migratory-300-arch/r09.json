@@ -1,0 +1,54 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Entity lifecycle events have no producer; population dynamics are an implicit load-bearing decision",
+   "description": "Tick step 4 (\"State commit \u2014 \u2026 Handle entity lifecycle events (spawning, removal, profile changes) queued during the tick\") presupposes something that *queues* lifecycle events, and no component in the document does that. The Envisioned State says the server \"removes entities when appropriate\" \u2014 no rule, no population target, no death/predation/despawn condition, and no ongoing spawn rule after startup (only \"creates initial entity populations from configured profiles\"). The behavior engine's interface (100-arch: \"tick the simulation forward, query agent state, register/remove agents\") returns updated positions/velocities; it does not emit spawn/removal events, and register/remove are server-initiated. \"When appropriate\" is the load-bearing decision left implicit: it determines who proposes events, what happens when configured \"entity limits\" are hit, and whether v1 populations are static at all. It also undercuts the replay claim: \"entity spawns/removals\" are named as non-deterministic inputs the log must capture, but with no owning component and no RNG policy, there is nothing reproducible to capture.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned-State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Persist state on shutdown\" is a declared principle with no mechanism anywhere",
+   "description": "The \"Explicit lifecycle\" principle asserts the server \"knows how to \u2026 persist state on shutdown,\" and the document's own standard is \"no silent failures, no undefined states\" \u2014 yet nothing in the document defines what is persisted (entities? environment? temporal state? RNG state? configuration?), in what format, or where it goes. No anticipated slice covers persistence. The slice plan for this very document (300-slices.worldserver-foundation.md) files \"State Persistence and World Save/Load\" under **Future Work**, unchecked. A first-class design goal is therefore deferred to future work with the gap unacknowledged \u2014 and notably, replay (an in-scope slice) needs the same serialization story plus RNG capture, so this is not a peripheral concern.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Architectural-Principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"multi-resolution support from the start\" commitment is a placeholder, not a design",
+   "description": "The \"Entity scaling\" section concludes that \"the key architectural decision now is ensuring the behavior engine's interface and the entity management layer support aggregation and variable-rate ticking from the start.\" But the document contains no corresponding design content. The entity state schema is fixed as \"positions, velocities, profile indices\"; variable-rate ticking requires per-entity fidelity tier and last-evaluation tick, and aggregate simulation requires a second entity kind (center of mass, heading, dispersion radius, count, membership) with undefined ID assignment, array representation, and disaggregation provenance. The document stops at \"must not preclude.\" The child slice plan confirms the deferral (\"implementing aggregation itself is future work\") and notes that entity management (302) is **already complete** \u2014 so the \"from the start\" guarantee now rests on an array-layout decision made in code that this document neither records nor can verify. The 100-arch subset-evaluable tick covers the engine side; the entity-management side of the promise is simply absent.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical-Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Environment ownership contradicts the initiative structure; 300\u2194500 circular dependency is invisible in this document",
+   "description": "The scope lists \"environment hosting\" and the anticipated slice \"Environment layer foundation \u2014 Terrain generation, resource placement, and the read-only query interface \u2026 The world has geography that shapes agent movement\" \u2014 i.e., this initiative builds the environment. But the initiative plan assigns the environment to initiative 500 (\"500 depends on 300 \u2014 Environment layer is hosted within and queried through the world server\"), and this document's own slice plan redefines the work as \"(304) Environment Layer Integration \u2014 Wire the environment layer (500-arch) \u2026 The environment layer itself \u2014 terrain, biomes, resources, seasonal logic \u2014 is owned by initiative 500.\" The architecture document never mentions initiative 500, so its scope and slice list conflict with its child slice plan over who builds terrain/biome/resources/seasonal logic. This also hides a genuine circular dependency (500's environment is hosted by and driven by 300's tick cycle; 300's slice 304 depends on 500's foundation) that the slice plan silently breaks by permitting deferral of 304 \u2014 a dependency structure the architecture document should at least name.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Anticipated-Slices"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Sync/async boundary inside the tick is unspecified, and slow-client backpressure is never chosen",
+   "description": "The document says the tick \"run[s] synchronously, [then] yield[s] to the async event loop for I/O between ticks,\" yet tick step 5 places \"Push the committed state to connected clients\" and \"Write to the event log if logging is active\" *inside* the tick. A synchronous tick body cannot await WebSocket sends or block on file writes; whether distribution is queued for a post-tick I/O phase, fired-and-forgotten, or made to turn the tick into an async step is not decided \u2014 and each choice changes tick semantics (ordering, failure visibility, overrun accounting). The same gap opens a concrete failure mode for a long-lived server: \"buffering, dropping frames, or disconnecting unresponsive clients are all strategies to consider\" \u2014 with no default chosen, a stalled client gets an unbounded per-client send buffer and undetected disconnects (there is no mention of pong/keepalive handling at all). The document also never names the WebSocket library (Python's asyncio stdlib provides no WebSocket server; this implies a third-party dependency, e.g. `websockets` or `aiohttp`, whose high-water-mark semantics are exactly where the backpressure policy would live). Given the \"Observable by default\" goal, the document should commit to a default (e.g., bounded write buffer + drop, disconnect after N missed pongs).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical-Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Broken reference to the concept document, evidence of an unapplied renumbering",
+   "description": "Frontmatter `dependsOn: [001-concept.migratory, \u2026]` and the Related Work link `../project-guides/001-concept.migratory.md` both point at a document that does not exist; the concept document is `project-documents/user/project-guides/000-concept.migratory.md` (the 100-arch sibling and the initiative plan both reference `000-concept`). Corroborating signal: 100-arch and 100-slices refer to this document as `200-arch.world-server-foundation.md` while the file is `300-arch.worldserver-foundation.md` \u2014 a renumber/rename that was not propagated to dependent references.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Anticipated Slices list is inconsistent with the document's own mandated mechanisms and ordering",
+   "description": "Three specific problems: (1) no slice covers state serialization/protocol, even though the \"State representation and serialization\" consideration mandates \"a minimal framing protocol (tick number, entity count, array layout descriptor)\" that both the client layer and logging depend on; (2) no slice covers per-client spatial culling, which the \"Network egress\" section says \"the server must perform \u2026 per client\"; (3) \"Logging and replay\" is ordered before \"Seasonal and temporal systems,\" but tick step 2's \"seasonal progression\" and the replay guarantee both depend on the world clock that slice introduces later. The child slice plan has since patched these (306, 309, reordered 307/308), but the architecture document's own list still omits mechanisms it itself mandates.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Anticipated-Slices"
+  }
+ ]
+}

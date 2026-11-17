@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Dense padding can exceed the architecture\u2019s CPU-scale memory budget",
+      "description": "The padded representation allocates `n_active \u00d7 max_neighbors` entries, and the design explicitly includes the all-same-cluster case where `max_neighbors` can approach the population size. The 80KB estimate is for 100 agents; at 10,000 densely clustered agents, the neighbor indices and mask alone would use roughly 900MB, before the gathered position/velocity arrays and temporary reductions. That risks making the force path unusable at the architecture\u2019s tens-of-thousands CPU scale. Bound the dense working set\u2014for example, by processing in chunks\u2014or choose a representation that does not require materializing population-wide padded gathers.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent profile lookup still uses Python iteration inside force calls",
+      "description": "The proposed weight construction uses a Python list comprehension over agents for each force call. That conflicts with the slice\u2019s requirement of no Python-level per-agent loops in `BulkForce.__call__` and the architecture\u2019s vectorized hot-loop principle. Build profile-field arrays indexed by `profile_indices`, or otherwise arrange the lookup so force calls use array operations rather than iterating over agents in Python.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Per-Agent Profile Weight Vectorization"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new neighbor interface cannot represent aggregate neighbors",
+      "description": "`NeighborData` stores only integer indices, and the force pattern gathers position and velocity directly from individual-agent state arrays. It cannot represent the aggregate neighbor data the architecture describes (such as centroid, heading, dispersion, and population count). The architecture requires the force/spatial-query interfaces to accommodate heterogeneous neighbors from the start. This slice need not implement aggregates, but it should preserve a representation or extension point that can carry them without a breaking interface change.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification does not cover the architecture\u2019s stated scale target",
+      "description": "The architecture calls for full-fidelity evaluation of tens of thousands of agents on a single CPU. The slice\u2019s live verification targets 100 agents and a 50ms tick budget; it does not restate or validate the tens-of-thousands CPU target for this hot path. Add a performance acceptance criterion at the architecture\u2019s stated scale, with a specific tick-time or throughput target.",
+      "file_ref": null,
+      "category": "requirements",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Success Criteria"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Dense padding can exceed the architecture\u2019s CPU-scale memory budget",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Per-agent profile lookup still uses Python iteration inside force calls",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Per-Agent Profile Weight Vectorization",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The new neighbor interface cannot represent aggregate neighbors",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "requirements",
+      "raw_category": null,
+      "summary": "Verification does not cover the architecture\u2019s stated scale target",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Success Criteria",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-17T12:40:13.416980",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 5142,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 3,
+  "prompt_tokens": 37400,
+  "cached_tokens": 13373,
+  "cache_write_tokens": null,
+  "completion_tokens": 4270,
+  "reasoning_tokens": 3456,
+  "duration_seconds": 46.52173341717571,
+  "cost_usd": 0.004671430000000001,
+  "cost_basis": "alias_pricing"
+}

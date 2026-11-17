@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria 1\u20135 and 7 are traced, sequencing is sound",
+      "description": "SC1 (registration + registry-driven YAML validation) maps to Tasks 6, 7.1, 7.4, 9.1; SC2 (arg mapping + result mapping) to Tasks 4.2, 7.2, 7.3, 5.1; SC3/SC4 (real round-trip, isError, timeout, spawn failure, WARNING signals) to Tasks 5.1\u20135.4; SC5 to Task 8; SC7 to Task 9.2. Dependency order is clean (config keys \u2192 fixture \u2192 bridge \u2192 bridge tests \u2192 descriptors \u2192 descriptor tests \u2192 live contract \u2192 close-out), no cycles, and every implementation task is immediately followed by its test task. Task 2 correctly targets the real `tests/config/test_keys.py`. No load-test/NFR requirement exists in the slice, so none is owed. No `**Commit**:` markers are used, which is acceptable.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Protocol/transport-error failure mode has no test, though the design requires one",
+      "description": "The slice design's failure-mode table has a row for \"Protocol/transport error mid-call (`McpError`, closed stream) \u2192 `is_error=True` + `logger.warning`\" and states \"Each row above has a test asserting the observable signal.\" Task 4.3 implements that handling, but Task 5's test list (echo, fail, empty, unknown-tool, timeout, spawn-failure) covers only the spawn/timeout/server-isError/missing-arg rows \u2014 there is no case driving a mid-call `McpError`/closed-stream and asserting the WARNING. The fake server (Task 3.1) also has no tool that can induce such a fault, so the fixture cannot support it. Add a fixture capability and a test for this row.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:158-172"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Non-text-block result mapping is implemented but never verified",
+      "description": "The design's Result mapping rules require \"Non-text blocks are noted by type in the content, not dropped silently.\" Task 4.2 implements it, but no test asserts it, and the fake server's `echo`/`empty` tools only produce text (or zero) blocks. Given the design's explicit \"no silent no-op\" emphasis, a fake-server tool that returns a mixed text/non-text result plus an assertion on the noted-by-type content would close the loop; as written this behavior is unverified.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SC6's model-driven `cf_build_context` demo has no owning task",
+      "description": "SC6 requires that \"a dispatch with a tool-capable non-SDK model can call `cf_build_context` and receive assembled context (walkthrough \u00a74).\" The first half (materialized `cf_workflow_status` returning real status) is covered by Tasks 8.2/9.1 step 2, but the end-to-end dispatch-with-model half is not: Task 9.1 runs only walkthrough steps 1\u20133, and Task 9.3 explicitly notes step 4 \"remains open alongside 263's demo.\" No task schedules that demo. The standard-terminal constraint is real, but the success criterion is left unmet at slice close-out; a dedicated step-4 demo task (run outside Claude Code) should own it.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:290-292"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria 1\u20135 and 7 are traced, sequencing is sound",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Protocol/transport-error failure mode has no test, though the design requires one",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:158-172",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Non-text-block result mapping is implemented but never verified",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:137",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC6's model-driven `cf_build_context` demo has no owning task",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:290-292",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-17T07:54:55.438891",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 109712,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 154132,
+  "cached_tokens": 129792,
+  "cache_write_tokens": null,
+  "completion_tokens": 28078,
+  "reasoning_tokens": 26591,
+  "duration_seconds": 226.42760245827958,
+  "cost_usd": 0.004977508,
+  "cost_basis": "alias_pricing"
+}

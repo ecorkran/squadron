@@ -1,0 +1,129 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Subdivision does not define the radius for mixed profiles",
+      "description": "Slice 145 defines `query_radius` per profile and sizes the shared grid using the **maximum** query radius. This design uses an unqualified `query_radius` to derive one shared `cell_size` and scan extent. If a smaller profile radius is used, agents with larger radii can miss valid neighbors, violating behavioral fidelity. Define the shared grid size from the maximum configured profile radius and retain each agent\u2019s own radius for filtering.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Benchmark matrix cannot distinguish the interventions",
+      "description": "The baseline and early-exit-only commands are identical, as are the subdivision-only and combined commands. The design provides no switch or version-selection procedure to run counter-gating after replacing it with a break. Consequently, the walkthrough cannot reproduce the slice 145 baseline or establish the required 5\u00d7 `force_total` speedup. Specify how to capture a comparable pre-change baseline and, if the four-way comparison is retained, how each variant is selected.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The seven-neighbor benchmark target is omitted",
+      "description": "The slice plan explicitly assigns a seven-neighbor operating point as a benchmark target, but the design specifies only `max_neighbors=32` for gate runs and no seven-neighbor measurement. Add that benchmark without replacing the required 32-neighbor stress gates.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The external break undermines the future neighbor-selection seam",
+      "description": "The proposed break prevents the selection function from seeing candidates after the first `k` accepted neighbors. A future distance-ranked selector must inspect later candidates to replace farther selections, so retaining the function alone does not preserve the promised swap point. Specify that the cap termination policy must change with the selector, or place that policy behind the seam.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Subdivision does not define the radius for mixed profiles",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-67",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Benchmark matrix cannot distinguish the interventions",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The seven-neighbor benchmark target is omitted",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The external break undermines the future neighbor-selection seam",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T13:17:03.462078",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 38926,
+  "cached_tokens": 37248,
+  "cache_write_tokens": null,
+  "completion_tokens": 598,
+  "reasoning_tokens": 88,
+  "duration_seconds": 28.63941829185933,
+  "cost_usd": null,
+  "cost_basis": null
+}

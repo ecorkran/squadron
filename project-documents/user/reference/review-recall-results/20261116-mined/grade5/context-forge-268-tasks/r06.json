@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3.3's success grep will fail on a surviving comment that the instruction does not ask to remove",
+   "description": "Task 3.3's success criterion is `grep -rn \"adoption/\\|detection/\" packages/core/src/services` prints nothing, and 6.2 repeats the same check. But `ContextIntegrator.ts:8` holds the comment `// contracts.ts only (never adoption/index.ts): keeps services/ and adoption/ from importing each other's internals.` directly above the import that 3.3 removes. The instruction only says \"Remove every import from `adoption/` and `detection/`\" \u2014 it does not say to remove the now-orphaned comment, and the comment is the only remaining match. The technical requirement (\"services/ imports nothing from adoption/ or detection/\") is met either way, but the stated gate fails. Fix by making the instruction explicit (\"delete the orphaned `contracts.ts only (never adoption/index.ts)` comment too\") or by narrowing the grep to import statements.",
+   "location": "packages/core/src/services/ContextIntegrator.ts:8"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Section 3's header misstates which package's typecheck breaks in the 3.4\u20133.5 window",
+   "description": "The header states \"Between 3.4 and 3.6, only `mcp-server` typecheck is expected to fail. `cli` passes once 3.5 is done.\" Those two sentences contradict each other, and the first is wrong: `packages/cli/src/commands/build.ts:84` still calls `createContextPipeline(workingCopy.projectPath!, { adoptionStateWrites: 'persist' })` until 3.5, so as soon as 3.4 rebuilds core's `dist/` with the one-argument signature (3.3), `pnpm --filter @context-forge/cli typecheck` also fails until 3.5 runs. A junior AI following the header may treat the CLI failure as unexpected and work around it, or skip the CLI gate. State the window precisely: after the 3.4 core build, both `cli` and `mcp-server` typecheck fail until 3.5 and 3.6 respectively.",
+   "location": "packages/cli/src/commands/build.ts:84"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 3.6 under-specifies the `integrationSetup.ts` cleanup, leaving a dangling `ContextToolOptions` import",
+   "description": "3.6 says to delete the `ContextToolOptions` type from `contextTools.ts`, but for the helper it only says \"drop the `squadronProbe` option and its doc comment\". The helper also carries `import { registerContextTools, type ContextToolOptions } from '../../src/tools/contextTools.js';` (line 9), the parameter `createIntegrationClient(options?: ContextToolOptions)` and the call `registerContextTools(server, options)`. With the type deleted from `contextTools.ts`, all three become compile errors, and \"update its caller in the server setup\" only points at `packages/mcp-server/src/index.ts` (which already passes no options). The MCP typecheck gate will catch it, but the instruction should name the import, the `options` parameter, and the `registerContextTools(server, options)` call to be removed.",
+   "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 5.1 is too large for one checklist item and should be split",
+   "description": "5.1 (effort 3) bundles four separable concerns in one item: (a) scaffolding \u2014 the temp-bin fake `sq`, `PATH` prepend/restore, and the file-tree + `.context-forge.toml` byte snapshot helper; (b) the three-surface purity runs (CLI \u00d72, MCP `context_build`, MCP `template_preview`) with the three per-run assertions; (c) the two extra once-only checks (CLI/MCP parity, explicit `brownfield-adoption`); and (d) the mutation-based negative control (inject a `writeFileSync`, confirm the snapshot assertion fails, revert). That is ~6 builds across two packages plus two helper mechanisms in one commit. Split it into at least three independently completable tasks \u2014 scaffolding, the per-surface purity runs, and the parity/explicit-key checks \u2014 so each can be run, verified and committed on its own. The negative-control step can move into the final validation section, since it is a verification of the test rather than a behaviour to ship.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 5.1 does not say the MCP calls must pass the Phase 0 instruction",
+   "description": "The pattern 5.1 mines from the deleted test called `context_build` with `arguments: { projectId: FIXTURE_PROJECT_ID, instruction: CONCEPT_PHASE }` \u2014 the stored fixture project's instruction is not Phase 0, so that argument is what makes the MCP output the concept prompt. Task 5.1's MCP bullet says only \"run `context_build` once and `template_preview` once, on the `in_progress` state\" and never states the instruction argument, while the per-run assertions require the concept prompt text and the parity check requires equality with the CLI output. Spell out `instruction: CONCEPT_PHASE` for both MCP calls (and the matching instruction on the CLI runs) so the assertions are satisfiable as written.",
+   "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commit points sit at tested checkpoints",
+   "description": "The file contains no `**Commit**:` markers, which is acceptable. The commits it does specify are well placed: 2.3 after the golden test passes twice on unmodified source, 3.2a after `pnpm typecheck` and the core suite pass, 3.7 after `pnpm -r build`/`typecheck`/`lint`/`test`, 4.1\u20134.4 each after their own typecheck and core-test gates, and 5.1 after the purity test passes. The 3.3\u20133.6 grouping into a single 3.7 commit is justified by the shared signature change and is explicitly explained in the section header. The test-with pattern also holds, with the one deliberate exception of the D6 golden capture, which the design requires to run before any source edit and which the task documents as such.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  }
+ ]
+}

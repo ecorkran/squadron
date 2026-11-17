@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All seven success criteria have corresponding tasks",
+      "description": "Traceability verified:\n- SC1 (registration + pipeline validation): Task 6.4 (register via 261 `register()`, `__init__.py` import \u2014 matches the verified side-effect pattern in `src/squadron/tools/__init__.py`), Task 6 success criteria (`list_tools()` includes exactly the five `cf_*` + three builtins), Task 7.4 (verified `validate_allowed_tools` in `src/squadron/pipeline/steps/utils.py` is registry-driven, so the zero-schema-change claim holds), Task 9.1 Step 1.\n- SC2 (exact mapped calls + result mapping): Task 6.1\u20136.3 (mapping table, narrow schemas, required-arg validation before spawn) and Task 7.2 (mocked-transport exact-argument assertions per tool).\n- SC3 (real stdio round-trip, `isError`/timeout \u2192 WARNING): Task 3 (fake server with echo/fail/sleep/empty), Task 5.1 (round-trip, server isError, empty-result, unknown tool), Task 5.2 (timeout + child-process-gone assertion matching the design's mcp 1.26.0 `killpg` claim), Task 5.4 (caplog WARNING assertions mirroring the failure-mode table).\n- SC4 (spawn failure \u2192 error result, no exception): Task 5.3.\n- SC5 (live contract test with CF available): Task 8.1 (availability-gated, asserts four CF tool names and that argument names \u2014 imported from Task 6 constants, single source) plus Task 9.1 Step 2.\n- SC6 (live demo): Task 8.2 materialized-executor round-trip; walkthrough step 4 (non-SDK model dispatch) explicitly deferred as open, which is correct since the design says it requires a standard terminal and 263's equivalent demo is itself open.\n- SC7 (suite green, pyright, ruff): Task 9.2, plus per-task scoped gates.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep; effort and detail are proportional to a 2/5 slice",
+      "description": "Every task traces to design in-scope items (transport helper, five descriptors, two config keys, four test files) or to mandatory close-out (walkthrough \u00a71\u2013\u00a73, quality gates \u00a75, git-branch merge per project rules). Out-of-scope items (session pooling, other MCP servers, `integrations/context_forge.py`, dynamic discovery, 265 review activation) are untouched. Line targets (~80 for the bridge, ~150 for descriptors, <80 for the fixture) match the design's file table. Nine tasks for two small modules, a config-key pair, and four test files is at the right granularity \u2014 no task is too large to hand to a junior implementer, and none is so trivial it deserves merging (Tasks 1+2 keep the test-after-implementation rhythm clean). No NFR is restated in the design, so no load test or CI-gating task is required.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern, and commit placement are correct",
+      "description": "Dependency order holds: config keys (1\u20132, leaf) \u2192 fake server fixture (3, needed by 5 and 8) \u2192 bridge (4) \u2192 bridge tests (5, immediately following 4) \u2192 descriptors (6) \u2192 descriptor tests (7, immediately following 6) \u2192 live contract test (8) \u2192 close-out (9). No circular dependencies; layering (`cf_tools` \u2192 `mcp_bridge`, never reverse) is checked as a Task 6 success criterion. Each task ends with scoped tests passing and a semantic commit (`feat:`/`test:`/`docs:`) at a working point rather than after every sub-item or only at the end; the branch/`integration_branch` note correctly defers to `cf config get` at implementation time.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5.2 offers a fragile alternative for asserting the child process is gone",
+      "description": "The timeout test should \"capture the child PID via the fake server printing it to a temp file at startup, **or scan for the fixture's command line**.\" The command-line-scan fallback is unreliable: multiple test cases spawn the identical fixture command, an earlier test's lingering server would match the scan, and command-line enumeration is not portable (Windows). Since Task 3 owns the fixture, the PID-file approach is strictly better and should be the only specified mechanism (pass the temp-file path via env or argv, write `os.getpid()` at startup, assert liveness with `os.kill(pid, 0)`/`ProcessLookupError`). The task is completable as written, but pinning one method would prevent a junior implementer from picking the flaky path.",
+      "file_ref": null,
+      "category": "test-robustness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "All seven success criteria have corresponding tasks",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No scope creep; effort and detail are proportional to a 2/5 slice",
+      "location": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern, and commit placement are correct",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-robustness",
+      "raw_category": null,
+      "summary": "Task 5.2 offers a fragile alternative for asserting the child process is gone",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-17T12:13:06.772803",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 75078,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 100077,
+  "cached_tokens": 78592,
+  "cache_write_tokens": null,
+  "completion_tokens": 20023,
+  "reasoning_tokens": 18300,
+  "duration_seconds": 62.45451437495649,
+  "cost_usd": 0.053136600000000006,
+  "cost_basis": "alias_pricing"
+}

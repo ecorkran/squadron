@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Test rewrites are sequenced after commits that invalidate the existing suite",
+   "description": "Task 6 removes the `MessageParseError` rate-limit special case before Task 10 rewrites `test_a_rejected_rate_limit_event_reaches_the_backoff`, which currently depends on that case (`tests/providers/sdk/test_agent.py:648-680`). Task 9 then deletes `install_rate_limit_parser_shim` before Task 10 deletes the four tests importing it (`tests/providers/sdk/test_agent.py:684-765`). Consequently, the Task 6 and Task 9 commit checkpoints leave known tests failing and are not working, tested points. Merge or reorder each implementation with its corresponding test rewrite\u2014for example, Tasks 6 + 10, Tasks 7 + 8 + 11, and the shim-test deletion with Task 9\u2014and commit only after the paired suite is green.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The pipeline dispatch path has no task satisfying the stats half of Success Criterion 3",
+   "description": "Success Criterion 3 says that a rejected event reaching any of the three dispatch paths increments `RateLimitStats.throttles` and logs a warning naming the attempt. `SDKExecutionSession` currently owns no `RateLimitStats` or equivalent counter, while Task 7 only changes the retry gate and Task 11 asserts retry count and returned text\u2014not throttle statistics. Task 15 can satisfy its manual observation by selecting an agent path, leaving the pipeline path unimplemented. Add a pipeline-scoped stats owner and an assertion in Task 11, or otherwise explicitly cover the criterion for all three paths.",
+   "location": "src/squadron/pipeline/sdk_session.py:192-203"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 10 combines too many independent test obligations",
+   "description": "Task 10 covers five test rewrites, four shim-test deletions, three existing unknown-message checks, and a new informational-event test. That is too broad for one independently reviewable junior-AI task and is the main reason its implementation and test separation is hard to sequence. Split it into at least two tasks: typed-event retry/backoff/exhaustion rewrites, and shim-test removal plus informational/unknown-message behavior. Each should have its own focused success criteria and green checkpoint.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers violate the required plain-line and tested-point contract",
+   "description": "The task file uses checkbox entries such as `- [ ] Commit: ...`, whereas the required commit marker form is a plain `**Commit**:` line. More importantly, Tasks 2, 4, 6, 7, and 8 place commit markers before their corresponding tests in Tasks 3, 5, 10, and 11. Reformat the markers as plain lines and move each marker to the end of the paired implementation-and-test group after that group passes.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Informational-event control flow is contradictory",
+   "description": "Task 6 says an informational event should \u201ccontinue the loop without yielding it\u201d and also \u201clet it flow to translation as normal.\u201d Those instructions imply opposite implementations: `continue` skips translation, while yielding permits it. Task 7 explicitly lets the event proceed to translation, so an implementer could also make the agent and pipeline paths diverge. State one exact behavior\u2014consistent with D6, after DEBUG logging pass the event to translation\u2014and add an agent-path assertion that the informational event becomes the expected system message.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 13 duplicates test execution beyond the required validation",
+   "description": "Task 13 runs two targeted pytest commands and then runs the full suite, which necessarily includes both targeted scopes. Tasks 3, 5, 10, 11, and 12 already provide focused checkpoints. Keep the full suite as the final regression gate and remove the two redundant subset runs, or retain only the design\u2019s targeted commands if full-suite runtime is unacceptable. The success text also says \u201call four commands\u201d although the task lists six commands.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  }
+ ]
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Part C auth-command I/O paths lack the failure-mode enumeration the review path gets",
+      "description": "The design states spawning is confined to \"a Codex turn, `sq auth login/logout`, and `sq auth status` for a profile that is already valid\" (line 82), and D7 assigns a wall-clock cap to each review-path operation \u2014 but the coverage does not extend to all three of those places:\n\n1. **`sq auth logout` has no failure modes at all.** It sends a new message type (`AsyncCodex.logout()`) and, per line 82, spawns the runtime, yet no row in the failure-modes table, no `codex.*_timeout_s` key, and no teardown statement covers it. A hung `__aenter__`/`initialize` during logout, a `logout()` that raises, and the already-not-logged-in case are all unspecified. The test list at line 199 names \"logout\" but there is no specified error behavior for it to assert.\n2. **The login command's runtime start is unbounded.** `codex.login_timeout_s` is scoped to \"`handle.wait()` for browser or device-code login\" (line 108), and `codex.account_timeout_s` explicitly covers \"runtime start + `account()` in `sq auth status` and post-login confirmation\" (line 126) \u2014 neither names the login flow's own `AsyncCodex(config)` / `login_chatgpt()` before `wait()`. A hung spawn or initialize during `sq auth login` has no listed bound.\n3. **`sq auth login openai-oauth` with the extra absent does not surface the install hint.** The login flow (line 84) enters at `AsyncCodex(config)` directly, D2 lists the shared resolver's consumers as \"agent, provider, and doctor\" (line 98), and the install hint is \"referenced by agent, provider, doctor, and `model list`\" (line 139) \u2014 login appears in none of them, so a raw `ImportError` at the in-function import is the implied result. This leaves the Value bullet \"a missing piece is named at the point of failure with the exact command to fix it\" (line 28) unmet on this path, and the Verification Walkthrough's without-the-extra step (line 209) exercises review, model list, and doctor but not login.\n\nThe requirement left unmet is the enumeration rule for each new I/O path. The fix is additive: extend the failure-modes coverage (or state the timeout wraps) for the three auth commands, assign `account_timeout_s` (or a login-scoped wrap) to login/logout runtime start, and route `login.py` through `resolve_codex_runtime()` so the hint has one source.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Architecture document predates the Codex provider; design defers the doc edit",
+      "description": "`100-arch.orchestration-v2.md` lists planned providers (SDK, Anthropic, OpenAI, Gemini, OpenRouter, local) and an Authentication Patterns table that contain no mention of Codex or `~/.codex/auth.json` \u2014 the Codex provider arrived via slices 124/128 after the architecture's last update. The design's \"Relationship to the architecture's auth model\" section addresses the auth principle explicitly and defers editing the architecture until a second provider adopts `InteractiveLogin`, which is a reasonable, deliberately stated decision. Informational only: the architecture's provider inventory is stale relative to this work, and a PM-level architecture refresh is the natural place to record both the Codex provider and the login capability.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89"
+    },
+    {
+      "severity": "PASS",
+      "title": "Capability protocols continue slice 128's no-string-dispatch invariant",
+      "description": "Part C's login dispatch (`isinstance(strategy, InteractiveLogin)`) and Part B's extra-missing marker (`isinstance(provider, ExtraRequirement)`) both go through `runtime_checkable` protocols rather than profile-name or auth-type string comparisons \u2014 exactly the invariant slice 128 established and restated here as a technical requirement. D3's ISP argument for a separate protocol (rather than new `AuthStrategy` methods every API-key strategy must stub) is sound. Dependency directions hold: the CLI consumes provider-layer protocols, `login.py` and all SDK types stay inside `providers/codex/`, `runtime.py` probes importability only, and the review module is untouched.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:198"
+    },
+    {
+      "severity": "PASS",
+      "title": "Consumed interfaces from slices 128 and 931 match what those slices provide",
+      "description": "The `Interfaces Required` list matches what slice 128 (provider registry, `ProviderCapabilities`, `AUTH_STRATEGIES` dispatch, `\"oauth\"` auth type) and slice 931 (`AgentConfig.effort`, `applies_effort`, `core/usage.py` `TokenUsage`/`RunTelemetry`, message-metadata stamping) actually provide. The usage mapping (D6) stamps the same metadata keys the OpenAI agent uses, which slice 931's D8 explicitly anticipated (\"maps onto the same `TokenUsage` without touching `review/`\"). Effort application closes #171, which 931 deferred by design; flipping `applies_effort` for Codex keeps 931's recording contract intact (`sent_effort` recorded only when the provider applies it), and the design states the 931 WARNING is dropped rather than silently left in place.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:54-55"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Part C auth-command I/O paths lack the failure-mode enumeration the review path gets",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Architecture document predates the Codex provider; design defers the doc edit",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Capability protocols continue slice 128's no-string-dispatch invariant",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:198",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Consumed interfaces from slices 128 and 931 match what those slices provide",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:54-55",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-17T12:50:36.101740",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 309096,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 427443,
+  "cached_tokens": 376128,
+  "cache_write_tokens": null,
+  "completion_tokens": 73485,
+  "reasoning_tokens": 71253,
+  "duration_seconds": 568.8731877920218,
+  "cost_usd": 0.49296828000000004,
+  "cost_basis": "alias_pricing"
+}

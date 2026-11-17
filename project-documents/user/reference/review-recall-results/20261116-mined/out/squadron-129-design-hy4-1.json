@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Authentication model stays aligned with the HLD",
+      "description": "The HLD (`100-arch.orchestration-v2.md`, Authentication Patterns) states squadron does not unify authentication and each provider's credential resolution is self-contained. The design argues this correctly: `InteractiveLogin` is an optional capability implemented only by `OAuthFileStrategy`, the `AuthStrategy` Protocol is unchanged, credentials stay exclusively in `~/.codex/auth.json`, and login/logout/account delegate to the Codex runtime. No squadron-side token store is added (Excluded, line 42), so no shared auth layer is introduced. The rationale for deferring an HLD edit until a second provider adopts the capability is proportionate.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-92"
+    },
+    {
+      "severity": "PASS",
+      "title": "Provider boundaries and dependency direction match slice 128",
+      "description": "`openai_codex` is imported only inside functions; SDK types are confined to `agent.py` and `login.py`; `runtime.py` probes importability only. The provider still registers without the extra, so the review pipeline (which slice 128 moved onto `Agent.handle_message()` via the registry) is untouched, and the core engine gains no provider-internal dependency. D3 (line 99) and D9 (line 112) use capability `isinstance` checks rather than the profile-name/auth-type string dispatch slice 128 banned, and Technical Requirements (line 198) pins that as a criterion. `interfaces: []` in frontmatter is honest about there being no downstream consumer, and `parent:` correctly names the slice plan.",
+      "file_ref": null,
+      "category": "boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76-76"
+    },
+    {
+      "severity": "PASS",
+      "title": "Upstream integration contracts are consumed as provided",
+      "description": "The design names the exact interfaces slice 931 provides (`AgentConfig.effort`, `ProviderCapabilities.applies_effort`, `core/usage.py` `TokenUsage`/`RunTelemetry`) and the message-metadata keys the OpenAI agent already stamps (`metadata[\"usage\"]`, `[\"turns\"]`), so D5/D6 close #171 and add usage without changing review artifacts or `review/` imports. Slice 128's registry, capabilities and `\"oauth\"` auth type are listed as prerequisites (line 49). `applies_effort=True` plus dropping the 931 WARNING is the correct counterpart to 931 D4. The 128/931 prerequisites are both marked complete in their own designs.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:50-55"
+    },
+    {
+      "severity": "PASS",
+      "title": "Turn-path failure modes are enumerated with explicit handling",
+      "description": "The 14-row table gives a concrete strategy for hang (`asyncio.timeout(codex.turn_timeout_s)` + cancel), peer disconnect mid-turn (`TransportClosedError` \u2192 `ProviderError`, client state reset), startup/initialize failure, server busy/rate limit, failed/interrupted turns, and empty `final_response` (D8, line 114), each with a test asserting the signal. Timeouts are centralized config keys rather than scattered defaults (D7), `usage` absent is `None` never `0` (D6), and the install hint is defined once (line 139). This satisfies the \"no silent fallback values\" project rule on the turn path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New auth-command I/O paths lack failure modes, a timeout, and the shared install hint",
+      "description": "The Login data flow goes straight from `login.login(mode)` to `AsyncCodex(config)` \u2014 it never calls `resolve_codex_runtime()`, and the \"extra missing\" row of the failure table is scoped to `create_agent` only (line 122). Yet the success criterion says \"**any** `openai-oauth` use exits with an error containing the exact install command\" (line 190), and Verification step 1 exercises only `review`/`model list`/`doctor` without the extra. Requirement left unmet: `sq auth login/logout/status` on a default install would hit a raw `ImportError` instead of the one shared hint string (line 139). Related gaps on these same new paths: `AsyncCodex.logout()` spawns a runtime (line 82) but D7 defines no timeout for it and no failure-table row covers SDK error, hang, transport close, or a partially completed logout; `webbrowser.open` failing or returning False on a headless box has no stated strategy (\"attempt `webbrowser.open`\"); and `login_chatgpt()` raising before a handle exists means the only specified cleanup \u2014 `handle.cancel()` on timeout/Ctrl-C (line 110) \u2014 cannot run. Add rows for login startup, pre-handle failure, browser-open failure and logout (including a bounded runtime-start + RPC timeout), and route all three commands through the shared resolver/hint.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor/model-list missing-extra handling is left implicit at a raising boundary",
+      "description": "D9 builds both consumers on `resolve_codex_runtime()`, which the Data Flow (line 80) says **raises** `ProviderError` when the package or binary is missing. But `ExtraRequirement.missing_extra_hint()` must return `str | None`, and the doctor check must return a `CheckResult` WARN row (Verification step 1, line 212) \u2014 neither contract permits a raised `ProviderError`. The design says \"Doctor contains no import probing or `shutil.which` of its own\" without stating which layer catches the resolver's error and converts it into the hint/detail, or how the row's `detail` (package version, runtime source) is produced when resolution fails. Slice 905's doctor contract requires the pure-check module to wrap unexpected exceptions in a typed, WARNING-logged handler that still emits a row; slice 381 restates that `run_all_checks` makes no subprocess call. Requirement left unmet: \"sq doctor and sq model list run cleanly with and without the extra\" (line 205). Specify the non-raising wrapper (and its single hint source) explicitly, plus a failure row and test for the wrapped exception.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112-112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parent's SDK startup NFR is not restated with a target; the 30 s status budget is unjustified",
+      "description": "The HLD's \"System Architecture / SDK Agent Provider\" and \"SDK Agent Design Considerations\" state a startup-cost constraint for SDK-subprocess providers (20\u201330 s CLI initialization; design for warm-pool/instance reuse rather than per-message creation), and the slice plan's Notes record 2\u201312 s+ per `query()`. This slice adds three new fresh-spawn command paths (login, logout, status) and explicitly declines any target: \"No latency target is set\" (line 82); no measured startup bound or reuse decision is given for them. More concretely, `codex.account_timeout_s = 30` (D7, line 109) covers \"runtime start + `account()`\", so a startup at the parent's stated 20\u201330 s leaves little or no room for the RPC \u2014 and the design's own failure row (line 126) then degrades to a WARNING row with **no account details**. That leaves the success criterion \"sq auth status shows email and plan for a logged-in `openai-oauth`\" (line 192) unmet on an in-spec slow startup. Restate the startup NFR with its numeric bound (or a measured Codex bound), and either split startup from the account RPC budget or raise/justify the cap so a normal startup cannot consume it.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82-82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several mechanisms are heavier than this slice needs",
+      "description": "Frontmatter says no planned slice consumes `InteractiveLogin`, `ExtraRequirement` or `CodexRuntime`, so the \"Provides to Other Slices\" generalizations are speculative. `ExtraRequirement` is a new `runtime_checkable` Protocol in `providers/base.py` with exactly one implementer, layered on top of the hint string that is already centralized in `runtime.py` and consumed by doctor/model list (line 139) \u2014 two mechanisms for one signal where the provider-side hint plus the shared resolver already satisfies \"no profile-name check\". `sq auth login --timeout SECONDS` (line 148) adds a second knob for a value D7 already centralizes in `codex.login_timeout_s`; the plan entry asks only for browser login and `--device-code`. Implementation step 0 (line 224) gates all of Part A on a live `OPENAI_API_KEY` fallback probe with a branching outcome that edits `OAuthFileStrategy` for a case the plan never assigns to slice 129. Cut/defer candidates: keep one hint mechanism (the shared `runtime.py`/provider hint) instead of a base-layer Protocol for one implementer; drop `--timeout` and use the config key; move the API-key fallback verification to its own bug-fix slice rather than making it a precondition of the port. This is trimming mechanisms, not dropping plan scope \u2014 Parts A/B/C remain intact.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Authentication model stays aligned with the HLD",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-92",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "boundaries",
+      "raw_category": null,
+      "summary": "Provider boundaries and dependency direction match slice 128",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76-76",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Upstream integration contracts are consumed as provided",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:50-55",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Turn-path failure modes are enumerated with explicit handling",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New auth-command I/O paths lack failure modes, a timeout, and the shared install hint",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Doctor/model-list missing-extra handling is left implicit at a raising boundary",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112-112",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Parent's SDK startup NFR is not restated with a target; the 30 s status budget is unjustified",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82-82",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Several mechanisms are heavier than this slice needs",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-17T08:18:34.963113",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 303143,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 548049,
+  "cached_tokens": 432512,
+  "cache_write_tokens": null,
+  "completion_tokens": 73485,
+  "reasoning_tokens": 70023,
+  "duration_seconds": 752.822612832766,
+  "cost_usd": 0.14911793099999998,
+  "cost_basis": "alias_pricing"
+}

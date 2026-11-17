@@ -3,7 +3,7 @@
 # confidence: high | medium | low. It describes the evidence, not the model.
 # Dollars are API-equivalent on a subscription, not charges.
 meta:
-  updated: 20261117
+  updated: 20261118
   aliases_used: [haiku-xhigh, opus-high, opus-medium, sonnet-high, sonnet-medium, sonnet, fable-medium, fable-high, sol, sol-high, luna, luna-r]
   design_cases: {mined: 43, flaws: 82, arch_flaws: 19, slice_flaws: 32, tasks_flaws: 31, never_found_by_any_model: 14}
   code_cases: {original: 10, known_bugs: 14, new: 7, new_known_bugs: 7}
@@ -14,9 +14,10 @@ recommendations:
   design_review:        # slice designs, task breakdowns, architecture
     default: haiku-xhigh
     second_pass: fable-medium
-    cheap_second_pass: glm-flash   # OpenRouter, $0.06; run 1 only, precision unmeasured
+    cheap_second_pass: minimax31-flash   # OpenRouter, $0.04; 43 of 82 alone, 58 with haiku-xhigh; run 1 only, precision unmeasured
+    cheap_alternatives: [hy4, mimo, qwen38-flash, glm-flash]   # 45, 38, 38, 37 of 82
     comb: none
-    avoid: [sonnet-high, sonnet-medium, sonnet, minimax, glm52]
+    avoid: [sonnet-high, sonnet-medium, sonnet, minimax, glm52, glm53, luna, luna-r-high, qwen38-27b]
     confidence: medium
     why: haiku-xhigh $0.34 per review ties dearer configs on recall; haiku plus fable find 66 of 82 flaws against 58 for haiku alone over three runs.
     evidence: [RESULTS 15, RESULTS 16, RESULTS 18]
@@ -57,10 +58,16 @@ answers:
     evidence: [RESULTS 16]
   - id: cheap_reviewers
     question: Are the cheap OpenRouter models usable as design reviewers?
-    answer: "glm-flash yes: 37 of 82 flaws for $0.06 a review (haiku-xhigh 43 for $0.24, fable-medium 47 for $2.27), best of all on slice designs (19 of 32), weak on tasks (10) and arch (8). deepseek4-flash 33. glm52 19 and minimax 13 no. glm-flash plus haiku-xhigh 55 of 82 on run 1, equal to fable-medium plus haiku-xhigh."
+    answer: "Yes, several. minimax31-flash finds 43 of 82 flaws for $0.04 a review (haiku-xhigh 44 for $0.24, fable-medium 50 for $2.27) and is best of all on slice designs (20 of 32). hy4 45 at $0.19. mimo 38 ($0.07), qwen38-flash 38 ($0.06), glm-flash 37 ($0.06; slice 19, tasks 10, arch 8), hy4-flash 32 ($0.01), mimo-flash 31 ($0.01). deepseek4-flash 33. No: glm52 19, minimax 13, qwen38-27b 27 at $0.15, luna-r-high 16. haiku-xhigh plus minimax31-flash 58 of 82 on run 1, equal to haiku-xhigh plus fable-medium; fable-medium plus minimax31-flash 63."
     confidence: medium
-    caveats: one run each; precision not measured; minimax and glm52 returned no findings on 4 of 43 cases each
-    evidence: [RESULTS 19]
+    caveats: one run each; precision not measured; grades are agent grades; minimax and glm52 returned no findings on 4 of 43 cases each
+    evidence: [RESULTS 19, RESULTS 20]
+  - id: expensive_and_openai_reviewers
+    question: Do the dearer OpenRouter models and the OpenAI models earn a design-review slot?
+    answer: "No, on a 15-case subset (22 flaws, one run each). glm53 6 at $0.40 a review, kimi3 12 at $0.32, qwen38 10 at $0.45, qwen38-max 13 at $0.74; hy4, mimo and minimax31-flash scored 13-14 at $0.04-0.19. OpenAI: sol 9, terra 9 (ChatGPT plan), terra-r 10 ($0.05), luna 2. haiku-xhigh and fable-medium scored 12 on the same cases."
+    confidence: low
+    caveats: 22 flaws; differences of one or two are noise; only glm53, luna and qwen38-27b are clearly weak
+    evidence: [RESULTS 20]
   - id: design_review_value
     question: Best design reviewer per dollar?
     answer: haiku-xhigh. $0.34 per review against $0.79 (opus-medium), $0.96 (opus-high), $2.10 (fable-medium). It is slow, about 314 s median.
@@ -164,7 +171,7 @@ data:
   summary: review-recall-results/SUMMARY.md
   code_grids: [20261112-grid2, 20261113-grid3, 20261113-comb]
   design_grids: [20261115-design, 20261116-mined]
-  mined_flaws_and_grades: [20261116-mined/grade, 20261116-mined/grade2, 20261116-mined/grade3, 20261116-mined/grade4]
+  mined_flaws_and_grades: [20261116-mined/grade, 20261116-mined/grade2, 20261116-mined/grade3, 20261116-mined/grade4, 20261116-mined/grade5]
   design_comb: 20261116-mined/comb
   writers: 20261117-writers
   mined_case_files: [reference/design-review-recall-cases.md, reference/design-review-recall-cases-2.md, reference/design-review-recall-cases-3.md, reference/design-review-recall-cases-context-forge.md, reference/design-review-recall-cases-migratory.md]

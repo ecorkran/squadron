@@ -1,0 +1,19 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2's \"full suite passes unchanged\" success criterion is not achievable",
+   "description": "Task 2 adds four `SnapshotMetric` members (and three `AbsenceReason` members) and narrows `PythonAdapter.metrics` to the explicit four 400 metrics, then asserts **\"Success: the full `tests/metrology/` suite passes unchanged.\"** That cannot hold. Three tests pin the old 4-metric invariants and will break the moment the enum grows to 8, with no task telling the implementer to edit them:\n\n- `tests/metrology/snapshot/test_python_length.py:57` \u2014 `assert adapter.metrics == set(SnapshotMetric)`. After Task 2 the adapter declares 4 but `set(SnapshotMetric)` is 8 \u2192 assertion fails.\n- `tests/metrology/snapshot/test_render.py` (`python_snapshot`, ~L33\u201350) \u2014 builds a `LanguageSnapshot` with exactly 4 `Measurement`s. `LanguageSnapshot._one_measurement_per_metric` (`src/squadron/metrology/snapshot_models.py`) requires every member of `set(SnapshotMetric)` (now 8) \u2192 `ValidationError` at construction.\n- `tests/metrology/snapshot/test_snapshot_models.py` (`test_json_round_trip_is_lossless`, ~L213\u2013235) \u2014 same 4-metric `LanguageSnapshot` construction \u2192 `ValidationError`.\n\nA junior executing Task 2 will see a red suite and have no guidance on which tests encode the pre-extension contract and must be updated (they are not \"the 400 length tests adjusted only for the rename\"). The task should either drop \"passes unchanged,\" or explicitly name these invariant-pinning tests as expected edits. The downstream incremental additions (Task 8 complexity, 12/14 duplication, 25 coverage) are handled correctly, so this is localized to Task 2's success line.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md#Task 2"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Token-bound performance property is guarded functionally, not by a load test",
+   "description": "The slice's \"linear in tokens, memory \u2248133 B/token, `DUPLICATION_MAX_TOKENS = 4_000_000` ceiling\" property is verified by Task 11's `monkeypatch`-lowered-constant test (`tool_failed` naming count and ceiling) plus the `MemoryError` test, rather than a `tests/load/` case. That is adequate because the bound is a functional guard the design tests by forcing the threshold, and the slice does not restate a load NFR requiring a `tests/load/` task \u2014 so no gap. Noted only to record the decision so it is not mistaken for an oversight.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md#Task 11"
+  }
+ ]
+}

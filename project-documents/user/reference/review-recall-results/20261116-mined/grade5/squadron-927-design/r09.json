@@ -1,0 +1,19 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Any successful tool call is treated as evidence of diff coverage",
+   "description": "The cap is skipped after any successful tool call, but the design does not establish that the call read a relevant file\u2014or that its result covered the omitted diff. For example, a successful `Glob` or a read of an unrelated file can leave a truncated review eligible for a clean PASS. That falls short of the stated goal that a PASS means the model saw the whole diff or read the relevant content with tools. Only treat calls that provide relevant file content as coverage evidence; if coverage cannot be established, keep the result from being a clean PASS.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The total-injection-limit case can receive a false truncation explanation",
+   "description": "D3 records only the total and injected character counts when the total-injection limit skips the diff. But D4\u2019s synthetic-finding example attributes the omission to `review.max_file_size_bytes`. For a diff skipped by the total-injection limit, that explanation is inaccurate; the design does not specify a cause-neutral message or retain enough information to name the actual cause. Make the finding accurate for both truncation paths, either by using cause-neutral wording or by recording the cause.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D3 \u2014 A diff dropped by the total-injection limit is a truncation to zero"
+  }
+ ]
+}

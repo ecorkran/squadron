@@ -1,0 +1,33 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Collision cleanup deletes the wrong file and cannot clear the finding",
+   "description": "Step 9 prescribes `cf config unset git.integration_branch --project` to remove only the stale shared-file copy. That contradicts the Delete contract at line 89: because this is a personal key, deletion is routed to `.context-forge.local.toml`. The command therefore removes the preferred personal value, leaves the stale shared value in place, causes reads to fall back to that stale value, and leaves the `cf check` finding active. This leaves the different-value collision case without a viable cleanup path and risks destroying the developer\u2019s local preference. Define an explicitly file-targeted deletion or an opt-in migration operation that discards only the shared copy, and verify that the personal value survives and the finding clears.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:259"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Existing projects can migrate into an unignored personal file",
+   "description": "The only guaranteed `.gitignore` protection is through `cf init`, while the migration command at line 144 writes the personal file without establishing or checking that protection. Existing projects\u2014the explicit subject of the migration plan\u2014may never rerun `cf init`; both migration and their first post-upgrade `config set` can therefore create an unignored `.context-forge.local.toml`, undermining the requirement that personal settings stay out of git. Reuse the same minimal one-line ignore helper during migration, or make migration/set explicitly verify coverage and stop with actionable remediation. This does not require the deferred general gitignore-scaffolding work.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:159"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The fallback walkthrough retains a higher-precedence personal value",
+   "description": "Step 1 writes `git.integration_branch = \"dev/erik\"` to the personal file. Step 4 explicitly leaves that file untouched, adds `\"legacy/value\"` to the shared file, and then expects the shared value with `source: project`. Under the documented precedence, the result must remain `dev/erik` with `source: project-personal`. Consequently, step 6 is a different-value collision and should report `skipped`, not move the key, and step 8 cannot resolve to `legacy/value`. Clear the personal key before the fallback scenario and test the both-files-present precedence separately. The migration tests at line 222 should also cover the absent, identical, and different-value collision branches rather than only happy-path and no-op behavior.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:245"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "New config-read and checker I/O failure behavior is unspecified",
+   "description": "The failure-mode section covers personal-file writes, migration write/delete ordering, and `.gitignore` writes, but not the new read paths. It does not define handling for unreadable or malformed personal/shared TOML during `get`/`list`, the checker\u2019s shared-file scan, or migration\u2019s initial reads. Reusing existing helpers alone does not establish whether configuration reads propagate the error, whether `cf check` emits a finding or aborts, or whether migration stops before modifying either file. Specify those outcomes explicitly, including avoiding silent fallback on malformed input and making a migration with any reported per-key failure exit unsuccessfully rather than appearing successful to automation.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-152"
+  }
+ ]
+}

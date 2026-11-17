@@ -1,0 +1,40 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Performance model for subdivision is wrong, and the S=3 gate default rests on it",
+   "description": "The \"Interaction\" paragraph treats per-cell occupancy as the total candidates scanned. Subdivision shrinks each cell but increases the cell count:\n\n| Config | Cells scanned | Agents per cell | Total candidates |\n|---|---|---|---|\n| S=1 | 9 | ~5000 | ~45,000 |\n| S=3 | 49 | ~555 | ~27,200 |\n\n- **Subdivision alone:** the gain is about 1.65\u00d7 (scan area 9r\u00b2 down to 5.44r\u00b2), not the ~9\u00d7 implied by \"candidates loaded drops to ~5000\".\n- **Both together:** \"candidates loaded ~555, exits after ~32\" is also wrong. The `range(-S, S+1)` scan starts at corner cell (-S,-S), whose nearest point is at least ~47 units from the agent at S=3. Almost every candidate there fails the radius test, so the agent walks whole cells before accepting 32.\n- **Consequence:** with a row-major scan, S=3 plus early exit can scan more candidates than S=1 plus early exit. The claim that the interventions \"compose multiplicatively\" is unsupported.\n- **Selection bias:** \"correct neighborhood is preserved\" (line 56) holds for the candidate set only. At S=3, the first-k picks come from the farthest cells on one side, which A4's mean-NN-distance check may well expose.\n\nFix: correct the estimates. State the scan order and its effect on iterations-to-cap. Do not hard-code S=3 as the gate configuration (line 128); gate on whichever S the measurement supports. If a centre-outward cell order turns out to be needed for A3, say so in this design rather than discovering it during implementation.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Four-way ablation in the walkthrough is not executable as designed",
+   "description": "Step 3 lists four runs, but the \"counter-gating\" and \"break enabled\" pairs use identical commands. The design makes the `break` unconditional (lines 36-46), so there is no toggle. \"Baseline (S=1, counter-gating)\" and \"Cell subdivision only (S=3, counter-gating)\" cannot be produced from the slice 149 build.\n\nThis matters because the ablation is the only place the flawed model above would be caught.\n\nFix (lightest option): do not add a toggle. State that counter-gating numbers come from the slice 145 commit, and reduce the slice 149 runs to S=1 and S=3 with early exit. A2's baseline is then the recorded slice 145 figure or a re-run at that commit; say which.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:160-176"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`S` and `cell_size` are two independent inputs with no single source of truth or production home",
+   "description": "Line 53 defines `cell_size = query_radius / S`, but line 80 and the component diagram treat `cell_size` and `S` as separate configuration inputs on `BenchConfig`.\n\n- **Silent wrong results:** nothing stops an inconsistent pair. `cell_size * S < query_radius` drops neighbors without error, which violates the project's no-silent-failure rule. The validation at lines 69-76 checks only S's range.\n- **Slice 146 gap:** line 111 declares 146 \"unblocked\", but the setting lives only in the bench config. If the \u2265100 TPS headroom is reached only at S>1, the production engine path needs to know where the value comes from. Otherwise the live server runs at S=1 and the Tier 2 NFR the gate claims to protect is not carried over.\n\nFix: derive `cell_size` from `query_radius` and `S` in exactly one place, or validate `cell_size * S >= query_radius` at config load. Add one sentence naming where 146 reads the value.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-92"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Gate A5 (register spill) has no defined verification method and is not in the slice plan",
+   "description": "A5 is a gate criterion, but its verification is given as \"`nvcc --ptxas-info` or benchmark log\" (line 124) and \"`TI_PRINT_KERNEL_STATS=1` or equivalent\" (line 182). Neither is a confirmed mechanism for Quadrants.\n\nThe slice plan's exit criteria for 149 are the 5\u00d7 `force_total` speedup, \u2265100 TPS, and 20% parity. Register spill is not among them. A gate whose check is \"or equivalent\" will be guessed at or skipped.\n\nFix: cut A5, since A2 and A3 already capture any spill cost. Alternatively, demote it to a diagnostic to run only if A2/A3 miss, and name the actual mechanism.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Rationale for the S \u2264 8 bound is incorrect",
+   "description": "The text says a 17\u00d717 scan is \"larger than the physical neighborhood\". The scan always covers the same physical area whatever S is, because the cells shrink as their count grows. The valid reasons for a cap are scan-cell overhead and grid cell count growing as S\u00b2. Reword it, and define the bound once as a named constant rather than a literal in the validator.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78"
+  }
+ ]
+}

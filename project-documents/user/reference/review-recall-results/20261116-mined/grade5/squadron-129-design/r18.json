@@ -1,0 +1,19 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Turn timeout does not cover runtime initialization",
+   "description": "The timeout explicitly wraps only `thread.run`, but runtime startup, `initialize`, and `thread_start` precede it. A hung startup therefore bypasses the cap, contradicting line 82\u2019s claim that startup hangs are bounded. Extend the deadline to cover initialization and thread creation, and specify bounded cleanup when initialization stalls.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-128"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Interactive authentication has unbounded I/O paths",
+   "description": "The login deadline covers only `handle.wait()`. Runtime startup and the initial browser/device-code login RPC occur before it; logout has no specified deadline. Cancellation also awaits `handle.cancel()` without describing what happens when the runtime is unresponsive or disconnects mid-request.\n\nDefine deadlines and explicit disconnect/error handling for login initiation, logout, and cancellation, including subprocess cleanup when graceful cancellation fails. Otherwise the new authentication commands can hang despite the design\u2019s stated timeout handling.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-111"
+  }
+ ]
+}

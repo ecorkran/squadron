@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`report history` requires git, contradicting the \"No git\" module contract and lacking its own data flow and failure modes",
+      "description": "The Component Structure table states the three report assembly modules \u2014 including `history_report.py` \u2014 have \"No git and no store writes beyond what `ensure_snapshot` and `record_slice_ranges` do\" (line 99). But the API Contracts section specifies `report history` orders snapshots \"by the target's first-parent history\" (line 298), which can only come from `git log --first-parent <target>` \u2014 stored `CodeSnapshot` records carry a commit SHA, not parent links. The Data Flow section gives flows for range resolution, export and `report slice` only; `report project` and `report history` have none, so the git dependency (whose source, injection and error handling are unspecified) is hidden. This matters because the failure-mode table's git entries cover `git archive`, `rev-parse`, reflog and merge searches \u2014 not a first-parent history query, so a `run_git` timeout or missing target ref in `report history` has no stated handling. Relatedly, line 298 places review findings \"on the row of the landing's `after_sha`\", which presupposes history reads (or resolves) slice ranges \u2014 also unstated. Fix: either state that `history_report` takes the first-parent list as an injected argument (keeping \"no git\" true at the assembly layer, with the CLI command supplying it and handling a `None` from `run_git`), or amend the table and add history's failure rows and data flow.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resolve_diff_base`'s silent degrade-to-`main` can persist a wrong landing in a record that is never corrected",
+      "description": "The data flow uses `target = resolve_diff_base(repo_root)` annotated \"(git.integration_branch, or main)\". Verified in `src/squadron/review/git_utils.py:340-380`: `resolve_diff_base` returns `DEFAULT_DIFF_BASE = \"main\"` whenever `cf` is unavailable, the read fails, or the key is unset \u2014 a silent fallback. D2 rejects `_find_merge_commit`'s `main` fallback precisely because it \"isn't [acceptable] for a record that's kept forever,\" and D1 makes stored landings append-only and immutable (\"stored ones never change\", \"A wrong landing stays in the store\" \u2014 Risk Assessment). The same rationale applies to the target ref: on a project with `git.integration_branch` where `cf` is temporarily unavailable, a resolution run under `target=main` can record a landing (or a `NO_LANDING`-driven fast-forward resolution) against the wrong branch's first-parent line, permanently \u2014 and it also violates the project rule \"Never use silent fallback values.\" The `target_ref` field makes it visible after the fact but not correctable. Fix: for the durable `slice-ranges`/`report slice` path, resolve the target strictly (following 196's `read_integration_target` precedent \u2014 a `cf` failure raises rather than degrading) or at minimum refuse to persist when the target was obtained by fallback, logging the reason as an unresolved state.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:109"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`compute_delta` and `is_within_floor` come from 324, not 323",
+      "description": "The Prerequisites line attributes `baseline_report`, `compute_delta` and `is_within_floor` to \"323 (complete)\". `baseline_report` is 323's (`src/squadron/metrology/audit_report.py:54`), but `compute_delta` and `is_within_floor` are 324's additions (`src/squadron/metrology/audit_delta.py:38-100`). 324 is also complete, so there is no dependency risk \u2014 but line 326 (\"323: `baseline_report` and `compute_delta`, unchanged\") repeats the misattribution in the Consumes section and would send a task-time reader to the wrong document.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:73"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`report history` requires git, contradicting the \"No git\" module contract and lacking its own data flow and failure modes",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`resolve_diff_base`'s silent degrade-to-`main` can persist a wrong landing in a record that is never corrected",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:109",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "`compute_delta` and `is_within_floor` come from 324, not 323",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:73",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-17T06:58:19.032969",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 168293,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 659643,
+  "cached_tokens": 596512,
+  "cache_write_tokens": null,
+  "completion_tokens": 42351,
+  "reasoning_tokens": 40040,
+  "duration_seconds": 505.2189664160833,
+  "cost_usd": 0.014523894000000002,
+  "cost_basis": "alias_pricing"
+}

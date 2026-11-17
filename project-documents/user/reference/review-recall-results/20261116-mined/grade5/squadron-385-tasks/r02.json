@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "\"Needed by\" references in Tasks 1 and 2 name the wrong first consumer",
+   "description": "Task 1 says it is \"needed by Task 9\" and Task 2 \"Needed by Tasks 9 and 10\", but neither `parse_slice_branch` nor `parse_task_items` is called by assembly (Task 9 copies fields from `PrInputs`; nothing is parsed there) or directly by the composer (Task 10 receives facts). The first and only caller of both parsers is Task 7's `gather_inputs` (7.1 calls both explicitly). The stated dependency direction is still correct \u2014 nothing downstream runs before Tasks 1\u20132 land \u2014 but a junior implementer reading \"needed by Task 9\" could infer assembly can directly follow the parsers, when the intervening Tasks 3\u20138 are required. Wording fix only: cite Task 7.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37-55"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Design-internal contradiction on the title's source; tasks resolve it in the correct direction",
+   "description": "D4a and its task (10a.1) say the middle title term comes from the design's H1 (`# Slice Design: {name}`, prefix stripped), explicitly **not** the frontmatter `slice` field \u2014 which is the kebab-case slug. But the Design Review Response's F009 paragraph says the name comes \"from the design's frontmatter\". The task file implements the D4a reading and even calls out the distinction, so implementation is unaffected; the stale sentence in the review-response summary should be corrected whenever the design document is next touched, since it is the opposite of the specified behavior.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:699"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "No `**Commit**:` markers in the task file \u2014 acceptable, but a deviation from sibling files' house style",
+   "description": "The file carries no `**Commit**:` lines, which is explicitly acceptable and does not block. For context, every comparable task file in this initiative and its predecessors (e.g. `384-tasks.post-findings-to-the-pr.md`'s siblings, `128-`, `144-`\u2013`147-`, `153-tasks.*.md`) places `**Commit**:` markers at working, tested points. If the project's convention for task files is taken to include them, adding them at the tested sub-task boundaries (e.g. after each `x.2` test item) would match the house style; per instructions this is not required, and committing at least once per task remains covered by the project guidelines the implementing agent already follows.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Logout and the login/logout runtime spawn are new I/O paths with no failure handling",
+   "description": "`sq auth logout` calls `AsyncCodex.logout()` and, per the \"Runtime startup cost\" paragraph, spawns the app-server subprocess (`AsyncCodex.__aenter__` + `initialize`). Yet neither the failure-modes table nor the \"Patterns and Conventions\" list (which names only \"login timeout, login success=False, and account() failure\") covers logout, and D7 defines timeouts for turn/login-wait/account only \u2014 no logout timeout and no bound on the runtime spawn for login or logout. The design explicitly bounds runtime start in the `account()` path with `codex.account_timeout_s` but leaves the identical spawn in the login and logout paths unbounded. Per the requirement that each new I/O path enumerate hang/timeout/peer-disconnect handling with an explicit strategy, add a logout row (spawn failure, logout RPC failure, hang) with a config timeout and cancellation/`finally` teardown similar to the turn path, and state whether login's `__aenter__`/`login_chatgpt()` calls are covered by `codex.login_timeout_s` or need their own bound.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Overlap with deferred slice 907 should be explicitly reconciled",
+   "description": "Slice 907 (\"Optional Dependency Split \u2014 serve and codex extras\", status `deferred`) declares an intentionally empty `codex = []` extra with a manual-install comment and adds a `CodexProvider.create_agent()` guard built on `resolve_codex_binary()`. This design populates the same `codex` extra with `openai-codex` (D1) and sets a success criterion of \"no remaining reference to ... `resolve_codex_binary`\" (D2). D1 acknowledges replacing the \"stale ... GitHub installs\" comment, but the design never states that it supersedes 907's codex portions. If 907 later lands, the two designs conflict on both the extra definition and the `create_agent` binary check. Recording the supersession explicitly (or aligning with 907's author/PM) would prevent a future regression; this does not block the current slice since 907 is deferred.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions"
+  }
+ ]
+}

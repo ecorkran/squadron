@@ -1,0 +1,61 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Broken document references (missing 200-arch, concept numbering)",
+   "description": "The Related Work section links to `200-arch.world-server-foundation.md`, which does not exist \u2014 the actual file is `300-arch.worldserver-foundation.md`. The body also cites \"the world server (300-arch)\" as the tick-loop owner, so the doc is internally split between two numbering schemes. Additionally, the engine's frontmatter `dependsOn: [000-concept.migratory]` while the world server doc references `001-concept.migratory.md`. Every link from this document to a sibling architecture or concept document is either broken or ambiguous.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Related-Work"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Determinism is a design goal with no determinism strategy",
+   "description": "\"Tick determinism \u2014 given the same state and inputs, a tick produces the same outputs\" is a load-bearing goal (replay, debugging, future multi-region agreement), but no section addresses what determinism actually requires: stable floating-point reduction order in vectorized force accumulation, deterministic neighbor-query result ordering (a spatial hash that returns neighbors in bucket-iteration order can vary with insertion history), and \u2014 critically \u2014 the RNG story. The anticipated slices include stochastic-sounding features (\"target selection logic\" in 103, terrain/resource-driven behavior from environment state). Where does randomness come from, how is the seed threaded, and is it per-tick/per-agent? None of this is specified, yet the world server doc leans on it (\"if the tick function is deterministic\u2026 logging only the initial state plus non-deterministic inputs is sufficient\"). This is the hard part being waved at, not designed.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design-Goals"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Stateless tick claim conflicts with spatial index ownership",
+   "description": "\"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it\" and \"neighbors may include agents outside the active subset.\" Together these imply the engine must build a spatial index over the *full* population every tick from arrays passed in, only to query it for the *active* subset \u2014 the index build is likely the dominant cost the doc itself says \"dominates tick cost\" (Technical Considerations, \"Neighbor query cost dominance\"). Rebuilding per tick may erase most of the benefit of a persistent index, yet the doc never states whether index reuse across ticks is allowed, who owns the index, or how the \"read-only interface\" for environment queries relates to index lifetime. If index persistence *is* intended, the statelessness claim is false and the testability argument (\"feed in state, get back state, no mocks\") breaks. Either way, the interface contract that the world server's multi-resolution strategy depends on is left implicit.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Heterogeneous per-agent force evaluation vs. the vectorized/GPU constraint",
+   "description": "The GPU-path requirement demands \"no Python-level per-agent branching\" in the hot loop, and the Design Goals demand \"vectorized computation over arrays\u2026 not object-by-object iteration.\" But the doc's own archetype definitions are inherently per-agent branching: flocking agents run cohesion/alignment/separation, herding agents add leadership/corridor forces, pack hunters run target selection, territorial agents run home-range attraction \u2014 with different force *sets* per profile, plus inter-profile rules (\"an elk herd member's separation force from a nearby wolf is qualitatively different\"). Selecting force terms per agent by profile index is vectorizable in NumPy (masked/gathered operations), but the doc never says so, and no slice or design note describes how per-archetype force sets and inter-profile rules will be expressed as bulk array operations. This is the exact cliff between \"simple boid loop\" and \"five archetypes + pairwise interaction rules,\" and it's currently under-specified (\"Profile-to-profile interaction rules add a combinatorial dimension\" is an observation, not a design).",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Aggregate entities as \"neighbors\" is a leaky extension point",
+   "description": "The doc's answer to aggregation is that \"the world server would present [aggregates] through the same neighbor query interface.\" But an aggregate is not a point neighbor: cohesion toward a statistical center of mass, separation *from* a dispersion cloud, and flight response from an aggregate predator all require different force math than point-agent interactions \u2014 a dispersion radius changes effective distance for distance-attenuated forces, and count/heading change alignment and pursuit semantics. Forcing aggregates through the point-neighbor interface either (a) limits aggregates to the subset of forces that are well-defined for points (rearchitecting the force model later), or (b) requires the neighbor-query result to carry entity-type-dependent payloads, which changes the interface now. Slice (108) \"Aggregation Interface Support\" is the right idea, but the current interface contract description doesn't reserve the room for it. The doc should at minimum specify whether the neighbor-query result is typed (individual vs. aggregate) at the interface level.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No error or failure-mode specification anywhere in the engine",
+   "description": "The document defines no behavior for any failure mode: integration blowup (it acknowledges Euler \"can produce energy drift\" but defers the choice \u2014 note the slice plan has already chosen semi-implicit Euler, so the architecture is behind its own implementation), agents leaving world bounds (the world server doc anticipates \"boundary-driven\" removal events; the engine doc is silent on whether the engine clamps, reflects, or does nothing), NaN/invalid state detection in the hot loop, malformed or partial profiles, and subset-mask inconsistencies (mask referencing indices beyond current population). The project convention is \"never use silent fallback values \u2014 fail explicitly,\" which makes an unspecified error policy a live contract question between engine and world server, not a detail to defer.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Swarm archetype inconsistency between Envisioned State and the slice plan",
+   "description": "The Envisioned State lists five archetypes the profiles define, including \"Swarm agents respond to environmental stigmergy (reinforced paths) rather than direct neighbor forces.\" But the engine's own slice plan explicitly defers swarm intelligence (slice 106) because \"the behavior engine alone cannot provide\" the marker substrate \u2014 it requires the Environment Layer initiative, which has no architecture document in this directory (only 100 and 300 exist). The architecture document presents all five archetypes as within its profile model, while its execution plan shows one of them cannot be built on this architecture's interfaces alone: the \"Environment as input surface\" read-only query interface has no stated provision for stigmergic *write* (agents depositing/reinforcing markers), which is a read-only-vs-write design conflict, not just missing work. The engine doc should scope the environment interface to declare whether it will ever carry agent-written state.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Overweight ambition relative to what this architecture must deliver",
+   "description": "A substantial fraction of the document \u2014 multi-resolution simulation, GPU compute path, 4M-entity scaling, aggregate disaggregation \u2014 is explicitly \"interface support only,\" not built. That scoping is mostly disciplined (\"the engine does not implement scaling strategies itself\"). But the cost is real: the subset-evaluable tick, the \"full population visible for neighbor queries\" contract, typed aggregate handling, and GPU-compatible force interfaces all constrain the initial 10K\u201350K single-CPU implementation starting at slice (100), which is already marked complete. If any of those forward-looking interface constraints weren't actually honored in the completed foundation slice, the \"designed for, not built\" claims are already stale. Worth verifying before slicing (102)\u2013(105) rather than deferring.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design-Goals"
+  }
+ ]
+}

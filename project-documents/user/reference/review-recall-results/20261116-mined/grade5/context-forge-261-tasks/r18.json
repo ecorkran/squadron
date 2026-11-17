@@ -1,0 +1,19 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 8T omits renderer tests for three outcome kinds the design requires",
+   "description": "The design's Technical Requirements require `renderAdoptionFacts` tests for \"every outcome, the state-set notice, 'none found' facts, the squadron bullet.\" Task 8T enumerates only brownfield (capped), adoption-in-progress, and `NOT_EVALUATED`. The `adoption-closed`, `already-planned`, and `greenfield` outcome bullets are never asserted. This matters beyond completeness: the renderer only runs when the brownfield prompt is selected, so in production those three kinds are reachable only via the `in_progress`/`declined` state bullets path \u2014 effectively never \u2014 meaning the untested branches would be exercised by no other task (Task 12 fixtures for greenfield/planned/closed assert the *absence* of the facts section, not their rendering). Add three cases to Task 8T asserting the outcome bullet text for `adoption-closed`, `already-planned`, and `greenfield`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Design scope line mentions `hasBuildManifest` reuse that no fact consumes",
+   "description": "The design's Technical Scope says \"The report reuses 260's `recognizeCi` and `hasBuildManifest` unchanged,\" but D5's authoritative fact list (source, history, docs, adrs, ruleFiles, ci) contains no build-manifest fact, and no task uses `hasBuildManifest`. The tasks correctly follow D5, so no requirement is left unmet and no task change is needed \u2014 but the scope sentence is loose and worth cleaning up if the design is revised, so a later reader doesn't conclude the tasks dropped a fact.",
+   "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md"
+  }
+ ]
+}

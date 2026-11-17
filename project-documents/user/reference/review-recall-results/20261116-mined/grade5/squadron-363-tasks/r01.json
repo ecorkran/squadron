@@ -1,0 +1,19 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Success Criterion 12 has no corresponding task check",
+   "description": "Slice design Success Criterion 12 states: \"Running against squadron produces a concept a PM would edit rather than discard.\" No task or subtask in the breakdown tests this. Task 8.1's checklist is entirely mechanical (filename, citations, provenance lines, frontmatter validation), and its Success line reads \"every listed check passes on the written document\" \u2014 a document can pass every mechanical check and still be one a PM would discard. Task 9.3's hand-off to the PM is a process gate, not a criterion check. Fix: add an explicit item to Task 8.1 (e.g., a Success sub-item that the PM reviews the written `000-concept.squadron.md` during the walkthrough and confirms it is edit-not-discard quality), so SC 12 has a named, completable verification point.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Task 7 lacks a verification subtask before its commit marker",
+   "description": "Tasks 1\u20136 each end with a dedicated verify subtask (1.2, 2.2, 3.4, 4.2, 5.3, 6.3) immediately before their `**Commit**:` marker; Task 7 goes straight from authoring subtasks (7.1\u20137.4) to the commit at line 296. Most of Task 7's content is eventually exercised in Task 8.1 (provenance lines, inferred-claims), but the frontmatter block match (7.2) and the updated Gap-markers pointer (7.1) have no check between authoring and commit. Consider a short \"7.5 Verify\" subtask diff-checking the frontmatter block and pointer against the design, consistent with the pattern used elsewhere in the file.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:296"
+  }
+ ]
+}

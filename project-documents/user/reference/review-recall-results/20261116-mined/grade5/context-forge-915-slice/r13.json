@@ -1,0 +1,26 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Documented collision cleanup (`cf config unset --project`) deletes the wrong file",
+   "description": "The design's \"Delete: mirrors write\" rule (line 89) states that `delete` routes a project key to whichever file the key's `scope` maps to. Because `git.integration_branch` is classified `personal`, `cf config unset git.integration_branch --project` will route to `.context-forge.local.toml` \u2014 not the shared `.context-forge.toml`. Yet the collision-semantics paragraph (line 146) and verification step 9 (line 259) instruct the user to run exactly that command \"to clear the stale shared-file copy explicitly.\" Following the documented procedure therefore does the opposite of its intent: it deletes the developer's local value (the one that wins at read time, which the whole collision section exists to protect), leaves the stale shared copy in place, and `cf check` keeps warning. This is a required part of the plan's \"defined migration/compat story\" (plan entry 915), so it must be resolved before implementation \u2014 e.g. give `unset` a shared-file target, or let `migrate-personal` remove stale differing copies explicitly. The design itself already acknowledges `migrate-personal` is \"the one exception that touches the other project file,\" which is precisely the capability the cleanup step assumes exists on the ordinary `unset` path.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Detection rule's hook point is under-specified and rests on a nonexistent category",
+   "description": "The rule is described as \"added alongside the existing config-hygiene-style checks,\" but `ConsistencyChecker` has no config-hygiene checks today (its rules are task/plan/frontmatter/review-gate/worktree/initiative/schema checks; only `reviewGate` touches config, via the injected `ConfigManager`). There is also no statement of whether the new project-file scan belongs in `check()` or the aggregate `checkAll()`. This matters for the stated success criterion \"reports exactly one warning-severity finding\": default `cf check` calls `checkAll()` (check.ts), MCP `workflow_check` calls both `check()` and `checkAll()` depending on whether a slice is specified, and `checkAll()` prefixes per-slice findings with `[index]` and dedupes them. If the rule is slotted into the per-slice `checkSlice()` path it would emit one prefixed warning per slice (violating \"exactly one\"); if added only to `check()` it would miss default `cf check`. The \"surfaces automatically ... no code change to check.ts\" claim (line 66) only holds if the rule is explicitly registered in the right method(s), which the design does not pin down.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "\"Reuse the pattern already used for personal ignores\" contradicts \"cf init writes no .gitignore\"",
+   "description": "The Technical Scope says the `.gitignore` addition reuses \"the pattern already used for personal ignores,\" but the detailed `.gitignore handling` section correctly states that `cf init` writes no `.gitignore` at all and that no gitignore-writing logic exists anywhere in CLI/core. There is no existing pattern or helper to reuse; the append-missing-line logic is net-new (as the later section itself describes). The wording could mislead task breakdown into searching for a nonexistent helper, though the detailed section is accurate.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+  }
+ ]
+}

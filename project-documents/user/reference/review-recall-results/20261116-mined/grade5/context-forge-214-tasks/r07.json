@@ -1,0 +1,12 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The \"unreadable file\" preflight branch is implemented but never exercised by any test",
+   "description": "The slice's functional requirement lists \"a missing, non-regular or unreadable file\" among the exit-2 triggers, and Task 3's preflight bullet implements all three checks. Task 3T's error list covers missing (valid-file-then-missing), non-regular (directory passed as file), and both template error cases \u2014 but no task tests an existing-but-unreadable file, so that preflight branch ships unverified. The design's own Technical Requirements don't enumerate an unreadable-file test and the walkthrough doesn't exercise it, so this is a minor gap, not a blocker: adding one line to Task 3T's errors bullet (e.g., a file with permissions stripped, guarded for root-running environments) would close it.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+  }
+ ]
+}

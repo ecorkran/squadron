@@ -1,0 +1,96 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "No mechanism is specified for measuring a historical commit, yet per-slice before/after is defined in terms of one",
+   "description": "Description: \"A slice's before and after is the snapshot at its fork point against the snapshot at its merge.\" The snapshot model is \"a snapshot measures a commit\" with a dirty-tree refusal, and the Architectural Principles say \"Taking a snapshot doesn't modify the measured repository.\" Those three statements cannot all hold: measuring the fork-point commit while the worktree sits at HEAD requires either checking out the old commit (mutates the repo), `git worktree add` (mutates `.git/worktrees`), or extracting the tree elsewhere (`git archive`/clone to a temp dir) \u2014 none of which is specified. The keystone slice (\"Snapshot record and Python adapter\") is where this must land, and the difficulty is invisible in the slice list. Until the mechanism is named, the per-slice rollup (a headline capability) has no input.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The deterministic tools are assumed present on repos where they are not, making the brownfield \"full baseline\" mostly absent",
+   "description": "Description: The design goals promise \"An existing project gets a full baseline from one command, without editing the project's config files or code\", and Technical Considerations only says a missing tool is \"absent with a reason\". But ruff and pyright are *dev* dependencies of squadron (pyproject.toml `[project.optional-dependencies].dev`), not runtime dependencies, and no brownfield project has them installed; likewise every non-Python metric needs its own toolchain. The architecture never decides tool provisioning \u2014 bundle/pin them in squadron, require the project to have them, or install into an isolated env \u2014 and never states which snapshot is acceptable with most metrics absent. With \"Absent is not zero\" this yields a baseline record that is honest but useless for the stated consumer (440's handoff, 420's scoring). This is the same class of decision 323 made explicitly (profile/model/config keys registered in `config/keys.py`, tools resolved through `skills/resolver`), and the doc's \"one command\" promise rests on it.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Limits come from the project\" contradicts \"without editing the project's config files\", and no config surface for limits is named",
+   "description": "Description: The principle says file/function length \"are checked against limits the project declares in its own config\", while Design Goals say an existing project gets a baseline \"without editing the project's config files or code\", and Current State says the limits are \"stated in prose in CLAUDE.md and the review rules\" (the conventions now live in AGENTS.md \u2014 the reference is stale). For squadron itself the limits are prose in AGENTS.md, not a machine-readable declaration, so the keystone adapter has nothing to read; for a brownfield project there is no declaration at all, so the snapshot \"reports length distributions and records that no limits were set\" \u2014 i.e. the brownfield baseline carries no length-limit signal, the very metric the initiative plan lists first. The architecture must name the declaration surface (e.g. a `metrology.limits`/`.squadron.toml` key set, or a documented parse of the prose rule) and state what the baseline contains when it is absent.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The closed review vocabulary is not enforceable at any boundary the repo controls",
+   "description": "Description: The preferred direction is \"write-time categorization \u2026 following 323's precedent for the audit skill\", with \"323's sync test extends to cover it\". But the built-in code template (`src/squadron/data/templates/code.yaml`) carries no category vocabulary today \u2014 the findings block it specifies is severity + `location:` + prose \u2014 and `load_all_templates` lets a user's `~/.config/squadron/templates/code.yaml` override the built-in by name. A prompt-level list of categories plus a CI sync test over built-in files therefore enforces nothing: a user override silently drops the vocabulary, and the parser (`review/parsers.py`, `_CATEGORY_RE`) accepts any free string with no validation against `AuditCategory`. The architecture treats the \"third copy\" as a solved problem (\"a sync test extends to cover it\") without noticing that the review path has no schema field or validation point for the vocabulary. Either the vocabulary becomes a validated field on the review output (a `ReviewTemplate`/parse-time contract) or the goal \"one category vocabulary\" is not enforceable as written.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The read-side mapping algorithm for historical reviews is excluded without an alternative",
+   "description": "Description: \"Historical reviews can only be mapped read-side, and reports must mark those findings as read-side mapped rather than pool them silently\" \u2014 but the two read-side mechanisms named (\"a lookup table that will miss or an LLM call that adds noise\") are both dismissed rather than chosen. No third option is offered (e.g. a single curated synonym table held in one module, with `other` + raw string for misses \u2014 the same coercion rule 323 adopted for the audit). Because the lookup table is exactly the kind of \"comparison value scattered across code\" AGENTS.md forbids, the omission is load-bearing, not cosmetic: the slice plan (\"ingest of review files into the store, including read-side mapping for historical reviews\") cannot be designed until the mechanism is fixed.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slice attribution ignores this project's documented branch topology, and \"cf slice records\" would add an undeclared dependency",
+   "description": "Description: \"Slice branches give one (fork point to merge commit), but fix commits land directly on the target\". AGENTS.md's Git Rules make this materially worse than the doc assumes: an optional integration branch, worktrees that fork from their own long-lived branch, and the hierarchy `main \u2190 integration \u2190 worktree \u2190 slice`. The fork point of a slice branch is therefore not the merge-base with `main`, and a fix landing directly on the target (or on the integration branch) is inside the slice's fork\u2192merge range, so ranges overlap and \"the snapshot at its fork point against the snapshot at its merge\" attributes other people's commits to the slice. The doc offers \"git topology, cf slice records, or both\" as an open choice; choosing cf slice records makes 400 depend on context-forge, which is not in `dependencies: [100, 320]` and is not in the initiative plan's dependency list. The attribution model must be fixed against the real topology, and the CF option either dropped or declared.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The record model does not state snapshot granularity or volume, against a store that loads every record into memory",
+   "description": "Description: \"Snapshots and normalized review findings are new `record_type` values in the existing metrology store, added as optional sibling payloads on `MetrologyRecord` \u2026 No new store, no schema migration.\" That matches `metrology/models.py` and `metrology/store.py` today, but the store's query model is `glob(\"*.json\")` \u2192 `json.loads` \u2192 full Pydantic validation of every record, and the architecture adds a record type taken *per commit, per project, per language* \u2014 a far higher cardinality than audit runs. The doc never says whether a snapshot carries per-file/per-function detail (needed for the file/function-length limits) or aggregates only, nor what happens when the same commit is re-measured (the store has an explicit in-place replace convention for noise floors but nothing is said for snapshots). 321 already left a measured trip-wire about this store's scaling; adding the highest-volume record type without naming the granularity or an expected volume repeats the mistake.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Lint/type-count semantics under tool failure are undefined, so \"absent\" does not cover the common case",
+   "description": "Description: \"Absent is not zero\" enumerates only \"no adapter for the language, tool not installed, tests failed, coverage not configured\". The far more common failure for a deterministic counter is a tool that *ran* and did not produce a comparable count: ruff exits non-zero on a syntax error and reports it as a diagnostic rather than a lint violation; pyright emits diagnostics of several kinds (errors, warnings, unresolved imports) and can be killed by a missing node install; a duplication tool can skip a file it cannot parse. Without a stated rule for these, the count field will be filled with a number that is not the quantity the metric claims to be, which violates the repo's \"never use silent fallback values\" rule. The metric definitions (what exactly is counted, per what tool semantics, and what a non-zero exit means) are the hard part of the keystone slice and are not in the architecture.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The lint rule-set decision is left as \"either or both\", which doubles cost and leaves the metric undefined",
+   "description": "Description: \"A fixed reference rule set makes projects comparable to each other \u2026 A snapshot may record either or both, but it must name the rule set each count came from.\" \"May record either or both\" is not a decision, and it propagates: the record needs one or two count fields, the rollup must pick which to compare, and the \"cheap to start measuring\" goal is spent twice per snapshot. It also sits badly against the initiative plan's requirement of \"lint and type-error counts under the full rule set rather than pass/fail\", which reads as one named set. The same section is candid that the two numbers are different measurements \u2014 which is exactly why the choice has to be made once, centrally, not offered as a per-snapshot option.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The cross-language adapter framework is specified before any second language exists",
+   "description": "Description: The slice plan is \"Snapshot record and Python adapter (keystone)\" then \"Additional language adapters \u2026 proving the contract wasn't Python-shaped\", and the design goal is \"each language is a pluggable adapter\" with a general contract, a registry, and per-language tool selection \u2014 on the strength of one Python implementation that has not been written. AGENTS.md's first principle is \"Always resist adding complexity. Ensure it is truly necessary.\" What can be cut or deferred: the registry/dispatch machinery, the generic contract, and the cross-language comparability machinery until the second adapter exists; ship the Python adapter as a concrete implementation behind one narrow interface, and let the second language force the abstraction. Likewise deferrable: automatic snapshot capture at every fork/merge (\"adds work and a failure mode to every pipeline run\") and the \"either or both\" rule-set option \u2014 neither is needed for the stated first customer (420's comparable implementation scores, 440's baseline).",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Anticipated Slices"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The non-Python requirement for 440 is stated but not sequenced anywhere",
+   "description": "Description: \"Python is required for squadron's own use, and at least one non-Python language is required before 440 relies on this.\" But 440 (Brownfield Adoption) and context-forge initiative 260 depend on 400's adoption baseline and are explicitly about repos squadron did not write; the initiative plan lists 440's dependency as \"400\" with no ordering qualifier, and this document's frontmatter says `dependencies: [100, 320]`. The non-Python adapter is the *second* slice in the plan. Unless the dependency edge is qualified, 440/260 can reach handoff against a Python-only baseline \u2014 the doc names the constraint but does not attach it to anything that enforces it.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "\"Full baseline\" and \"does not modify the measured repository\" overstate what the baseline command does",
+   "description": "Description: \"For an existing project, one baseline command takes the first snapshot and runs the audit baseline with its noise floor.\" The audit half is 323's harness, which by design *writes into the audited repo* \u2014 it looks for `analysis/nnn-analysis.*.md` / `project-documents/user/analysis/*-analysis.*.md` and even has `_is_audit_artifact` logic to tolerate the resulting dirty tree. The baseline therefore mutates the brownfield repo it is supposed to measure, and the snapshot half is optional-by-design on coverage (\"Coverage is therefore optional per snapshot\"). \"One command that captures a static snapshot plus an audit baseline\" is therefore not \"a full baseline\" in the sense the initiative plan means, and the \"Taking a snapshot doesn't modify the measured repository\" claim silently excludes the audit half of the same command.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Undecided data-integrity behaviours are left as \"either/or\" in a design whose stated strength is determinism",
+   "description": "Description: \"A dirty working tree is either refused or recorded with an explicit dirty marker\" leaves the behaviour undecided, and the two options have different downstream consequences (a refused snapshot is a missing data point; a dirty-marked snapshot is a measurement that does not correspond to its keying commit, which the record's own \"never silently attributed to the HEAD commit\" principle is about). The envelope also grows to seven optional sibling payloads with no discriminator validation (a `record_type` with no matching payload is not rejected by `MetrologyRecord`), so \"new `record_type` values \u2026 the way 322, 323 and 177 did\" inherits a schema whose invalid combinations are silently readable.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  }
+ ]
+}

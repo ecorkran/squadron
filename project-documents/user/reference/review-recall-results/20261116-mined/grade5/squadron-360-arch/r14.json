@@ -1,0 +1,54 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Generated analysis docs collide with the metrology audit harness's file discovery",
+   "description": "The decision to put both new artifacts (`{index}-analysis.codebase-comprehension.md` and `{index}-analysis.overview.md`) into `project-documents/user/analysis/` with `docType: analysis` in the 940-949 band and 950+ overflow creates a concrete runtime coupling that the document does not account for. The existing audit harness resolves its output with `_AUDIT_FILE_GLOBS = (\"project-documents/user/analysis/*-analysis.*.md\", \"analysis/*-analysis.*.md\")` and then `max(fresh, key=mtime)` (`src/squadron/metrology/audit.py:57,259`) \u2014 a glob that matches `943-analysis.codebase-comprehension.md` and `944-analysis.overview.md` just as readily as a tech-debt-audit file. Any comprehension/overview file written inside an audit run's `started_at` window is parsed as that run's audit, fails `parse_audit_findings` with no findings block, and the audit is silently discarded. Separately, `_is_audit_artifact` treats any untracked `\\d+-analysis\\..+\\.md` as the audit's own output, so these new docs would be ignored by the dirty-tree check in variance runs, masking a genuinely dirty worktree. This also falsifies the Dependencies claim that 360 is \"Independent of ... 320 \u2014 no ... judging ... machinery is involved\": the coupling is at the shared artifact layer, not the code layer. The document needs to either give these outputs a non-matching name shape/docType or specify how the harness distinguishes them.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Capability 2's tested path contradicts its core \"derived, not authored\" rule and has no interview spec",
+   "description": "`Inputs` says that when the concept is absent the skill \"sources purpose from the initiative plan plus interview,\" and calls this \"the common case ... so it is the tested path, not an edge case.\" But the Design Goals state the client document \"is not a place where new claims about the project appear,\" and Translation rules state \"Derive, never invent. Every claim traces to an input artifact.\" An interview injects claims that are, by definition, not in any input artifact \u2014 so the primary tested path violates the design's central invariant. It is also internally incoherent with the field schema: `Problem` sources only from \"Concept Problem & Motivation\" and `Audience` only from \"Concept Target Users,\" neither of which exists when the concept is absent, yet no alternative source is given. Unlike Capability 1, which has an \"Interview scope\" table, Capability 2 defines no questions, bounds, or derivation rules for this interview. The document must decide whether the degraded path is strictly derivable from the initiative plan alone or define how interview input is reconciled with \"every claim traces to an input artifact.\"",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Direct contradiction on whether an emphasis parameter exists",
+   "description": "\"Audience variants share one document\" states, in the present tense, \"Emphasis is a generation parameter; the factual content is identical.\" The Resolved Design Decisions section states the opposite: \"one neutral document, not per-audience variants ... An emphasis parameter is added only if real use demonstrates the need.\" Same document, opposite decisions on whether a load-bearing generation input is built now or deferred. Slice design cannot tell whether `/sq:overview` takes an audience/emphasis argument.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Translation rules"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Working-tree hygiene ignores only trash and is silent on `intermediate/scan-result.json`",
+   "description": "The goal \"Leave the working tree clean\" is operationalized as a single `.gitignore` entry for `.understand-anything/.trash-*/`. But the Output Contract table lists `intermediate/scan-result.json` as an upstream-produced path that \"squadron does not touch it.\" It appears in neither the ignored set nor the explicit \"Not ignored ... remain tracked\" list (`knowledge-graph.json`, `meta.json`, `config.json`, `.understandignore`). If the plugin writes it \u2014 the table says it does \u2014 it will surface as an untracked file after every run, leaving the tree dirty and contradicting the goal. The hygiene section needs to state whether this file is ignored, tracked, or expected to be absent, and account for the fact that tracked `meta.json` also changes on every run.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Working-tree hygiene"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`000-concept` convention is never reconciled with the repo's existing `001-concept` reference",
+   "description": "Capability 1 writes `000-concept.{project}.md` and Capability 2 reads it as the optional input. The only concept reference actually in the repo is `source: user/project-guides/001-concept.squadron.md` in `001-initiative-plan.squadron.md`. The document asserts the `000` convention without addressing this, so both the write path and the graceful-degradation read path can miss a concept that exists under the project's recorded naming. Compounding this, Output Conventions opens with \"Both capabilities write to the existing `project-documents/user/analysis/` directory with the existing `docType: analysis`,\" which is false for Capability 1's primary output \u2014 a `concept` doc in `user/project-guides/`. The output destinations need to be stated consistently in one place.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Outputs"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No re-run semantics for the fixed-path concept document, conflicting with \"sacred, never rewritten\"",
+   "description": "Analysis outputs are explicitly per-run (\"incrementing per run ... each run is an independent sample\"), but the concept is a single fixed path, `000-concept.{project}.md`. The document never says what a second `/sq:analysis understand` does when that file already exists \u2014 overwrite, merge, or stop. This matters because the generated concept is required to place interview responses verbatim in a **User-Provided Concept** section that is \"sacred ... never rewritten.\" Regenerating the file from a fresh interview would rewrite exactly the section the convention protects; skipping it silently leaves stale structural content. No failure mode or idempotency contract is defined.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Outputs"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Staleness handling assumes the graph commit is an ancestor of HEAD and ignores a missing `meta.json`",
+   "description": "\"report the drift \u2014 including the commit distance\" presumes `git rev-list <gitCommitHash>..HEAD --count` is meaningful. In this project's rebase/integration-branch workflow, a graph built in another checkout or before a force-push can carry a hash no longer in HEAD's history; the distance is then undefined or misleading, yet the design mandates reporting it unconditionally. There is also no stated contract for `meta.json` being absent while `knowledge-graph.json` exists: preconditions check only the graph and the plugin's presence, and the whole warn-don't-block path depends on `meta.json`'s `gitCommitHash` being readable. Both cases need defined behavior before slice design.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:130-131"
+  }
+ ]
+}

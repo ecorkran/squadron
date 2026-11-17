@@ -1,0 +1,82 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "\"Read-side over 300\" has no stable persistence key to join against",
+   "description": "\"Read-side over 300's write path\" states that 320 \"reads and annotates\" 300's persisted judge results, that results are self-describing via provenance, and that 320 \"does not re-thread plumbing.\" The keystone slice in \"Anticipated Slices\" requires \"human sample verdicts keyed to persisted judge results (with judge-configuration identity).\" The current stack does not provide that key. `src/squadron/review/persistence.py:format_review_markdown()` emits `reviewType`, `verdict`, `sourceDocument`, `aiModel`, `score`, `criteria`, and findings, but its own comment says \"provenance is never emitted here (reserved \u2014 slice 301)\"; it emits no result ID, template version/content hash, model version, threshold config, or run ID. `save_review_result()` uses a deterministic filename based on slice index, template name, and slice name, so repeated judge calls in a loop or with different models overwrite the same review file. `src/squadron/pipeline/state.py` has `run_id` and `action_results` with `score`/`provenance`/`metadata`, but state files live under `~/.config/squadron/runs/` and `StateManager.prune()` deletes all but the last 10 completed/failed runs per pipeline. Therefore \"judge configuration identity\" from \"Technical Considerations\" and \"attach unambiguously to the specific persisted judge result\" from \"Sampling capture ergonomics\" cannot be implemented read-side. The design must either add write-path identifiers and durable config/provenance or change the \"No change to the judging path\" and \"no re-thread plumbing\" commitments in \"Non-Goals\"; as written it cannot be built.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Architectural Principles"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Dispersion depends on \"existing\" machinery that is future work and misattributes `fan_out`",
+   "description": "\"Dispersion needs repeated measurements\" says \"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`,\" and \"Related Work\" repeats that initiative 140 supplies `fan_out`. This is inconsistent with the referenced artifacts. `300-slices.eval-actions-llm-as-judge-scoring.md` lists \"Multi-Sample Judging\" as unchecked Future Work 1 with \"Permit (not require) running a judge N times and reducing via median\"; no `multi_sample` or `median` implementation exists in `src/squadron`. `fan_out` was delivered by slice 182 under initiative 180, not 140, and its reducers are `collect` and `first_pass`; there is no median judge reducer. Worse for metrology, `_execute_fan_out_step()` reduces N `StepResult`s into one `ActionResult`, and `collect` nests branch action results under `outputs[\"branches\"]` rather than persisting per-branch judge results as first-class queryable records. Dispersion measurement therefore requires implementing 300 future work, a median/raw-dispersion reducer, and durable per-branch judge records; it cannot simply \"accept dispersion data opportunistically.\"",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Artifact-level calibration uses unbuilt levels and user-facing labels as keys",
+   "description": "\"Measured trust per artifact level\" fixes calibration at \"(tasks-vs-slice, slice-design-vs-arch, arch-vs-concept)\"; \"Architectural Principles\" says agreement and dispersion are \"always computed and reported at the artifact-level grain.\" But \"Current State\" says initiative 300 is complete, and the shipped judge templates are only `judge-slice-vs-arch.yaml` and `judge-tasks-vs-slice.yaml`; `300-slices` explicitly leaves \"Which design-phase judge templates beyond slice-vs-arch and tasks-vs-slice to author first\" as an open question. There is no `arch-vs-concept` judge whose verdicts can be sampled, so one of the three declared calibration grains has no data source. The document also varies the third level's label (`arch-vs-concept` here, `arch-concept-vs-initiative-blurb` in the initiative plan) and offers no canonical enum/config for artifact-level identity. CLAUDE.md says \"NEVER use user-accessible labels as logical structure\" and requires comparison values to be defined once; using prose labels as the reporting key will scatter three similar strings across capture, reporting, and calibration-to-threshold code.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Design Goals"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The keystone slice defers every decision it claims to de-risk",
+   "description": "\"Metrology data layer & sample capture (keystone)\" says it \"de-risks the storage/join/ergonomics decisions in isolation,\" but those decisions are not made here. \"Where metrology data lives\" defers whether to extend existing storage, add a metrology store, or relate to 280; \"Sampling capture ergonomics\" defers which results are offered for sampling and only says \"CLI at minimum\"; \"Agreement and dispersion at small n\" defers metric choices and the minimum-evidence floor; \"Comparability across template and model versions\" defers the practical granularity of judge identity; \"Normalizing an LLM-authored audit\" states a desired `(category, location, severity)` shape without a schema. No interface contract is given for a human-sample record, an audit-finding record, a query API, a join key, a report object, or immutable-vs-correctable sample state. CLAUDE.md requires \"Program to interfaces (contracts)\" and \"clear separation between components\"; this document leaves the keystone's contracts to a later slice while also declaring the keystone the prerequisite for all reporting.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No failure semantics exist for the new write, parse, join, and feedback paths",
+   "description": "This is a cross-cutting omission; I cannot pin it to one named section because the document contains no failure-mode section or per-component error contract. Specific unhandled interactions: sample capture receiving a human verdict for a missing, pruned, overwritten, or ambiguously identified judge result; duplicate or conflicting human samples; a sample arriving after a template/model revision; metrology-store write failure or partial CLI write; report generation over mixed judge configurations or `UNKNOWN` judge results; calibration-to-threshold feedback applied to a config that changed after the report; audit skill not installed because 340 packs are opt-in; `tech-debt-audit` producing no audit file, a malformed findings table, or `NEW`/`RESOLVED`/stale rows from repeat-run mode; cross-project store lock/corruption/migration failure. CLAUDE.md requires \"Never use silent fallback values. Fail explicitly with errors or obviously-placeholder values\" and constrains every `try/except` to re-raise/log or narrowly handle a specific exception. \"Honest statistics at small n\" and \"Attribution of the pre-emption delta\" discuss statistical honesty but do not define any of these operational failures.",
+   "location": "unverified"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Two oracles, one metrology shape\" conflates incompatible data models",
+   "description": "\"The two oracles share one metrology shape \u2014 capture oracle verdicts, persist them queryably, report agreement/trend at the meaningful grain \u2014 so the reporting layer is built once.\" The judge oracle produces human sample verdicts, judge-vs-human agreement, and judge-vs-judge dispersion keyed by artifact level and judge configuration. The code-quality oracle, described in \"Normalizing an LLM-authored audit\" and \"Attribution of the pre-emption delta,\" produces normalized audit findings and an observational before/after delta in audit-findings-per-project keyed by project/audit run/issue class. These are different subject keys, units, denominators, and trend semantics; audit findings are not \"oracle verdicts\" and have no agreement/dispersion pair. The document never defines a shared observation protocol or registry key that both can implement. A single reporting layer will either duplicate oracle-specific aggregation inside generic code or become a god abstraction with fields meaningful to only one oracle, violating the project rule to maintain clear component boundaries.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Envisioned State"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The pre-emption prompt and \"any future intervention\" have no extension point",
+   "description": "\"Baseline before intervention\" says the ordering discipline \"applies to any future intervention the metrology enables,\" and \"Pre-emption prompt & delta measurement\" makes the dispatch-side prompt the first customer. No intervention registry, protocol, ID, version, activation timestamp, exposure record, or target-scope key is defined. On the actual stack, `src/squadron/pipeline/actions/dispatch.py` resolves prompts from `context.params[\"prompt\"]`, a prior `build_context` cf-op stdout, prior review findings, and an `override_instructions` prefix; there is no \"prompt-chaining pre-emption\" hook. The document does not say whether the prompt is a pipeline param, a review template change, a `system_prompt`, a rules injection, or a file installed by 340, nor how a later audit run knows which projects/runs saw which prompt version. \"Attribution of the pre-emption delta\" admits the measurement is observational, but without an exposure record even a directional signal cannot be attributed to the intervention. Stated future interventions will not compose with this design without adding the missing extension point.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Architectural Principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Calibration-to-threshold feedback has no concrete config surface",
+   "description": "\"Calibration feeds the gates\" says \"Calibration output is configuration, not a new gating mechanism,\" and \"Anticipated Slices\" promises \"the documented, evidence-floored path from calibration reports to 300's template/step threshold config.\" In the current stack, 300's thresholds live in the `judge:` block of template YAML such as `judge-slice-vs-arch.yaml` and `judge-tasks-vs-slice.yaml`, with step overrides resolved by `resolve_thresholds(template_judge, step_override)`; built-in templates are wheel data and user templates override them by name. \"Advisory\" and \"auto-gate\" are not first-class config values: `judge-cycle.yaml` uses `until: review.pass`, `on_exhaust: checkpoint`, and threshold bands, while checkpoints fire on verdict triggers. The architecture gives no schema for a calibration recommendation, no command/API for applying it, no validation that the target template/model version is still current, and no numeric minimum-evidence floor. CLAUDE.md forbids hard-coded magic defaults and requires centralized config; leaving the evidence floor and config keys to slice design will scatter `pass_floor`, `concerns_floor`, and graduation rules across templates and reporting code.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Design Goals"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The audit baseline harness assumes a headless interface the 340 skill does not provide",
+   "description": "\"Envisioned State\" says \"the tech-debt-audit harness runs across squadron-managed projects and persists normalized findings.\" The shipped 340 capability is not a Python harness or `sq` subcommand: `commands/analysis/tech-debt-audit.md` is a Claude Code slash-command skill with `disable-model-invocation: true`, `TodoWrite`/`Task`/`rg`/`ast-grep` instructions, and a deliverable markdown file `analysis/nnn-analysis.{project-name}{.subproject?}.md`; `commands/sq/analysis.md` merely tells Claude Code to \"Invoke `/analysis:tech-debt-audit`\". The skill is opt-in and may be absent (\"The analysis pack is not installed. Run `sq skills install analysis`\"). \"Normalizing an LLM-authored audit\" only mentions `(category, location, severity)`, but the real output includes a 30\u201380-row findings table with ID, `File:Line`, severity, effort, description, recommendation, `RESOLVED`/`NEW`/stale repeat-run semantics, and required non-finding sections. CLAUDE.md requires lenient structured-text parsing and a test fixture containing the actual production format. The document under-specifies the hard part: how a cross-project Python/Typer harness invokes an interactive Claude Code slash command in each repo and parses its non-deterministic markdown into stable baseline observations.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Envisioned State"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Dependency declarations omit load-bearing 340/280 relationships and misstate 280's fitness",
+   "description": "Frontmatter declares `dependencies: [100, 140, 300]`, but \"Overview\" makes the 340 analysis pack's `tech-debt-audit` skill the code-quality oracle, and \"Where metrology data lives\" makes a queryable cross-project store \"a new requirement\" with the \"anticipated shared artifact store, 280\" as a candidate. 340 is complete but opt-in; 280 is explicitly \"not started\" and its architecture defaults to `{cwd}/.squadron/artifacts.db`, a per-project append-only `artifacts` table with `run_id` and JSON `metadata`, no cross-project key, no migrations, and an explicit non-goal of being a general-purpose store. That design cannot aggregate audit findings \"across projects\" without rearchitecting 280. \"Related Work\" says 280 is \"to be evaluated at slice design, not assumed,\" while \"Technical Considerations\" treats cross-project joinability as a fixed commitment. If 320 consumes 340's installed skill or 280's store, those dependency directions must be declared; if it does not, the 280 candidate should be removed rather than left as an implicit future dependency.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Related Work"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Overweight metrology platform for small-n observations",
+   "description": "\"Honest statistics at small n\" says samples are \"a handful of human spot-checks per artifact level, a handful of projects in the audit baseline,\" yet the architecture introduces a cross-project durable home, a shared reporting layer \"built once\" for two dissimilar oracles, derived calibration reports, a candidate relationship to 280's shared artifact store, and a discipline for \"any future intervention the metrology enables.\" This is over-engineering for hypothetical future requirements and conflicts with \"No general observability platform\" in \"Non-Goals.\" Cut the generic \"one metrology shape\" reporting abstraction, the 280 relationship evaluation, durable derived-report state, and the future-intervention extension point until there is a second real intervention. Keep both plan-assigned oracles, but implement two thin append-only observation recorders with explicit schemas and compute reports from immutable observations; a local SQLite/JSON store plus per-oracle reports is the lighter option that meets small-n requirements.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Architectural Principles"
+  }
+ ]
+}

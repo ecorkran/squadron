@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Density feedback can use capped counts",
+      "description": "Slice 112 assigns the cap\u2019s output back to `filtered_counts`. The proposed end-of-tick call therefore receives post-cap counts when a cap applies, contrary to slice 113\u2019s requirement to dispatch on pre-cap density. Preserve the post-self-exclusion, pre-cap count or edge total before applying the cap, and test switching with a binding cap.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:149-159"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Backend switching does not preserve deterministic tick output",
+      "description": "The design permits different neighbor ordering across backends but requires bit-exact tick parity. Floating-point reductions can differ with order, and slice 112\u2019s `argpartition` can select different neighbors at equal-distance ties. Hysteresis also makes backend selection depend on prior dispatcher state, which the design does not specify how to restore for replay. Define a canonical ordering and tie policy, or another mechanism that preserves the parent architecture\u2019s same-input determinism across switches and replay; test both.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421-421"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The default crossover is not supported by the cited workload",
+      "description": "The design calculates approximately 132 neighbors for the uniform 300\u00d7300 scenario, yet says that same uniformly spread population can fall below 10 and select the grid. With the proposed threshold of 10 and band of 2, that example selects brute force despite the cited scattered-regime grid win. Calibrate the default against measured pre-cap counts and backend costs in both phases, and require the benchmark to establish that the default captures the intended benefit rather than merely demonstrating a tunable knob.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:208-213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty active subsets lack a density policy",
+      "description": "`counts.sum() / n_active` has no defined result when the active subset is empty, a valid case in slice 112. Specify whether to retain the prior selection or otherwise handle that tick, and test it. This is necessary to preserve the parent\u2019s subset-evaluable tick contract.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Backend selection changes before the next build",
+      "description": "`record_density` changes the selected backend immediately, although only the previously selected backend was built. A query after feedback but before the next `build()` can therefore reach an unbuilt or stale backend, contrary to the stated next-build switch semantics. Keep a pending choice and activate it during the next build, or explicitly define and enforce a narrower query lifecycle.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:106-110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scaling target is not restated for this performance slice",
+      "description": "The parent architecture targets tens of thousands of agents at full behavioral fidelity on one CPU process. The slice only specifies measurements at 2,000\u20133,000 agents and does not restate that target. Include the parent target and explain how this slice\u2019s measurements relate to it, without claiming this slice alone must achieve the full target.",
+      "file_ref": null,
+      "category": "non-functional-requirements",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:368-380"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The claimed constant-time density calculation is inconsistent with the interface",
+      "description": "`record_density` accepts the counts array and calls `counts.sum()`, an O(n_active) reduction, not O(1). Moreover, after capping, the CSR edge total is not the required pre-cap total. Either pass the pre-cap edge count already available from the filtered neighbor array, or state and measure the actual reduction cost.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:338-342"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Configuration permits a hysteresis band that prevents switching",
+      "description": "Validation permits `hysteresis_band >= grid_threshold_mean_neighbors`. Since mean density is non-negative and brute-to-grid requires `m < t - h`, such a configuration can never enter grid mode from the default brute start. Reject this combination or explicitly define its intended behavior.",
+      "file_ref": null,
+      "category": "configuration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:199-202"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Density feedback can use capped counts",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:149-159",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Backend switching does not preserve deterministic tick output",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421-421",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "The default crossover is not supported by the cited workload",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:208-213",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Empty active subsets lack a density policy",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-116",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "Backend selection changes before the next build",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:106-110",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "non-functional-requirements",
+      "raw_category": null,
+      "summary": "Scaling target is not restated for this performance slice",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:368-380",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "The claimed constant-time density calculation is inconsistent with the interface",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:338-342",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "configuration",
+      "raw_category": null,
+      "summary": "Configuration permits a hysteresis band that prevents switching",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:199-202",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T13:51:36.693626",
+  "model": "openai/gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 522,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6.1-terra",
+  "answering_models": [
+    "openai/gpt-6.1-terra"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 116093,
+  "cached_tokens": 65754,
+  "cache_write_tokens": null,
+  "completion_tokens": 1680,
+  "reasoning_tokens": 353,
+  "duration_seconds": 33.25682449992746,
+  "cost_usd": 0.062026700000000004,
+  "cost_basis": "alias_pricing"
+}

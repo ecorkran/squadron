@@ -1,0 +1,47 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Capture density before neighbor capping",
+   "description": "The hook receives `filtered_counts` after `apply_neighbor_cap(...)`. Slice 112 shows that the cap replaces `filtered_counts` with `capped_counts`, so this is post-cap density, contrary to line 116 and the slice plan\u2019s explicit pre-cap requirement. With `max_neighbors=1`, the reported mean never exceeds 1, potentially keeping the dispatcher on grid even when pre-cap density strongly favors brute force. Preserve the post-`exclude_self`, pre-cap counts in a separate variable and pass those to `record_density`. Add an integration case with high pre-cap density and a small cap to prove the cap cannot influence backend selection.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:154-159"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Define empty-subset behavior and correct the density-cost claim",
+   "description": "`counts.sum() / n_active` is undefined when `n_active == 0`, an input explicitly supported by the batch-query and neighbor-cap contracts. Specify an explicit policy\u2014such as recording no sample and retaining the current backend\u2014and test it. Also, because `record_density` receives only `counts`, computing `counts.sum()` is `O(n_active)`, not the `O(1)` operation claimed at line 340. If constant-time recording is required, pass the already-available total edge count or CSR boundary; otherwise correct the technical requirement.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Substantiate the default threshold with consistent benchmark evidence",
+   "description": "The first example calculates approximately 132 mean neighbors for a uniform N=3100 scenario, which selects brute force at threshold 10. The next example claims that the same population spread uniformly across the same world can fall below 10 and select grid. These examples contradict each other, and the first also sits uneasily with Entry 4\u2019s measured grid win in uniform distributions. Consequently, the stated rationale does not establish that the default captures the intended expansion-phase win. Replace these examples with measured pre-cap density traces from the target scenarios and derive or validate the default against the documented phase transitions.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:210-213"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Separate cross-backend equivalence from bit-exact determinism",
+   "description": "The integration test requires bit-exact positions against brute force while exercising both backends, but line 431 correctly permits grid rows to contain the same neighbor sets in a different order. Floating-point CSR reductions are not guaranteed to produce bit-identical results under reordering. Either canonicalize row ordering before force evaluation or change cross-backend verification to neighbor-set equivalence and an explicitly justified numerical comparison. Test tick determinism separately through repeated runs with identical state, inputs, and dispatch history.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Wire the initial-backend choice or cut the operator-facing scope",
+   "description": "The document says an operator can choose grid-first behavior, but `SpatialConfig` contains only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band`, while the adaptive construction at line 238 hardcodes `initial_backend=\"brute\"`. Thus the promised operator choice is unreachable. The lighter option is to remove that operator-facing claim and keep the fixed safe default; if grid-first operation is genuinely required, add the field through YAML validation and wiring with tests.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Reconcile the no-spike criterion with the documented switch cost",
+   "description": "The walkthrough requires no dispatcher-induced worst-case spike, while line 439 explicitly predicts a visible first-grid-build spike after switching and leaves mitigation open. Define whether measurements are cold or warmed and specify an acceptable switch-boundary cost, or replace the absolute no-spike assertion with a measurable regression budget. As written, the design simultaneously predicts and forbids the same behavior.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:380"
+  }
+ ]
+}

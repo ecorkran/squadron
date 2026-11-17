@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every functional requirement has a corresponding implementation and verification task",
+      "description": "All FRs are covered: empty/scaffold-only and brownfield outcomes (Task 12 fixtures 1\u20133), shallow clone (Task 12.4 + Task 5T + Task 15.2), concept-only + code (Task 12.6), planned project with no walk (Task 12.7 + the `measureSourceVolume` spy in Task 9T), monorepo folder scoping and root CI (Task 12.5 + Task 5T), `in_progress` resume (Task 12.8), overrides including invalid-value rejection (Task 12.9 + Task 1T), `--phase 2`/explicit instruction (Task 12.10\u201311 + Task 9T), `template_preview` read-only (Task 12.13 + Task 11), and missing profile/prompt with no concept fallback (Task 9T + Task 10T + Task 12.12 + Task 15.4). No success criterion is left without a task.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Technical, integration and walkthrough requirements are fully mapped",
+      "description": "Each mandated unit-test area has a task (Task 3T, 4T, 5T, 6T, 7T, 8T, 9T), as do the integration fixtures (Task 12), CLI/MCP parity (Task 13), build/typecheck/lint and caller updates (Task 11, Task 15), and the manual walkthrough steps 1\u20135 (Task 15). The future-slice integration points are honored: the squadron bullet is isolated in `renderSquadronFact()` (Task 8) and state is exported through `adoption/` (Tasks 2, 7, 9), so 262/263/264 need not touch selection logic.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequence, test-with pairing and commit points are sound",
+      "description": "Dependencies are respected: `adoptionOutcome.ts` is seeded with the threshold in Task 3 and expanded in Task 7; the renderer (Task 8) and resolver (Task 9) follow the outcome; integrator/pipeline wiring (Tasks 10\u201311) follows the resolver; integration/parity (Tasks 12\u201313) follow the wiring. No circular dependencies. Test tasks immediately follow their implementations throughout. Commit markers sit after completed-and-tested groups (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) \u2014 neither after every task nor only at the end.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Implementation-dependent instructions are accurate against the current code",
+      "description": "`PHASE_STRINGS[2]`/`ARCHITECTURE_PHASE` and the legacy `phase 1: concept` alias exist in `projectSchema.ts`; `gitExec(args, cwd, opts)` produces `timed out after 5s` for a 5000 ms bound; `MIN_GUIDE_VERSION = '0.22.2'` and `PROMPT_FILE_RELATIVE_PATH` resolve as described; all named test files and the `test-project` fixture exist; and every `createContextPipeline(` caller (CLI `build.ts`, MCP `contextTools.ts`, and the enumerated tests) is accounted for by Task 11, with `packages/electron/out/` correctly excluded.",
+      "file_ref": null,
+      "category": "verifiability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test or extra timing test is needed, and the file correctly omits one",
+      "description": "D2's \"under one second\" target is explicitly bounded by the cap tests in Task 3T (\"tests assert the caps, not timings\"), and the `tests/load/` tier cited in the Context Summary is a Python-rule artifact that does not apply to this TypeScript repo. This is correctly reasoned; no load-test task or CI gating task is warranted here.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Every functional requirement has a corresponding implementation and verification task",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Technical, integration and walkthrough requirements are fully mapped",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequence, test-with pairing and commit points are sound",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "verifiability",
+      "raw_category": null,
+      "summary": "Implementation-dependent instructions are accurate against the current code",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No load test or extra timing test is needed, and the file correctly omits one",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T08:02:43.781509",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 189497,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 384171,
+  "cached_tokens": 340992,
+  "cache_write_tokens": null,
+  "completion_tokens": 50208,
+  "reasoning_tokens": 47877,
+  "duration_seconds": 289.84422254096717,
+  "cost_usd": 0.009051873000000002,
+  "cost_basis": "alias_pricing"
+}

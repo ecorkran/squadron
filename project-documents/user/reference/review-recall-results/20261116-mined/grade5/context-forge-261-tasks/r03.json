@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "The review criterion describes commit markers as plain lines (`**Commit**:`), but this file writes them as checkbox tasks (e.g. `- [ ] **Task 2C: Commit** \u2014 ...`). This is consistent with the project's own convention (AGENTS.md: \"Each item and subitem should have a `[ ]` checkbox\") and with the completed sibling slice `260-tasks.onboarding-consolidation.md`, which uses the identical `**Task nC: Commit** \u2014` checkbox form. The substantive requirement \u2014 markers at working, tested points, not after every task and not only at the end \u2014 is satisfied (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). No action needed; noted only because it deviates from the literal marker format.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Renderer tests exercise reachable outcomes only, not literally \"every outcome\"",
+   "description": "The Technical Requirements say `renderAdoptionFacts` should be tested for \"every outcome.\" `AdoptionOutcome` has five kinds; Task 8T exercises `brownfield`, `adoption-in-progress`, and `NOT_EVALUATED`, omitting `greenfield`, `already-planned`, and `adoption-closed`. This is defensible: the resolver only renders facts when selected (D4 step 3 = brownfield / adoption-in-progress / explicit), so the other three kinds are unreachable in production and the exhaustive `never` switch already forces them to compile. Impact is therefore near-zero. If literal coverage of the requirement is wanted, adding a `greenfield` case is the cheapest close, since it is the source-bearing sibling of `brownfield` and would catch a regression in the \"source volume when the outcome carries it\" branch.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 5's parenthetical about gitExec's timeout message is imprecise",
+   "description": "Task 5 states \"gitExec's timeout message already reads `timed out after 5s`.\" The real rejected message wraps that detail: `git {args} failed in {cwd}: timed out after 5s`, and `withNetworkErrorHint` then appends offline-remediation text because `/timed out after \\d+s/i` matches. This does not break anything \u2014 Task 5T wisely mocks gitExec to reject with exactly `timed out after 5s` and asserts only that `reason` *contains* `timed out`, which is robust to the wrapping. The practical consequence is that the `history: unknown` reason rendered in the Adoption Facts section will be the full wrapped string (command + cwd + network hint), not the bare phrase. Worth the implementer knowing so the verbose reason in the facts bullet isn't a surprise; no change to the task logic is required.",
+   "location": "packages/core/src/guides/gitExec.ts#gitExec"
+  }
+ ]
+}

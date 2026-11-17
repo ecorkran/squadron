@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 2's success criterion is false: tests that build `LanguageSnapshot` directly cannot pass unchanged after the enum addition",
+      "description": "Task 2's Success is \"the full `tests/metrology/` suite passes unchanged\", but adding four `SnapshotMetric` members makes `LanguageSnapshot._one_measurement_per_metric` (snapshot_models.py:193) reject any snapshot built with only the four 400 metrics. Verified two 400 tests do exactly that: `test_snapshot_models.py:225` (`test_json_round_trip_is_lossless`) constructs a `LanguageSnapshot` with `measurements` for only `file_length`, `function_length`, `lint_count` and `type_errors` (lines 229\u2013244), and `test_render.py:61` builds `python_snapshot()` with the same four measurements \u2014 the latter also fails the summary test because the new metric lines have no handling yet. The second bullet of Task 2 only repairs `PythonAdapter.metrics`, which covers `test_take.py` (it iterates `set(SnapshotMetric)` via real adapters) but not these directly-constructed fixtures. The fix is small \u2014 enumerate `SnapshotMetric` or append the new metrics as `no_adapter`/absent in those two builders \u2014 but the task says nothing will change, so a junior executor will hit unexpected failures and either misdiagnose them or edit tests without any task authorizing it. Task 2 should explicitly list which 400 tests need the new members added (and note this is test-fixture maintenance, not a change to the SC-12 \"edited only for the rename\" rule, which covers length tests only). The Task 30 checkpoint \"Every Success Criterion maps to a passing test\" won't catch this either, since the claim lives in Task 2's success line rather than an SC.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Render tests that assert new-metric line shapes belong to Task 27 but Task 2 breaks them first",
+      "description": "Task 27 tests \"each new line's shape matches the API Contracts example\", but `test_render.py`'s fixture (`python_snapshot`, line 36) becomes structurally invalid at Task 2 for the reason above, and its expected line set won't contain the four new metrics until Task 27. The task pair works if Task 2 repairs the fixture's measurement list; if the above finding is addressed, this resolves with it. No action beyond the Task 2 edit.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:265"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage is complete",
+      "description": "Every SC in the slice design has a task with an explicit SC citation: fixture values (SC3) in Tasks 4/6, duplication boundaries (SC4) in Task 11/15, the token ceiling with a `monkeypatch` trigger (SC10) in Task 11, freshness and `report_stale` detail (SC5) in Task 21/22, real-report fixtures (Technical Requirements) in Task 18/20, failure-mode rows (Technical Requirements) asserted signal-and-outcome in Tasks 9/11/20/21/24, and the contract freeze (Integration) checked by diff in Task 30 with the coverage-wiring check in Task 25. Task 30's final checklist makes the mapping explicit, which is the right backstop. No missing-item finding.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern are correct",
+      "description": "Tasks 3\u21924, 5\u21926 (module then tests), 7\u21928 (carry then emit), 10\u219211, 12\u219213, 14\u219215, 16\u219217, 19\u219220, 21\u219222, 23\u219224 each place tests immediately after implementation. `MeasuredFunction` (7) precedes `complexity.py` (8), the read-and-decode helper (7) precedes `measure_duplication`'s use of it (10), fixtures (18) precede the reader (19), and the reader (19) precedes `read_coverage` (21). No circular dependencies. Task 25 (adapter coverage wiring) has no committed sibling test of its own, but Task 26 follows immediately as its snapshot-level test, which is the correct pattern.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality is appropriate for the slice size",
+      "description": "30 tasks with efforts mostly 1\u20133 (one 4) matches a slice adding four metrics across two languages with no new dependencies; nothing is inflated with implementation detail the design doesn't require, and no task is so large it should split \u2014 Task 10 (Effort 4) is the heaviest but its seven sub-bullets are the whole of D3 and are individually checkable. No task file split is proposed; a single file is right for this size.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 2's success criterion is false: tests that build `LanguageSnapshot` directly cannot pass unchanged after the enum addition",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Render tests that assert new-metric line shapes belong to Task 27 but Task 2 breaks them first",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:265",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage is complete",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern are correct",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Proportionality is appropriate for the slice size",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T06:59:06.994045",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 224361,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 638543,
+  "cached_tokens": 547104,
+  "cache_write_tokens": null,
+  "completion_tokens": 60099,
+  "reasoning_tokens": 57412,
+  "duration_seconds": 643.8467315831222,
+  "cost_usd": 0.018644318,
+  "cost_basis": "alias_pricing"
+}

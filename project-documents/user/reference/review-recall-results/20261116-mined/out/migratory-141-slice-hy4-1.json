@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-force timing breakdown is deferred to slice 142 even though the slice plan assigns it to 141",
+      "description": "The plan entry 2 for (141) requires \"comparable per-tick timings broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration)\". The design instead ships a single `force_total_ns` and states \"Slice 142 introduces per-force timings ... the harness is structured to admit a per-force breakdown by extending `PhaseTimings` ... later.\" This drops scope the plan assigns to this slice. It also breaks the integration promise: consumers named in the plan \u2014 (142) \"benchmarked against the existing NumPy and Numba implementations\", (144) \"Each force is ported and validated individually ... with the harness providing timing\" \u2014 need per-force resolution from this instrument, and adding it later means changing the frozen `PhaseTimings` dataclass, the aggregation helpers, the JSON schema (which the design says must be bumped on changes), the Markdown columns, and the tick instrumentation in `numpy_backend.py`. That is a harness rewrite, not the \"single-row registration\" advertised at lines 27-28 and 341-345. \"Standalone against NumPy at first\" in the plan justifies deferring *backends*, not the phase resolution.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Workload and report schemas omit the comparison dimensions the plan requires",
+      "description": "The in-scope list promises workload fields for \"density\" and \"formation seed\", and the plan entry requires \"Reads workload definitions (N, density, profile mix, formation state) from config\" plus \"Reports include the formation-dependent breakdown noted in the architecture's Profile Principle\" (architecture principle: \"performance is formation-dependent\"). The concrete schema at lines 349-390 has no `density`, no formation seed (only a single `seed`), and no formation-state dimension per measurement window \u2014 density is only implied by `formation.kind`/`world_size`/`cluster_radius`, so a slice cannot sweep density at fixed N. Separately, the plan requires runs \"on Apple Silicon (Metal) and NVIDIA (CUDA)\" and the plan's Tier 3 note says \"Tier 2 validated on CUDA via (141)\", but the report metadata (lines 231-236) records only `platform.system()/machine()/processor()` and `python`; there is no accelerator/backend identifier, so a Quadrants-on-Metal record and a Quadrants-on-CUDA (or CPU-fallback, which (142) explicitly benchmarks) record are not distinguishable by a downstream comparison tool. Lines 96-99 defer CUDA entirely and line 28 promises a \"config flag\" for backend selection that never appears in the workload schema or CLI. Restating the platform NFR as \"run it on a NVIDIA box later\" leaves the comparable-timings requirement unmet.",
+      "file_ref": null,
+      "category": "requirements",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:70-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design contradicts itself about whether the harness measures the production `tick()`",
+      "description": "Three places assert the NumPy runner \"calls `tick()` directly\" (line 61 \"today's `engine.tick.tick`\", line 132, line 540 \"`engine.tick.tick` \u2014 called by the NumPy backend\", line 722 \"calls into existing engine\"). Decision B (lines 250-271) and lines 496-505 instead specify a parallel `tick_instrumented()` that reimplements the tick body with timing brackets and does not call `tick()`; the task plan T9 is explicit: \"do NOT import or call `engine.tick.tick()` from within it \u2014 it reimplements the same algorithm\". These cannot both be true and the choice is load-bearing: the harness is the \"empirical gate\" for tiers 2-3, so measuring a *copy* of the tick rather than the production tick undermines the architecture's \"Profile before you optimize, profile after\" principle and goal 1 (verifiable outputs). The design's own Risk Assessment admits the copy drifts and that phase-boundary drift is undetectable. The \"No changes to `src/migratory/engine/`\" success criterion (line 571) is a self-imposed \"clean room\" constraint \u2014 slice 140's contract is about the *return type*, and the architecture's clean-ownership goal concerns the engine/server boundary, not bench/engine \u2014 so this constraint should be re-examined rather than silently driving duplication.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:127-133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"numpy\" backend is undefined against the already-landed Numba JIT, and numba registration is misassigned to slice 144",
+      "description": "The design says \"the only backend that exists today\" is NumPy, treats a Numba runner as out of scope (line 92, \"slice 144 / 118 territory\"), and claims slice 144 will register `numba` \"via the engine's existing JIT-config flag\". But slice 118 is complete on main and its design makes `USE_JIT_KERNELS = True` the production default via a single module-level flag that switches all five forces at once. Consequently a `tick_instrumented()` that reuses the engine's force classes measures JIT'd kernels by default, and the \"NumPy baseline\" that (142) needs as the golden reference is silently a Numba baseline unless the harness explicitly pins the flag \u2014 which the design never specifies. That is a hidden dependency and a silent fallback of exactly the kind the project conventions forbid. A single global flag also cannot make `numpy` and `numba` coexist in one process, which conflicts with `--all-backends` (line 481) and the \"one file, zero changes elsewhere\" criteria. Furthermore, slice plan entry 5 (144) scopes that slice to porting forces to `@ti.kernel` and says \"the harness providing timing on Metal and CUDA\" \u2014 it *consumes* the harness; it does not own registering a numba benchmark runner. The design assigns integration work to a slice whose plan does not contain it.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Multi-backend integration is under-specified, so the \"one file, zero changes elsewhere\" criteria cannot be met",
+      "description": "Registry discovery is never defined. The registry lives in `backends/__init__.py` and `numpy_backend.py` is \"registered\", but no import/auto-discovery mechanism is described; task T11 makes the hidden dependency explicit (\"Import `numpy_backend` from `backends/__init__.py` so the registration side-effect fires\"), meaning every new backend edits a second file \u2014 contradicting success criteria at lines 587-591 (\"adding one file ... zero changes elsewhere in the harness\"). The published signature is also inconsistent: line 84 advertises `register_backend(name, factory)` while the code at line 305 defines `register_backend(name: str)` as a class decorator (and task T7 matches the latter); consuming slices 142/144/145 cannot code against both. Finally, `--all-backends` appears in the CLI examples (line 481) but is absent from the CLI description and task T21, and the cross-backend Markdown table (\"one table per workload across all backends\", lines 79-80 and 440-455, success criterion line 556) has no mechanism to combine runs: the harness is \"stateless across runs\" (line 225), writes \"a fresh result file\" per invocation, and `bench/results/` is gitignored. The plan's core deliverable \u2014 \"runs the same workload across NumPy, Numba, and Quadrants ... producing comparable per-tick timings\" \u2014 needs an explicit aggregation/read-back path or a multi-backend run mode; neither is designed.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:298-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes do not cover the new I/O paths introduced by this slice",
+      "description": "The four enumerated cases are all control-flow errors (missing YAML field, unregistered backend, `setup` raising, TPS < 1). The new I/O paths are: reading `bench/workloads/*.yaml`, the `git rev-parse HEAD` subprocess (line 233), writing JSON and Markdown to `bench/results/`, and stdout/stderr piping. None has an explicit strategy for: workload file missing/unreadable or malformed YAML (only \"missing a required field\" is covered); the git subprocess failing, being absent, hanging, or exceeding a timeout; result-directory creation failure, permissions, or disk-full on either write; a tick that hangs mid-measure (there is no per-tick timeout \u2014 the \"TPS < 1\" warning only fires *after* the run completes, so a hung backend never reaches it); an exception during the measure loop leaving no partial report; or a closed stdout pipe. The closing claim \"No silent fallbacks anywhere on these paths\" is also contradicted by task T15, which specifies `git_sha = \"unknown\"` on subprocess failure. Per the review criteria, each of these paths needs an enumerated failure mode with an explicit handling strategy (fail loudly with the concrete error, timeout bound, or documented placeholder), not an implicit one.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The parent architecture's throughput NFR is not restated with a specific target",
+      "description": "The architecture states the NFR on the path this slice instruments: \"scale ... from 3,500 entities at 57 TPS to 2 million entities at 60 TPS\" (overview), the N=3,500 @ 57 TPS live-server operating point, and the per-tick budget (5.67 ms spatial query, 3.14 ms force total, 0.06 ms integrate, ~9.42 ms total). The slice plan makes the harness the instrument for \"per-tier validation can be automated\" and frames Tier 2/3 milestones in TPS. The design never restates a throughput target with a number; verification step 9 restates the *reference numbers* only to say \"explicit ms thresholds are not asserted (host variance)\", and the out-of-scope list rejects \"CI gating on TPS\". Restating the target (60 TPS / 16.67 ms per tick at each tier's N, 57 TPS @ N=3,500 as the current baseline) is a documentation requirement distinct from asserting it in CI; without it the JSON `tps_observed` numbers have no stated bar to be compared against, and the \"did the change help\" question the Overview poses has no defined answer.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:661-667"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for a NumPy-only harness; several mechanisms can be cut or deferred",
+      "description": "Effort 3/5 matches the plan, but the mechanism count and document bulk exceed what a single-backend harness must deliver. Concrete cuts: \"sortable on TPS\" for a static Markdown table (line 80) \u2014 Markdown cannot sort, nothing consumes it, and the plan asks only for \"a human-readable summary\"; `finalize()` with its \"release GPU memory, clean up Numba caches\" teardown hook (lines 336-339) when both backends are explicitly out of scope and NumPy's is a no-op; the `pytest-benchmark` prerequisite (lines 120-122) reused for stub tests that yield *synthetic* constant timings, so no timing is actually measured and the dependency buys nothing; `--all-backends` (line 481) with exactly one registered backend and subprocess isolation explicitly deferred (lines 762-766); reserved-future prose such as `--baseline/--max-regress` (line 486), `bench/charts/` (lines 455-457), `force_breakdown` (line 296), and the `profiler=` \"planned alternative\" (lines 268-271) \u2014 configuration/abstraction nothing uses yet. The heaviest item is duplicating the entire production tick body in `numpy_backend.py` (Decision B) to preserve a self-imposed \"no engine changes\" rule; an optional `profiler=` hook on `tick()` is the lighter option that meets the requirement without a second algorithm to keep in sync. Sections that restate other documents \u2014 the Value section, Risk Assessment, and the 10-step Verification Walkthrough with illustrative numbers including the architecture's budget table \u2014 can be trimmed; the \"eight new files\" estimate at line 740 also undercounts the eleven files listed at lines 160-173.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:53-88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice 140's construction-cost NFR is misquoted",
+      "description": "The out-of-scope bullet cites \"the `pytest-benchmark` micro-benchmarks added in slice 140 (`from_numpy_state` < 50 \u00b5s)\". Slice 140's Performance NFR and success criteria specify construction time **< 0.01 ms at N=3,500** (i.e. < 10 \u00b5s), justified by \"the architecture's per-tick budget ... has no headroom for a new allocation on the critical path\". The 50 \u00b5s figure is 5\u00d7 the actual guard and would mislead a reader about how much headroom the tick-return contract leaves. Informational only \u2014 it does not change this slice's behavior.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:108-111"
+    },
+    {
+      "severity": "PASS",
+      "title": "Engine/server ownership boundary and slice-140 integration are respected",
+      "description": "The harness depends only on `engine.tick.tick`, `AgentState`, `BehavioralProfile`, `KDTreeQuery`, the five `BulkForce` implementations, and `TickResult`; it explicitly excludes `migratory_server`, `SimulationManager`, `logging_sim`, and the websocket layer. This matches the architecture's goal \"Clean ownership boundaries between behavior engine and world server. The tick return type contract is the single shared interface\" and its principle \"The wire is a separate problem\" \u2014 the design benchmarks compute, not transport. It also matches slice 140's stated cross-slice interface for 141 (\"consumes `TickResult` to read positions/velocities for behavioral parity comparison across backends ... the harness reads `result.positions` and is done\"). The three named formation regimes (`dispersed`, `mid-flock`, `packed-herd`), machine-readable JSON plus human-readable Markdown, fixed seeds with an explicit \"no silent defaults\" rule for the workload loader, and the decision to leave production `tick()` unmodified all align with the plan and the architecture's profiling principle.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:127-149"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-force timing breakdown is deferred to slice 142 even though the slice plan assigns it to 141",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "requirements",
+      "raw_category": null,
+      "summary": "Workload and report schemas omit the comparison dimensions the plan requires",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:70-80",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The design contradicts itself about whether the harness measures the production `tick()`",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:127-133",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "The \"numpy\" backend is undefined against the already-landed Numba JIT, and numba registration is misassigned to slice 144",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-345",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Multi-backend integration is under-specified, so the \"one file, zero changes elsewhere\" criteria cannot be met",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:298-345",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes do not cover the new I/O paths introduced by this slice",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The parent architecture's throughput NFR is not restated with a specific target",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:661-667",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight for a NumPy-only harness; several mechanisms can be cut or deferred",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:53-88",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Slice 140's construction-cost NFR is misquoted",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Engine/server ownership boundary and slice-140 integration are respected",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:127-149",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-17T10:13:12.376532",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 363297,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1113584,
+  "cached_tokens": 1002304,
+  "cache_write_tokens": null,
+  "completion_tokens": 86692,
+  "reasoning_tokens": 82195,
+  "duration_seconds": 929.8102532504126,
+  "cost_usd": 0.175817144,
+  "cost_basis": "alias_pricing"
+}

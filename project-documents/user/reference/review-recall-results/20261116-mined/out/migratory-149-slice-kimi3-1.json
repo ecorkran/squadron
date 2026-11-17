@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Early exit moves part of the selection policy outside the A7 seam",
+      "description": "Option A preserves the `get_neighbors_first_k` function and kernel signature, but the unconditional caller-side `break` hard-codes first-k termination policy outside that function. A future distance-ranked selector cannot be installed by replacing only `get_neighbors_first_k`: candidates encountered after the first k accepted neighbors may displace previously accepted, farther neighbors, yet the caller will already have stopped scanning. Slice 145 A7 specifically promises that distance-ranked selection will not require changing the tick-kernel signature; that narrower guarantee can still hold, but \u201cseam preserved\u201d must not imply a function-only drop-in swap. Either include the termination decision in the selection seam or explicitly document that the future A7 slice must remove/replace this caller-side break while retaining the kernel signature.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subdivision does not reduce total scanned candidates by S\u00b2",
+      "description": "The calculation reduces agents per cell by `S\u00b2` but overlooks the corresponding increase in scanned cells. Under the document\u2019s own approximation, `S=3` scans 49 cells \u00d7 ~555 agents = **~27,000 candidates**, not ~5,000; the slice 148 re-diagnosis gives this same ~27,000 figure. Thus subdivision alone provides roughly a 1.65\u00d7 candidate reduction from 45,000 in this model, not a 9\u00d7 reduction. With early exit, there is also no fixed \u201c~555 candidates loaded\u201d budget: exit occurs after 32 *accepted* neighbors, with a data-dependent number of rejected visits. The measured gates remain valid, but the claimed multiplicative performance rationale and expected candidate counts must be corrected.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The four claimed ablation runs do not select different implementations",
+      "description": "The \u201cbaseline\u201d and \u201cearly exit only\u201d commands are identical, as are the \u201ccell subdivision only\u201d and \u201cboth interventions\u201d commands. More importantly, Intervention 1 defines an unconditional break with no counter-gating switch, so the two commands labelled \u201ccounter-gating\u201d would still run early exit on the slice 149 branch. Use the recorded slice 145 baseline and accurately label the two available comparisons (`S=1` versus `S=3`, both with early exit), or define an explicit ablation mechanism and four genuinely distinct configurations. The current walkthrough cannot attribute improvements to the individual interventions as claimed.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification uses undefined bench commands and an unavailable profiling method",
+      "description": "The established harness contracts use `python -m migratory.bench` or `python -m migratory.bench.cli` with `--workload`, while warmup and measurement counts come from workload YAML; slice 145 parity is exercised through its pytest suite. This walkthrough instead introduces `scripts/bench.py`, `--config`, `--N`, `--ticks`, and `--parity-check` without defining those interfaces. Use the existing commands and parity tests rather than adding a parallel bench interface to this narrowly scoped slice. Additionally, A5 cites `nvcc --ptxas-info`, but slice 148\u2019s envelope notes record that `nvcc`, `ptxas`, and `cuobjdump` are unavailable on the CUDA host. Specify a confirmed spill-check method\u2014such as the cached-PTX `.local` inspection used by slice 148\u2014or a concrete, verified kernel-statistics command.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:141-188"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The plan-assigned 7-neighbor benchmark target is omitted",
+      "description": "The slice plan entry for 149 explicitly identifies the **7-neighbor operating point as a benchmark target**, motivated by the starling murmuration model. The design\u2019s gate configuration and entire walkthrough cover only `max_neighbors=32`; the biological note and corresponding measurement are absent. Retain the 32-neighbor stress gate, but add a recorded `max_neighbors=7` run with TPS and `force_total` so the assigned operating point is actually evaluated. If that measurement is deliberately deferred, the parent slice plan must be updated rather than silently dropping its scope.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Early exit moves part of the selection policy outside the A7 seam",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Subdivision does not reduce total scanned candidates by S\u00b2",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The four claimed ablation runs do not select different implementations",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Verification uses undefined bench commands and an unavailable profiling method",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:141-188",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The plan-assigned 7-neighbor benchmark target is omitted",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T12:53:43.610025",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 65414,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "moonshotai/kimi-k3.1-pro",
+  "answering_models": [
+    "moonshotai/kimi-k3.1-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 339376,
+  "cached_tokens": 264960,
+  "cache_write_tokens": null,
+  "completion_tokens": 16690,
+  "reasoning_tokens": 13886,
+  "duration_seconds": 86.32155912509188,
+  "cost_usd": 0.368724,
+  "cost_basis": "alias_pricing"
+}

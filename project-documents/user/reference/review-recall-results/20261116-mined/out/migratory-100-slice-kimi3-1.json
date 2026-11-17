@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Single-agent spatial queries conflict with the vectorized hot-path requirement",
+      "description": "`SpatialQuery` exposes only a single-position `query_radius()`, and the data flow at line 88 explicitly performs that query for each active agent. This conflicts with the slice\u2019s \u201cNo Python-level per-agent loops in the hot path\u201d requirement at line 247. It also weakens the architecture\u2019s requirement that spatial strategies, including GPU implementations, be replaceable without changing the engine: an optimized index would still leave the tick loop performing Python-level per-agent calls. Define a bulk/batch neighbor-query operation and its result representation for active agents; the single-agent operation can remain for reference tests if useful. This does not require optimizing the brute-force implementation in this slice.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Force dispatch and subset-integration contracts are inconsistent",
+      "description": "The tick signature accepts only `list[BulkForce]`, yet this section says the tick \u201cprefers the bulk variant when available,\u201d implying support for the per-agent `Force` variant without defining dispatch or adaptation. The same paragraph instructs implementers to \u201cadd force to velocity for all,\u201d while lines 90-91 and 215 require active-only integration and completely untouched inactive state. A full-population force scratch array is compatible with subset evaluation, but full-population position integration would move inactive agents with nonzero velocities. Specify the canonical force type accepted by `tick()`, how per-agent reference forces are exercised, and unambiguously require force accumulation and state integration to update only `active_indices`.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spatial-query results lack determinism and self-inclusion semantics",
+      "description": "The protocol specifies neither result ordering nor whether the querying agent itself is returned. Slice 105 must preserve identical behavioral output when replacing brute force with a spatial hash, but different neighbor iteration orders can change floating-point force summation results. The repeated-call determinism criterion at line 240 does not cover this cross-implementation requirement. Define a deterministic neighbor-ordering or canonical-reduction contract, and specify self-inclusion and how bulk forces distinguish the self entry. Otherwise slice 105 cannot reliably satisfy its regression requirement without retrofitting this interface.",
+      "file_ref": null,
+      "category": "determinism",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick output and mutation semantics conflict with the parent architecture",
+      "description": "The Included scope says tick returns updated state, and the parent architecture describes a pure computational core that \u201creturns the updated state array\u201d (`100-arch.behavior-engine.md:62-70`). The actual signature instead returns `None` and mutates the supplied `AgentState`. In-place mutation can still avoid engine-owned state between ticks, but it is not the same ownership or functional-purity contract. Reconcile the two documents by either returning the updated state\u2014potentially the same object with explicitly documented in-place semantics\u2014or recording the intentional architectural deviation and its aliasing/ownership rules.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:177-203"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The engine-scale NFR is not restated for the hot-path design",
+      "description": "The architecture sets a specific target of **tens of thousands of agents at full behavioral fidelity on a single CPU process** (`100-arch.behavior-engine.md:33`). This slice defines that hot path but mentions only a \u201chundreds-of-agents scale,\u201d without restating the engine-level target in its requirements. Restate the parent NFR and clearly distinguish it from this slice\u2019s limited brute-force validation scale. The initial O(n\u00b2) implementation need not meet the final target\u2014spatial optimization remains assigned to slice 105\u2014but the foundational interfaces must explicitly preserve that target rather than making hundreds of agents appear to be the architectural ceiling.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Acceleration state has no defined producer or consumer",
+      "description": "`AgentState` adds an N\u00d72 `accelerations` array, but the data flow and semi-implicit Euler equations use accumulated force directly and never read or write that array. No force unit, mass assumption, or downstream consumer for stored acceleration is defined. This adds unused per-agent state beyond the positions, velocities, and profile indices required by the foundation slice. Remove `accelerations` until a slice needs it, or define its exact integration role and unit-mass/force relationship and cover it with the integration tests.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:93-102"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Single-agent spatial queries conflict with the vectorized hot-path requirement",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-173",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Force dispatch and subset-integration contracts are inconsistent",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "determinism",
+      "raw_category": null,
+      "summary": "Spatial-query results lack determinism and self-inclusion semantics",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-170",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Tick output and mutation semantics conflict with the parent architecture",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:177-203",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The engine-scale NFR is not restated for the hot-path design",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Acceleration state has no defined producer or consumer",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:93-102",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-17T12:54:27.126407",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 95217,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "moonshotai/kimi-k3.1-pro",
+  "answering_models": [
+    "moonshotai/kimi-k3.1-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 86211,
+  "cached_tokens": 47808,
+  "cache_write_tokens": null,
+  "completion_tokens": 20096,
+  "reasoning_tokens": 18101,
+  "duration_seconds": 188.77256762515754,
+  "cost_usd": 0.2873276,
+  "cost_basis": "alias_pricing"
+}

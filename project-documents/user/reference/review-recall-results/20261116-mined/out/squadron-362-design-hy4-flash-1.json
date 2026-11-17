@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Function/class edge endpoints contradict the slice's own read discipline",
+      "description": "The design requires, in Section 6 detail, that \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts as an inter-layer signal.\" This is in direct tension with three statements of the read discipline: the architecture (\"function- and class-level nodes are not read\"), this slice's own \"Read discipline, unchanged\" section (line ~330, \"the excluded 687 function and class nodes remain excluded\"), and Success Criterion 9 (\"no function- or class-level node is read\"; walkthrough step 7: \"no function- or class-level node data appears in any section\"). Resolving an edge endpoint to a function's owning file requires consuming function/class node identity, which is excluded by the discipline the design claims to leave unchanged. The design never reconciles these. State explicitly whether this is derived purely from parsing edge-ID strings (not node reads) and whether such counts may appear in a section, or drop the clause \u2014 otherwise implementers get contradictory instructions on a boundary the architecture treats as a principle.",
+      "file_ref": null,
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Corrections to the 361 contract\" assume 361 skill text that is neither specified nor present yet",
+      "description": "The design's stated reason for being (\"the reason this slice is not merely additive\") is two corrections premised on specific defects in 361's *generated skill*: \"The 361 skill states that `nodeIds` mixes file, function, and class nodes and instructs intersecting with `type == \"file\"`\" (line 121) and \"361's skill text collapsed that to `select(.type == \"file\")`\" (line 146). Neither claim matches the 361 slice design, which says only \"each layer's name, description, and file count, from `layers[]`\" and uses `select(.type == \"file\" or ...)` (an allow-list, not a bare `== \"file\"`). Moreover 361 is `not_started` and `commands/analysis/understand.md` does not currently exist (`commands/analysis/` holds only `tech-debt-audit.md`). The consumer's expectations of its prerequisite therefore don't match the prerequisite as designed. The underlying end-state (count layers as `nodeIds|length`; exclude `function`/`class` by name) is architecturally correct and should be kept, but it should be stated unconditionally as part of the extraction mapping, or made explicitly conditional on observing that text at implementation time \u2014 not asserted as fact about an artifact that doesn't exist and whose design says otherwise.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is overweight relative to the slice's assigned scope; name what to cut",
+      "description": "The slice plan assigns 362: the field-to-section extraction mapping (fields/order/fallback), the unchanged read discipline, and the `analyze-codebase-prompt.md` reuse decision (effort 3/5, risk Low). The design carries materially more: a large empirical \"Verified graph facts\" table; an extensive \"Corrections to the 361 contract\" apparatus with type-breakdown tables, cross-checks, and a dedicated risk mitigation; and a new seven-section \"Coverage and scope limits\" section that closes three 361 deferrals (`config.json` key reporting, `.understandignore` listing, `analyzedFiles` discrepancy detection). The architecture's comprehension output lists only layers, complexity hotspots, entry points, and dependency observations, and neither 363 nor 364 consumes the coverage section. Cuttable/deferrable: (a) trim the \"Verified graph facts\" table to the few numbers the decisions actually depend on \u2014 it is re-measured in walkthrough step 1 anyway; (b) defer the coverage/scope-limits section and its discrepancy handling to a later slice, since it is not assigned here and feeds no downstream slice; (c) once Finding 2 is resolved by stating the correct end-state, the correction-specific measurement tables and cross-check machinery shrink substantially.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Core architectural alignment and boundary discipline hold",
+      "description": "The design consumes the graph through the 361 contract unchanged, adds no Python, keeps all writes in `project-documents/` plus the two explicitly allowed edits (`understand.md` and a cross-reference line), uses the correct `analysis` docType and sanctioned 900-band index, and resolves the parent architecture's `analyze-codebase-prompt.md` open question with a reasoned reuse decision that retains the reference document. New message types (gap markers, coverage discrepancy, unrecognized complexity tier, absent/empty source fields) each have explicit handling, and the architecture's read discipline is restated. No numeric NFR exists in the parent architecture to restate.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "summary": "Function/class edge endpoints contradict the slice's own read discipline",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "\"Corrections to the 361 contract\" assume 361 skill text that is neither specified nor present yet",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:121",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is overweight relative to the slice's assigned scope; name what to cut",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core architectural alignment and boundary discipline hold",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-17T07:44:26.030601",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 142013,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 140668,
+  "cached_tokens": 105216,
+  "cache_write_tokens": null,
+  "completion_tokens": 33414,
+  "reasoning_tokens": 31658,
+  "duration_seconds": 201.48184266593307,
+  "cost_usd": 0.006076604,
+  "cost_basis": "alias_pricing"
+}

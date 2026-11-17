@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The graph location does not match the installed upstream plugin",
+   "description": "The design exclusively reads `.understand-anything/knowledge-graph.json` and tells users with no graph to run `/understand`. The locally installed upstream 2.9.8 skill instead defaults to `.ua/` for new projects and uses `.understand-anything/` only when that legacy directory already exists. A fresh `/understand` run therefore produces a graph the proposed consumer cannot find; the trash ignore rule also targets the wrong directory. Define supported upstream versions and resolve the active data directory consistently for graph, metadata, ignore rules, and hygiene.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The overview\u2019s required provenance contradicts its concept-absent path",
+   "description": "The common concept-absent path sources purpose from an interview, but Design Goals says the document only restates approved artifacts, and Translation Rules require every claim to trace to an input artifact. The field schema also assigns Problem, Audience, and Approach solely to the optional concept. Consequently the explicitly tested path has no coherent way to populate its required fields without either inventing claims or violating provenance. Define whether interview statements are admissible sources and how they are recorded; specify unknown or omitted fields when neither artifact supplies the information.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Comprehension outputs require graph data the flow never reads",
+   "description": "The read step extracts project, layers, tour, and file-level nodes, but the analysis promises dependency observations and the concept promises frameworks and dependencies. Edges are not included in the extraction, nor is there a specified source for framework or external dependency identification. Specify bounded extraction of the relevant edges and project metadata, including how missing evidence is reported rather than inferred as fact.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Existing concepts and repeated runs have no safe write policy",
+   "description": "Every comprehension run emits the fixed `000-concept.{project}.md`, yet the document provides no behavior when a concept already exists or a prior run partially succeeded. Overwriting risks destroying the protected verbatim **User-Provided Concept** section and subsequent human edits; refusing all existing files would prevent ordinary reruns. Define explicit create, conflict, and recovery behavior that preserves existing content.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Staleness checks can report a graph as current when it is not",
+   "description": "Comparing `gitCommitHash` with `HEAD` misses uncommitted source changes, and a missing metadata file, unavailable commit, shallow clone, or divergent history makes the promised commit distance unavailable or ambiguous. Define an explicit unknown-staleness result and provenance for these cases, and account for relevant working-tree changes rather than treating equal commit IDs as proof of freshness.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The proposed status translation can misrepresent planned work",
+   "description": "The translation example turns \u201cstatus draft\u201d into \u201cin progress,\u201d although drafting a plan is not evidence that implementation has started. The project\u2019s own initiative plan also contains checked items with differing explicit statuses, including a checked maintenance initiative marked `not_started`. Define precedence for conflicting status indicators and preserve uncertainty instead of converting document maturity or a checkbox into delivery progress.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Output index overflow conflicts with the stated naming convention",
+   "description": "The document says analysis is reserved to 940\u2013949 and that the naming convention will not change, then independently sanctions allocation from 950 onward. That does not establish that those indices are available or valid for this artifact type, and the allocation rule does not address collisions with other analysis producers. Either keep allocations within the existing convention with defined exhaustion behavior, or change the convention and define collision-safe allocation.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The graph reader has no contract for invalid or incompatible input",
+   "description": "The only preconditions are plugin installation and graph existence, while the design relies on particular fields and node types from an actively developed external format. A malformed graph, missing tour, changed schema, or unresolved node references has no specified outcome; the instruction to grep a large JSON file also does not reliably extract nested records across formatting variants. Define supported schema/version checks, structured bounded extraction, and explicit failure or unknown-coverage behavior before generating artifacts.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+  }
+ ]
+}

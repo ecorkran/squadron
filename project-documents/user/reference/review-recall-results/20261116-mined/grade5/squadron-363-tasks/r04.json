@@ -1,0 +1,19 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "SC4's document-level clause is not re-verified on the generated concept",
+   "description": "Success Criterion 4 requires dropped topics (why-now, audience evolution, methodology preference) to \"appear nowhere **in the document** \u2014 neither as content nor as gap markers.\" Task 4.1/4.2 verify the rule is authored in and verified within the skill text, and 8.1 verifies interaction-level behavior (\"nothing else asked\"), but Task 8.1's checklist for the written `000-concept.squadron.md` contains no check that the dropped topics are absent from the generated document itself (e.g., grep for why-now/audience/methodology gap markers or headings). The design's own walkthrough omits this too, so the task file is faithful to the design \u2014 but the walkthrough is the only place the output document is inspected, so a hallucinated \"why now?\" gap marker would pass uncaught. Suggested fix: add one line to 8.1's document checklist confirming the three topics appear nowhere in the written concept, as content or as `[GAP: ...]`.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-316"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers use checkbox items and bare `Commit:` rather than plain `**Commit**:` lines",
+   "description": "All eight commit markers (lines 99, 125, 164, 185, 221, 254, 296, 351) are written as `- [ ] Commit: \\`feat: ...\\`` checklist items. Their *placement* is correct per the review convention: each sits after its task's verification subtask at a working, tested point (selector after 1.2, sources after 3.4, etc.), there is no marker after every task (Tasks 0 and 9.x have none \u2014 9.3 commits in prose), and none sits only at the end. The format deviates from the plain-line `**Commit**:` convention, but CLAUDE.md's document conventions mandate \"`[ ]` checkbox\" for \"each item and subitem\" in task files, so the checkbox form is defensible under project convention. Noting for consistency; no action required unless the project wants to resolve the convention conflict.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  }
+ ]
+}

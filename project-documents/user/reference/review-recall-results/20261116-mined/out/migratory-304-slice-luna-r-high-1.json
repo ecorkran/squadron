@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Environment configuration and construction do not meet the assigned scope",
+      "description": "The slice-plan entry assigns YAML configuration for seed, grid resolution, and layer selection, and creating or loading a 500-provided environment at startup. This design specifies only `seed` and constructs `Environment(bounds, layers={})`; it defers the environment specification and provides no layer-selection or construction path. It also says layers \u201cregister themselves,\u201d while the 500 foundation defines layers as statically composed at construction and does not describe a registration API. Reconcile this design with the assigned configuration and composition scope, including the 500 plan\u2019s expectation that the specification be stable before 304 integrates.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Configuration: Environment Section"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment context is not connected to behavior evaluation",
+      "description": "The 300 architecture and 304 slice-plan entry expect environment context to reach behavior evaluation. The proposed `engine.tick()` call has no environment or query argument, and this slice does not construct any environment-aware forces; it only exposes an `environment` property for hypothetical future force constructors. Specify the actual path by which the same environment or its query interface becomes available during force evaluation, and ensure that path is delivered by this slice rather than left illustrative.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Environment Access for Forces"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The post-tick write pathway is not integrated",
+      "description": "The 500 environment contract accepts trail deposits and threat mutations in `post_tick()`, and the 304 plan assigns handling of post-tick writes. The design calls `post_tick()` with no arguments and defines no source or transfer path for write data from behavior evaluation to the environment. Define the write payload and its route through the server, even if the initial implementation supplies empty payloads until layers produce writes.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager Extension"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The zero-entity path skips post_tick",
+      "description": "The `SimulationManager Extension` implementation returns immediately when the entity count is zero, after `pre_tick()` but before `post_tick()`. This contradicts the accompanying note and the earlier example, which require `post_tick()` to run even with no entities so time-varying layers can advance. Keep the early exit limited to `engine.tick()`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Implementation Details"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick-path performance targets are not restated",
+      "description": "The parent world-server architecture states an initial operating range of 10K\u201350K entities and target tick rates of 20\u201360 Hz. This slice adds environment lifecycle work to every tick, but its success criteria do not restate a tick-rate or tick-budget target or specify how to verify it. Include the relevant target and an acceptance check for the added per-tick work.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Success Criteria"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design is disproportionate and repeats substantial material",
+      "description": "For a slice-plan effort of 2/5, the design repeats lifecycle and `SimulationManager` details across multiple sections and includes an extensive verification walkthrough and an illustrative future force implementation. Trim repeated API and implementation material, particularly the future-force example and duplicate lifecycle snippets, while retaining the decisions and acceptance criteria specific to this integration.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Environment configuration and construction do not meet the assigned scope",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Configuration: Environment Section",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Environment context is not connected to behavior evaluation",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Environment Access for Forces",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The post-tick write pathway is not integrated",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager Extension",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The zero-entity path skips post_tick",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Implementation Details",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Tick-path performance targets are not restated",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Success Criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design is disproportionate and repeats substantial material",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+    "against": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-304-slice"
+  },
+  "timestamp": "2026-11-17T12:41:47.360562",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 4536,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 51593,
+  "cached_tokens": 22812,
+  "cache_write_tokens": null,
+  "completion_tokens": 7609,
+  "reasoning_tokens": 6573,
+  "duration_seconds": 85.34016270795837,
+  "cost_usd": 0.00691072,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Density signal pseudocode reads post-cap counts, contradicting the mandated pre-cap signal",
+      "description": "The tick-integration sketch passes `filtered_counts` to `record_density` at step 8, after step 4's `apply_neighbor_cap`. In the actual `tick.py`, `apply_neighbor_cap` reassigns `filtered_flat, filtered_counts` when any profile sets `max_neighbors`, so the array reaching step 8 is the capped counts. This contradicts the design's own statements at line 27 (\"reads the CSR's raw `counts` output \u2026 not anything capped\"), line 116 (\"post-`exclude_self`, pre-cap\"), line 409, and the slice plan entry's explicit requirement that \"the query-side cost that determines grid-vs-brute winner is driven by pre-cap neighbor counts, not capped counts.\" The failure mode under literal implementation is severe, not cosmetic: with `max_neighbors=1` (the walkthrough's own test config), the post-cap mean is \u2264 1, always below `t \u2212 h = 8`, so the dispatcher would pin to the grid permanently \u2014 including in the clustered steady state where Entry 4 measured the grid 1.5\u00d7 slower than brute force. The sketch should capture the `exclude_self` output before the cap step and pass that.",
+      "file_ref": null,
+      "category": "data-flow-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:150-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Bit-exact position equality\" integration test is unattainable once the dispatcher switches backends",
+      "description": "Implementation step 5 requires an integration test confirming \"bit-exact position equality against brute-force-only over N ticks\" with a mocked density sequence that exercises both backends. The design itself documents (line 431) that \"order within a row may differ for grid\" \u2014 brute force emits neighbors in column-sorted order (`np.nonzero`) while the grid emits them in cell order. The CSR force implementations sum via `np.add.reduceat`, which is order-dependent in floating point, so a grid-served tick produces last-ULP-different forces, and chaotic integration amplifies that into macroscopic position divergence within a few hundred ticks. This conflicts with the scope section's weaker and correct \"behavioral parity\" (line 41) and walkthrough step 2's \"identical, modulo documented determinism caveats in the hash grid.\" The acceptance criterion should be restated as tolerance-based behavioral parity (or bit-exactness only while pinned to one backend), otherwise the test either fails spuriously or gets silently weakened during implementation.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 5 references a `test.yaml` that does not match the committed config",
+      "description": "Step 5 says to run \"Using `test.yaml` (2500 entities, `max_neighbors=1`, soft bounds)\" and compare against Entry 5's ~16\u201317 TPS baseline. The committed `config/test.yaml` defines 1000 entities (950 + 50) and no `max_neighbors` fields. Entry 5's journal describes the 2500-entity/`max_neighbors=1` config, so the walkthrough depends on a variant config that does not exist in the repo. The design should say explicitly whether this config is created as part of the walkthrough (and not committed as a silent change to `test.yaml`), so the baseline comparison is reproducible.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`hasattr` duck-typed hook keeps engine layer free of dispatcher API at the cost of an untyped call site",
+      "description": "The `hasattr(spatial, \"record_density\")` guard is a deliberate, reasoned choice (the alternative of adding a no-op protocol method was considered and rejected), and it preserves the \"clean boundaries\" principle for the two standalone backends. It is acceptable as designed; the only residual is that `tick.py` now contains a duck-typed call whose contract lives in prose rather than a type. The design's \"Special Considerations\" note prohibiting no-op `record_density` on the other backends is the right guardrail to keep this from drifting.",
+      "file_ref": null,
+      "category": "protocol-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, dependency direction, and exclusions match the slice plan entry",
+      "description": "The delivered scope maps one-to-one onto plan entry (113): `AdaptiveSpatial` wrapper implementing `SpatialQuery` unchanged, `mean_neighbors_per_agent` from the previous tick's CSR, threshold + hysteresis, `SpatialConfig` with `backend: \"adaptive\" | \"grid\" | \"brute\"` defaulting to `adaptive`, and escape hatches that instantiate a backend directly. Dependencies (100, 110, 111) match the plan's stated dependencies, and slice 105's preserved `HashGridQuery` (verified present at `src/migratory/spatial/hash_grid.py` with its 35 tests in `tests/test_hash_grid.py`) is consumed as declared, unchanged. Exclusions (KD-tree, per-agent dispatch, dynamic threshold tuning, protocol changes) align with the plan and the architecture's \"pluggable spatial queries\" principle. No scope creep detected.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Performance NFRs restated with specific targets for the touched hot path",
+      "description": "The slice modifies the tick hot path, whose performance context is established by perf journal Entries 4/5. Verification walkthrough step 5 restates the concrete targets: expansion-phase TPS at or above the brute-force baseline, steady-state ~16\u201317 TPS matching Entry 5, overall average TPS \u2265 brute-force-only average, and a worst-case-tick bound (\"no dispatcher-induced spike\"). The dispatcher's own overhead is bounded explicitly (\"at most one attribute lookup \u2026 no per-edge work\", `record_density` O(1)). This satisfies the NFR-restatement requirement for the path being changed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:371-383"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "data-flow-consistency",
+      "raw_category": null,
+      "summary": "Density signal pseudocode reads post-cap counts, contradicting the mandated pre-cap signal",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:150-159",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "\"Bit-exact position equality\" integration test is unattainable once the dispatcher switches backends",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Walkthrough step 5 references a `test.yaml` that does not match the committed config",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "protocol-boundary",
+      "raw_category": null,
+      "summary": "`hasattr` duck-typed hook keeps engine layer free of dispatcher API at the cost of an untyped call site",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Scope, dependency direction, and exclusions match the slice plan entry",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Performance NFRs restated with specific targets for the touched hot path",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:371-383",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T13:39:57.892029",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 265626,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 15,
+  "prompt_tokens": 761474,
+  "cached_tokens": 669184,
+  "cache_write_tokens": null,
+  "completion_tokens": 63233,
+  "reasoning_tokens": 60024,
+  "duration_seconds": 1862.1954007917084,
+  "cost_usd": 0.6978148,
+  "cost_basis": "alias_pricing"
+}

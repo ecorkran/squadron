@@ -1,0 +1,147 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Neighbor queries require per-agent hot-loop work",
+      "description": "The tick queries `query_radius` separately for each active agent, and `BulkForce` consumes a Python list of per-agent neighbor arrays. This conflicts with the architecture\u2019s bulk, no-Python-per-agent-branching direction and the slice\u2019s own no-per-agent-loop requirement. Define a bulk neighbor-query/result contract that both the initial implementation and slice 105 can implement, while retaining full-population visibility.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:84-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subset integration has contradictory instructions",
+      "description": "The design says to integrate all agents because inactive agents have zero force. Zero force leaves an inactive agent\u2019s existing velocity nonzero, so updating its position would still move it. This contradicts the subset contract at lines 90\u201391. Require both velocity and position integration to operate only on active indices.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:148-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent force protocol has no tick integration path",
+      "description": "The design says the tick loop prefers bulk forces when available and requires placeholders to exercise both protocol paths, but `tick()` accepts only `list[BulkForce]` and specifies no adapter or dispatch for `Force`. Either define how per-agent forces enter the tick pipeline without violating the hot-path requirement, or defer the unused per-agent protocol and its associated test requirement.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Brute-force index precomputes unnecessary quadratic storage",
+      "description": "Computing all pairwise distances on every build adds quadratic time and storage even when only a small subset is active. A brute-force query can instead retain positions and compute distances on demand, avoiding the full distance matrix while still satisfying this slice\u2019s reference-implementation requirement. Defer the heavier indexing strategy to slice 105.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scaling target is not restated",
+      "description": "The parent architecture sets a target of **tens of thousands of agents at full behavioral fidelity on one CPU process**. The slice describes its scaling foundation but does not restate that target. Record it as the architecture-level target, while making clear that the initial brute-force implementation is not expected to achieve it before spatial optimization.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:23-27"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Neighbor queries require per-agent hot-loop work",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:84-90",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Subset integration has contradictory instructions",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:148-152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Per-agent force protocol has no tick integration path",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Brute-force index precomputes unnecessary quadratic storage",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173-175",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Scaling target is not restated",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:23-27",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-17T13:16:33.373490",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 32590,
+  "cached_tokens": 29184,
+  "cache_write_tokens": null,
+  "completion_tokens": 699,
+  "reasoning_tokens": 91,
+  "duration_seconds": 24.912646499928087,
+  "cost_usd": null,
+  "cost_basis": null
+}

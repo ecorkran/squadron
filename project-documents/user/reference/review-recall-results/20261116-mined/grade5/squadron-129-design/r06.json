@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Unset effort has no defined SDK mapping",
+   "description": "Slice 931 defines `AgentConfig.effort` as optional, with unset meaning the backend default. Calling `config.effort.value` unconditionally fails for the default case, including aliases without an effort setting. Specify that an unset value omits the SDK argument, and test a review without configured effort.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:101"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Turn startup is outside the stated timeout",
+   "description": "The design says the turn timeout bounds runtime startup, but D7 and the failure table apply it only around `thread.run`. A hang in `AsyncCodex.__aenter__`, initialization, or `thread_start` can therefore block a review indefinitely. Bound those operations and specify cleanup and the resulting error when startup times out.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80-82"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Login and logout lack complete I/O failure handling",
+   "description": "The login timeout covers only `handle.wait()`. Runtime startup, login initiation, cancellation and logout have no specified handling for hangs or transport disconnects. Define bounded handling, cleanup, and user-visible errors for those paths so the new auth commands cannot hang indefinitely or report an ambiguous outcome.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86"
+  }
+ ]
+}

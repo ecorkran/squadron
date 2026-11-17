@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The pushed-branch check has no specified source for the local SHA",
+   "description": "`check_head_pushed` requires `local_sha`, but no task specifies obtaining it (for example, with `git rev-parse HEAD`) or passing it from the command. Task 3 adds the current branch helper and commit-range helper, neither of which supplies the local head SHA. The host/local comparison therefore lacks a specified input and is not independently implementable as written.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138-142"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The real-task-file parser test will become state-dependent",
+   "description": "The real-file test requires both parsed groups to be non-empty. When this task file is complete, its checkboxes are expected to be checked, so the unchecked group can become empty and the test can fail despite correct parser behavior. Use a stable fixture captured from a real task file, or avoid requiring both groups to remain non-empty as task state changes.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Provider-failure coverage does not verify the CLI avoids the PR write",
+   "description": "Task 10.2 tests the composer\u2019s failure in isolation, where it cannot make a PR write. Task 13.2 covers command-level refusals but does not include a failing composer. The slice\u2019s success criterion that a provider failure exits non-zero and creates nothing therefore lacks a command-level test asserting that `open_pull_request` is not called.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:227-229"
+  }
+ ]
+}

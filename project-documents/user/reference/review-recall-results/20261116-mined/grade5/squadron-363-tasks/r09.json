@@ -1,0 +1,12 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox subitems rather than the plain `**Commit**:` lines sibling task files use",
+   "description": "The eight commit markers in this file are formatted as checklist subitems (`- [ ] Commit: \\`feat: ...\\`` at lines 99, 125, 164, 185, 221, 254, 296, 351), whereas sibling task files (e.g. `144-tasks`, `145-tasks`, `147-tasks`, `128-tasks`) render the marker as a bold plain line (`**Commit**: \\`...\\``) outside the checklist. Placement and semantics are correct here \u2014 each marker sits after its task's verification step \u2014 and the checkbox form is arguably what this project's own CLAUDE.md checklist convention produces for task files, so this is informational only. Note that as checkbox items they invite being checked off by task-checker rather than standing out as commit instructions; if cross-slice consistency matters, converting them to the plain `**Commit**:` form is a one-line-each change, but nothing in the slice's success criteria requires it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99-351"
+  }
+ ]
+}

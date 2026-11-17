@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Required profile fields break `build_profiles()` in `src/migratory_server/`; no task updates it",
+      "description": "`BehavioralProfile` gains two **required** fields (task 2.1), but `build_profiles()` constructs it with the current six. `tests/test_simulation.py:29`, `:39`, `:45` call `build_profiles()`, so `TestBuildProfiles` will raise `TypeError` the moment 2.1 lands. Task 2.2's enumerated list (line 70: \"search for `BehavioralProfile(` across `tests/`\") and its catch-all are scoped to `tests/` only \u2014 the `src/migratory_server/` call site is unreachable from every task in the file. `ProfileConfig` (`src/migratory_server/config.py:53-61`) also has no `leadership_weight`/`momentum_weight`, so the fix is a decision, not a mechanical edit. Both gates that depend on it \u2014 2.2 \"all existing tests still pass\" and 6.1 \"All tests pass (existing 80 + new herding tests)\" \u2014 fail. Add an explicit task step: extend `ProfileConfig` with the two fields (defaults matching the existing optional-field pattern used for `cohesion_weight`/`separation_weight`/`alignment_weight`) and pass them through `build_profiles`.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "src/migratory_server/simulation.py:18-25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`AgentState.leadership` is dropped by `EntityManager.spawn_population()`'s array merge; no task covers it",
+      "description": "Task 1.1 updates `__init__`, `create()`, `add_agent()` and `remove_agent()`, which is what the slice's Implementation Details ask for. But `spawn_population()` bypasses those methods: it builds a batch via `AgentState.create()` (`:122`) and then concatenates `positions`/`velocities`/`accelerations`/`profile_indices` field-by-field \u2014 never `leadership`. After any population spawn, `state.leadership` stays at its pre-spawn length, so `state.leadership[neighbors]` in `LeadershipForce` indexes out of bounds (or, worse, silently reads the wrong agent's value). `spawn_population()` is exercised by `tests/test_simulation.py` and `tests/test_entities.py` fixtures, so this is a live code path, not dead code. The slice's technical requirement \"all affected tests are updated within this slice\" is not satisfiable while this merge is unhandled. Either add a step to task 1.1 covering the batch-merge path, or state explicitly that the server-side path is deferred and record why it does not break this slice's suite.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "src/migratory_server/entities.py:135-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Vectorization requirement has no task step and no verification",
+      "description": "The slice's Technical Requirements state: \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" Slice 101's breakdown enforced this with explicit per-force steps (\"Use vectorized NumPy within each neighborhood \u2014 no `for neighbor in neighbors` inner loop\", `101-tasks.flocking-behavior.md:59`, `:87`, `:111`). Tasks 3.1 and 4.1 omit any equivalent step, and 6.2 checks only `isinstance(..., BulkForce)`, so a junior AI that writes an inner `for` over neighbors finishes green. The requirement is unmet and unchecked \u2014 add the vectorization step to 4.1 (LeadershipForce is where the inner loop is tempting) and name it as an explicit pass/fail item.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:176-179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.3 turns \"statistically different\" into a disjunction that either branch satisfies",
+      "description": "The profile-differentiation criterion is \"herding profile vs equivalent flocking profile produce statistically different movement patterns (heading variance, path straightness, or similar metric)\". Step 5.3 asserts `herding variance < flocking variance` **or** `herding eastward > flocking eastward`. A single seeded run will pass on either branch, so the test can be satisfied without demonstrating the archetype distinction that is this slice's stated value (\"a herd progresses; a flock meanders\"). There is also no threshold or metric definition for \"statistically measurable\". Pick one metric, state the numeric threshold, and make the conjunction (or a documented single metric) the assertion, so 5.3 has a determinate success condition a junior AI can implement and check.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:157-162"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 2.2's file list omits two files that construct `BehavioralProfile`",
+      "description": "The enumerated list names conftest, test_profile, test_state, test_forces, test_tick, test_flocking. `tests/test_entities.py:27` and `tests/test_simulation.py:65` also construct it; the trailing catch-all (`:70`) will find them via grep, so this is not a coverage gap \u2014 but naming them removes the discovery step and pairs naturally with the `build_profiles` fix above.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "tests/test_simulation.py:65"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6.2 re-checks assertions already verified in 3.1 and 4.1",
+      "description": "`isinstance(LeadershipForce(), BulkForce)` and `isinstance(MomentumForce(), BulkForce)` are both verify steps in 4.1 and 3.1, and are additionally asserted in 3.2/4.2 as protocol-conformance tests. 6.2 is a duplicate manual check; folding it into 6.1's suite run would trim the final section without losing coverage.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:176-179"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional requirements are fully traced",
+      "description": "Each functional criterion maps to a concrete step: BulkForce conformance (3.1, 4.1, 6.2); hand-constructed correctness including the slice's walkthrough geometries verbatim (3.2 \"agent moving at `[3.0, 0.0]`... expected \u2248 `[3.0, 0.0]`\" mirrors Walkthrough 3; 4.2's 3-agent leadership geometry mirrors Walkthrough 2); zero-force edges \u2014 no neighbors and zero-sum leadership (4.1, 4.2), stationary agent (3.1, 3.2); self-exclusion (4.1, 4.2); active_indices isolation (3.2, 4.2); directional bias under five forces (5.1, 5.2 mirroring Walkthrough 4). The zero-sum epsilon guard from the Risk Assessment mitigation is present in 4.1.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:122-162"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-test and commit-cadence checks: no gap",
+      "description": "The slice restates no NFR (throughput, agent count, tick latency), so no `tests/load/` task and no CI gating task is expected from this breakdown, and none is missing. Commit markers sit at the six section boundaries (1.3, 2.3, 3.3, 4.3, 5.4, 6.3), each immediately after a suite-green verify step \u2014 working, tested points rather than one per task or one at the end. Format is checkbox-style, which conflicts with the plain-line convention but matches `CLAUDE.md` (\"Use checklist format for all task files\") and the accepted `101-tasks.flocking-behavior.md`; left as an observation, not a defect.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:44-45"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Required profile fields break `build_profiles()` in `src/migratory_server/`; no task updates it",
+      "location": "src/migratory_server/simulation.py:18-25",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`AgentState.leadership` is dropped by `EntityManager.spawn_population()`'s array merge; no task covers it",
+      "location": "src/migratory_server/entities.py:135-147",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Vectorization requirement has no task step and no verification",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:176-179",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 5.3 turns \"statistically different\" into a disjunction that either branch satisfies",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:157-162",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 2.2's file list omits two files that construct `BehavioralProfile`",
+      "location": "tests/test_simulation.py:65",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 6.2 re-checks assertions already verified in 3.1 and 4.1",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:176-179",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Functional requirements are fully traced",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:122-162",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Load-test and commit-cadence checks: no gap",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:44-45",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-17T11:52:20.583005",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 118585,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 347646,
+  "cached_tokens": 315904,
+  "cache_write_tokens": null,
+  "completion_tokens": 31090,
+  "reasoning_tokens": 27836,
+  "duration_seconds": 431.74423024989665,
+  "cost_usd": 0.024112159999999997,
+  "cost_basis": "alias_pricing"
+}

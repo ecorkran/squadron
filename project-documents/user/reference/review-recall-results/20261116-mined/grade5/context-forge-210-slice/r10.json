@@ -1,0 +1,40 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Plan-assigned tool guide reference and custom-agent mapping documentation dropped",
+   "description": "The slice plan entry (200-slices\u2026:184, :218) names two documentation deliverables assigned to this slice: reference `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` in the slice design, and \"document the mapping\" for `.claude/agents/*.md` \u2192 Copilot custom agents. That tool guide exists and is the source of all the glob/frontmatter knowledge the design relies on, yet the slice doc never references it, and the \"document the mapping but defer implementation\" line (54) promises documentation that appears nowhere in the doc. The mapping is consequently lost. Restore the reference and either include the custom-agent mapping section or point explicitly to the guide that holds it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:52-54"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Managed-marker safety check covers only two of the four generated output locations",
+   "description": "The pre-run safety check (sequence step 4; `isManagedCopilotFiles`) checks only `.github/copilot-instructions.md` and `AGENTS.md`, but step 5's script also writes `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`. An unmanaged user file in either directory is therefore overwritten silently, which contradicts the stated contract \"first-run warns before overwriting unmanaged user content\" and the \"same safety as Claude path\" success criterion. Extend the check to the split-rule and prompt directories (or explicitly document why they are exempt and adjust the safety claim).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:96-102"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new script subprocess and worktree copies are unspecified",
+   "description": "`execFileSync('bash', [scriptPath, 'copilot'], ...)` and `propagateToWorktrees(project, 'copilot')` are new I/O paths, but the design gives no handling strategy for a hung script (no timeout on the synchronous exec), for the script partially writing the four outputs before failing, or for a worktree copy failing after the root files were written. The Risks section addresses only the \"script lacks a copilot case\" case. Specify behavior for these failure modes (e.g., timeout/failure propagation, partial-output recovery, rollback or clear error state) rather than leaving them implicit.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-102"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Managed-marker helper has two different names and signatures",
+   "description": "Technical Scope defines `isManagedCopilot(filePath)` (single file path), while Files Changed (:109) and Interfaces define `isManagedCopilotFiles(projectPath)` (whole project, two files). This is a genuine interface ambiguity, not just a typo; consolidate to one name and signature consistent with the coverage decision in the finding above.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Parent NFR not restated on the `cf init --ide copilot` path",
+   "description": "The parent architecture (200-arch\u2026:21) states the onboarding target \"from `npm install` to useful context output in under two minutes.\" The slice touches that path via `cf init --ide copilot` but does not restate the target or note that the additive target swap does not change it. Low materiality for an additive slice; recording it would make alignment explicit.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:17"
+  }
+ ]
+}

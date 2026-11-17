@@ -1,0 +1,26 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Adoption cannot resume after producing an architecture",
+   "description": "The flow says the agent writes the concept, derived architecture, and existing-state slice plan, while the detection report classifies any repository with an architecture artifact as \u201calready planned\u201d and says adoption does not apply. Because the amendment removes adoption state, an interruption after the architecture is written but before the retroactive slice plan exists leaves the next `sq onboard` run with no way to distinguish partial adoption from a project that was already planned. It will stop rather than resume, potentially leaving the repository without the baseline plan that makes adoption useful. Define a resumable intermediate condition or otherwise make the flow recoverable before treating the architecture artifact alone as proof that adoption is complete.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Detection: a read-only report (amended 20261025)"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The initiative\u2019s central outcome is deferred beyond its deliverables",
+   "description": "The Overview and Design Goals describe delivering a brownfield path that leaves `cf next` pointing to new work. But the rework\u2019s unparked slices (268\u2013272) deliver only build cleanup, detection/prompt primitives, and documentation; the actual adoption run (273) and later-phase comprehension support (274) are parked until `sq onboard` exists. That makes the initiative\u2019s stated user outcome contingent on an external capability that is not part of its deliverables. Either scope this initiative explicitly as primitives-only and revise its outcome, or include a viable, scheduled path to the promised adoption result.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Anticipated Slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The retroactive marker does not reliably prevent review-gate bypass",
+   "description": "A retroactive entry with a slice design or task file is an error, but a newly planned slice often has neither yet. Such an entry can be checked, marked `retroactive`, and placed before the other new work; the stated checks then accept it and the review gate skips it. The marker\u2019s restriction to the adoption flow is a convention, not something the checker enforces. Consequently, the claim that the marker cannot bypass the gate is stronger than the described validation supports. Add a way to distinguish verified pre-adoption history from an unimplemented plan entry, or narrow the gate-safety claim.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Baseline artifacts"
+  }
+ ]
+}

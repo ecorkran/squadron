@@ -1,0 +1,19 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2's success criterion is false: tests that build `LanguageSnapshot` directly cannot pass unchanged after the enum addition",
+   "description": "Task 2's Success is \"the full `tests/metrology/` suite passes unchanged\", but adding four `SnapshotMetric` members makes `LanguageSnapshot._one_measurement_per_metric` (snapshot_models.py:193) reject any snapshot built with only the four 400 metrics. Verified two 400 tests do exactly that: `test_snapshot_models.py:225` (`test_json_round_trip_is_lossless`) constructs a `LanguageSnapshot` with `measurements` for only `file_length`, `function_length`, `lint_count` and `type_errors` (lines 229\u2013244), and `test_render.py:61` builds `python_snapshot()` with the same four measurements \u2014 the latter also fails the summary test because the new metric lines have no handling yet. The second bullet of Task 2 only repairs `PythonAdapter.metrics`, which covers `test_take.py` (it iterates `set(SnapshotMetric)` via real adapters) but not these directly-constructed fixtures. The fix is small \u2014 enumerate `SnapshotMetric` or append the new metrics as `no_adapter`/absent in those two builders \u2014 but the task says nothing will change, so a junior executor will hit unexpected failures and either misdiagnose them or edit tests without any task authorizing it. Task 2 should explicitly list which 400 tests need the new members added (and note this is test-fixture maintenance, not a change to the SC-12 \"edited only for the rename\" rule, which covers length tests only). The Task 30 checkpoint \"Every Success Criterion maps to a passing test\" won't catch this either, since the claim lives in Task 2's success line rather than an SC.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:43"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Render tests that assert new-metric line shapes belong to Task 27 but Task 2 breaks them first",
+   "description": "Task 27 tests \"each new line's shape matches the API Contracts example\", but `test_render.py`'s fixture (`python_snapshot`, line 36) becomes structurally invalid at Task 2 for the reason above, and its expected line set won't contain the four new metrics until Task 27. The task pair works if Task 2 repairs the fixture's measurement list; if the above finding is addressed, this resolves with it. No action beyond the Task 2 edit.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:265"
+  }
+ ]
+}

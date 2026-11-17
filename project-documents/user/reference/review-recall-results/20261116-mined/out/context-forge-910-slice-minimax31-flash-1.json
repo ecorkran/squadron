@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Sweep set contradicts TD-3 and Success Criteria: all 3 WorkflowNavigator sites are `SliceStatus.status` sites",
+      "description": "The Technical Scope table (`WorkflowNavigator.ts | 3 | '=== complete' checks`), the Component Structure table (\"Replace 3 bare-string comparisons with `STATUS.*`\"), and Migration Plan step 4 (\"sweep 3 sites\") all put `WorkflowNavigator.ts` in scope. But all three of those sites are `SliceStatus.status` sites, **not** `NormalizedStatus` sites: `WorkflowNavigator.ts:312` `if (slice.status === 'complete' && status.slicePlan)`, `:345` `if (slice.status === 'complete')`, `:588` `return { ...base, status: 'complete', taskProgress };` \u2014 `slice.status`/`base.status` are typed by `SliceStatus['status']` (the workflow-position union in `types.ts:265-273`). TD-3 states that union is \"Left untouched\", and Success Criteria states \"`frontmatterSchema.ts` and `SliceStatus.status` remain untouched (confirmed out of scope, not accidentally swept)\". The design's own \"After\" count books these same 3 as excluded (\"`SliceStatus.status` (4) sites\" = `types.ts:269` + the 3 WorkflowNavigator sites). An implementer cannot satisfy both the scope table and TD-3/Success Criteria; the task file's Task 9 tries to split the difference (\"the 3 `'complete'` sites\u2026 replace each\", \"other `SliceStatus.status` values leave untouched\"), which directly contradicts the design's Success Criteria text. There are in fact **zero** `NormalizedStatus` literal sites in `WorkflowNavigator.ts`. Fix: remove the `WorkflowNavigator.ts` row and Migration Plan step 4 (and the corresponding task-file step), or explicitly reclassify those three as `SliceStatus.status` sites, decide, and amend TD-3 and the Success Criteria accordingly.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Site counts and the exact literal set are inaccurate, and fix-action payload sites are unclassified",
+      "description": "Grep-verified counts (single-quoted literals, `packages/core/src`) contradict the design's table on four of six rows: `ConsistencyChecker.ts` has **30** matches, not 36; `statusNormalizer.ts` has **14** value-side sites (quoted alias keys number 4, of which `'in-progress'` and `'not-started'` also match the `NormalizedStatus` spelling), not \"13 (of 16 total; 3 are alias keys)\"; `types.ts` has **8** grep matches across 5 lines, not \"5 (of 8 total)\" (4 + 5 \u2260 8 either way); `slicePlanParser.ts` has 4 literals on 2 lines, not 4 \"sites\". More substantively, the design never classifies the **13 fix-action payload sites** in `ConsistencyChecker.ts` (`detail: { key: 'status', value: 'complete' | 'in-progress' }` at lines 368, 384, 403, 480, 546, 728, 744, 825, 841, 914, 978, 989, 994). These strings are written into *user frontmatter*, whose canonical vocabulary is underscore-separated per `VALID_STATUSES` (`frontmatterSchema.ts:29-35`: `not_started`, `in_progress`, `complete`, `deferred`, `deprecated`) \u2014 exactly the vocabulary TD-2 says must not be conflated with `NormalizedStatus`. They match the design's own grep pattern, so an implementer running \"sweep every grep hit\" will convert them while one following the described pattern (\"comparisons\") will not. The Success Criterion \"No bare `NormalizedStatus`-value string literals \u2026 remain in production code\" is therefore not satisfiable as written until these are explicitly classified.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stated verification command and expected counts cannot hold; baseline numbers are wrong",
+      "description": "\"Before: ~75\" does not match reality: the `grep -roE` count across `packages/core/src` (no test files live under `src`) is **67**, of which 4 are the `STATUS` definition, 3 are `frontmatterSchema.ts`, 1 is `types.ts:269` (`SliceStatus`), 3 are `WorkflowNavigator.ts` (`SliceStatus`), and 1 is `ProjectModelBuilder.ts:179` \u2014 a **prose comment** (\"silently coerced to 'not-started' (TD-2a)\"), not a code literal. The sweepable set is therefore ~55\u201358 sites, not the \"~65\" the design states. The design's own command (`grep \u2026 | grep -v 'introspection/types.ts:[3-6]:'`) cannot return zero matches: the `frontmatterSchema.ts`, `types.ts:269`, `ProjectModelBuilder.ts:179` and `WorkflowNavigator.ts` residues all survive it, contradicting the criterion's \"returning zero matches in the six swept files\". Task 0's \"expected ~75\" baseline and Task 16's residue set are consequently unusable as completion gates. Fix: state exact per-file pre/post counts and give a grep that filters each documented exclusion explicitly (including the comment literal).",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Verification-Walkthrough"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Same-pattern production site outside the sweep scope is left behind",
+      "description": "The scope statement confines the sweep to `packages/core/src/**/*.ts`, with no rationale for the exclusion. `packages/cli/src/commands/arch.ts:189` \u2014 `const completedSlices = init.slices.filter((s) => s.status === 'complete').length;` \u2014 compares a `NormalizedStatus`-derived value (`deriveEntryStatus` output assigned in `ProjectModelBuilder.ts` `buildTaskEntry` and the planned-entry path) against the bare literal `'complete'` in production CLI code. The slice's Value statement (\"every reference is a compiler-checked property access \u2014 a typo like `'in-progres'` becomes a compile error instead of a silent runtime mismatch\") does not hold for this site, and the CLI's own established pattern already uses `STATUS` (`packages/cli/src/output/entryStatusDisplay.ts`, `packages/cli/src/commands/slice.ts`). Note also that `DocSummary.status` is typed `string`, so real compiler-checking there would require a type change \u2014 which is precisely the trade-off the design should have stated rather than silently drawn a package boundary. Fix: include the site, or exclude it with a stated reason.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Regression-guard claim is not fully substantiated: one swept branch has no test",
+      "description": "The parent architecture's principle is \"No behavior changes without tests. Refactoring slices must have test coverage verifying preserved behavior before and after the change.\" The design discharges this by asserting \"The existing test suite is the regression guard \u2014 no new test *behavior* is needed.\" One of the four swept assignments in `taskFileParser.ts` is not exercised by any test: the branch `totalTasks > 0 && completedTasks === 0 \u2192 'not-started'` (`taskFileParser.ts:68`). The parser's own test file asserts `'not-started'` only for the zero-item fixture (`empty-tasks.md`) and the missing-file case, and `packages/core/tests/fixtures/introspection/` contains no all-unchecked task file. That assignment therefore has no regression guard, contrary to the design's claim. Fix: add one fixture + assertion (one line of scope) or name the test that covers it.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stated rationale for excluding test files is factually false",
+      "description": "The design states: \"Test files \u2014 grep confirms zero `.test.ts` files assert against these literals directly (tests exercise behavior through parsers/fixtures, not string comparison).\" Verified false: `packages/core/tests/introspection/taskFileParser.test.ts:48,54,61,73,80` assert `result.inferredStatus` `toBe('in-progress'/'complete'/'not-started')`; `statusNormalizer.test.ts:7,15,24,31,50,54` assert `normalizeStatus(...)` against the same literals; `slicePlanParser.test.ts:69,79` assert `status` `toBe('complete')`; `types.test.ts:6-9` asserts the four `STATUS` members; `packages/cli/tests/commands/list-derived-status.test.ts:109,124,159,181,194,206` asserts entry status `toBe('complete'/'in-progress'/'not-started')`. The conclusion (no test edits needed) remains correct, but for a different reason \u2014 the runtime values are unchanged \u2014 and the stated reason is false. Restate it as \"the values are unchanged, so existing assertions remain valid\"; as written, a reader would wrongly conclude the test tree is literal-free and could miss that the CLI/MCP JSON surfaces are pinned to these exact strings.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"No public API signature changes\" is inaccurate for a published interface",
+      "description": "The design states \"Consumer updates: none required outside `packages/core` \u2014 this is an internal-representation change only\u2026 No public API signature changes.\" `TaskFileResult` is exported from the published package (`packages/core/src/introspection/index.ts` \u2192 `export * from './types.js'` \u2192 `packages/core/src/index.ts`), and `ArtifactIntrospector.parseTaskFile` \u2014 exported from `@context-forge/core/node` \u2014 returns it. Retyping `inferredStatus` from the three-value union to `NormalizedStatus` changes the emitted `.d.ts` of a published interface. The change is a widening, so no consumer needs to change (TD-1's reasoning is sound), but the blanket \"no public API signature changes\" and the \"Provides to Other Slices: None\" claim should acknowledge the widened published type rather than assert no change at all.",
+      "file_ref": null,
+      "category": "api-surface",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Migration-Plan"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with the parent architecture's scope and principles is sound",
+      "description": "The slice directly serves the parent architecture's \"Hard-coded values \u2192 configuration or constants\" scope item and implements exactly what the slice plan's entry 10 authorizes (introduce the `STATUS` `as const` with a derived union, then sweep literal sites to `STATUS.*`, \"pure mechanical refactor, no behavior change\"). It correctly honours slice 241's TD-6 deferral rather than re-litigating the `STATUS` definition, and its TD-1/TD-2/TD-3 exclusions (raw frontmatter vocabulary, `SliceStatus` union, `ProjectModelBuilder`'s `'unknown'` sentinel) are each grounded in verified source. Dependency direction is correct \u2014 core-internal only, no new modules, no new packages, no cross-package interface consumed \u2014 and the slice introduces no new I/O path or message type, so the parent architecture's absence of restated NFR targets (latency/throughput) and of per-path failure-mode enumeration is not a gap for this slice. The \"no behavior change\" premise is correct: `STATUS.X === 'x'` by construction (`types.ts:1-10`, asserted in `types.test.ts:6-9`).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md#Scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Sweep set contradicts TD-3 and Success Criteria: all 3 WorkflowNavigator sites are `SliceStatus.status` sites",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Site counts and the exact literal set are inaccurate, and fix-action payload sites are unclassified",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Stated verification command and expected counts cannot hold; baseline numbers are wrong",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Verification-Walkthrough",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Same-pattern production site outside the sweep scope is left behind",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Regression-guard claim is not fully substantiated: one swept branch has no test",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Stated rationale for excluding test files is factually false",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "api-surface",
+      "raw_category": null,
+      "summary": "\"No public API signature changes\" is inaccurate for a published interface",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Migration-Plan",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Alignment with the parent architecture's scope and principles is sound",
+      "location": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md#Scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-17T10:50:13.004028",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 626454,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1066836,
+  "cached_tokens": 856832,
+  "cache_write_tokens": null,
+  "completion_tokens": 158497,
+  "reasoning_tokens": 154046,
+  "duration_seconds": 841.5351635422558,
+  "cost_usd": 0.06929722399999999,
+  "cost_basis": "alias_pricing"
+}

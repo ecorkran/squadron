@@ -1,0 +1,40 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Missing automated coverage for `context_build` D9 error result",
+   "description": "Description: The slice design's Functional Requirements say a guide without the profile or prompt must make `cf build` exit non-zero with the `AdoptionError` message and make `context_build` return it as an error, with no concept prompt. Tasks 9/9T cover the resolver D9 checks, Task 10/10T cover rethrow, Task 12 fixture 12 covers rejection through the pipeline, and Task 15 step 4 manually covers `cfl build` non-zero. But no task asserts the MCP `context_build` error result for a missing profile or prompt; Task 13 and Task 15 step 5 cover only successful parity. Add an MCP-level assertion that `isError` is true, the text contains the D9 `AdoptionError` message, and no concept prompt was produced.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:187-215"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Renderer tests do not cover every outcome",
+   "description": "Description: Technical Requirements require `renderAdoptionFacts` tests for \"every outcome\", and the design defines `AdoptionOutcome` as a discriminated union with `adoption-in-progress`, `adoption-closed`, `already-planned`, `brownfield`, and `greenfield`. Task 8T tests brownfield, adoption-in-progress, `NOT_EVALUATED`, state notice, \"none found\", history unknown, and the squadron bullet, but omits `adoption-closed`, `already-planned`, and `greenfield`. Task 8's exhaustive switch helps compile-time safety but does not satisfy the explicit test requirement. Add those outcome cases or narrow the design requirement.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:163-176"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "D9 write-failure test omits the state-unchanged assertion",
+   "description": "Description: Technical Requirements explicitly call for D9's write failure to assert `AdoptionError` and \"state unchanged\", plus guide-check-before-write ordering. Task 9T's guide-without-profile case asserts state remains `''` before the write, satisfying ordering, but the write-failure case only requires the error to name `.context-forge.toml` and `--it brownfield-adoption`. Add a read-back assertion that `adoption.state` remains unset after the write failure.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:187-200"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Guide fixture instructions are not clear enough for the D9 parser",
+   "description": "Description: Task 9T says to create the brownfield guide fixture as a copy of `packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md` with a `brownfield-adoption: [...]` profile line and a `##### Brownfield Adoption` prompt section. That existing fixture has no `context_profiles` block, while `ContextProfileParser.parseProfiles` requires a fenced `context_profiles:` YAML block. A junior AI could add the profile line outside the block and get `{}` from `parseProfiles`, leaving D9 profile checks and all Task 12 integration fixtures using the brownfield guide fixture unreliable. Specify adding the production-shaped fenced `context_profiles:` block with the profile line, and keep the separate \"profile but no prompt\" fixture explicit.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:187-200"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Caller/pipeline changes do not have an immediate successor test task",
+   "description": "Description: The test-with rule requires implementation groups to be immediately followed by test tasks. Tasks 1-10 are paired as `Task N` / `Task NT`, and integration/parity tests follow later, but Task 11 changes `createContextPipeline`, `build.ts`, `contextTools.ts`, updates every test caller, and adds `contextTools.test.ts` assertions inside the implementation task itself before Task 11C. Split the caller/test updates into a `Task 11T` immediately after the implementation steps, or explicitly restructure this group so the test task is the immediate successor.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-225"
+  }
+ ]
+}

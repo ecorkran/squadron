@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The audit harness has no defined way to run the tech-debt-audit skill",
+   "description": "The architecture says the harness will run the audit across projects and persist its findings, but the referenced 340 skill is a Claude Code slash-command file, not a runnable Squadron audit interface. Its frontmatter sets `disable-model-invocation: true`, and 340\u2019s design installs it as a command for Claude Code. The architecture does not specify how a Squadron CLI or pipeline invokes it, supplies its required audit protocol, or captures its output. Normalizing prose is downstream of this missing execution boundary. Define a callable audit interface or make the initial baseline an explicitly manual import workflow.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Envisioned State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Results are not required to identify an immutable artifact version",
+   "description": "Dispersion requires multiple judges to assess the same artifact, and trend reports must distinguish changes in judge behavior from changes in the input. The document keys samples to persisted judge results and requires judge-configuration identity, but does not require an artifact content hash, commit, or immutable snapshot of the inputs. A path alone is insufficient when the file changes between runs. Without stable input identity, comparisons can silently combine judgments of different artifacts.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The cross-project data store and its join contract are left unresolved",
+   "description": "Cross-project aggregation is in scope, while 300\u2019s persistence is per-run/per-project and 280 is explicitly not assumed. The architecture leaves both the store choice and its relationship to 280 for slice design, without defining the cross-project identity and join contract: for example, how project, run, result, artifact version, and judge configuration are identified across local stores. This is a load-bearing boundary for the keystone data-layer slice, not just a storage implementation detail. Set that contract before implementing capture and reporting.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Sample-size floors do not address bias in opportunistic human samples",
+   "description": "The architecture acknowledges that escalation-triggered or disagreement-triggered sampling can bias agreement figures, but defers the sampling policy and does not require reports or threshold recommendations to account for that bias. Reporting `n` and enforcing a minimum-evidence floor cannot make a selectively offered sample representative. Define which sampling modes support population-level recommendations, and keep targeted or convenience samples clearly separated from them.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Findings-per-project is not a comparable code-quality measure as specified",
+   "description": "The proposed delta is audit findings per project, but the architecture itself notes that project size, audited scope, models, and slice difficulty vary. An observational before/after caveat avoids causal overclaiming; it does not make raw counts comparable. The metrology needs to record the audited scope and audit configuration and define a comparable denominator or matched-project comparison before interpreting a drop as improvement.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The initiative bundles two largely independent measurement programs",
+   "description": "Human-sampled judge calibration and threshold recommendations can ship independently of the code-audit baseline and dispatch prompt intervention. Their data grains and failure modes differ: judge results are compared to human verdicts by artifact level and judge configuration, while audit findings are normalized prose observations compared across projects and interventions. Calling them one \u201cmetrology shape\u201d does not yet establish a shared component boundary. Defer the audit baseline and pre-emption prompt to separate work, or define the concrete shared data contract that justifies building them together.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Scope"
+  }
+ ]
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion in the slice design maps to a task, with no gaps and no scope creep",
+      "description": "Cross-referenced against the design: all 13 functional scenarios (empty/scaffold-only/brownfield/shallow-clone/monorepo/concept-only/planned/resume/overrides/`--phase 2`/`--it brownfield-adoption`/`template_preview`/missing-profile) map to Task 12's fixtures 1\u201313; every named unit test in Technical Requirements maps to 1T/2T/3T/4T/5T/6T/7T/8T/9T/10T; the CLI/MCP parity criterion maps to Task 13; the byte-identical-before/after integration requirement maps to Task 15 walkthrough step 1; and the 262/263/264 interface requirements are satisfied by Task 8's isolated `renderSquadronFact()` and Task 2's `adoption/` exports. No task traces outside the design's Excluded list. I verified the codebase claims the tasks depend on: `PHASE_STRINGS[0]` is `'Phase 0: Concept'` with `resolvePhaseValue` handling the legacy `'phase 1: concept'` alias (projectSchema.ts:21,157); `ContextIntegrator` has exactly six constructor params today with the permissiveness resolver sixth; `ContextTemplateEngine` places permissiveness at order 3.5 (room for a 3.4 adoption section); `gitExec(args, cwd, opts)` takes the directory as `cwd`; `build.test.ts:227` has the `toHaveBeenCalledWith('/tmp/test')` assertion Task 11 updates; `MIN_GUIDE_VERSION = '0.22.2'` exists in `guides/guideMinimum.ts`; and the `test-project` prompt fixture exists where Task 9T's fixture copies from.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Context Summary attributes the no-load-test decision to a rule that does not exist",
+      "description": "The Context Summary justifies omitting a load test by claiming \"The `tests/load/` tier is a rule in `rules/python.md`\". I searched the installed guide's rules directory (`testing.md`, `python.md`, `typescript.md`) and found no load-test tier rule. The conclusion is still correct on other grounds: D2 explicitly states \"Tests assert the caps, not timings\", and Tasks 3/3T implement those cap assertions (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`). No action needed beyond correcting the citation if the file is revised; the D2 performance target is verified exactly as the design prescribes.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6's refactor of `ArtifactIntrospector` is a justified deviation from D6's letter",
+      "description": "D6 says `findPlanningArtifacts` reuses `resolveInitiativePlanPath`, but that helper's `findProjectGuideFile` catches every `readdir` error and returns `null` \u2014 which conflicts with D6's \"other read errors throw\". Task 6 resolves this correctly: it extracts the regex into an exported `INITIATIVE_PLAN_FILE_PATTERN` (one pattern definition, per the project's single-definition rule) and re-implements the read with the ENOENT-only rule, while `resolveInitiativePlanPath`'s behavior stays unchanged. This touches a file the design lists as belonging to `introspection/`, but it is the minimal change that honors D6's error rule, and the task file documents the reasoning. No change requested.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:20-24"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are checkbox tasks, following the project's checklist convention, placed at working tested points",
+      "description": "The ten commit tasks (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) are checkbox items rather than plain `**Commit**:` lines. This follows AGENTS.md (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\") and the completed slice 260's identical pattern. Placement is correct: each commit sits after a tested, working point (implementation + its test task), commits are grouped rather than after every task (Tasks 1/1T/2/2T share 2C; 4/4T/5/5T share 5C; 7/7T/8/8T share 8C; 10/10T/11 share 11C), and they are distributed throughout rather than only at the end. The substance of the commit guidance is satisfied.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Every success criterion in the slice design maps to a task, with no gaps and no scope creep",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Context Summary attributes the no-load-test decision to a rule that does not exist",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 6's refactor of `ArtifactIntrospector` is a justified deviation from D6's letter",
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:20-24",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox tasks, following the project's checklist convention, placed at working tested points",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T12:46:13.735651",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 257913,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 578511,
+  "cached_tokens": 511104,
+  "cache_write_tokens": null,
+  "completion_tokens": 65992,
+  "reasoning_tokens": 63856,
+  "duration_seconds": 246.94211995787919,
+  "cost_usd": 0.51762164,
+  "cost_basis": "alias_pricing"
+}

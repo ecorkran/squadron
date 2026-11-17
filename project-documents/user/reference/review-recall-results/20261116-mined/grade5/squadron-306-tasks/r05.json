@@ -1,0 +1,26 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T3 leaves a review\u2192pipeline import in the relocated core, recreating the F002 package-level cycle",
+   "description": "T3 moves `verification.py` into `review/addressed/` but keeps its `RoundDiff` import from `pipeline/actions/findings_addressed/screens.py`, calling it \"a cross-package import in the pipeline\u2192review direction\". The direction label is backwards: a review module importing `pipeline/actions/` internals is a **review\u2192pipeline** edge \u2014 the inversion the design explicitly forbids at `306-slice...md:141-145` (\"Having `review/resolution.py` import `pipeline/actions/` internals would invert that and create a review \u2194 pipeline package-level cycle\"). Verified in code: `findings_addressed/verification.py:17` imports `RoundDiff` from `...screens`, and `screens.py:15-23` imports `findings_addressed.models` (\u2192 `review.addressed.models` after T1/T3) plus `review.git_utils`, `review.models`, `review.parsers` \u2014 so after the move the chain `review.addressed.verification \u2192 pipeline...screens \u2192 review.*` is exactly the cycle F002 resolved against, exercised through partially-initialized package `__init__`s once T7 makes `review/addressed/__init__.py` re-export `verify_outcomes`. T5 inherits the same dependency unmentioned: `judge_residue_core(..., diff, ...)` types `diff` as `RoundDiff` (`judge.py:21`), so the extracted \"context-free\" judge core in `review/addressed/judge.py` would also import from `pipeline/actions/` internals. File 2 compounds it \u2014 its T21 instructs `review/resolution.py` to import `RoundDiff` and `screen_byte_identical` from `pipeline/actions/findings_addressed/screens.py` (\"import it, do not redefine it\"), which is verbatim the design-forbidden sentence. Fix: include `RoundDiff` (a plain context-free dataclass, `screens.py:34`) and whatever shared screen logic Part B needs in the relocation to `review/addressed/`, with `screens.py` importing them from there in the already-established pipeline\u2192review direction \u2014 i.e., resolve the design's own component-diagram/dependency-direction tension in favor of the dependency rule, and adjust file 2's T21/T27 accordingly.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:102-115"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "F005 checkpoint T14 is numbered after the Part D commit it gates",
+   "description": "The slice design's binding Phase 5 note requires the cf `archive/`-scanning verification to appear \"as its own checklist task in the breakdown, sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme.\" T14 exists as its own task (good) but is placed after T12/T13, and T13's `Commit: fix: archive prior review content...` marker (line 272) precedes it in file order. The gating language in T12 (\"Do not mark this task done until T14's verification outcome is known\") and T14 (\"gates T12 in practice even though it is numbered after it\") mitigates the risk, but a top-to-bottom executor reaches the Part D commit marker before running the checkpoint; if T14 finds cf scans recursively, the committed archive-filename scheme needs rework after the fact. T14 has no code dependency on T12 \u2014 move it before T12 (right after Part A) so the go/no-go genuinely precedes Part D landing.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-297"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Context-free core\" move carries `read_findings`/`ActionResult` across the boundary",
+   "description": "T1 moves `models.py` \"verbatim\", including `from squadron.pipeline.models import ActionResult` (line 14) and `read_findings(result: ActionResult | None)` (line 93). Per F002's own criterion (\"What stays in `pipeline/actions/findings_addressed/` is exactly what is loop-specific\"), `read_findings` is loop-specific: it parses pipeline `ActionResult.findings`, and the interactive path uses file 2's `records_from_frontmatter` instead. Moving it drags a review\u2192`pipeline.models` dependency into the relocated core and undercuts the \"context-free\" characterization the design and the task file's handoff claim (\"every task in file 2 imports from there\") rely on. This is acyclic (`pipeline/models.py` imports only stdlib/typing, verified) and the design's component list does place `read_findings` in `review/addressed/models.py`, so this is not blocking \u2014 but the cheap fix now is to leave `read_findings` behind in a pipeline-side module (or split it from the moved models), rather than cement a boundary crossing that F002's narrative claims to have eliminated.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+  }
+ ]
+}

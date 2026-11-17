@@ -1,0 +1,12 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "No load test or extra timing test is needed, and the file correctly omits one",
+   "description": "D2's \"under one second\" target is explicitly bounded by the cap tests in Task 3T (\"tests assert the caps, not timings\"), and the `tests/load/` tier cited in the Context Summary is a Python-rule artifact that does not apply to this TypeScript repo. This is correctly reasoned; no load-test task or CI gating task is warranted here.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

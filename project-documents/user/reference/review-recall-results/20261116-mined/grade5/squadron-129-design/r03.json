@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Timeout scope for runtime spawn is internally inconsistent",
+   "description": "The \"Runtime startup cost\" paragraph (line 82) asserts that the spawn/`initialize` hang case \"is already bounded by `codex.turn_timeout_s`,\" but the Failure Modes table (line 125) applies that timeout only \"around `thread.run`.\" On the first message, `CodexAgent` performs `AsyncCodex.__aenter__` (subprocess spawn + `initialize`) and `thread_start` before `thread.run`; if the timeout truly wraps only `thread.run`, a hang during spawn or `thread_start` is unbounded, contradicting line 82. The same gap appears on the login path: D7 documents `codex.login_timeout_s` as bounding `handle.wait()` only, while `login.login()` first constructs `AsyncCodex(config)` and calls `login_chatgpt()`/`login_chatgpt_device_code()` (Data Flow, line 84) \u2014 a hang in that spawn is not covered by the documented scope, unlike `sq auth status`, where `account_timeout_s` explicitly covers \"runtime start + account().\" The design should state exactly what each timeout wraps (e.g., turn timeout wraps `__aenter__` + `thread_start` + `thread.run` on first use; login timeout wraps the whole `login.login()` call).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82-125"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Logout I/O path has no enumerated failure modes or timeout",
+   "description": "`sq auth logout` is a new I/O path \u2014 `login.py` performs \"async login/logout/account flows over AsyncCodex\" and Interfaces Required lists `AsyncCodex.logout()` \u2014 yet the Failure Modes table and the Patterns and Conventions list (which names login timeout, login `success=False`, and `account()` failure) contain no row for logout. There is also no timeout covering it: D7 defines `turn`, `login`, and `account` keys but nothing for logout, even though logout spawns the runtime. A hung runtime start or an SDK error during `logout()` has no stated handling strategy (raise vs. warn-and-delete-file vs. report). Add a row (e.g., reuse `codex.account_timeout_s` or the login key, state the exit behavior and what `sq auth status` shows afterward) and a matching test alongside the existing logout test in Technical Requirements.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#failure-modes---codex-turn"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Version upper bound explicitly deferred with a stated default",
+   "description": "D1 ships a concrete pyproject line (`codex = [\"openai-codex>=0.159.3,<1\"]`) while Special Considerations leaves \"whether to cap\" to the PM. Because a default is stated in the design itself, this is not a silent fallback or a blocking TBD \u2014 implementation can proceed with `<1` \u2014 but the decision should be resolved and recorded in the task file so the final constraint doesn't drift between D1 and the implementation. Also minor: D8 appears after D9 in Technical Decisions (lines 112\u2013114), a numbering slip worth fixing for readability.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97-231"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-agent Force protocol has no consumer in the tick interface",
+   "description": "The design defines a per-agent `Force` protocol, states \"The tick loop prefers the bulk variant when available,\" and lists a success criterion that \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths.\" But the documented `tick()` signature (`#Tick Function Signature`) accepts only `forces: list[BulkForce]`, and no mechanism is described for adapting a per-agent `Force` into that call. As written, the `Force` protocol is an abstraction with no integration point, and the \"both paths\" success criterion is unsatisfiable through the public interface. Either specify the union/adaptation path in the tick, or cut/defer the per-agent `Force` protocol and drop that success criterion \u2014 the architecture's GPU principle only requires the bulk path.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Force Protocol"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Engine-scale throughput NFR not restated; slice adopts a lower scale target",
+   "description": "The parent architecture states the NFR \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" and requires the hot loop to stay compatible with GPU offload. The slice restates the determinism NFR but not this throughput target. Instead it declares the brute-force query \"acceptable for the hundreds-of-agents scale this slice targets,\" with no statement that the SoA/vectorized/`BulkForce` design must still preserve the engine-level tens-of-thousands target once brute force is replaced by slice 105. Restate the specific engine NFR and explicitly frame brute force as a deliberately temporary, replaceable implementation so the interfaces are not designed down to the hundreds scale.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Scalar SpatialQuery mandates a Python-level per-agent loop in the tick",
+   "description": "Data Flow step 3 specifies \"For each active agent, `SpatialQuery.query_radius(...)`,\" and the `SpatialQuery` protocol is scalar (one position in, index array out), which forces a Python-level loop over agents inside the tick. This is in tension with the slice's own Technical Requirement \"No Python-level per-agent loops in the hot path\" and with the architecture's GPU guidance (\"bulk array-in/array-out operations with no Python-level per-agent branching ... no callbacks into Python during the hot loop\"). It is defensible for the brute-force reference at this slice's scale, but the design should acknowledge the loop and state whether a bulk query variant is needed for the later spatial-hash/GPU path rather than leaving the contradiction implicit.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Data Flow"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Environment interface intentionally deferred is consistent with scope",
+   "description": "The architecture lists \"Environment as input surface\" as a principle and describes the envisioned tick as receiving environmental context, yet this slice's tick has no environment parameter. This is consistent with the slice-plan entry for (100), which does not include environment, and adding an unused interface here would introduce an abstraction nothing in this slice consumes. Noted only so the deferred integration point stays visible for later slices.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick Function Signature"
+  }
+ ]
+}

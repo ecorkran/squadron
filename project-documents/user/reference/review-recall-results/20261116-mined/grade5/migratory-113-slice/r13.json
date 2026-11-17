@@ -1,0 +1,26 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Density hook leaks a dispatcher-specific method into the engine tick loop",
+   "description": "The design adds `if hasattr(spatial, \"record_density\"): spatial.record_density(...)` to `tick.py` (lines 158-159) and rejects putting the method on the protocol (line 164). This contradicts the parent architecture's \"Pluggable spatial queries\" and \"Clean boundaries\" principles \u2014 the strategy must be \"replaceable without changing the engine\" and spatial strategy must be \"hidden behind these interfaces\" \u2014 and breaks the established pattern from slice 105, which explicitly *excluded* any `tick.py` change (\"the swap is at the construction site\"). It also creates a hidden, non-protocol dependency that only `AdaptiveSpatial` satisfies, and line 315 rationalizes it with speculative future `record_*` subscribers that no slice needs. The lighter mechanism already exists: `AdaptiveSpatial` sees every `query_radius_batch` call and its own `counts` output, so it can derive the density and schedule the next `build()` entirely inside the wrapper \u2014 zero `tick.py` change, fully behind `SpatialQuery`. The only nuance (wanting post-`exclude_self` counts) is a constant \u22121 per agent the wrapper can account for. Recommend recording density in the wrapper and dropping the engine hook.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Operator-configurable `initial_backend` is promised but absent from the config schema and wiring",
+   "description": "The Technical Decision states \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator ... can choose grid-first,\" but `SpatialConfig` (lines 168-195) exposes only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band`, and `_build_spatial` hardcodes `initial_backend=\"brute\"` (line 238). The requirement in that decision is therefore unmet. It is also scope beyond the slice plan for 113, which names only the threshold and hysteresis as exposed knobs. Recommend cutting the configurability claim and documenting `initial_backend` as fixed to `brute` (the lighter option that matches the slice plan and the \"matches current production behavior\" rationale), or adding the field consistently across config, validation, and wiring if it is truly wanted.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Empty active population leaves the density signal under-specified",
+   "description": "`record_density` is defined as `counts.sum() / n_active` (line 116), but the document elsewhere writes it as `float(counts.sum()) / len(counts)` (line 25) and `filtered_counts.sum() / len(filtered_counts)` (line 315). These disagree on empty input: the `float(...)/len(...)` form raises `ZeroDivisionError` in Python, while the NumPy form yields `NaN` plus a warning. `n_active == 0` is a valid, reachable input \u2014 the tick is subset-evaluable (slice 100), zero-profile configs are valid and tested (slice 105 caveat), and \"empty\" is listed as a test distribution (line 366). The design neither settles the expression nor defines empty-count behavior. Recommend an explicit `if n_active == 0: return` guard, one canonical expression, and a `record_density`-specific empty test (the current \"empty\" case only covers output parity, lines 364-366).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  }
+ ]
+}

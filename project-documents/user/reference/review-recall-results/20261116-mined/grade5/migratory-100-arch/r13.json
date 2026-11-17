@@ -1,0 +1,82 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The proposed neighbor-list interface is incompatible with the vectorization and GPU requirements",
+   "description": "The design requires bulk array computation, \u201cno Python-level per-agent branching,\u201d and eventual GPU offload, while Envisioned State step 2 queries neighbors separately for every active agent. The implemented `SpatialQuery.query_radius()` returns one variable-length array per call, and `tick()` collects these into `neighbor_lists: list[NDArray[np.intp]]` (`src/migratory/engine/tick.py`; `src/migratory/spatial/interface.py`). `CohesionForce`, `SeparationForce`, and `AlignmentForce` then each iterate over active agents again, repeatedly performing profile lookup, self-filtering, masks, and allocations (`src/migratory/engine/flocking.py`). This is object-by-object orchestration around small NumPy operations, not the required vectorized hot loop. It also makes a GPU implementation responsible for consuming Python lists of host arrays, allocating full CPU-sized force results, and transferring them back per force. A spatial hash alone will not fix that structure. The architecture needs a bulk neighborhood representation and accumulation boundary\u2014such as contiguous neighbor offsets/indices, padded tiles, or pairwise force reduction\u2014or a narrower, validated performance claim.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:33"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "\u201cStateless between ticks\u201d is false for both spatial queries and stigmergic behavior",
+   "description": "The document says all state lives in arrays passed to the engine and that a tick requires \u201cNo setup, no teardown, no mocks.\u201d However, the required `SpatialQuery` has a stateful `build()` operation whose results are consumed by later `query_radius()` calls; the brute-force implementation explicitly retains copied positions and raises if `build()` was not called. Profile and force lists are additional persistent inputs. Swarm behavior is more problematic: it depends on \u201creinforced paths,\u201d which are mutable history, but the architecture describes only a read-only environmental interface. Deferred swarm work therefore needs write/deposit semantics, trail decay/update ownership, and inclusion of that state in snapshots and replay. None is part of the stated state contract. The engine should distinguish immutable configuration, caller-owned simulation state, derived per-tick caches, and persistent environmental state rather than claiming that passing arrays makes the whole engine stateless.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Same-input determinism does not establish the distributed-replay property the document claims",
+   "description": "The determinism goal explicitly motivates agreement between distributed regions, but no numerical or ordering contract is defined. Independent `query_radius()` calls do not guarantee stable neighbor ordering; different spatial-index implementations can produce different orders, and floating-point summation is order-dependent. Partial ticking also changes which velocities are current, so grouping agents into different active subsets can change results even when every individual tick is deterministic. The document does not specify whether these differences are acceptable, whether neighbor results must be canonically ordered, how forces are reduced, or which precision and math operations are required across CPU/GPU implementations. Slice 105\u2019s proposed before/after behavioral-equivalence test likewise needs a defined comparison tolerance or bitwise contract. Without these decisions, replay and cross-region agreement cannot be derived from the stated \u201csame state and inputs\u201d property.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The profile-only claim does not cover the behavior the architecture assigns to it",
+   "description": "\u201cAll behavioral variation comes from parameterized profiles, not from archetype-specific code paths\u201d conflicts with the planned additions of leadership, corridor movement, target selection, home ranges, and stigmergy. Those require new force terms, selectors, and state\u2014not merely different weights on cohesion, separation, and alignment. In particular, target selection is behavioral decision logic despite the \u201cForces, not decisions\u201d principle, and the document does not say whether selecting a target is a force, a persistent per-agent state transition, or a server operation. The document also includes swarm intelligence in the initial five-archetype parameter-space requirement even though its own slice plan defers swarm pending environmental support. Reframe the goal as composing behavior from reusable force/evaluation primitives, and define which behaviors legitimately require new primitives and state.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Inter-profile interactions have no defined representation or ownership",
+   "description": "The document identifies profile-to-profile interaction rules as a combinatorial design problem but leaves their representation unspecified. A single neighbor index array exposes only a position lookup and the neighbor\u2019s profile index; it does not define interaction matrices, directional responses, predator/prey categories, target identity, or how an elk distinguishes a wolf from another elk without proliferating pairwise parameters. It is also unclear whether these rules belong in each profile, in a shared interaction table, or in force implementations. This is load-bearing for the Predator-Prey slice and for the claim that new species require only profile data. Specify the interaction model and its configuration schema before treating profile-driven predator/prey behavior as an extension of flocking weights.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Subset evaluation is presented as sufficient for reduced-rate simulation without addressing temporal correctness",
+   "description": "The subset-evaluable tick freezes inactive agents\u2019 positions and velocities, while active neighbors continue reading those stale values. At 1/4 or 1/16 evaluation rates, this changes collision spacing, alignment, pursuit, and force magnitudes; it is not merely a cheaper schedule producing equivalent behavior. The world-server architecture additionally proposes interpolated positions between evaluations, but this document does not say whether neighbor queries see canonical stale positions or interpolated proxies, or who owns those proxies. Variable-rate ticking needs explicit semantic tolerances, transition behavior, and tests for interactions across different-rate populations. Otherwise the interface technically accepts subsets while failing to provide the multi-resolution behavior claimed for it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Aggregate entities cannot be dropped into the existing neighbor-query contract without a new abstraction",
+   "description": "The proposed extension presents aggregates \u201cthrough the same neighbor query interface,\u201d but the current interface returns indices into `AgentState`. An aggregate has center, heading, dispersion, and count, not an ordinary individual position/velocity/profile row. Existing forces compute means and inverse-square separation directly from individual rows, so treating an aggregate as one agent produces incorrect weighting and neighbor semantics. The design must specify an aggregate-aware neighbor record or adapter, force-specific aggregation rules, and how individual-to-aggregate forces scale with population count. It must also address discontinuity when an aggregate disaggregates. The present interface reserves an extension point in name but does not support the promised capability without changing force contracts.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "State ownership and the public engine interface are contradictory",
+   "description": "Envisioned State says the engine receives state and returns an updated array, and the narrow interface includes \u201cquery agent state, register/remove agents.\u201d Overview instead assigns lifecycle and canonical state to the world server, and the current `tick()` mutates an `AgentState` in place and returns `None`. `EntityManager` directly owns and resizes those same arrays and maintains ID-to-index mappings. Consequently, registration/removal is not an engine operation, state querying is not read-only through an engine interface, and consumers share mutable storage rather than exchanging an explicit result. Removal also shifts indices, invalidating subset selections and any external index-based references. Choose and document one ownership model: server-owned mutable arrays with a computation-only engine, or an engine-owned registry with controlled mutation. The current prose describes both.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Dimensional and array-layout decisions are less replaceable than claimed",
+   "description": "The document presents internal representation as hidden and replaceable, but the slice design exposes concrete N\u00d72 arrays throughout `BulkForce`, `SpatialQuery`, and `AgentState`. Although the slice calls `DIMS = 2` a single-point change for 3D, `src/migratory/engine/flocking.py` allocates `(n, 2)` results and force protocols document N\u00d72 outputs. Changing to 3D therefore requires editing every force and protocol, not one constant. Similarly, the exposed positional arrays and profile-index lists make the internal layout part of every consumer\u2019s contract. The architecture should either acknowledge these as explicit v1 constraints or define dimension- and layout-neutral boundaries before claiming replaceability.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The architecture document does not reflect completed architectural decisions",
+   "description": "The linked slice plan marks agent state/tick and flocking complete, yet the architecture still says \u201cNo engine exists\u201d and describes spatial-query abstraction as future work. SoA, semi-implicit Euler, float64 simulation state, `DIMS = 2`, and the `BulkForce`/`SpatialQuery` protocols are presented as open considerations although the completed slice documents already chose them. This leaves implementers unsure whether the architecture is the governing contract or an earlier exploration. Update Current State and Technical Considerations to record accepted decisions and known deviations; in particular, record that the current force loop does not satisfy the stated vectorization requirement rather than leaving that contradiction implicit.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Anticipated Slices"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Broken sibling references undermine the engine\u2019s cross-component requirements",
+   "description": "The document links to `200-arch.world-server-foundation.md`, but the available world-server document is `300-arch.worldserver-foundation.md`. The behavior-engine slice plan repeats the stale 200-series reference. Its frontmatter dependency is `000-concept.migratory`, whereas the world-server frontmatter references `001-concept.migratory`, whose linked path is also absent; the available concept is `000-concept.migratory.md`. These are not just cosmetic link errors: subset evaluation, aggregation, serialization, and state ownership rely on the world-server contract, so readers must be able to resolve the authoritative sibling document unambiguously.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Related Work"
+  }
+ ]
+}

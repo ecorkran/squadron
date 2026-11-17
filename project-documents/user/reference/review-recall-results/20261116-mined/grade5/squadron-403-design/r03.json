@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`report history`'s history-ordering git call has no enumerated failure mode",
+   "description": "`report history` orders \"snapshots ordered by the target's first-parent history\" and counts snapshots \"off that line\" \u2014 a new `git log`-class call introduced by this slice (line 298). The Failure modes table (lines 153\u2013173) enumerates the export calls, the resolver's reflog/merge searches, boundary-snapshot failure, concurrent writes and store-write failure, but nothing covers this ordering read. The nearest row (\"A reflog read or merge search returns `None`\", line 164) is scoped to the resolver paths, and the exit-code statement \"Exits 1 on a git or store error\" (line 275) is scoped to `slice-ranges`; neither `report history` nor `report project` states what a `run_git` `None` (timeout or failure) does there \u2014 hard error, unsorted fallback, or an empty history that reads as \"0 snapshots\". The global rule \"a `None` from `run_git` is never an answer\" (Integration Points) implies it must not be treated as empty, but the handling is implicit, and criterion 11 makes the table the normative list of failure behavior. Add one table row (or extend line 164's row) stating the handling and signal for this call, and the report commands' exit behavior on a git read failure.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "`compute_delta` and `is_within_floor` are 324's interfaces, attributed to 323",
+   "description": "Line 73 (also 236 and 326) credits \"323 (complete)\" with `baseline_report`, `compute_delta` and `is_within_floor`. `baseline_report` is 323's, but 323's own spec explicitly defers the delta (\"does not report a before/after delta \u2014 all of that is 324\"), and `compute_delta`/`is_within_floor` ship with 324 (pre-emption prompt delta measurement, status complete). The frontmatter `dependencies` lists only 400 and 402, omitting the 323/324 consumption entirely, while sibling slice 402 lists its cross-initiative prerequisites (320, 323) in frontmatter. Nothing blocks \u2014 324 is complete and the functions exist with the exact three-state semantics D8 requires \u2014 but the dependency record should name 324 so the audit-section contract points at its real provider.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:73"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`sq metrology slice-ranges` is a command beyond the slice plan's named deliverables",
+   "description": "The plan's entry 403 provides \"the slice-range record type, commit export, and report commands\". The standalone `slice-ranges` persistence command (D4) is a fifth CLI surface not named there. The rationale at line 206 is sound and traceable to the plan's durability criterion \u2014 persisting a fast-forward range before `git gc` expires the reflog, without paying boundary-snapshot (pyright) cost \u2014 and the command is thin over the resolver, so it is proportionate. If CLI surface must be minimized, batch range resolution could fold into `report slice`; otherwise record it in the plan's interface list so the added surface is deliberate.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:205"
+  }
+ ]
+}

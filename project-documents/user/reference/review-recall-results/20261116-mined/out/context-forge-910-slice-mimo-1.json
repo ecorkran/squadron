@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "WorkflowNavigator's three \"in-scope\" sites are the SliceStatus.status sites TD-3 excludes",
+      "description": "The scope table (line 36) classifies `WorkflowNavigator.ts`'s 3 sites as `NormalizedStatus` `=== 'complete'` checks, the component table (line 75) and migration step 4 (line 90) sweep them \u2014 but verified against source, all three are members of the `SliceStatus.status` workflow-position union (types.ts:267\u2013274), not `NormalizedStatus`:\n\n- `WorkflowNavigator.ts:312` and `:345` \u2014 `slice.status === 'complete'` where `slice` is `status.activeSlice: SliceStatus`\n- `WorkflowNavigator.ts:588` \u2014 `return { ...base, status: 'complete', taskProgress }` constructing a `SliceStatus` (`base: SliceStatus` in `deriveSliceStatus`)\n\nThis directly contradicts TD-3 (slice doc lines 104\u2013106: \"`SliceStatus.status` \u2026 is a different, larger union \u2026 touching it risks conflating two independent unions. Left untouched.\") and the success criterion at line 136 (\"`SliceStatus.status` remain untouched \u2026 not accidentally swept\"). Executing step 4 as written violates the design's own exclusion; skipping it makes WorkflowNavigator's true in-scope count 0 and leaves 3 pattern matches that defeat the \"zero matches in the six swept files\" check at line 135. Reconcile by dropping the WorkflowNavigator row and migration step 4 (and adjusting the success-grep expectations), since the sweep of `NormalizedStatus` sites is complete without them \u2014 not by amending TD-3, whose reasoning is correct.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification counts and the success grep don't fully reconcile with the code",
+      "description": "Minor count inaccuracies in the site table and Verification Walkthrough (all hedged as \"~65\"/\"~75\", so informational): `statusNormalizer.ts`'s value side is 14 occurrences (lines 5\u201318), not 13; the walkthrough's after-count of \"SliceStatus.status (4)\" matches only 1 occurrence under the stated pattern (`types.ts:269`, the sole `'complete'`); and `ConsistencyChecker.ts`'s \"36 sites\" includes 3 literal occurrences inside the comment at `ConsistencyChecker.ts:514` (`// 'complete' | 'in-progress' | 'not-started'`), which the success grep will match. That comment documents the pre-TD-1 type and is stale after the retype, so the sweep should update it (and the similar comment at `ProjectModelBuilder.ts:179`) or the grep at line 135 needs to be comment-aware \u2014 as written, \"zero matches in the six swept files\" is unachievable while the comment stands. (Also trivial: `ProjectModelBuilder.ts`'s `'unknown'` literal is at line 181, plus 256/269/270 \u2014 not \"line 179\" \u2014 though the exclusion conclusion is unchanged.)",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, proportionality, and architecture alignment hold",
+      "description": "The slice fits the 900-arch scope (\"pattern consolidation\", \"hard-coded values \u2192 constants\") and its principles: a themed slice with clear success criteria, no behavior change, with the existing test suite run before/after as the regression guard the \"No behavior changes without tests\" principle requires (the design states the test baseline explicitly: 931/934 core, 428/432 cli, 184/184 mcp). No new components, helpers, or abstractions \u2014 matching \"resist adding complexity\". The exclusions are verified as correct, not scope-dropping: `frontmatterSchema.ts`'s `VALID_STATUSES` is a distinct raw-token vocabulary including `deferred` (which `statusNormalizer.ts:26`'s own comment confirms has no `NormalizedStatus` counterpart), and `STATUS_MAP`'s keys are alias inputs. Slice-plan entry 910's assigned scope is covered; the single addition (TD-1's one-line retype of `TaskFileResult.inferredStatus`) removes a duplicate definition of the same three values and directly serves the plan's stated purpose, so it is not scope creep. The NFR-restate and failure-mode-enumeration criteria are N/A \u2014 the parent architecture states no latency/throughput NFRs, and the slice adds no I/O paths or message types; its one real failure mode (an intermediate non-building state between the retype and its producer's sweep) is explicitly handled by coupling them in migration step 1.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "TD-1's type widening is safe for all consumers; dependency direction is correct",
+      "description": "Verified every `inferredStatus` consumer (`ArtifactIntrospector.ts:122`, `WorkflowNavigator.ts:574/659`, `ConsistencyChecker.ts:286/325/352/392`, `taskFileParser.ts:60\u201376`): all use `===` comparisons or pass the value through to `NormalizedStatus`-typed fields (`types.ts:276/321`); no exhaustive `switch` exists that the widened union would break. TD-1's claim that nothing validates `inferredStatus` excludes `'deprecated'` holds. Dependencies point correctly inward: the slice consumes `STATUS` from `introspection/types.ts` (already imported with the value+type pattern in `statusDerivation.ts:1` and `WorkflowNavigator.ts:13`, confirming the \"already imports `STATUS`\" note), provides nothing, and leaves the exported `NormalizedStatus` type unchanged so CLI/MCP consumers are unaffected \u2014 matching the design's \"no public API signature changes\" claim.",
+      "file_ref": null,
+      "category": "type-safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#TD-1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "WorkflowNavigator's three \"in-scope\" sites are the SliceStatus.status sites TD-3 excludes",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification counts and the success grep don't fully reconcile with the code",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Scope, proportionality, and architecture alignment hold",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "type-safety",
+      "raw_category": null,
+      "summary": "TD-1's type widening is safe for all consumers; dependency direction is correct",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#TD-1",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-17T06:15:00.213634",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 74378,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 211511,
+  "cached_tokens": 169472,
+  "cache_write_tokens": null,
+  "completion_tokens": 20656,
+  "reasoning_tokens": 18289,
+  "duration_seconds": 446.4602478747256,
+  "cost_usd": 0.036935573,
+  "cost_basis": "alias_pricing"
+}

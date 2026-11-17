@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The concept guide (`guide.ai-project.000-concept.md`) is not present in the working tree, so every task that verifies it against the real guide is unverifiable as written",
+   "description": "The `project-documents/ai-project-guide/` submodule is registered in `.gitmodules` but is **not initialized** in this checkout \u2014 `project-documents/ai-project-guide/project-guides/` does not exist, and `grep -c '^## User-Provided Concept'` on the guide cannot succeed. Task 0.2 lists this check as a **STOP condition** (\"if any check diverges from the Verified facts table, stop and report to the Project Manager\"), Task 2.2 requires confirming \"the guide tree path is readable\", Task 6.3 requires both contract checks to pass against the real guide, and Task 8.3 requires a scratch copy of the guide. As written, the implementer hits the STOP condition at Task 0.2 and the slice stalls before any work starts \u2014 and the failure mode is indistinguishable from \"the design's premise is wrong\". The task file's own \"Verified anchors\" table asserts the guide \"contains `## User-Provided Concept` exactly once\" as a traced fact, which is not reproducible in the current tree. Task 0.2 needs an explicit submodule-init step (`git submodule update --init`) with its own failure branch, and the \"Verified anchors\" claim needs qualifying as \"traced in a checkout where the submodule was initialized\". Note also that the guide's *own* section list (Overview, Problem & Motivation, Target Users, Solution Approach, Initial Technical Direction, Development Approach, User-Provided Concept, Refined Concept) is what Task 4.1's binding seven-row mapping table is derived from \u2014 if the guide cannot be read, the mapping table cannot be validated against its source either.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:65"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The slice design's own \"Excluded\" boundary forbids the comprehension-flow edit that Task 7.4 mandates",
+   "description": "The design states under Technical Scope \u2192 Excluded: *\"Any change to the Preflight Graph Contract, the comprehension flow, `src/squadron/`, the installer, the frontmatter gate, or `guide.ai-project.000-concept.md`.\"* But Task 7.4 requires editing a sentence inside the comprehension flow (`commands/analysis/understand.md:393` \u2014 \"The concept flow and the initiative-candidates flow are slices 363 and 364\"), and Task 8.6's changed-file check expects \"only `commands/analysis/understand.md`\", which does include that file. The design's own Implementation Notes do authorize the sentence fix (\"362's sentence \u2026 is edited to reflect that the concept flow exists\"), so the design contradicts itself between its Excluded list and its Implementation Notes. The task file resolves the contradiction in favor of making the edit, which is the sensible reading, but the tasks should not leave the implementer choosing between a design \"Excluded\" clause and a design \"Implementation Notes\" bullet. The design's Excluded list should drop \"the comprehension flow\" (narrowing it to \"the comprehension flow's extraction mapping and seven-section scope\"), or the task file should cite the Implementation Notes line as the authority for the edit.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:287"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 8.6 requires `uv run pytest tests/skills/` but the slice's scope rule permits no Python change, and the same task's changed-file check contradicts the design walkthrough's file list",
+   "description": "Task 8.6's `git diff --name-only main` expectation is \"only `commands/analysis/understand.md`, the generated concept, this slice's documents, and the DEVLOG\", but the design's Verification Walkthrough step 7 lists the same set and additionally names `.understand-anything/` cleanliness \u2014 both are consistent. The problem is the `uv run pytest tests/skills/` bullet: `tests/skills/` covers the skill-pack manifest/installer/resolver, not the `commands/analysis/` markdown content. It exercises \"the pack install path\", which this slice does not touch, and it does not exercise anything the slice changed \u2014 the skill file's content is not asserted by any test in the repo. Meanwhile the slice's own discipline checks (no whole-graph load, no `function`/`class` node read, only one changed non-document file) are verified only by *inspecting the written prose* in Task 8.6 and by the walkthrough's own narrative, not by anything mechanical. Since Success Criterion 11 (\"the only changed non-document file is `commands/analysis/understand.md`\") and Criterion 12 (\"a concept a PM would edit rather than discard\") are the criteria most at risk of silent regression, the walkthrough should either (a) drop the irrelevant `tests/skills/` invocation and say so, or (b) state explicitly that no automated test covers the skill's markdown, and that the discipline check is prose inspection plus `git diff` \u2014 so the implementer does not treat a green pytest run as evidence for Criterion 11.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:344"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 4.1's binding seven-row mapping table cannot be validated against its source without the guide",
+   "description": "Task 4.2 verifies the table \"row-for-row\" against the *design's* table, which is a self-consistency check \u2014 it confirms the skill file matches the design, not that the design's rows match the concept guide's actual section list. The design itself says the table is \"The concept guide's own sections, in its order\", and the re-run semantics in Task 6.2 refer to \"Refined Concept sections\" \u2014 a section group the mapping table never names. Given the guide is the upstream authority and is not in the tree, Task 4.2 should add a step that reads the guide's section headings (once the submodule is initialized per the first finding) and confirms the seven rows are a subset of them in the same order, and states explicitly which guide sections the table intentionally omits and why.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:171"
+  }
+ ]
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`init()` timeout supply is contradictory between Task 15 and Task 17",
+      "description": "Task 15's first bullet gives the signature `init(operationPath: string)` and says it runs the submodule update \"with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`\" \u2014 i.e. the timeout is built into `init()`. Its second bullet then says `sync()` must call `init()` \"without the timeout: pass the timeout as an `init()` option so `sync()` and `update()` keep unbounded behavior (D10)\" \u2014 i.e. the timeout is opt-in via a parameter. These cannot both hold: if `init()` applies the constant internally, `sync()` inherits the bound and D10's \"install/update stay unbounded\" is violated; if the timeout is opt-in, no task says who passes `GUIDE_INIT_TIMEOUT_MS` \u2014 Task 17's `ensureCheckout()` steps (line 249) never mention supplying it, so a literal implementation leaves auto-init unbounded, the exact hang D10/F004 was raised to close. Pin one shape (e.g. `init(operationPath, opts?: { timeoutMs?: number })` with `ensureCheckout()` passing `GUIDE_INIT_TIMEOUT_MS`) and name the supplying caller in Task 17.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config-file alias deprecation warning is implemented but never tested",
+      "description": "The slice design's functional success criterion (925-slice\u2026md:193) requires: \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning.\" Task 7's second bullet implements the print (`guidesInstallAction()` emits the config-path deprecation warning from Task 5's return shape), but no test asserts it: Task 6(b) only checks that the manager reports the alias, and Task 8's CLI cases cover only the `--strategy manual` flag path, not the config-sourced path's stderr output. Add one case to Task 8 (config with `guide.git_strategy: manual`, no flag \u2192 deprecation line on stderr) so the criterion is verified end-to-end.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:130"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit directives live inside checklist items instead of plain `**Commit**:` lines",
+      "description": "The file has no `**Commit**:` markers as such; commit messages are embedded in the \"Success criteria\" checkbox text (lines 100, 127, 153, 204, 224, 246, 276, 312, 333, 342, 373, 389, 412). The placements themselves are correct \u2014 each sits at a working, tested point after the paired test task passes, not after every task and not only at the end \u2014 so this is purely a format note: extracting them as plain `**Commit**:` lines would match the convention and keep them out of checklist items the task-checker ticks off. Absence of markers is acceptable; no action strictly required.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 10 is not independently completable as written",
+      "description": "Task 10's own success criterion is \"typecheck passes once Task 11 populates the field\" \u2014 i.e. its completion depends on a later task. Adding a required `checkout: SubmoduleCheckoutState | null` field to `GuideInfo` will break existing constructors until Task 11 (or an interim `checkout: null` fill) lands. Either make the field optional in Task 10 and narrow it in Task 11, or merge Tasks 10\u201311 into one task; as-is the pair is fine in sequence but Task 10 alone cannot reach its stated success state.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:186"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage is complete",
+      "description": "All ten functional criteria map to tasks: fresh-clone `cf build` + stderr SHA notice and clean `--json` stdout (Task 21); read-only `cf guides info` reporting \"Checkout: not initialized\" (Tasks 12, 24, with directory-unchanged assertions); out-of-sync warning without mutation (Tasks 18, 21); `--strategy manual` alias + `Method: tarball` output (Tasks 7, 8); config alias install (Tasks 5\u20137, subject to the test gap above); `cf init --strategy tarball` with no `.gitmodules` (Task 27); both `--help` outputs listing three strategies (Tasks 25\u201327); managed-directory line and README parity (Tasks 28\u201330); malformed config failing explicitly (Tasks 5, 6c). Technical criteria are likewise covered (real-git submodule fixture Tasks 9/12, `ensureCheckout` branch tests Task 18, `normalizeGuideMethod` rejection cases Task 2, the two grep-based literal checks in Tasks 3/5/7 and re-verified in Task 32, CHANGELOG/DEVLOG Task 31). The slice restates no NFR (F006 explicitly closed), so no `tests/load/` task or CI gating is required. Sequencing respects dependencies throughout: the fixture (Task 9) precedes every consumer, `gitExec` timeout (13\u201314) precedes `init()` (15\u201316), and `ensureCheckout` (17\u201318) precedes all call-site wiring (19\u201323). No scope creep found; Task 20's added `PROMPT_FILE_RELATIVE_PATH` grep is a completeness fix to the design's call-site enumeration, not extra scope.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md:183"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "`init()` timeout supply is contradictory between Task 15 and Task 17",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Config-file alias deprecation warning is implemented but never tested",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:130",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Commit directives live inside checklist items instead of plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 10 is not independently completable as written",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:186",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage is complete",
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md:183",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-17T06:15:24.406652",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 28472,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 68859,
+  "cached_tokens": 45824,
+  "cache_write_tokens": null,
+  "completion_tokens": 8778,
+  "reasoning_tokens": 7057,
+  "duration_seconds": 174.97664825012907,
+  "cost_usd": 0.017840381,
+  "cost_basis": "alias_pricing"
+}

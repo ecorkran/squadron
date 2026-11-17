@@ -1,0 +1,19 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Dropped-topics criterion is authored but never verified in the produced document",
+   "description": "Success Criterion 4 requires that why-now, audience-evolution, and methodology-preference \"appear nowhere in the document \u2014 neither as content nor as gap markers,\" and the design treats this as central to the whole redesign. The rule is authored into the flow in Task 4.1 (task file line ~171), but Task 8.1's written-document checklist (lines 304\u2013318) verifies filename/divergence, question count and timing, verbatim User-Provided Concept, README citations, signals, Solution Approach, corrected description, and provenance lines \u2014 it never checks the generated `000-concept.squadron.md` for absence of the three dropped topics as either content or gap markers. Task 5.3 checks the skill's *question inventory*, not the output document's dropped-topic absence. Authoring a rule plus running the flow once does not demonstrate the output complies with a criterion the design calls out explicitly; add a dropped-topics-absent assertion to 8.1. (A parallel, smaller instance: 8.1 confirms the inferred-claims provenance line exists but never checks that each `[INFERRED]` sentence satisfies the checkable rule from 7.1 / SC10.)",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox subitems and appear after every authoring task, contrary to the `**Commit**:` convention",
+   "description": "All eight commit markers (lines 99, 125, 164, 185, 221, 254, 296, 351) are written as `- [ ] Commit: \\`feat: ...\\`` \u2014 checkbox items with a `Commit:` label \u2014 rather than the required plain-line `**Commit**:` markers (\"plain lines, never checkboxes\"). They also appear after every authoring/verification task group (1\u20138), whereas markers should sit at working, tested points and not follow every task. Note the genuine tension with CLAUDE.md's \"each item and subitem should have a `[ ]` checkbox\" rule; the commit-marker-specific convention is the more specific one and should govern here. This is a formatting/convention deviation only; it does not block implementation.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  }
+ ]
+}

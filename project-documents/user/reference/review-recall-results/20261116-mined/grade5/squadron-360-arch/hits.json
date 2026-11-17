@@ -1,0 +1,45 @@
+{
+ "case": "squadron-360-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Output Conventions: \"Both capabilities write to the existing `project-documents/user/analysis/` directory\" (line 243) and the settled list (lines 332-333), while Capability 1 Outputs writes the concept to `project-documents/user/project-guides/000-concept.{project}.md` (line 148). **VALID**: self-contradiction. Needs: doc alone. Raised by the original review (F001; the response calls it \"a factual error\").",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [
+     0
+    ],
+    "r11": [],
+    "r12": [],
+    "r13": [
+     4
+    ],
+    "r14": [
+     4
+    ],
+    "r15": [
+     0
+    ],
+    "r16": [
+     1
+    ],
+    "r17": [],
+    "r18": [
+     0
+    ],
+    "r19": []
+   }
+  }
+ ],
+ "note": "Borderline: r14 finding 4 raises the contradiction as a secondary point inside a finding mainly about 000 vs 001 concept index; r13 finding 4 mentions it as one part of a combined output-location/index finding."
+}

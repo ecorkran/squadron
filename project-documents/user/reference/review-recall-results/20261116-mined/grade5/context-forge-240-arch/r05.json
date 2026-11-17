@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The configured pre-task and pre-implementation gates have no insertion point",
+   "description": "The only gate branch described is between Priority 5 (`in-implementation`) and Priority 6 (`complete \u2192 advance`). That can gate `pre-advance`, but it cannot enforce the configured `pre-tasks` or `pre-implementation` transitions: those paths return recommendations at Priorities 4 and 5, before this branch is reached. The proposed `pending-review` and `review-failed` states are also defined around completed tasks, not those earlier stages. Either specify gate checks at each relevant transition, with the artifact and state each one evaluates, or defer those transition types. The checker has a related mismatch: its rule is triggered by a checked slice-plan entry, while the navigator\u2019s gate is triggered by task completion, so the two surfaces can disagree about whether a review is required.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Gate insertion point"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The gate output does not identify which review a consumer should run",
+   "description": "The examples return `recommendation: \"review\"` for every gate, while the configured `reviewType` (such as `slice`, `tasks`, or `code`) appears only in the rationale text. `NextAction` is explicitly left unchanged and has no structured field for the gate or review type. A runner consuming `workflow_next` therefore cannot reliably route to the right review agent without parsing prose. This also falls short of the stated goal that runners act on named states without parsing recommendation strings. Include the applicable review type and transition in the structured output, or constrain v1 to one review type.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Gate insertion point"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Configuration shape and scope are unresolved against the existing config API",
+   "description": "The design makes per-transition overrides central to expressing which reviews are required, but defers whether they are nested tables or flat dotted keys to slice design. The existing `ConfigManager` accepts registered scalar keys; `get()` rejects unregistered keys, and its `ConfigKeyDefinition` does not model a transition map. The document also says review policy should resolve at worktree scope via 180, but the existing resolution is project \u2192 user \u2192 default; 180\u2019s worktree handling does not establish a worktree-scoped config layer. These are implementation and policy-ownership decisions that affect both `WorkflowNavigator` and `ConsistencyChecker`, not merely syntax choices. Specify the supported representation and scope, and how both components receive resolved policy.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Technical Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The promised parse-failure rationale cannot be produced by the existing frontmatter parser",
+   "description": "The design says malformed or unreadable review files become `UNKNOWN` and that the rationale will name the parse failure. The existing `parseFrontmatter()` catches read errors and returns `{ found: false, data: {} }`; it also returns that same result for missing, malformed, and unclosed frontmatter. The gate cannot distinguish these cases or report the cause through that result. Specify a parser/result change that preserves failure information, or define a review-specific read-and-parse path. Otherwise the documented behavior is not implementable using the stated existing machinery.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Verdict handling"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "A stale passing review can continue to clear the gate",
+   "description": "Discovery chooses the lexicographically last matching filename, but the design does not bind a review to the code or other artifact revision it assessed. An older `PASS` can therefore clear the gate after the slice changes, and `provenance` is explicitly opaque to CF. Define how the gate determines review freshness (for example, a reviewed revision or artifact identity), or explicitly accept and document that a review remains valid regardless of subsequent changes.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Review-artifact discovery"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "V1 carries forward mechanisms that have no v1 behavior",
+   "description": "The planned configuration includes `pre-slice-plan`, while its gate logic is explicitly deferred; the design also reads and stores numeric `score` without enforcing it in v1, and lists opaque `criteria` and `provenance` with no v1 consumer. These create schema and implementation surface for capabilities that do not contribute to the stated v1 gate. Defer the initiative-level configuration until its gate ships, and defer score storage and other unused review fields until a consumer or enforcement rule requires them.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Anticipated Slices"
+  }
+ ]
+}

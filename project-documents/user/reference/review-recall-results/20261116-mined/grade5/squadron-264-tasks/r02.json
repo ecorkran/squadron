@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Success criterion 6's live non-SDK model dispatch has no task that closes it",
+   "description": "Success criterion 6 in the slice design requires two things: (a) a materialized `cf_workflow_status` executor returns actual project status \u2014 covered by Task 8.2 and walkthrough step 2 in Task 9.1 \u2014 and (b) \"a dispatch with a tool-capable non-SDK model can call `cf_build_context` and receive assembled context (walkthrough \u00a74).\" Task 9.1 explicitly runs only walkthrough steps 1\u20133, and Task 9.3 records that step 4 \"remains open alongside 263's demo.\" No task in the breakdown performs or schedules the criterion-6 dispatch. The environmental constraint (the `sq run` CLAUDECODE guard refuses inside Claude Code) is real and correctly documented, but as written the criterion is closed by no completable task \u2014 a reviewer checking criteria against tasks will find this one unmet. Recommend either adding a task that runs the step-4 pipeline from a standard terminal, or amending the slice design's success criterion 6 to explicitly scope step 4 as a deferred/manual verification with a named owner.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:290"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Non-text-block result-mapping rule is implemented but never tested",
+   "description": "The design's Result mapping rules include \"Non-text blocks are noted by type in the content, not dropped silently\" (slice design line 137), and Task 4.4.2 implements it (task file line 137). Success criterion 2 says executors must map \"results per the Result mapping rules.\" The Task 3 fake server provides fixtures for the other three rules (`echo` \u2192 text join, `fail` \u2192 isError, `empty` \u2192 zero blocks), but no fixture emits a non-text block (e.g., an image or resource block), and Task 5's test list has no case for it. If the non-text path regresses to silent-drop, the suite stays green. Suggest adding one fake-server tool returning a non-text block plus one assertion in Task 5.1; alternatively, confirm this rule is behavior-only and doesn't require a test.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit guidance is expressed as checkbox success-criteria lines, not plain `**Commit**:` markers",
+   "description": "There are no `**Commit**:` markers in the file; commit instructions live in the \"Commit protocol\" section (line 57) and as `[ ]`-checkbox lines inside each task's success criteria (lines 84, 96, 120, 152, 182, 220, 251, 274, 299). Per the review rules a file with no markers is acceptable, and placement is substantively correct \u2014 one commit per task, after that task's scoped tests pass, neither after every subtask nor only at the end. Flagging only for format awareness: if the plain-line marker convention is desired, these would need to be lifted out of the checkboxes.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 2 is small enough to fold into Task 1, but sequencing is correct as-is",
+   "description": "Task 2 adds two default-value assertions for the keys Task 1 just created \u2014 roughly a 5-line diff split into its own task with its own commit. It doesn't violate any rule (tests immediately follow implementation, effort is 1/5, no wasted setup), and the breakdown's stated sequencing rationale covers it. Noted only as a possible merge candidate if task count matters; not blocking.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:86"
+  }
+ ]
+}

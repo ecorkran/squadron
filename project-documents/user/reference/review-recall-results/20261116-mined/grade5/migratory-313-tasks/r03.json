@@ -1,0 +1,19 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 2.2 pins implementation detail consistent with the slice design",
+   "description": "Task 2.2 dictates the exact numpy idiom (`np.mod(..., out=...)`, boolean-mask `np.abs`/`-np.abs` flips) rather than just the behavioral contract. This is acceptable here because the slice design's \"Policy Semantics\" section itself specifies these exact semantics (modulo handling of negative/multi-width overshoot, idempotent abs-based velocity flips) \u2014 the task is faithful to the parent, not adding unspecified detail. No action needed; flagged only so reviewers know this level of step detail is inherited, not invented.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "No load-test or CI task needed",
+   "description": "The slice design restates no NFR and no performance requirement beyond \"negligible cost for the default path,\" which the OPEN-path gating and the mock test in Task 3.4 cover functionally. No `tests/load/` task is required, and none is missing.",
+   "location": "project-documents/user/slices/313-slice.world-bounds-policy.md"
+  }
+ ]
+}

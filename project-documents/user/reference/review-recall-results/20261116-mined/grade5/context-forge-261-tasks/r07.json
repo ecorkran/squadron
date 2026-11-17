@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Renderer must switch on five outcome kinds, but four of them have no specified or tested output",
+   "description": "Task 8 requires an exhaustive `switch` on `outcome.kind` with a `never` check, and the design's `AdoptionOutcome` union has five kinds (`adoption-in-progress`, `adoption-closed`, `already-planned`, `brownfield`, `greenfield`). Task 8's bullet list only says the outcome bullet carries \"outcome and reason\" and only describes source volume \"when the outcome carries it\"; Task 8T then enumerates brownfield, adoption-in-progress, `NOT_EVALUATED`, the notice, \"none found\" and squadron \u2014 no case for `adoption-closed`, `already-planned` or `greenfield`. The design's Technical Requirement asks for `renderAdoptionFacts` over \"every outcome,\" and since those three kinds are unreachable through the resolver (Task 9 step 3 selects only brownfield/adoption-in-progress/explicit), a junior AI will either invent bullet text with no test or add a silent fallthrough \u2014 which AGENTS.md forbids. Fix by naming the text for the three unreachable kinds, or by having Task 8 throw an explicit `AdoptionError`/`Error` for them and adding those cases to 8T.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Squadron bullet test is circular and never pins the required D8 text",
+   "description": "Task 8T's only assertion about the squadron bullet is \"the squadron bullet equals `renderSquadronFact()`\" \u2014 a self-referential check that passes whatever string the function returns. D8 specifies the sentence verbatim (\"Squadron: unavailable. This cf version does not run squadron's capability probe, so no probe output is present.\") and it is the load-bearing statement the guide prompt keys its CF-only path on (the one live check is Task 15's step-2 walkthrough). Assert the literal string in 8T so 262's isolated-function replacement is protected by a test, not only by a manual run.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 12 is the largest single task in the breakdown and puts 13 fixtures in one test file",
+   "description": "Task 12 (effort 3) enumerates fixtures 1\u201313 including a shallow `git clone --depth 1 file://` of another fixture and a monorepo with moved source, into either `CoreServiceFactory.test.ts` or `pipeline-integration.test.ts` \u2014 the latter already exists and both risk the ~300-line source convention. Splitting into two tasks with their own commits (1\u20137 detection outcomes; 8\u201313 state, phase, explicit-instruction, read-only and missing-profile) would give a junior AI two verifiable checkpoints. The fixture list itself is not scope creep: each entry maps to the design's Technical Requirements.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Context Summary's claim that 260's detection tests already use `it.skipIf` is not visible in `tests/detection`",
+   "description": "The skip instruction in 3T (`chmod 000`/`EACCES`) and 9T (`chmod 444`) is correct and necessary \u2014 I confirmed `pathPresent` rethrows non-ENOENT errors, so those tests genuinely cannot pass as root \u2014 but grepping `packages/core/tests/detection` for `skipIf`, `chmod`, `platform` or `EACCES` returns nothing, so the phrase \"as the 260 detection tests do\" points at no precedent I could find. Drop the appeal to precedent or name where it actually lives, so the junior AI does not go hunting.",
+   "location": "packages/core/tests/detection/pathPresent.test.ts"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`context_build` returning the `AdoptionError` is covered only by existing generic handling plus the walkthrough",
+   "description": "The functional requirement names both surfaces: \"cf build exits non-zero \u2026; `context_build` returns it as an error.\" Task 10T asserts rejection at the integrator, fixture 12 asserts it at the pipeline, and Task 15 step 4 checks the CLI exit live; on the MCP side the requirement falls out of `generateContext` throwing into `registerContextTools`' existing catch \u2192 `errorResult` (`packages/mcp-server/src/tools/contextTools.ts:92-93,210-215`). Task 11 adds only the `persist`/`read-only` assertions to `contextTools.test.ts`. If that file has no existing case where the mocked `generateContextFromProject` rejects, one line asserting `isError` for an `AdoptionError` would close the surface-level requirement explicitly; I did not verify whether such a case already exists there.",
+   "location": "packages/mcp-server/tests/contextTools.test.ts"
+  }
+ ]
+}

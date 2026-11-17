@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Missing MCP error-result coverage",
+      "description": "Task 9T and Task 12 verify that a missing guide profile raises or rejects with `AdoptionError`, but no task verifies the slice criterion that `context_build` returns that error as an error result. Add an MCP-path assertion for the missing-profile or missing-prompt case, including that the concept prompt is not produced.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:193-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification task requires unscoped defect fixes",
+      "description": "Task 15 says to fix any defect found during verification in its own commit, without limiting fixes to this slice. That could pull unrelated work into the task breakdown. Limit fixes to defects in Slice 261; route unrelated defects outside this slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-267"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Missing MCP error-result coverage",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:193-200",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Verification task requires unscoped defect fixes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-267",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T05:31:34.033163",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 54134,
+  "cached_tokens": 49408,
+  "cache_write_tokens": null,
+  "completion_tokens": 649,
+  "reasoning_tokens": 436,
+  "duration_seconds": 26.31145333405584,
+  "cost_usd": 0.00129118,
+  "cost_basis": "alias_pricing"
+}

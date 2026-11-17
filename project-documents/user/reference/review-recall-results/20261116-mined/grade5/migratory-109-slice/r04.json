@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Breaking `BulkForce` change is not coordinated with slice 103, which is designed against the old signature",
+   "description": "This slice makes a breaking change to the `BulkForce.__call__` signature (`neighbor_lists: list[NDArray[np.intp]]` \u2192 `neighbors: NeighborData`). But the already-written 103 design (predator-prey, `not_started`) is built on the *old* signature: it states \"No changes to tick()\" and \"Forces receive the same `(state, neighbor_lists, profiles, active_indices)` arguments,\" and its `FlightForce`/`PursuitForce` sketches index into `neighbor_lists`. The slice plan lists 103's only dependency as (101), not 109, and the `parent` field does not make 103 depend on 109. The 109 frontmatter lists `103-predator-prey-dynamics` under `interfaces`, showing awareness, but neither document records a sequencing rule or a plan to re-baseline 103's force sketches to `NeighborData`. If 103 lands before 109, its two new forces will be written against a signature 109 then breaks and must be reworked; if 109 lands first, 103 must be updated to consume `NeighborData`. The gap the requirement leaves unmet: the architecture \"Clean boundaries \u2014 internal representation choices \u2026 are replaceable without affecting consumers\" and the plan's expectation that \"all existing implementations and callers update in the same slice\" are both undermined by an undocumented, out-of-scope consumer (103) that will silently break. Add an explicit note that 103's forces must target the post-109 `NeighborData` signature, or that 109 must also update 103's design/sketch.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#BulkForce-Protocol-Signature-Change"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "World-server-side `BulkForce` implementors (308/314) are affected but only implicitly named",
+   "description": "The \"Technical Decisions\" note that non-neighbor forces (`WorldBoundsRepulsor`, `ConstantDrift`, `VelocityDrag`) \"accept the new parameter but ignore it.\" `WorldBoundsRepulsor` (slice 314, complete, world-server initiative) and the `force_builder` registry (slice 308) are concrete, already-merged `BulkForce` consumers that must be signature-updated when this slice lands, yet they belong to a different initiative. The \"Included\" item \"Update to all callers and tests that construct or consume `BulkForce`\" and the plan's \"all existing implementations and callers update in the same slice\" do cover this, so it is not dropped scope \u2014 but the doc never names the world-server test files and the `force_builder`/`WorldBoundsRepulsor` call sites as in-scope. The requirement left unmet: the plan's \"callers update in the same slice\" cannot be verified complete without an explicit statement that the world-server-side force implementors and their tests are included (or explicitly deferred with a follow-up). Recommend one sentence naming `migratory_server/force_builder.py`, `WorldBoundsRepulsor`, and the server test suite as updated in this slice, to avoid the cross-initiative break being discovered during 109's run.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#BulkForce-Protocol-Signature-Change"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Parent \"Tick determinism\" NFR is not restated or verified",
+   "description": "The slice rewrites the hot path and introduces new per-tick array allocation (`NeighborData`, padded arrays, masked gathers). The parent architecture lists **Tick determinism** as a first-class design goal (\"Given the same state and inputs, a tick produces the same outputs\"). This slice doc never mentions determinism \u2014 not in Value, Success Criteria, or the Verification Walkthrough. The behavioral-equivalence test compares old-vs-new on *one* shared input, and \"full test suite passes\" does not assert that repeated identical ticks produce bit-identical output. The specific target the gap leaves unmet: a regression guarantee that the vectorized path is deterministic across repeated ticks (no NaN-from-uninitialized-memory, no ordering sensitivity in the padded/masked reduction). Add a success criterion + a repeated-tick determinism assertion (identical initial state \u2192 `np.array_equal` across two runs) mirroring slice 100's `TestDeterminism`.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Success-Criteria"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`NeighborData.mask` is redundant with `indices`",
+   "description": "The doc defines `mask[i,j] = True iff j < counts[i]` *and* defines `indices[i, counts[i]:] = -1`, and states padding is \"never dereferenced thanks to `mask`.\" The mask is a pure, deterministic function of `indices` (`indices != -1`) and of `counts`, so storing a third `(n_active, max_neighbors)` boolean array duplicates state that a later slice (105 batch query, GPU offload) could recompute. This is minor and the doc already prefers simplicity, but dropping `mask` and deriving it (or relying on `counts`/the `-1` sentinel) would reduce the memory footprint and the number of things that must stay in sync. Not blocking; flag for proportionality.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor-Data-Representation"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"Constant Python overhead regardless of agent count\" is a claim about the plan, not what the padded-array design guarantees at the target scale",
+   "description": "The Overview states \"force computation cost \u2026 with constant Python overhead, regardless of agent count or clustering density.\" The doc's own \"Padded Array vs. Sparse/COO\" decision concedes that at 100K+ a CSR representation \"may become necessary,\" and a padded `(n_active, max_neighbors)` gather scales total work with `n_active \u00d7 max_neighbors`. So the *Python-overhead* is O(1), but total CPU cost is not constant in agent count; at the architecture's \"tens of thousands\" target, memory for the padded arrays (indices, mask, gathered positions/velocities per force) and per-force O(n\u00b7k) NumPy work can approach the 50ms budget. The slice's actual deliverable \u2014 the observed 100-agent overrun fix within the 50ms budget \u2014 is sound, but the headline \"regardless of agent count or clustering density\" overstates what this design guarantees. Recommend anchoring the acceptance criterion to the 50ms budget at the validated 100-agent default (which the doc does in the Value/Verification sections) and explicitly bounding the guarantee, rather than implying unbounded constant time. This is inherited from the plan's own wording, so it is a precision nit, not a scope-creep finding.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:19"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Minor: verification command uses a non-path `--config` value",
+   "description": "Step 2 of the Verification Walkthrough runs `python -m migratory_server --config default`, whereas every other slice uses `--config config/default.yaml` (300, 301, 305, 313, 314). If `default` is not a resolvable path/alias in the server's config loader, the step will fail. Cosmetic, but it is the doc's primary runtime-verification step for the NFR claim; align it with the established `--config config/default.yaml` form.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:213"
+  }
+ ]
+}

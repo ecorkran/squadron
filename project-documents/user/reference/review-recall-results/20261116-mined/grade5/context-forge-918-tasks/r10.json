@@ -1,0 +1,54 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 1's unindexed `[~]` example lacks the `**bold**` wrap the unindexed regex requires, so the fixture line Task 5 asserts against would be silently dropped",
+   "description": "Task 1 tells the implementer to add \"one unindexed `[~]` line (e.g. \u2026 `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.`)\" and scopes the bold-wrap note to \"the indexed form\" only. `PLAN_UNINDEXED_RE` is `/^(\\d+)\\.\\s+\\[([ xX~])\\]\\s+\\*\\*([^(].*?)\\*\\*\\s*(.*)/` \u2014 the name must be `**`-wrapped, and every real unindexed entry in production fixtures follows that shape (`packages/core/tests/fixtures/introspection/unindexed-slice-plan.md:14`, `mixed-index-slice-plan.md:15`). As written, the new line matches neither regex, stays silently dropped, and Task 5's \"unindexed `[~]` entry parses with `status: 'deprecated'`, `indexSource: 'fallback'`\" fails for a reason unrelated to the code under change \u2014 exactly the \"spec example that doesn't match the format the parser consumes\" trap CLAUDE.md warns about. Restate the example as `N. [~] **Feature Epsilon** \u2014 cut for scope.`",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:9"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 1's fixture edit breaks six existing assertions; Task 5 anticipates two of them",
+   "description": "Adding an unindexed entry to `sample-slice-plan.md` gives it `index = unindexedCounter` = **1** (the parser counts unindexed matches, it does not use the list number), so after `entries.sort()` it sorts to the front and shifts every positional assertion:\n- `:10` `toHaveLength(5)` and `:44-45` `totalSlices/completedSlices` \u2014 both anticipated by Task 5.\n- `:12` `entries[0]).toEqual({index: 101, \u2026})` and `:22` `entries[2]).toEqual({index: 103, \u2026})` \u2014 **not** anticipated; both fail on the re-sort.\n- `:126-128` \"tags every entry `indexSource: explicit` when the plan uses only the indexed format\" \u2014 becomes false by construction (and its test title becomes a lie). This assertion exists to pin slice 913's explicit/fallback discrimination against this fixture.\n- `:164-167` `entries[0].description` / `entries[1].description` \u2014 shift and fail.\n- Outside the parser suite: `packages/core/tests/introspection/ArtifactIntrospector.test.ts:48` asserts `totalSlices` is 5 for the same fixture and is not mentioned in any task; Task 1's \"Do not alter any existing line in the fixture\" gives no instruction to touch it.\n\nA junior AI given no guidance for these failures will most likely weaken or delete the 913-purity assertion, or abandon the fixture edit. The slice design already sanctions the cheaper path (\"extend the existing `sample-slice-plan.md` **(or add a sibling fixture)**\"): put both `[~]` lines in a new `deprecated-entry-slice-plan.md`, which removes the length/total/completed re-edits, the positional shifts, the purity-test invalidation and the ArtifactIntrospector change in one move. Task 1's success criteria need a second option, not an unconditional edit of the shared fixture.",
+   "location": "packages/core/tests/introspection/slicePlanParser.test.ts:12-167"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "One unindexed `[~]` entry is enough for Decision 2; the second one buys no criterion coverage and causes the breakage above",
+   "description": "Success criterion #1 and #2 are indexed/unindexed `[~]` parsing, so both formats should be exercised \u2014 but they need not be exercised by the *same* fixture edit. The indexed line alone covers criterion #1, #3 and #7; the unindexed line only adds `~`-on-fallback coverage. Keeping the unindexed line in a sibling fixture (finding above) gets that coverage at zero blast radius. This is the one place the breakdown is overweight for a two-regex-character-class change.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:72-76"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commits land only after test tasks; the parser's arithmetic (Decision 3) has no green checkpoint until Task 5",
+   "description": "Tasks 2, 3 and 4 (the whole parser change, including Decision 3's `completedSlices` widening) carry no `**Commit**:` line, while each of the five test tasks (5, 7, 10, 11, 12) carries one. Consequences: the only commit on the parser change bundles the unit test with it (Task 5), the `statusDerivation` field (Task 6) has no commit of its own, and Tasks 8 and 9 (two production wiring changes) leave a third checkpoint uncommitted. Per CLAUDE.md (\"Keep commits semantic; build after all changes\"), Tasks 2+3+4 are one semantic change and Tasks 6+8 and 7+9 are two more. Suggested consolidation: commit after Task 4 (parser change, observed red-then-green by Task 5), after Task 8, after Task 10 (threading complete), and keep 11 and 12 as the two genuinely separate verification checkpoints where they already sit. This drops the commit count from six to four without losing a recoverable state.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:36-76"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "A third entry-status resolution path is named neither in the design's analysis nor in any task",
+   "description": "`WorkflowNavigator.resolveEntryStatus` and `sliceListAction` are Tasks 8 and 9, but `deriveEntryStatus` has four call sites: `ProjectModelBuilder.ts:445` (`modelInitiatives`, which reads `parseSlicePlan()` entries) and `packages/cli/src/commands/arch.ts:112,114` both build signals without a plan-line status, and `ProjectModelBuilder.ts:271` passes `isChecked: false`. A `[~]` entry feeding those paths will resolve as `not-started` from `entry.status === Deprecated`, i.e. the parser's signal is discarded a second time in a different surface. Two of these were named nowhere in the design's \"Current Behavior\" section, so Task 13's `pnpm -r test` is the only thing that could catch a break, and there is no task that covers the `cf overview`/MCP model surfaces if they do not break. Either fold a one-line \"does `ProjectModelBuilder.ts:445` need `planLineStatus`?\" check into Task 13's success criteria, or state explicitly in Task 9's scope note that the initiative-plan paths are out of scope by decision \u2014 a junior AI should not have to make that call.",
+   "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "No load-test or CI-wiring items expected here; the absence is not a gap",
+   "description": "The slice frontmatter carries no NFR and the design states none (no latency/throughput/reliability target), so the `tests/load/` + CI-gating pairing does not apply to this breakdown, and no task file, design doc or task file is required by the criteria (the Context Summary calls that out: \"without a slice-design doc or task file ever needing to exist\").",
+   "location": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md:1-60"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`[X]` regression coverage has no fixture basis",
+   "description": "Task 5's third step says to assert existing `[ ]`/`[x]`/`[X]` parsing is byte-identical, but no slice-plan fixture anywhere under `packages/core/tests/fixtures/` contains an uppercase `[X]` line and no existing test asserts one (the only `[X]` in the fixture tree is a task-file checkbox at `all-complete-tasks.md:16`). Since `[ xX]` \u2192 `[ xX~]` is a strict superset, `X` behaviour is unchanged by inspection; restate the step as `[ ]`/`[x]` plus the new `[~]` lines, or drop `X` rather than inventing a fixture line for it.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:60"
+  }
+ ]
+}

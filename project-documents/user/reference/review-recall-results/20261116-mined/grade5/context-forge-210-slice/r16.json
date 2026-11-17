@@ -1,0 +1,61 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Source of truth for the copilot compilation is ambiguous and one reading breaks a parent success criterion",
+   "description": "The file-layout block says instruction files come \"from `.claude/rules/typescript.md`\" and prompt files \"from `.claude/skills/commit.md`\" \u2014 i.e. the copilot backend reads CF's *generated* Claude artifacts. The existing guide script does not work that way: its `claude` case compiles from `$SCRIPT_DIR/../project-guides/rules` (verified in `project-documents/scripts/setup-ide`), and its cursor/windsurf cases copy that same rules dir \u2014 no backend reads `.claude/`. If the copilot backend takes `.claude/` as input, then `cf setup-ide copilot` on a fresh project produces nothing, which contradicts the slice-plan success criterion \"`cf init --ide copilot` runs end-to-end on a fresh directory: git init, project create, guide install, setup-ide copilot\" (no claude step in that sequence). Worse, that premise is already unsound: the only skill in this repo is `.claude/skills/analyze/SKILL.md` (a subdirectory), while `propagateToWorktrees` copies `entry.isFile()` at the top level of each dir, so `.claude/skills/*` yields zero files today and no flat `.claude/skills/commit.md` exists to translate. Fix the design by naming one source (`project-guides/rules/` + `project-guides/agents/` in the guide, mirroring the claude backend) and by defining the actual skill input shape (`<name>/SKILL.md`, whose frontmatter carries `name`/`description`/`disable-model-invocation`, not `argument-hint`/`agent`/`model`/`tools`).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#technical-scope"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Managed-marker safety gate covers 2 of 4 output locations and leaves mixed states undefined",
+   "description": "Step 4 checks only `.github/copilot-instructions.md` and `AGENTS.md`. The slice also writes `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`, and users demonstrably own files in that space (`.github/` routinely holds `workflows/`, `ISSUE_TEMPLATE/`, and hand-written instruction files). Those per-file outputs can be silently overwritten or clobbered by a run with no prompt and no backup, which does not satisfy the plan's \"same safety as Claude path.\" The design also never defines the partial states: managed `AGENTS.md` with unmanaged `copilot-instructions.md`, or one of the two present and the other absent. Related, and unaddressed: with per-file emission there is no pruning story \u2014 a rule removed from the source leaves a stale `.instructions.md` forever, whereas the claude path sidesteps this by rewriting `CLAUDE.md` wholesale each run. Enumerate the gate over all four targets (or state why per-file targets need none), specify mixed-state behavior, and say whether the backend clears/prunes generated files it no longer emits.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#sequence-cf-setup-ide-copilot"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Cross-repo guide coupling has no sequencing or version-preflight strategy",
+   "description": "The design correctly names this \"the highest-risk coupling\" but the handling is \"it will fail at the script step with a clear error.\" Verified in the workspace copy of `setup-ide`, an unknown target hits `case cursor|windsurf|claude) \u2026 *) exit 1` and CF surfaces it as `setup-ide exited with code 1` \u2014 so the failure is loud, but the user gets no \"update your guides to vX\" hint, and `cf init --ide copilot` (which runs with `{ yes: true }`) will report a warn line and continue to the \"project is ready\" summary. The coupling is also already drifting in the other direction: the guide script supports `cursor`/`windsurf` while `VALID_TARGETS` does not, so the doc's claim that a new target is \"add an entry to `VALID_TARGETS`, add a backend\" is not the whole story. Name the required guide version/feature gate (a minimum-version check via the existing `GuideDetector` version data, or an explicit feature probe before invoking the script) and state that the guide-side change lands and tags before the CLI change, since this slice's `dependencies:` frontmatter is `[]`.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#risks"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Parent onboarding NFR is not restated although the slice adds work to that path",
+   "description": "The parent architecture states the initiative-level target: \"from `npm install` to useful context output in under two minutes.\" `cf init --ide copilot` is on that exact path and adds a second `execFileSync('bash', \u2026, { stdio: 'inherit' })` compilation over every rules file plus four directory/file writes. The slice restates nothing about that budget and offers no target or verification, so the requirement the gap leaves unmet is the parent's stated first-run latency goal for non-Claude users. Restate the target in the slice doc (e.g. \"copilot compilation must not push `cf init --ide copilot` beyond the parent's two-minute first-run budget\") and note how it is checked in the existing timing/manual verification step.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#interfaces"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Highest-risk logic has no test coverage or stated verification owner",
+   "description": "All seven listed tests are CF-side target validation, safety-prompt, and propagation checks. The plan's success criterion \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter\" has no corresponding test, and neither does the skills\u2192prompt frontmatter mapping. Since translation lives in the guide script, CF-side tests structurally cannot cover it \u2014 so the design must say where it *is* covered (guide-script tests, or an explicit manual-verification checklist with the real emitted fixture). This matters more than usual given the input forms the project guide warns about: real rule files here use `paths:` arrays, and some have trailing space after `paths:` (`react.md`, `sql.md`, `testing.md`) plus inline-style values in `typescript.md`; a translator that requires one exact YAML layout will silently emit `applyTo: \"**\"` or nothing.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#test-coverage"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Dual-writing `AGENTS.md` adds a third copy of the compiled rules with no divergence policy",
+   "description": "The rationale (cross-tool compatibility) is sound and matches the tool guide, but the consequence is not addressed: `cf setup-ide claude` regenerates `CLAUDE.md` and `cf setup-ide copilot` regenerates `AGENTS.md` + `copilot-instructions.md` from the same source, so a project running both commands diverges the moment either is run after a rule change. Either state that both backends refresh all three managed files, or cut the `AGENTS.md` write \u2014 the tool guide notes VS Code also reads `CLAUDE.md` in compatibility mode, so `copilot-instructions.md` alone meets the slice's stated requirement for Copilot users.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#design-decisions"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Naming and mechanism inconsistencies in the Files Changed list",
+   "description": "The helper appears as `isManagedCopilot(filePath)` in Technical Scope and `isManagedCopilotFiles(projectPath)` in Files Changed \u2014 pick one, since the shape difference (per-file vs per-project) is exactly what the mixed-state gap above needs to resolve. Separately, \"Update CLI help text to list both targets\" is already automatic: `.argument('<target>', \\`IDE target: ${VALID_TARGETS.join(', ')}\\`)` derives the string from the constant, so that scope item can be dropped.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#files-changed"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Worktree propagation for the new dirs should not repeat the top-level-files-only pattern",
+   "description": "The existing claude propagation copies only `entry.isFile()` in each directory, and the tool guide says VS Code searches `.github/instructions` recursively. If the copilot backend ever emits nested instruction files, a copied-per-dir-block will silently omit them. A single sentence constraining the emitted layout to flat files (or specifying recursive copy) closes this.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#technical-scope"
+  }
+ ]
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Slice plan deliverable for the Copilot tool guide is dropped",
+   "description": "The slice plan entry's success criteria explicitly require: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed.\" The slice design never references this tool guide anywhere \u2014 not in Overview, Technical Scope, Files Changed, or Test Coverage. The guide exists and is the design's factual basis for the file mapping (frontmatter, `applyTo`, prompt-file fields), so omitting it both drops an assigned deliverable and hides the design's own source material. Add a reference (and state explicitly whether promotion is in or out of scope for this slice).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Managed-marker safety check covers only 2 of the 4 write targets",
+   "description": "Step 4 checks the marker only in `.github/copilot-instructions.md` and `AGENTS.md`, yet `cf setup-ide copilot` writes four locations: those two plus `.github/instructions/` and `.github/prompts/` \u2014 directories where a Copilot user plausibly already has hand-authored files. The design claims \"same safety contract as the Claude path\" and \"Re-running on a project with existing unmanaged `.github/copilot-instructions.md` prompts before overwriting,\" but the plan's criterion is broader: \"Re-running on a project with existing unmanaged files prompts before overwriting.\" As written, an unmanaged user file such as `.github/prompts/review.prompt.md` has no stated protection before the guide script emits over it (the script's overwrite/merge behavior for those directories is unspecified in this doc). Also underspecified: when only one of the two checked files is unmanaged, which files get backed up to `.bak`. Either specify marker/overwrite handling for the `instructions/` and `prompts/` directories, or explicitly narrow the safety claim and state the accepted risk.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New subprocess I/O path has no enumerated failure-handling strategy",
+   "description": "Step 5 invokes `execFileSync('bash', [scriptPath, 'copilot'], { cwd: projectPath })` \u2014 a new external process boundary. The sequence and Test Coverage do not state handling for: (a) non-zero exit from the guide script (what does `setupIdeAction` print, does it exit non-zero, does `cf init` abort or continue to `propagateToWorktrees`?); (b) hang \u2014 no `timeout` option is specified, and `execFileSync` blocks the CLI indefinitely if the script stalls; (c) partial output \u2014 if the script fails after writing some files, the next run's marker check sees a mix of managed/unmanaged files with no defined recovery. The Risks section only covers \"submodule has no `copilot` case,\" which is a subset of (a). Give each failure mode an explicit strategy (exit code check, timeout with kill, leave files in place and report, or equivalent) as required for new I/O paths.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Test coverage omits the frontmatter-translation success criterion; skill frontmatter mapping unspecified",
+   "description": "The plan's success criteria include \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files\" and \"Manual verification: an AI agent in VS Code Copilot can read `.github/copilot-instructions.md` + `AGENTS.md` and follow project conventions.\" Neither appears in the Test Coverage section, which covers only target validation, marker safety, file creation, propagation, and init e2e. Additionally, the Technical Scope specifies translation only for rule `paths` \u2192 `applyTo`; the plan's file-mapping table states skills translate to `.prompt.md` with frontmatter fields `name`, `description`, `argument-hint`, `agent`, `model`, `tools`, but the design never says how Claude skill frontmatter maps to those fields (or that those fields are emitted verbatim/dropped). Add translation tests (including where they live \u2014 guide submodule vs. CF core) and specify the skill frontmatter mapping.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Test Coverage"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Parent architecture NFR on the init path is not restated",
+   "description": "`project-documents/user/architecture/200-arch.developer-onboarding.md:21` states the initiative NFR: \"from `npm install` to useful context output in under two minutes.\" Slice 210 extends `cf init --ide copilot`, which sits on that measured path, but the design states no target for the added IDE-configuration step (guide-script runtime, propagation time). Restate the two-minute target with a specific bound for the copilot setup step, or note explicitly that the added step is expected to be negligible relative to it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Design correctly preserves architectural boundaries",
+   "description": "Worth recording positively: compilation is kept in the guides submodule rather than CF core (matching how `setup-ide claude` works), `setupIdeAction`/`propagateToWorktrees`/`init.ts` signatures are unchanged, no MCP surface or `packages/core` changes are introduced, and dual-write is strictly additive \u2014 all consistent with the architecture's \"composability preserved\" and \"atomic operations\" principles. Proportionality is appropriate for an effort 3/5 slice; no scope cutting beyond the plan's stated non-goals (Cursor, bidirectional sync, custom agents).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Design-Decisions"
+  }
+ ]
+}

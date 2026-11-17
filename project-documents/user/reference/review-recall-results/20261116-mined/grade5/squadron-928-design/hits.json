@@ -1,0 +1,23 @@
+{
+ "case": "squadron-928-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Walkthrough step 7 runs bare `sq doctor` and expects \"all four rows present\" and `demo (codex): WARN`. `cli/commands/doctor.py:64` at `16194f3e` skips WARN rows unless `-v`. The correction adds `-v` and notes \"bare `sq doctor` hides WARN rows (F003)\". **VALID**: contradicts code. Needs: code. Found by the original review (F \"Walkthrough step 7 expects WARN rows on bare `sq doctor`, repeating the exact error slice 925 already corrected\"), so a control.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": []
+   }
+  }
+ ],
+ "note": "No borderline calls. r09 finding 2 mentions walkthrough step 7 but raises a different problem (doctor classification of github sources)."
+}

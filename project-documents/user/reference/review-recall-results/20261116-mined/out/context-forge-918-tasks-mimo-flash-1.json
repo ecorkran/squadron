@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unindexed `[~]` fixture example lacks the `**` bold-wrap the unindexed regex requires",
+      "description": "Task 1's example unindexed line is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` \u2014 but `PLAN_UNINDEXED_RE` (`packages/core/src/introspection/parsers/slicePlanParser.ts:9`) is `/^(\\d+)\\.\\s+\\[([ xX])\\]\\s+\\*\\*([^(].*?)\\*\\*\\s*(.*)/`, which requires `**Name**` bold-wrap. Every real unindexed entry (e.g. `packages/core/tests/fixtures/introspection/unindexed-slice-plan.md:12`) is bold-wrapped. An executor who transcribes the example verbatim gets a line that still matches neither regex and is still silently dropped, so Task 5's assertion that \"the unindexed `[~]` entry parses with `status: 'deprecated'`... `indexSource: 'fallback'`\" cannot pass. Task 1's success text only mandates the bold-wrap \"for the indexed form,\" which invites exactly this failure. The example should be written as `7. [~] **Feature Epsilon** \u2014 cut for scope.` and the success text should require bold-wrap for both forms.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:41"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5 does not update the pre-existing assertions its fixture edit breaks outside `slicePlanParser.test.ts`",
+      "description": "Task 1 adds two entries to `sample-slice-plan.md`, but Task 5's only \"update existing test\" instruction targets the `totalSlices`/`completedSlices` test (the design's `slicePlanParser.test.ts:44`). At least three other existing assertions against that fixture break and are named in no task:\n\n- `packages/core/tests/introspection/slicePlanParser.test.ts:10` \u2014 `expect(result.entries).toHaveLength(5)` becomes 7.\n- `packages/core/tests/introspection/slicePlanParser.test.ts:128` \u2014 `it('tags every entry indexSource: explicit...')` asserts `every((e) => e.indexSource === 'explicit')` on this fixture; adding an **unindexed** `[~]` line to `sample-slice-plan.md` makes `.every()` false, directly contradicting Task 1's requirement to put the unindexed line in this file.\n- `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` \u2014 `expect(result.totalSlices).toBe(5)`.\n\nTask 13's full-suite run would surface these only after the fact, which weakens Task 5's stated success criterion (`pnpm --filter @context-forge/core test -- slicePlanParser` passes \u2014 it wouldn't, and the ArtifactIntrospector failure is in a file Task 5 never mentions). Either update these assertions in Task 5's scope, or move the unindexed `[~]` line to `unindexed-slice-plan.md` (which resolves the `indexSource: 'explicit'` conflict and matches how the unindexed format is already fixture-tested).",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success criterion naming `arch-status-vs-plans` has no covering test task",
+      "description": "Slice-design success criterion 6 reads \"`ConsistencyChecker`'s `plan-status-vs-entries` / `arch-status-vs-plans` rules do not false-positive.\" Task 12 tests only `plan-status-vs-entries`. The sibling rule computes the same `allComplete` from `completedSlices`/`totalSlices` at `packages/core/src/introspection/ConsistencyChecker.ts:828-834` and flags against the **architecture** frontmatter status \u2014 a distinct input (`archStatus`) that the plan-status test never exercises. Task 12's complementary \"in-progress still fires\" case likewise only proves one direction of one rule. Add an `arch-status-vs-plans` case (arch frontmatter `status: complete`, plan entries all `[x]`/`[~]` \u2192 no finding) to Task 12, or state in the task why the arch rule is excluded.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Commit` markers are checklist items, not plain lines",
+      "description": "All six markers are written as `- [ ] Commit: ...` rather than plain `**Commit**:` lines. Placement is correct (after tested groups at tasks 5, 7, 10, 11, 12, plus a conditional one at 13 \u2014 not after every task, not only at the end), and this formatting appears to follow the CLAUDE.md rule requiring `[ ]` checkboxes on every subitem, so no action is required unless the plain-line convention takes precedence.",
+      "file_ref": null,
+      "category": "formatting",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 9's `derivedStatus` initializer change goes beyond the design's stated \"one-line addition\"",
+      "description": "Slice-design Decision 4 scopes `cf list slices` to \"the same one-line addition to its inline `deriveEntryStatus({...})` call.\" Task 9 additionally rewrites the pre-try initializer at `packages/cli/src/commands/slice.ts:91`. The change is well-justified in the task text (prevents a filesystem error from reporting a `[~]` entry as `not-started`, consistent with CLAUDE.md's no-silent-fallback rule) and is small, but it is implementation instruction the design does not require \u2014 worth a one-line design addendum or acceptance as intentional.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:155"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 10 asserts JSON output only; the `\u2298 deprecated` table render is left to the manual walkthrough",
+      "description": "Success criterion 4 says `cf list slices` \"renders the entry with the existing `\u2298 deprecated` display.\" Task 10 asserts `status: 'deprecated'` and `isNext: false` in `--json` output; the table-rendering path (`renderEntryStatus` at `packages/cli/src/commands/slice.ts:178`) is exercised only by walkthrough step 3 in Task 13. Acceptable since `renderEntryStatus`'s `STATUS.Deprecated` case already exists and the JSON path proves `derivedStatus` is correct, but a table-form assertion would close it automatically.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:166"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unindexed `[~]` fixture example lacks the `**` bold-wrap the unindexed regex requires",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:41",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 5 does not update the pre-existing assertions its fixture edit breaks outside `slicePlanParser.test.ts`",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Success criterion naming `arch-status-vs-plans` has no covering test task",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "formatting",
+      "raw_category": null,
+      "summary": "`Commit` markers are checklist items, not plain lines",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 9's `derivedStatus` initializer change goes beyond the design's stated \"one-line addition\"",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:155",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 10 asserts JSON output only; the `\u2298 deprecated` table render is left to the manual walkthrough",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:166",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-17T07:37:17.277220",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 230104,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 15,
+  "prompt_tokens": 358972,
+  "cached_tokens": 299968,
+  "cache_write_tokens": null,
+  "completion_tokens": 59290,
+  "reasoning_tokens": 56762,
+  "duration_seconds": 1262.7367034167983,
+  "cost_usd": 0.014530656000000003,
+  "cost_basis": "alias_pricing"
+}

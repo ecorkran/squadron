@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Overwrite protection does not cover every generated output",
+   "description": "The safety sequence checks only `.github/copilot-instructions.md` and `AGENTS.md`, but the backend also writes individual files under `.github/instructions/` and `.github/prompts/`. No prompt or backup behavior is specified for pre-existing unmanaged files in those directories, nor for files overwritten during worktree propagation. This falls short of the slice plan\u2019s requirement that existing unmanaged files prompt before overwriting and the architecture\u2019s non-destructive onboarding principle. Define behavior for every output class, including mixed managed/unmanaged sets, per-file backup names, preservation of existing backups, and a backup-or-skip policy for worktree destinations.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "New subprocess and file-copy paths lack complete failure semantics",
+   "description": "The sequence covers the successful path, while the Risks section only says an outdated guide script will fail clearly. It does not specify a subprocess timeout or hang policy, handling when the script exits after writing only some outputs, or behavior when propagation fails partway through a worktree. Specify how nonzero exits and timeouts surface, whether partial output is retained and safe to regenerate, and whether worktree copying aborts or continues after an individual failure. The final result should identify incomplete worktrees and return an appropriate status; a transactional rollback mechanism is not necessary.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:95-103"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The guide-side compilation contract is under-specified",
+   "description": "The design specifies `paths`\u2192`applyTo` conversion and destination filenames, but not how skill frontmatter becomes valid prompt-file frontmatter. The slice plan explicitly identifies `name`, `description`, `argument-hint`, `agent`, `model`, and `tools`; without mapping, omission, and unsupported-field rules, generated prompts may be uninvocable or silently lose behavior. Define the minimum valid prompt output and explicit handling for malformed source metadata. Also define regeneration behavior for deleted or renamed rules and skills so stale managed instruction/prompt files do not remain active after their sources disappear.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:112-115"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tests exercise CLI plumbing but not the required translation behavior",
+   "description": "The automated tests cover target validation, root-file safety, and propagation routing, but none executes the Copilot compiler against representative rule and skill fixtures or asserts generated content. Consequently, the plan\u2019s core success criteria\u2014correct artifact generation and correct path-to-`applyTo` translation\u2014are unverified. Add guide-side tests using actual production frontmatter formats, covering multiple and omitted paths, always-on versus scoped routing, and skill-to-prompt metadata. The verification section should also retain the plan\u2019s manual check that a VS Code Copilot agent can follow the generated guidance comparably to Claude.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The two-minute onboarding target is not carried into the Copilot init path",
+   "description": "The parent architecture sets a specific goal of under two minutes from npm installation to useful context output. This slice extends `cf init` and adds compilation and propagation work to that onboarding path, but neither restates the target nor says how it will be checked. Restate that `cf init --ide copilot` must preserve the under-two-minute end-to-end goal and include a lightweight timed verification of the fresh-project flow, rather than introducing a separate performance framework.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:25-34"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The assigned tool-guide deliverable is omitted",
+   "description": "The slice plan requires the design to reference `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` and promote it to a proper published tool guide if needed. The slice neither references that document nor includes its disposition in scope or Files Changed. Add an explicit documentation deliverable linking the source material and stating whether publication/cleanup is included; if promotion is unnecessary, record that decision rather than silently dropping the plan item.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:25-55"
+  }
+ ]
+}

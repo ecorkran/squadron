@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Add a loader test for explicit `open`",
+   "description": "Task 1.4 tests the omitted-policy default, `wrap`, and `reflect`, but not an explicit `policy: open` value. The slice requires the loader to accept all three values, so add a test confirming that explicit `open` loads as `BoundsPolicy.OPEN`.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Assert full config equality in the round-trip test",
+   "description": "Task 1.4 says the YAML round-trip test should assert that the policy matches. Slice success criterion 5 requires reloading the emitted YAML to produce an equal `ServerConfig`. Assert equality with the original config, in addition to checking the serialized policy value.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Format commit markers as standalone plain lines",
+   "description": "The commit markers are written as checklist items (`- [ ] **Commit:** ...`), but the required format is a plain line, never a checkbox: `**Commit**: ...`. The markers are otherwise placed at reasonable tested points between phases.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Remove the duplicate full-suite run",
+   "description": "Tasks 3.5 and 5.1 both require running the full test suite. Keep one full-suite run after the shipped config files are updated, and remove or relocate the earlier run. This would reduce unnecessary verification in an already detailed breakdown.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

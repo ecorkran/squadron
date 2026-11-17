@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Task 4T's `--json` exit-2 assertions need the JSON-mode flag set explicitly in-process",
+   "description": "Task 4T requires \"Exit 2 with empty stdout, in human and `--json` mode\" and says to follow the setup in `validate.test.ts`. `validate.test.ts` exercises JSON output through `printJson`, which keys off `opts.json` from the parsed command line \u2014 that works with `program.parseAsync`. But `handleError`'s error path keys off `isJsonMode()`, and JSON mode is only set at CLI entry load (`setJsonMode()` when `process.argv.includes('--json')`) or via `CF_JSON`. In a vitest in-process harness neither happens. The named criterion (\"nothing on stdout\") still passes either way, so this is not a gap \u2014 but the `--json` half of the test would silently assert the human-mode stderr shape. Cheap fix in the task file: state that the test sets `process.env.CF_JSON = '1'` (or calls `setJsonMode()`) in the `--json` cases. The same task-file note also deserves one line about mocking `process.exit`, since `handleError` calls it; `validate.test.ts` does so only in its single exit-2 test, while the exit-2 list in Task 4T has four cases \u2014 `validate-worktree-scope.test.ts` already shows the pattern needed and Task 4T cites it only for the worktree fixture.",
+   "location": "packages/cli/src/index.ts:179"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The 214 design doc is both a test fixture and a file Task 5 edits",
+   "description": "Task 3T pins \"Real design: `project-documents/user/slices/214-...md` passes against the real template,\" and Task 5's fourth step tells the implementer to write a \"Parity differences\" list into that same document's Implementation Notes. The edit adds a heading under `## Implementation Notes`, which cannot remove a required heading, so the test should still pass \u2014 but the ordering makes a previously-green file-level test depend on a later doc edit, and a careless insertion (e.g. nesting a `###` where a required `##` was deleted) would surface as a failure in an unrelated task. Consider either running the suite again after the Task 5 edit (Task 6's full `pnpm test` does this, so the risk is covered) or having Task 5 add the notes under a subheading only, explicitly. No action strictly required.",
+   "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"Wrap any unexpected `fs` error\" cannot cover `parseFrontmatter`'s internal swallow",
+   "description": "Task 3 says to wrap unexpected `fs` errors in `SliceDesignValidationError` so every I/O failure exits 2. `parseFrontmatter` never throws \u2014 it returns `{ found: false, data: {} }` from a `catch` around its own `readFile`. The preflight step already satisfies the \"unreadable file \u2192 exit 2\" criterion (regular-file + readable check before any validation), so this only matters in a TOCTOU race, where the file would be reported as `reason: 'doctype'` (FAIL, exit 1) instead of exit 2. Worth one line in Task 3 so the implementer doesn't expect the wrapper to catch it, or an explicit comment in the code noting preflight owns that guarantee. Flagging for awareness only \u2014 no requirement is left unmet.",
+   "location": "packages/core/src/introspection/parsers/frontmatterParser.ts#parseFrontmatter"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Commit markers are their own checklist items rather than plain lines",
+   "description": "`Task 2C/3C/4C: Commit` are written as `- [ ] **Task ...: Commit** \u2014 \\`<message>\\`` checkboxes, not the `**Commit**:` plain-line form. They sit at correct working, tested points (after each implementation+test pair, conditional for Tasks 5 and 6), which is the substantive requirement, and the checkbox form matches accepted precedent in this repo's own task files (`161`, `162`, `169`, `170`), where AGENTS.md's blanket checklist rule applies. The `5C`/`6C` \"only if Task N changed files\" conditions are a good touch \u2014 they prevent empty commits. Noted only so the format choice is deliberate.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  }
+ ]
+}

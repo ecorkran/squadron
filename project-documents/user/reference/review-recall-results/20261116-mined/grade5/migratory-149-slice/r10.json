@@ -1,0 +1,33 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "7-neighbor benchmark target assigned by the plan entry is dropped",
+   "description": "The slice plan entry (140-slices.simulation-scaling.md:50) states: \"the 7-neighbor operating point is a benchmark target.\" The design never mentions it; the gate config fixes `max_neighbors=32` and the walkthrough runs only that configuration. Per slice 148's rediagnosis notes (148-notes.rediagnosis.md), the early-exit gain scales with `candidates_scanned / max_neighbors`, so the 7-neighbor run is both plan-assigned and the highest-leverage data point \u2014 one extra bench invocation. Either add a `max_neighbors=7` benchmark run to the walkthrough/gates or record an explicit deferral with rationale.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Gate workload `mid-flock-50k` does not match the stated N=50k operating point",
+   "description": "The design states \"Default bench config for gate runs: `mid-flock-50k` workload\" and gates A2/A3 at \"N=50k\". As committed, `bench/workloads/mid-flock-50k.yaml` specifies `n: 100000` and `world_size: [1536.0, 1536.0]` (internally inconsistent with its own description, which claims N=50k in a [400,400] world). The gate commands (lines 162\u2013175) pass no N override, so as written the gates measure 100k agents at low density \u2014 not the dense N=50k two-flock regime the design's 45,000-candidate premise and occupancy analysis depend on. The gate spec should pin N and world size explicitly, or the workload file must be corrected before the gates are meaningful.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough targets a bench CLI surface that does not exist",
+   "description": "The walkthrough invokes `python scripts/bench.py --backend ... --config ... --N ... --ticks ... --parity-check ...`. The harness delivered by slice 141 is `python -m migratory.bench --workload <name> --backend <b>` (`src/migratory/bench/cli.py`); `scripts/bench.py` does not exist, the flag is `--workload` not `--config`, and no `--N`, `--ticks`, or `--parity-check` flags exist \u2014 N and tick counts are read from the workload YAML (`run(workload, args.backend, args.results_dir)`). `--subdivision-factor` is a new flag this slice plausibly adds, but the design's \"No changes to\" list (lines 103\u2013106) and \"Existing `quadrants-fused` backend API is unchanged externally\" (line 80) do not scope any bench-harness surface changes, leaving the mechanism that runs the A1\u2013A5 gates unspecified. Although the section is labeled \"draft demo script\", A2/A3/A5 acceptance depends on these runs. Specify the harness changes (new `--subdivision-factor` flag, parity-check entry, and how N/ticks are set per run) as in-scope, and correct the entry point and flag names to match the slice 141 harness.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:153-188"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`cell_size` derivation placement misstated",
+   "description": "\"The bench harness passes `cell_size` at setup; it reads from config\" and the Component Interactions diagram (lines 85\u201386) place `cell_size` in BenchConfig. In fact `cell_size` is derived inside `GpuAgentState.setup()` as `max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER` (`quadrants_fused_state.py:150`) \u2014 it is not a config input today, and the derivation uses `max_query_radius` (max across profiles), not a single `query_radius`. The sibling task file (149-tasks, T2) already places the change correctly (`self.cell_size = self.max_query_radius / subdivision_factor`); the design doc should match so the single-source-of-truth constant and its \"shared with the fused kernel\" comment get updated deliberately.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80"
+  }
+ ]
+}

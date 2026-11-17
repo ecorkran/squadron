@@ -1,0 +1,26 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Synthetic coverage finding omits the required location token",
+   "description": "The design states the synthetic finding \"has no `location` because it cites no file.\" That decision conflicts with the established finding contract from slice 904 and project conventions: every finding carries a `location:`, with `unverified` (`UNVERIFIED_LOCATION` in `parsers.py`) as the explicit token when there is no file. Because the synthetic `ReviewFinding` is constructed directly rather than parsed, it never passes through `_normalize_location`, so `structured_findings` maps `f.location or f.file_ref` \u2192 `None` and persistence omits the `location` line entirely; `to_dict()` emits `\"location\": None`. This makes the coverage finding the first artifact finding with no location at all, inconsistent with every other finding and with consumers that read location (ensemble dedup per 904 keys on it; metrology `_canonical_projection` reads `location`). Set the synthetic finding's `location` to `UNVERIFIED_LOCATION` with `location_verified=None` to keep the artifact schema consistent.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:152"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 6 cannot exercise multiple profiles, leaving D9's false-positive mitigation unverified",
+   "description": "Step 6 says to run \"one per configured profile (sdk, openai, openrouter, local)\" but the command is hardcoded to `sq review slice 927 --model sonnet -v`. In `cli/commands/review.py::_resolve_model_and_profile`, a model flag with no `--profile` resolves the profile from the alias (`alias_profile`); `sonnet` resolves to one provider. So the identical command four times captures the same alias's model id, not the openai/openrouter/local id forms that D9's equivalence rule must tolerate. This is the only planned defense for the risk named in Risk Assessment (\"D9 false positives on a live router\u2026 dropped `vendor/` prefix or a `:free` suffix\"), and Mitigation Strategies (line 363) explicitly relies on step 6 to \"capture each profile's real ids before merge.\" As written, the mitigation cannot fire and the false-positive risk retires unverified. The step should vary `--profile` with a model valid for each profile, and record the observed id for each.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-355"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The headline \"PASS means saw the whole diff or read files\" is a plan-sanctioned heuristic, not a guarantee",
+   "description": "Part B fires only when `tool_calls_made - failed_tool_calls == 0`; any single successful tool call suppresses the cap regardless of whether that call read the omitted portion of the diff. The slice plan explicitly accepts \"a truncated diff where the model did read files stays a normal verdict,\" so this is a deliberate proxy rather than a gap \u2014 but the Value statement is stronger than the mechanism (\"a PASS means the model either saw the whole diff or read files with its tools\"). Worth keeping the wording honest in the artifact/CHANGELOG so downstream gate owners do not read the cap as a guarantee that the omitted bytes were reviewed.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Value"
+  }
+ ]
+}

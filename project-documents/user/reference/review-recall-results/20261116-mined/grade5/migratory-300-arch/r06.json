@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Synchronous simulation can starve the asyncio server",
+   "description": "The design runs CPU-bound behavior evaluation synchronously on the asyncio event-loop thread. The integration shape in slice 303 has an async tick body call `SimulationManager.step()` without yielding; the tick loop also skips its sleep after an overrun. A long tick therefore delays connection handling and client I/O, and repeated overruns can leave no scheduling point at all. This conflicts with the goal of preventing the tick loop from starving I/O. Define an event-loop-safe execution strategy and state ownership for it\u2014such as offloading computation and committing results safely\u2014rather than leaving offload as an upgrade only after the budget is consumed.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The WebSocket implementation dependency is unspecified",
+   "description": "Python 3.12\u2019s standard-library `asyncio` does not provide a WebSocket server. The document selects WebSocket communication but names no protocol library or framework. That choice affects connection lifecycle, cancellation and shutdown behavior, and how sends apply backpressure. Select a compatible library and define the server boundary around it; \u201casyncio\u201d alone is not an implementable WebSocket stack.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Current State"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\u201cTick as transaction\u201d is not supported by in-place state mutation",
+   "description": "The principle promises that a tick computes next state and commits it atomically. However, the behavior-engine integration described in slice 303 passes the canonical `EntityManager.state` to `engine.tick()`, which mutates it in place. If computation fails partway through, positions or velocities may already be partially updated; the document defines no rollback or recovery. Stage changes separately and commit after successful evaluation, or explicitly weaken the transaction guarantee and specify what happens to partially updated state.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Architectural Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Shutdown persistence conflicts with the planned scope",
+   "description": "The \u201cExplicit lifecycle\u201d principle says the server persists state on shutdown. But the slice plan places state persistence and world save/load in future work, and the described logging/replay system is not defined as a shutdown save mechanism. As written, the foundation cannot satisfy its lifecycle principle. Either include and specify persistence in this architecture\u2019s scope or change the shutdown requirement to make the limitation explicit.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Architectural Principles"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Replay cannot be guaranteed from the specified inputs",
+   "description": "The document says the simulation can be reconstructed from a log and the same configuration, but it leaves the log contents and snapshot-versus-event strategy unresolved. The related entity-management design initializes positions with unseeded NumPy randomness; the server configuration mentions an environment seed but no entity-spawn seed or broader RNG-state handling. Configuration alone therefore cannot reproduce initial state, and the document does not establish how all nondeterministic inputs or state changes are recorded. Define the replay guarantee and record the inputs and state needed to meet it.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slow-client handling has no bounded policy",
+   "description": "The document lists buffering, dropping frames, and disconnecting slow clients as options but does not choose a policy or bound per-client buffering. Awaiting sends during distribution can let one stalled client delay other clients or tick work; queuing without a bound can turn a slow client into unbounded memory growth. Specify a bounded per-client queue and a concrete coalescing/drop/disconnect policy so slow consumers cannot stall the simulation or exhaust memory.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Entity capacity and array allocation expectations diverge",
+   "description": "This section says entity capacity determines array pre-allocation sizes. The related entity-management design instead creates arrays for the current population and uses `np.concatenate`/`np.delete` for individual additions and removals. That design reallocates arrays and does not preallocate to the configured capacity. Clarify whether capacity is only a hard limit or also a fixed allocation commitment, and make the memory and performance assumptions match that choice.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Extreme-scale design detail is disproportionate to the foundation",
+   "description": "The detailed 500K-to-4M+ scaling tiers, multi-GPU and multi-machine path, and predictive partition-rebalancing strategies are not needed for the stated initial single-process, CPU-only implementation. The document supplies no project workload or benchmarks validating the entity thresholds or claims that particular tiers are comfortable. Cut these speculative engineering prescriptions from the foundation contract; retain the initial operating target and basic replaceable boundaries, then revisit higher-scale strategies when measurements demonstrate a need.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations"
+  }
+ ]
+}

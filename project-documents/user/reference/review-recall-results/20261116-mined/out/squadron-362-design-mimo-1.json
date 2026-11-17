@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Section 6 resolves function/class endpoints while the read discipline forbids reading those nodes",
+      "description": "Section 6 states that \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts as an inter-layer signal\" (lines 215-219). But the same document's **Read discipline, unchanged** section (lines 282-293) says the 687 function/class nodes \"remain excluded and are the reason the discipline exists,\" Success Criterion 9 (lines 331-333) requires that \"no function- or class-level node is read,\" and walkthrough step 7 (lines 437-440) requires confirming \"no function/class-level node data appears in any section.\" The architecture's read discipline is equally explicit: \"File-level node types \u2026 are sufficient for planning artifacts; function- and class-level nodes are not read.\"\n\nThe design never names the mechanism that reconciles these. Two compliant mechanisms exist \u2014 deriving the owning path from the type-prefixed node id (`function:path:name`, per the architecture's node-id convention) or mapping endpoints through `contains` edges \u2014 but the obvious implementation (looking up the node's `filePath`) is exactly what SC9 forbids. The design's own verification snippet compounds the ambiguity: the walkthrough step-1 `jq` at lines 351-353 builds a `from_entries` map over `[.nodes[]|{name:.id,value:.type}]`, i.e. it indexes the id and type of all 925 nodes including the 687 function/class ones. Specify the endpoint-resolution mechanism explicitly and either reconcile or restate SC9 in terms of what is actually permitted (e.g. \"no function/class node record is read; ids are parsed\").",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-219"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty `.understandignore` fallback conflicts between the binding mapping row and the section detail",
+      "description": "Row 7 of the extraction mapping (line 180) is binding \u2014 \"on absence emits that fallback and nothing else\" (lines 172-173) \u2014 and gives, for absent/empty, `[GAP: ...]` \"naming the unreadable file.\" The section-7 detail (lines 232-235) says an all-comments `.understandignore` \"is reported as 'defaults only', not as a gap.\" These are the same case (a file readable but empty of active patterns) with two different required outputs, and the row's gap text (\"the unreadable file\") is wrong for a readable-but-empty file. The detail also conflates three distinct states \u2014 file absent/unreadable, file with zero active patterns, and optional `config.json` keys absent \u2014 under one rule; the third is separately and correctly ruled out as a gap (lines 228-231). Additionally, the parenthetical \"(this repo's current state has 17 active lines)\" sits inside the all-comments sentence while the Verified graph facts table (line 108) and walkthrough spot-check (line 389) both record 17 *active* lines \u2014 so this repo is not the all-comments case the sentence describes. Split row 7's fallback per input and per state (absent/unreadable \u2192 gap; zero active patterns \u2192 \"defaults only\") and fix the parenthetical.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`edges[].direction` is declared as consumed but appears in no section's source fields",
+      "description": "The Interfaces Required table (line 86) lists `edges[].weight`, `.direction` for \"Dependency ordering,\" but mapping row 6 (line 179) names only `type`, `source`, `target`, `weight`, and the section-6 detail never uses `direction`. Success Criterion 1 requires every section to name its fields \"matching the extraction mapping table,\" so a field consumed outside the table cannot be named. Either drop `direction` from the interfaces table or add it to row 6 with its role.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:86"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Correction 2 describes the binding selector as both an allow-list and an exclusion",
+      "description": "Line 151 says \"the file-level selector becomes an explicit type allow-list,\" and line 158 says \"Stated as an exclusion rather than an allow-list deliberately.\" The emitted rule (`select(.type != \"function\" and .type != \"class\")`, lines 155-157) is unambiguous and its rationale is sound, so this is a wording defect only \u2014 but it sits in the paragraph defining the selector that Success Criterion 5 makes binding, and the design's own standard for this document is precision about what is binding. Reword line 151 to call it an exclusion filter. (The same loose \"unchanged \u2026 gains only a cross-reference line\" phrasing around the `analyze-codebase-prompt.md` decision at lines 258/277 vs. SC7 is a milder instance of the same pattern; SC7 states the edit correctly.)",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Section 6 resolves function/class endpoints while the read discipline forbids reading those nodes",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-219",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Empty `.understandignore` fallback conflicts between the binding mapping row and the section detail",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "`edges[].direction` is declared as consumed but appears in no section's source fields",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "Correction 2 describes the binding selector as both an allow-list and an exclusion",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-17T06:07:45.198060",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 184990,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 261973,
+  "cached_tokens": 179808,
+  "cache_write_tokens": null,
+  "completion_tokens": 45312,
+  "reasoning_tokens": 42750,
+  "duration_seconds": 2500.635077833198,
+  "cost_usd": 0.07588244699999999,
+  "cost_basis": "alias_pricing"
+}

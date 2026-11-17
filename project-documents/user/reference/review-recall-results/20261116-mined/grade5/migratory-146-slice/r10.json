@@ -1,0 +1,54 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "f64-download claim is false against existing code; wire serialization silently depends on it",
+   "description": "The design states \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore carries f64, preserving the downstream contract,\" and success criterion A3 rests on this (\"Downstream code (`client_manager.broadcast`, sim logger) requires zero changes\"). The substrate code contradicts this: `src/migratory/bench/backends/quadrants_fused_state.py:228` declares `export_positions() -> NDArray[np.float32]` and ends with `np.column_stack([x, y]).astype(np.float32, copy=False)` \u2014 the field is `qd.f32` and there is no upcast anywhere in the download path (`export_velocities` and `export_profile_indices` likewise). `TickResult.from_quadrants_fields` (`src/migratory/engine/tick_result.py:124`) explicitly documents that slice-145 backends pass f32 arrays through with only a `type: ignore`. If an f32 array reaches `protocol.serialize_state_update` (`src/migratory_server/protocol.py:185-186`), `np.ascontiguousarray` preserves dtype and `.tobytes()` emits 4-byte floats under a header whose format is documented as `positions_f64`; `deserialize_message` reads `<f8`, producing truncated/garbage wire frames. The design as written would implement no conversion, unit test 5 asserts only `count` and finiteness (no dtype), so A3 would ship unverified and the wire would be corrupted. The design must specify an explicit `astype(np.float64)` (or an equivalent cast at the `TickResult` construction boundary) and assert dtype in the A3 test.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "REFLECT velocity flip is never synced back to the GPU",
+   "description": "The sync-back mechanism (`notify_positions_modified(positions)` \u2192 `upload_positions`) transfers positions only. `_apply_reflect` (`src/migratory_server/bounds_enforcement.py`) mutates *velocities* in place as well (outward velocity sign-flip at the boundary). On the GPU path that flip stays on the host; the GPU-resident velocities keep pointing outward forever, so each tick integrates agents into the wall and the host clamps them back \u2014 agents pin at the boundary with a persistently outward velocity, diverging from the NumPy reference behavior. This violates the architecture's first design goal (\"Preserve behavioral fidelity across scaling tiers \u2026 verifiable against the current NumPy implementation\"), and A4 only asserts positions are finite/in-bounds, so the test suite would not catch it. Either extend the sync-back to velocities for REFLECT, or state explicitly why velocity divergence is acceptable. Related: the stated rule \"call `notify_positions_modified` on any non-OPEN policy\" fires for SOFT as well, but `apply_bounds_policy` is a no-op for SOFT (`bounds_enforcement.py` case `BoundsPolicy.SOFT: return`) \u2014 that would add a pointless per-tick upload and contradicts the Open Notes claim that the extra transfer occurs only \"when bounds enforcement modifies positions.\"",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Spawn/despawn sync is under-specified and as described would revert GPU-advanced state",
+   "description": "The slice plan entry assigns this slice \"spawn/despawn (re-upload changed agent state),\" and the design's mechanism is `count_changed_since_last_tick()` \u2192 `sync_from_entity_manager()` described as \"Re-upload CPU state after spawn/despawn.\" Three gaps: (1) a full CPU\u2192GPU re-upload on any count change overwrites every agent's positions/velocities with the *stale* CPU mirror (which the GPU path never updates after setup), reverting the whole flock to its initial state on the first spawn/despawn; only the new/shifted agents need uploading, but the design does not specify a partial upload. (2) `setup_from_server()` sizes fields with `n = entity_manager.count`, while the server's real bound is `entity_capacity` (`config.py:1207`, enforced in `entities.py:79`) \u2014 a post-startup spawn past `n` has nowhere to land in the fixed `qd.root.dense(qd.i, n)` allocation. (3) `remove_entity` (`entities.py:175`) compacts arrays and shifts indices; the GPU state ordering is never remapped, so profile indices and `leadership_per_agent` would misalign after a removal. The unit test only asserts the subsequent tick \"does not raise,\" which none of these failure modes would trigger. Specify the partial-upload semantics, the field-capacity policy (size to `entity_capacity`, or realloc), and index remapping \u2014 or explicitly scope runtime spawn/despawn out and say how the startup-only `spawn_population` path is covered.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:201"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Snapshot path reads the stale CPU mirror on the GPU path",
+   "description": "`make_snapshot_builder` (`src/migratory_server/clients.py:361`) builds its `TickResult` from `TickResult.from_numpy_state(em.state, em.count)` \u2014 the CPU `AgentState`. On the GPU path the CPU arrays are never written after `setup_from_server()`, so any client connecting mid-run receives a SNAPSHOT of tick-0 positions followed by STATE_UPDATEs from the live GPU tick (absolute-vs-incremental desync). A3 claims `client_manager.broadcast` needs zero changes, but does not mention this second consumer of `em.state`; the design asserts \"the world server call site (`server.py`) is unchanged\" without addressing which structure is the source of truth once the GPU owns state. Either download GPU state for snapshots, mirror positions back to `entity_manager.state` each tick (cost on the hot path \u2014 must be justified), or explicitly document the staleness bound.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Success Criteria"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`_select_arch()` selects by platform, contradicting A7's \"no GPU\" fallback requirement",
+   "description": "A7 requires: \"A host with no Metal and no CUDA starts successfully \u2026 `_select_arch()` falls back to `qd.cpu` and logs a WARNING.\" The given `_select_arch()` only inspects `platform.system()` \u2014 any Linux host returns `qd.cuda` without checking that a CUDA device or driver exists. On a GPU-less Linux box, `qd.init(arch=qd.cuda)` raises, and the Open Notes explicitly embrace that (\"the server exits at startup with a clear error. There is no mid-session recovery path \u2014 a GPU failure after startup is fatal\"). The two statements are irreconcilable: as designed, the exact host A7 targets (no Metal, no CUDA) crashes instead of falling back. The slice plan entry also says \"if neither is *detected*\" \u2014 detection, not platform assumption. Either probe for device availability before selecting (and fall back to `qd.cpu` on failure of `qd.init`), or narrow A7 to the platform cases the code actually detects.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:101"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Verification walkthrough \"CPU default (no GPU)\" contradicts the default-is-quadrants rule",
+   "description": "Step 1 says \"Remove the `compute:` block entirely (or set `backend: cpu`). \u2026 No GPU initialization should appear in logs.\" With `ComputeConfig.backend` defaulting to `\"quadrants\"` (and `default.yaml`'s block only commented out), removing the block yields the *quadrants* path and the `GPU compute backend: quadrants (arch=\u2026)` log line **will** appear \u2014 the walkthrough's expected outcome is wrong for the first half of its own disjunction. Only `backend: cpu` produces the stated result.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Files Changed lists a non-existent file path",
+   "description": "`src/migratory_server/entity_manager.py` does not exist; `EntityManager` lives in `src/migratory_server/entities.py`. The `count_changed_since_last_tick()` row should name the real file (the same row's class name is correct).",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:297"
+  }
+ ]
+}

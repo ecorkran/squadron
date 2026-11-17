@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Informational events are both skipped and sent to translation",
+      "description": "Task 6 says to continue without yielding an informational `RateLimitEvent`, but also says to let it flow to translation. Without yielding, it cannot reach translation. This also leaves unclear how Task 4\u2019s translation branch relates to the design\u2019s D4 instruction to skip informational events in `_skip_unparseable`. Clarify which paths should expose informational events and align the task instructions and tests with that behavior.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests are separated from the implementations they verify",
+      "description": "The implementation in Task 6 is not followed by its test task until Task 10, and Tasks 7\u20138 are not followed by their test task until Task 11. This breaks the test-with pattern and delays feedback on the load-bearing dispatch changes. Move or split the corresponding tests so they immediately follow the implementation they exercise.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checked off and overused",
+      "description": "The `Commit:` entries are written as checklist items (`- [ ] Commit:`), rather than plain `**Commit**:` lines, and appear after nearly every task. Use plain markers at meaningful working, tested points, consolidating them instead of prescribing a commit after each task.",
+      "file_ref": null,
+      "category": "commits",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification tasks duplicate test runs",
+      "description": "Task 12 runs `test_provider.py` and `test_audit_cli.py` separately, while Task 13\u2019s `tests/providers` and `tests/metrology` run already covers those files; Task 13 then runs the full suite as well. Remove the redundant invocation in Task 12 and record its no-change observation in Task 16; consider whether the overlapping regression commands in Task 13 are all needed.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Informational events are both skipped and sent to translation",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Tests are separated from the implementations they verify",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "commits",
+      "raw_category": null,
+      "summary": "Commit markers are checked off and overused",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Verification tasks duplicate test runs",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-17T12:32:56.253281",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 5677,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 19631,
+  "cached_tokens": 5405,
+  "cache_write_tokens": null,
+  "completion_tokens": 5768,
+  "reasoning_tokens": 5178,
+  "duration_seconds": 64.3327747923322,
+  "cost_usd": 0.00436065,
+  "cost_basis": "alias_pricing"
+}

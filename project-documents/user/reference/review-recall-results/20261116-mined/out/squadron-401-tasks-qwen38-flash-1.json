@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 2's \"suite passes unchanged\" gate is unachievable as written",
+      "description": "Task 2 replaces `PythonAdapter.metrics = frozenset(SnapshotMetric)` (confirmed at `src/squadron/metrology/snapshot/python_adapter.py:105`) with an explicit four-metric set, while adding four members to the enum. `tests/metrology/snapshot/test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`, so once `SnapshotMetric` has eight members that assertion is false by construction. Task 2's Success line \u2014 \"the full `tests/metrology/` suite passes unchanged\" \u2014 therefore contradicts itself, and Task 2 says nothing about touching that test. A junior implementer hits a red gate with no sanctioned route and is likely to either revert the metrics change (which is the one thing that prevents `take_snapshot` from raising, per the DEVLOG \"Surprise\" note) or hand-edit a test outside any listed task. Fix: state the assertion edit inside Task 2 (\"update `test_adapter_declares_its_metrics_and_pb2_conventions` to the explicit set\"), or restate the gate as \"the suite passes after that one assertion update.\" The same file also shows `TypeScriptAdapter` already declaring an explicit set, so only the Python assertion is affected (`test_typescript_length.py:42` uses a `not in` check and survives).",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "tests/metrology/snapshot/test_python_length.py:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success Criterion 10's \"other metrics are unchanged\" clause has no test",
+      "description": "The slice design's criterion 10 reads \"`duplicated_lines` as `tool_failed` with a WARNING naming the count and the ceiling, **and its other metrics are unchanged**\", and the failure-mode table's row 2 carries the same claim (\"Other metrics are unaffected\"). Task 10 implements it and Task 11 asserts `tool_failed` plus the WARNING over the pure `measure_duplication` function with a whitespace test tokenizer, so there are no other metrics in scope to compare. Tasks 13/15 exercise duplication through the adapters but never trip the ceiling, and Task 26's snapshot-level tests don't either. The slice's own Technical Requirement (\"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table\") is therefore only half-satisfied for that row. Cheap close: one adapter-level case (Task 13 or Task 15) with `DUPLICATION_MAX_TOKENS` monkeypatched down, asserting file length, function length, complexity and lint are byte-identical to the same run without the ceiling.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:118-141"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No load test for the duplication pass's restated memory/throughput bound",
+      "description": "The slice restates a resource NFR in D3: \"~133 bytes per token, measured on 20261023 at squadron's size: 0.95M Python tokens gave 120 MiB\u2026 a repo ten times squadron's size needs over 1 GiB\u2026 `DUPLICATION_MAX_TOKENS = 4_000_000` (about 530 MiB)\". `project-documents/ai-project-guide/project-guides/rules/python.md:57` requires a `tests/load/` test asserting latency, throughput or resource bounds for code on the environment-layer path, and CI gating for slices touching it. The task breakdown has no `tests/load/` task: Task 11's ceiling case lowers the constant via monkeypatch, which proves the branch exists but never validates the constant at realistic scale \u2014 which is precisely what 4M tokens and the 133 bytes/token figure claim. The walkthrough (Task 29, steps 1\u201310) also has no scale step. Add one load task over squadron- or context-forge-sized input asserting the token count and a memory/time bound against the D3 figures. If that task is added, it needs a paired CI wiring task so the gate is explicit rather than implied \u2014 the current breakdown leaves no such hook.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 26's both-languages coverage case needs a stated report source",
+      "description": "\"a Python+TypeScript repo with a fresh report covering files of both languages gives present coverage for each\" requires one Cobertura report holding entries for both ecosystems, but the Task 18 fixtures are single-producer (coverage.py covers `src/squadron`, Istanbul covers the scratch TS project). Either say the test composes a small hand-written two-`<source>` report, or split the case into \"Python present via the coverage.py fixture; TypeScript present via the Istanbul fixture\". Task 24 already covers the mismatched-language half at unit level (\"a reading with none of the language's files gives empty `per_file` and every file in `tool_ignored_files`\"), so only the adapter-level positive case is under-specified.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:254"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are checklist items; placement is sound",
+      "description": "The markers are written as `- [ ] Commit: \u2026` rather than plain `**Commit**:` lines. That matches AGENTS.md (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\") and the precedent in 400's task file, so I record it as convention reconciliation, not a defect. Substantively the placement is right: Tasks 3, 5, 8, 10, 12, 14, 16, 19, 21, 23, 25 (implementation) have no commit and their following test task does \u2014 one commit per tested unit, not one per task and not all deferred to the end.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 is a single-checkbox task",
+      "description": "Branch creation from the target with one success line could sit as the first step of Task 2 without loss. 30 tasks against ~10 new modules, two captured real-report fixtures, an XML reader, a rolling-hash window pass, a freshness check, preflight validation, render, docs and a ten-step walkthrough is proportionate for this slice; Task 10 (Effort 4) is the heaviest single task but is coherent as one module and is fully covered by Task 11's eight cases, so I am not asking for a split.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Criteria-to-task mapping holds apart from the two gaps above",
+      "description": "All twelve functional criteria, the five technical requirements and both integration requirements trace to named tasks: 1\u21928/12/14, 2\u21927/9, 3\u21924/6, 4\u219211/13/15, 5\u219221/22/26, 6\u219219/20/23, 7\u219218/20/23/24, 8\u219219/20/23/24, 9\u219216/17, 10\u219210/11 (signal half only, see CONCERN), 11\u219223/26/29, 12\u21927/8; real Cobertura fixtures\u219218, line-count diffs and the enum-only `snapshot_models.py` check\u219230, docs plus the \"old snapshots are skipped and must be retaken\" statement\u219228, walkthrough steps 1\u201310\u219229 with the missing-400-record case handled explicitly. I found no scope creep: every task cites a decision (D1\u2013D6) or a component from the slice's module table, and the two contingency instructions (move a tokenizer to `python_tokens.py`/`typescript_tokens.py` if a module passes ~300 lines, and record grammar-node differences in D2) are amendment hooks the design itself anticipates rather than new scope. Sequencing is clean and acyclic: enums \u2192 per-language counters with their tests \u2192 `MeasuredFunction`/`measure_parse_metrics` \u2192 complexity measurement then integration tests \u2192 duplication core then each language's tokenizer \u2192 coverage key/preflight \u2192 fixtures \u2192 reader \u2192 freshness \u2192 measurements \u2192 adapter wiring \u2192 snapshot tests \u2192 render \u2192 docs \u2192 walkthrough \u2192 validation. Task 3/5's exported `counting` text feeds Task 8, Task 7's read-and-decode helper feeds Task 10, and Task 18's captured root `version`/`<source>` facts feed Task 19 \u2014 dependencies run in the listed direction throughout.",
+      "file_ref": null,
+      "category": "coverage-mapping",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 2's \"suite passes unchanged\" gate is unachievable as written",
+      "location": "tests/metrology/snapshot/test_python_length.py:60",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Success Criterion 10's \"other metrics are unchanged\" clause has no test",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:118-141",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "No load test for the duplication pass's restated memory/throughput bound",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 26's both-languages coverage case needs a stated report source",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:254",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Commit markers are checklist items; placement is sound",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 1 is a single-checkbox task",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "coverage-mapping",
+      "raw_category": null,
+      "summary": "Criteria-to-task mapping holds apart from the two gaps above",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T11:13:18.201884",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 280253,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1139434,
+  "cached_tokens": 902656,
+  "cache_write_tokens": null,
+  "completion_tokens": 74496,
+  "reasoning_tokens": 70400,
+  "duration_seconds": 880.8300634580664,
+  "cost_usd": 0.08406965999999999,
+  "cost_basis": "alias_pricing"
+}

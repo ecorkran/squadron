@@ -1,0 +1,19 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Timing bound in the load test may be jitter-sensitive on slow CI runners",
+   "description": "Task 22a seeds \"a few hundred\" run-state files and asserts wall-clock under `MAX_LISTING_S = 1.0`, citing the design's target (measured 0.67 s for 188 runs). The bound is the design's own NFR so the task is correctly scoped, but a few hundred files on a cold CI runner is close to the limit; if flakiness shows up in practice, the fix is seeding nearer the design's measurement scale or counting reads rather than only wall-clock. No action required at breakdown time.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 5's grep success criterion depends on Task 6",
+   "description": "Task 5's success check (\"`grep -rn \"on_step_complete\\|make_step_callback\" src tests` is empty after Task 6\") is satisfied only once the test migration in Task 6 lands. This is explicit and harmless, but the check belongs logically with Task 7's commit point; a junior executor should treat it as verified at Task 7, not Task 5. Informational only.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  }
+ ]
+}

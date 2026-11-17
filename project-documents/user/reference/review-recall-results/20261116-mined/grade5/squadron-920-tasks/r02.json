@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Informational-event handling in _skip_unparseable is self-contradictory",
+   "description": "The bullet says to \"continue the loop without yielding it to the caller as a raw SDK type \u2014 let it flow to translation as normal.\" Those two clauses are mutually exclusive given the code shape: `_skip_unparseable` is the only producer for `_handle_query_mode`/`_handle_client_mode`, so an informational `RateLimitEvent` either is yielded (and reaches `translate_sdk_message`) or is skipped (and never does). This also conflicts with LLD D4, which says informational events \"must not reach translation,\" while D6 and the LLD Data Flow diagram say \"the informational path continues to translation.\" A junior implementer cannot determine the required behavior from the task text, and the two readings produce observably different output (a system Message emitted to callers or not). Recommend the task state one behavior explicitly and make it consistent with the translation branch in Task 4 and the design's D4/D6 resolution.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Production-change commits land before the test rewrites that keep them green",
+   "description": "Task 9 commits deletion of `install_rate_limit_parser_shim`, but the four shim tests that import it (`test_agent.py:701,720,743,758`) are only deleted in Task 10 \u2014 so Task 9's commit point has four import-error failures. Likewise Task 6 commits removal of the `is_rate_limit_event(exc.data)` special case, which makes `test_a_rejected_rate_limit_event_reaches_the_backoff` (still fabricating a `MessageParseError` until Task 10) fail, since a generic parse failure is now logged-and-skipped rather than backing off. These commits therefore do not sit at working, tested points. Recommend moving the test rewrites/deletions (Tasks 10/11) ahead of the production re-keying/removal (Tasks 6/7/9), or deferring those commit markers until the paired test change lands, so each commit is independently green.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:89"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Substring-path backoff loses loop-level integration coverage after the rewrites",
+   "description": "Task 10 rewrites every loop-level test that fed a plain `ClaudeSDKError(\"rate_limit_event: \u2026\")` into the retry loop, leaving the retained substring path (SC7) covered only by the isolated `_is_throttle` unit test in Task 3. The wiring in Tasks 6/7 does call `_is_throttle` in all three gates, so SC7 is logically met, but no end-to-end test would catch a future regression that drops plain-429 errors from the backoff path. Consider retaining one loop-level test that raises a plain `ClaudeSDKError` containing `rate_limit`.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:98"
+  }
+ ]
+}

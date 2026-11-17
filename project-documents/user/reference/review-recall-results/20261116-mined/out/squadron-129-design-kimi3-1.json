@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unset effort must preserve the backend-default behavior",
+      "description": "D5 unconditionally evaluates `ReasoningEffort(config.effort.value)` and passes `effort` to `thread.run`. Slice 931 defines `AgentConfig.effort` as `Effort | None` and explicitly requires an unset effort to send no effort parameter. The current wording therefore risks an `AttributeError` for ordinary Codex use without an alias effort, or an unintended default if one is introduced to avoid that error. Specify that `None` omits the SDK argument, and add a test covering both unset and explicitly configured effort.",
+      "file_ref": null,
+      "category": "integration-contracts",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Interactive auth lacks the specified missing-extra diagnostic",
+      "description": "The exact install-command error is specified at `create_agent`, while the login flow constructs `AsyncCodex` directly and no corresponding preflight is described for login or logout. This leaves the Success Criterion that any `openai-oauth` use without the extra reports the exact install command unmet for Part C. Define how interactive operations use the shared runtime/extra check before importing or starting the SDK, including behavior when no runtime binary is available, and add missing-extra tests for login and logout.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runtime startup and login initiation can hang outside the configured timeouts",
+      "description": "`codex.turn_timeout_s` is placed around `thread.run`, and `codex.login_timeout_s` around `handle.wait()`. However, `AsyncCodex.__aenter__`/`initialize`, `thread_start`, and the browser or device-code login initiation calls all perform new I/O before those timeout scopes. A startup or login-initiation call that never returns is therefore not bounded by the documented strategy. Assign explicit timeout coverage and cleanup behavior to these operations, with stalled-startup and stalled-initiation tests.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80-84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Logout and mid-login transport failures need explicit outcomes",
+      "description": "The failure table covers login timeout and a `success=False` notification, but not an SDK exception or peer disconnect while initiating login or waiting for completion. `AsyncCodex.logout()` has no failure contract despite introducing another runtime-start and RPC path. Specify handling for timeout, SDK failure, and transport disconnect on these operations: command exit status, user-facing error, handle/runtime cleanup, and how remaining authentication state is reported. Add corresponding failure tests rather than covering only successful logout.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cancellation and teardown do not yet guarantee bounded cleanup",
+      "description": "On turn timeout, the design says to cancel the turn and rely on `shutdown()` in `finally`, concluding that no runtime process is orphaned. That conclusion does not hold if cancellation waits indefinitely or `shutdown()` itself hangs; the teardown-error row only handles an error after teardown returns. Define a bounded cancellation/shutdown strategy, including what happens when cleanup exceeds its deadline and how the original timeout or transport error is preserved. Test stalled cancellation and stalled shutdown explicitly.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-contracts",
+      "raw_category": null,
+      "summary": "Unset effort must preserve the backend-default behavior",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "Interactive auth lacks the specified missing-extra diagnostic",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Runtime startup and login initiation can hang outside the configured timeouts",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80-84",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Logout and mid-login transport failures need explicit outcomes",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-138",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Cancellation and teardown do not yet guarantee bounded cleanup",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-135",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-17T12:48:54.920692",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 72773,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "moonshotai/kimi-k3.1-pro",
+  "answering_models": [
+    "moonshotai/kimi-k3.1-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 195593,
+  "cached_tokens": 145920,
+  "cache_write_tokens": null,
+  "completion_tokens": 16822,
+  "reasoning_tokens": 14641,
+  "duration_seconds": 263.9754076669924,
+  "cost_usd": 0.29675,
+  "cost_basis": "alias_pricing"
+}

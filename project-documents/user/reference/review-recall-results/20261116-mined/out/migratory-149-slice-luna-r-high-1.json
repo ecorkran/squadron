@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cell-subdivision candidate estimate overstates the reduction",
+      "description": "The stated estimate that `S=3` reduces candidates from 45,000 to about 5,000 counts the lower occupancy per cell but not the larger scan: the kernel visits 49 cells rather than 9. Under the document\u2019s own occupancy assumptions, that is about `49 \u00d7 (5000/9) \u2248 27,200` candidates, not 5,000. With counter-gating, that implies roughly a 1.65\u00d7 reduction rather than the suggested 9\u00d7. Correct the estimate and explain what measured scan behavior is expected to make subdivision worthwhile.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 2 \u2014 Configurable Cell Subdivision"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification commands cannot isolate the interventions",
+      "description": "The \u201cbaseline\u201d and \u201cearly exit only\u201d commands both run `S=1`, and the \u201ccell subdivision only\u201d and \u201cboth interventions\u201d commands both run `S=3`. No option disables early exit or restores counter-gating, so the walkthrough cannot produce the stated comparisons. Define how to run the counter-gated variant or explicitly use a recorded slice 145 baseline artifact and revise the experiment descriptions accordingly.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Verification Walkthrough"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cell size must account for per-profile query radii",
+      "description": "Slice 145 describes per-profile `query_radius` values and sets cell size from `max_query_radius`. This design instead says `cell_size = query_radius / S` without specifying that the configured radius is the maximum across profiles. If any profile\u2019s radius exceeds the value used to size the cells, scanning only `\u00b1S` cells can omit valid neighbors and violate the behavioral-fidelity goal. Define the subdivision using the maximum supported radius, or specify a per-agent scan bound.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 2 \u2014 Configurable Cell Subdivision"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The preserved A7 seam is bypassed at the cap",
+      "description": "Option A checks the cap and breaks before calling `get_neighbors_first_k`, then describes the seam as unreachable after the break. That prevents a future distance-ranked selector from examining candidates after the first `k` have been accepted, despite the slice plan assigning this work to the existing neighbor-selection seam and slice 145\u2019s A7 requirement to preserve it as a swap point. Keep the seam operational for the planned swap, or revise the claim that this implementation preserves that interface.",
+      "file_ref": null,
+      "category": "interfaces",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 1 \u2014 Early Exit at Neighbor Cap"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cell-subdivision candidate estimate overstates the reduction",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 2 \u2014 Configurable Cell Subdivision",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification commands cannot isolate the interventions",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Verification Walkthrough",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cell size must account for per-profile query radii",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 2 \u2014 Configurable Cell Subdivision",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "interfaces",
+      "raw_category": null,
+      "summary": "The preserved A7 seam is bypassed at the cap",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 1 \u2014 Early Exit at Neighbor Cap",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T12:42:05.418615",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 9014,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 135771,
+  "cached_tokens": 92903,
+  "cache_write_tokens": null,
+  "completion_tokens": 9734,
+  "reasoning_tokens": 8699,
+  "duration_seconds": 110.729739415925,
+  "cost_usd": 0.010082830000000001,
+  "cost_basis": "alias_pricing"
+}

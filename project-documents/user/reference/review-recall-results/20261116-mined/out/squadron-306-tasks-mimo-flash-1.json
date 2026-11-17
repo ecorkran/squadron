@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Archive-on-overwrite guard misses the persistence path `sq review code <N>` actually uses",
+      "description": "The slice design's success criterion reads: *\"Re-running `sq review code <N>` over an edited review file archives the prior content and warns; nothing is silently destroyed\"*, and the design's own Verification Walkthrough step 7 exercises exactly `sq review code 305`. T12 adds the guard only to `save_review_file`, but `sq review code <N>` with a numeric slice goes through `save_review_result` (`src/squadron/cli/commands/review.py:746` \u2192 `save_review_result`), which writes directly with `path.write_text(...)` and never calls `save_review_file` (`src/squadron/review/persistence.py:300-305`). `save_review_file` has exactly one caller \u2014 the pipeline action's non-`slice_info` fallback (`src/squadron/pipeline/actions/review.py:272`). So as written, T12/T13 fix the guard on a rarely-used path while the headline data-loss hazard this slice claims to close (\"re-running `sq review code <N>` destroys hand-written content with no warning\") remains open, and the criterion would only be discovered failing at T40's walkthrough. Fix: T12 must also guard `save_review_result`'s overwrite (or route its write through `save_review_file`), with T13 asserting the archive on the `save_review_result` path. (The slice design names `save_review_file` too, so the breakdown faithfully reproduces a design-level inconsistency \u2014 but the success criterion is unambiguous and no task in this file satisfies it.)",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T14 (cf archive-scanning verification) is numbered after Part D despite the design's explicit \"sequenced before Part D lands\" requirement",
+      "description": "The design's Phase 5 note (review F005) states the cf `archive/`-scanning verification \"must appear as its own checklist task in the breakdown, **sequenced before Part D lands** \u2014 it is a go/no-go on the archive filename scheme.\" T14 does exist as its own checklist task (requirement met), but it is numbered after T12/T13, so a junior AI executing in order implements and tests the archive filename scheme before learning whether cf's scanner recurses \u2014 risking rework of T12/T13. The file acknowledges this (\"This task gates T12 in practice even though it is numbered after it\") and T12 carries a \"do not mark done until T14's outcome is known\" checkbox, which mitigates but does not satisfy the design's stated sequencing. Moving T14 ahead of T12 costs nothing and removes the ordering ambiguity.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T3 keeps `review/addressed/verification.py` importing pipeline internals and labels the direction backwards",
+      "description": "T3 states that `verification.py`'s import of `RoundDiff` from `pipeline.actions.findings_addressed.screens` \"stays as a cross-package import **in the pipeline\u2192review direction**.\" The direction label is factually inverted: after the move, the import statement lives in `review/addressed/verification.py` and points *into* `pipeline/actions/` \u2014 i.e. review \u2192 pipeline. That is precisely the inversion design review F002 resolved to eliminate (\"Having `review/resolution.py` import `pipeline/actions/` internals would invert that\"), now reintroduced inside the very package created to be the context-free core. Note that `RoundDiff`/`compute_round_diff` depend only on `review.git_utils` and `review.models` (see `src/squadron/pipeline/actions/findings_addressed/screens.py:21-22`) \u2014 they are as context-free as `verification.py` itself \u2014 so the cleaner resolution consistent with the design is to relocate `RoundDiff` into `review/addressed/` rather than leave a review\u2192pipeline edge. As written, the task asserts an architectural property it does not deliver, and `review/resolution.py` (file 2) inherits the same edge.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T11's integration test covers only one of the two `reviewedSha` persistence paths",
+      "description": "The success criterion requires the stamp \"from both the CLI and the pipeline persistence paths.\" T10 wires both, but T11's integration test says \"on `save_review_result` (**or** the pipeline review action, whichever is more directly testable)\" \u2014 one path only. Because `save_review_result` serves both the CLI and the pipeline's `slice_info` case, the main scenarios are covered; the untested residual is the pipeline action's `save_review_file` fallback call site (`src/squadron/pipeline/actions/review.py:272`), where `reviewed_sha` must be threaded through `format_review_markdown` manually. Adding that one assertion (or making the \"either/or\" an \"and\") would close the criterion fully.\n\n**Other checks, all clean:** test-with pattern holds throughout (T1\u2192T2, T3\u2192T4, T5\u2192T6, T7\u2192T8, T9/T10\u2192T11, T12\u2192T13); commit markers are plain lines at tested points, not per-task and not end-loaded; no scope creep \u2014 every task in T1\u2013T14 traces to a success criterion, the F002 relocation, or the design's mandated F005 checklist item; task granularity is appropriate (Part 0's four move/verify pairs are deliberately granular for verbatim relocations verified by 305's unchanged suite, which the design itself prescribes); the four success criteria belonging to file 1 (reviewedSha stamp, archive-on-re-run, fail-closed abort, 305 suite unchanged post-relocation) all have tasks \u2014 except the archive criterion as noted above; the remaining nine criteria are correctly delegated to file 2, which does cover them (T19\u2013T22, T23\u2013T28, T32, T40); no load-testing NFR is restated by the slice, so no load test or CI-gating task is required.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:214"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Archive-on-overwrite guard misses the persistence path `sq review code <N>` actually uses",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T14 (cf archive-scanning verification) is numbered after Part D despite the design's explicit \"sequenced before Part D lands\" requirement",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "T3 keeps `review/addressed/verification.py` importing pipeline internals and labels the direction backwards",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:102",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "T11's integration test covers only one of the two `reviewedSha` persistence paths",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:214",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-17T07:11:45.126437",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 135578,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 566087,
+  "cached_tokens": 498336,
+  "cache_write_tokens": null,
+  "completion_tokens": 34402,
+  "reasoning_tokens": 32111,
+  "duration_seconds": 450.6957327090204,
+  "cost_usd": 0.013047202000000003,
+  "cost_basis": "alias_pricing"
+}

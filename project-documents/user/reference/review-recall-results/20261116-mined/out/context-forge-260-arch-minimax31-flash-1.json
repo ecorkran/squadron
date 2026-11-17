@@ -1,0 +1,332 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`cf build` gives a brownfield repo the greenfield concept prompt with no brownfield signal",
+      "description": "Slice 268 makes \"a Phase 0 build select the concept prompt and have no side effects, the same as every other phase\", and the Detection section states \"`cf build` does not run detection\". But the onboard recipe \u2014 the one path the arch keeps \u2014 ends with \"Run `cf build` and follow it\" (`packages/core/src/onboarding/onboardRecipe.ts`, Step 3), and the same recipe says `cf next` is optional (\"You can run `cf next` anytime\"). So on a brownfield repo the agent runs `cf build`, receives the greenfield concept prompt, and is told to \"describe what you want to build\" \u2014 the exact behaviour the initiative exists to replace, now with no warning at all, since the brownfield notice lives only in `cf next` (Navigation) and detection is forbidden in the build path. The result is a fabricated greenfield concept, which the arch's own Design Goal (\"Never fabricate intent\") forbids. Either the concept prompt must carry a \"this looks like an existing codebase\" pointer (a detection call in `cf build`, which the amendment forbids), or `cf next`'s one line must be the only entry point and the onboard recipe must route through it. The arch does not say which.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"A project without squadron is told that adoption needs it\" is unimplementable after the probe removal",
+      "description": "The Design Goals bullet states: \"A project without squadron is told that adoption needs it, or can opt out and be treated as new.\" The amendment removes cf's ability to know squadron's state: \"cf no longer talks to squadron about graphs: the probe integration is removed\", and Technical Considerations confirms \"cf no longer consumes the probe; the contract between cf and squadron is now cf's detection report and prompt delivery\". The probe was the only signal (`packages/core/src/detection/squadronProbe.ts`, `surfaces.<s>.entry` / `analysis_skill_installed`) that told cf whether squadron was installed. Yet `cf next` must now emit \"adoption arrives with `sq onboard`\" for every unadopted brownfield repo, and Dependencies states `sq onboard` does not exist yet. cf will therefore instruct users to run a command that is not installed, with no way to detect that fact \u2014 and cannot satisfy the Design Goal as written. Either the message must assert the requirement rather than the availability (\"adoption requires squadron; install it, or opt out\"), or the \"without squadron\" branch of the Design Goal has to be deleted.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The opt-out short-circuits the \"already planned\" check, contradicting the file-derived outcome principle",
+      "description": "The Detection section fixes the order as: (1) opted out \u2192 \"It is greenfield\", (2) already planned, (3) brownfield or greenfield from code signals, and states \"The outcome is derived from the files every time and never stored. The only stored value is the opt-out.\" These two statements conflict: the opt-out is checked first, so a project that *has* an architecture doc and a slice plan but also carries the opt-out is reported as greenfield, and `cf next` falls into the first-run Phase 0 guidance instead of navigating the existing plan. The shipped code has the same precedence problem in a different form (`packages/core/src/adoption/adoptionOutcome.ts`: `decideOutcome` returns `adoption-closed` for `declined` before it looks at `artifacts`), but the arch is free to fix it while rewriting the order. The opt-out should override only the brownfield/greenfield decision, not the presence of planning artifacts.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Detection: a read-only report (amended 20261025)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The force-brownfield direction is dropped, leaving the 2000-line threshold as the sole determinant",
+      "description": "The Technical Considerations state that detection \"must not misfire on a repo that is only scaffolding ... nor on a shallow clone\" and that \"the override is the safety valve\". But the rework keeps only one stored value \u2014 \"an explicit opt-out ('treat this as new')\" \u2014 while the shipped implementation uses the `in_progress` value in the opposite direction as well (`packages/core/src/adoption/adoptionOutcome.ts`: `if (state === 'in_progress') return { kind: 'adoption-in-progress' }`, and `BROWNFIELD_MIN_SOURCE_LINES = 2000` is documented in-code as \"deliberately not configurable (the `adoption.state` override is the safety valve)\"). After the rework there is no way to declare a sub-threshold repository brownfield: a 500-line legacy service, a Terraform/SQL/notebook repo, or a repo whose source lives in a vendored directory is classified greenfield with no override, and the CF-only path is dropped at the same time. The arch should state that the threshold is now the only trigger, and that the opt-out is a one-way valve.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Detection failure remedies point at config values slice 269 removes",
+      "description": "Both detection failure paths embed the remedy text `To skip detection run \\`cf config set adoption.state in_progress\\` ... or \\`cf config set adoption.state declined\\`` (`packages/core/src/detection/sourceVolume.ts`, `OVERRIDE_REMEDY`; `packages/core/src/detection/planningArtifacts.ts`, same string), and `packages/core/src/config/ConfigKeys.ts` defines `ADOPTION_STATES = ['', 'in_progress', 'complete', 'declined']`. Slice 269 collapses that enum to an opt-out only and \"Existing `in_progress` and `complete` values are ignored with a one-time notice, never an error\" \u2014 so the `in_progress` remedy becomes a no-op that the user is instructed to run when detection throws. The arch's rework list (268\u2013272) never mentions updating the detection error text or the `ConfigKeys` enum, and \"a one-time notice\" has no defined home. Add the remedy-text and enum cleanup to 269 (or 271).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Anticipated Slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The replacement cross-repo contract has no version, shape or mismatch policy",
+      "description": "The arch is careful to record that the removed probe contract was pinned \u2014 \"`probe_version` 1 in squadron's `project-documents/user/reference/capability-probe-contract.md` (squadron commit 32b3c609)\" \u2014 with explicit rules for unknown versions (\"CF treats an unknown version or unreadable output as 'squadron unavailable'\"). The replacement contract gets none of this: \"the contract between cf and squadron is now cf's detection report and prompt delivery (slice 271)\". The detection report's JSON schema, the outcome vocabulary (greenfield / brownfield / already planned), the failure shape, the prompt-delivery request and response, and the behaviour when squadron is built against an older cf are all unspecified. Squadron builds `sq onboard` against this. At minimum the report needs a version field and a documented mismatch behaviour, or the contract needs the same treatment the probe had.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The concept writer is ambiguous between squadron 363 and the guide's adoption prompt",
+      "description": "The Concept row says the concept is \"Shared ... Written during the `sq onboard` flow from the comprehension doc and repo prose (squadron 363, or the guide's adoption prompt). Exactly one writer per run\". Two writers are named and no selection rule is given. The shipped state makes this live rather than theoretical: squadron 363 is \"complete\" per Current State and generates a concept, while the guide release coupling says the adoption prompt \"must open the conversation itself, since onboard no longer does\" \u2014 so the guide's prompt also generates a concept. The Adoption flow says only \"The agent drafts the concept\", without saying which of the two mechanisms the agent runs. Two concept generators on the same run is exactly the \"nothing overwrites an existing concept without the PM saying so\" case, and the arch provides no rule for who runs first.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Responsibility Split with Squadron (PM approved 20261020, amended 20261025)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The retroactive marker syntax is a cross-repo contract the arch never states",
+      "description": "The arch describes the marker only as \"a property of a slice plan entry, set only by the adoption flow\", but three parties must implement it consistently: cf's checker and gate, ai-project-guide (\"ai-project-guide writes its rule from it\"), and squadron (\"squadron's pipeline gates and 364 'candidates adopt' consume it\"). The actual format is a backticked token in the plan line \u2014 `/^\\s*`\\s*retroactive\\s*`\\s*/i` in `packages/core/src/introspection/parsers/slicePlanParser.ts` \u2014 and it is not in the architecture. The arch's semantics also differ from the implementation: it says \"A retroactive entry counts as complete for every 'done' check\", but the code only reports a retroactive entry complete when the checkbox is *also* set (`packages/core/src/introspection/WorkflowNavigator.ts`: `if (planEntry?.retroactive && planEntry.isChecked)`), and the checker raises an error when the checkbox is missing (`packages/core/src/introspection/retroactiveRules.ts`). External consumers reading \"the marker means complete\" will implement it wrong.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Baseline artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No release constraint between removing cf's adoption path and the guide's reworked prompt",
+      "description": "The Dependencies section lists the guide's `brownfield-adoption` profile and prompt as \"shipped in v0.22.0\" and requires \"at least v0.22.2\", which describes the *current* guide. The guide's brownfield prompt still tells agents to run `cf build` for adoption \u2014 slice 268 lists this as its own risk (\"the guide's current brownfield prompt tells agents to run `cf build`; 272 aligns it\"), and slice 272 raises `MIN_GUIDE_VERSION` to the release carrying the reworked prompt. Nothing in the arch states the ordering constraint: any cf release between 268 and 272 ships with a guide whose brownfield prompt asks for `cf build`, which after 268 produces a plain greenfield concept prompt and does nothing for adoption. The Dependencies section reads as if the guide coupling is already satisfied, which is the opposite of the case.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Dependencies"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The arch cites a review artifact that does not exist in the repository",
+      "description": "The Related Work section links `[260-review.arch.brownfield-adoption.md](../reviews/260-review.arch.brownfield-adoption.md)` and asserts \"(CONCERNS, 11 findings). All findings are addressed in this revision.\" The path resolves to `project-documents/user/reviews/`, and there is no `reviews` directory under `project-documents/user/` (the tree contains analysis, architecture, archive, content, notes, project-guides, slices, tasks, tool-guides). The slice plan repeats the claim (\"No re-review has been run\"), so the amendment that reversed the whole design is self-certified against an artifact that cannot be found. Either restore the review file or restate the claim as an unverified assertion.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Related Work"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Current State still describes pre-260 code that slice 260 already replaced",
+      "description": "The first Current State bullet asserts: \"Onboard skill (`packages/cli/commands/cf/onboard.md`), Codex variant, and `agent_onboard` ... Three hand-written copies of one greenfield recipe ... They already drift in wording.\" Slice 260 is shipped and replaced exactly that with one source: `packages/core/src/onboarding/onboardRecipe.ts` (\"Single source for the onboarding recipe. Three agent surfaces (Claude Code command, Codex/agents skill, MCP tool) render from the steps below\"), and the recipe's drift is now impossible. The Current State section also omits everything slices 263\u2013267 shipped (retroactive marker and the 240 gate amendment, conventions reconciliation, docs map). The rework slices 268\u2013271 are sized against this baseline; a stale baseline mis-sizes them.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Current State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Half the document describes a design that was superseded, kept \"for history\" in the same place as the current design",
+      "description": "The Technical Considerations section carries roughly four paragraphs of the pre-amendment contract \u2014 the `cf build` profile selection, the Adoption Facts section, the probe JSON carried verbatim, the `/understand` ask, the `surfaces` branching \u2014 each labelled \"The original contract follows for history\". History belongs in git, and keeping it in the same section as the live contract is a liability: a reader of Technical Considerations cannot tell which paragraphs are binding. The same pattern appears in Anticipated Slices, which still lists 260\u2013267 (\"all shipped\") as the plan while the active plan is 268\u2013274. Cut the superseded paragraphs and the shipped-slice list; keep the amendment's seven bullets, which are unambiguous.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cf next` gains a git subprocess and a tree walk on a hot path",
+      "description": "Under the amended design `cf next` must run detection to know whether to print the brownfield line, which means `measureSourceVolume` (walks and reads source files) and `readHistory` (spawns `git rev-list --count HEAD -- .`, 5s timeout) on every invocation (`packages/core/src/detection/sourceVolume.ts`, `packages/core/src/detection/history.ts`). The navigation decision needs only the planning-artifact check and the source-volume floor; the history fact is reported but \"never decides the outcome\". The arch should say the `cf next` path consumes the cheap subset rather than the whole report, otherwise every `cf next` pays for facts nobody reads.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Navigation"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Retroactive indices must fit before the project's allocated initiative indices, a constraint the arch leaves open",
+      "description": "The arch settles only the relative order (\"Retroactive entries come before new work in index order\") and defers the absolute scheme to slice design. The shipped constraint is stricter than that: `packages/core/src/introspection/retroactiveRules.ts` computes the lowest new-work index across *all* parsed plans and errors on any retroactive entry indexed after it, and the project's index scheme allocates a block per initiative (e.g. 260 \u2192 261+), with `findNextInitiative` in `packages/core/src/introspection/WorkflowNavigator.ts` skipping indices whose arch file already exists. A baseline of N retroactive entries therefore has to fit in the free space before the first allocated initiative index, and the arch does not state that constraint as an input to the slice-design decision.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `cf next` brownfield line must replace, not accompany, the existing Phase 0 recommendation",
+      "description": "The Navigation section says an unadopted brownfield repo \"gets one line\", but the current navigator's Phase 0 branch (`detectFirstRunContext` in `packages/core/src/introspection/WorkflowNavigator.ts`) returns exactly the wrong action for such a repo: \"Your project is in Phase 0 (Concept). Start by describing what you want to build.\" With `adoptionNavigation.ts` deleted by slice 270, the arch needs to state whether the brownfield line replaces that action or is attached as a warning beside it; as written, the recommendation a user sees would still be the greenfield one.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Navigation"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`cf build` gives a brownfield repo the greenfield concept prompt with no brownfield signal",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"A project without squadron is told that adoption needs it\" is unimplementable after the probe removal",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The opt-out short-circuits the \"already planned\" check, contradicting the file-derived outcome principle",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Detection: a read-only report (amended 20261025)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The force-brownfield direction is dropped, leaving the 2000-line threshold as the sole determinant",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Detection failure remedies point at config values slice 269 removes",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Anticipated Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The replacement cross-repo contract has no version, shape or mismatch policy",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The concept writer is ambiguous between squadron 363 and the guide's adoption prompt",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Responsibility Split with Squadron (PM approved 20261020, amended 20261025)",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The retroactive marker syntax is a cross-repo contract the arch never states",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Baseline artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No release constraint between removing cf's adoption path and the guide's reworked prompt",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The arch cites a review artifact that does not exist in the repository",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Related Work",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Current State still describes pre-260 code that slice 260 already replaced",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Current State",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Half the document describes a design that was superseded, kept \"for history\" in the same place as the current design",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`cf next` gains a git subprocess and a tree walk on a hot path",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Navigation",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Retroactive indices must fit before the project's allocated initiative indices, a constraint the arch leaves open",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The `cf next` brownfield line must replace, not accompany, the existing Phase 0 recommendation",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Navigation",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-17T10:34:19.398868",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 99283,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 629552,
+  "cached_tokens": 511744,
+  "cache_write_tokens": null,
+  "completion_tokens": 27058,
+  "reasoning_tokens": 21915,
+  "duration_seconds": 174.86648049997166,
+  "cost_usd": 0.020535208,
+  "cost_basis": "alias_pricing"
+}

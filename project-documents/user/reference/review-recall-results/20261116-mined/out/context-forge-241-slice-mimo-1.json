@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Config-read failure modes for the new gate path are unspecified; fail-fast NFR not restated",
+      "description": "The gate introduces a new I/O path \u2014 `resolveGateConfig(config)` reads `workflow.review_*` from TOML on every status-derivation call \u2014 and names no failure handling for it. Verified against the code this design builds on: `ConfigManager.get()` rethrows non-ENOENT read/parse errors (malformed TOML in a hand-edited `.context-forge.toml` makes the call throw, and the design's data flow has no error branch), and `get()` performs no read-time validation (`validateValue` runs only in `set()`), so an out-of-enum `review_threshold` or non-boolean `review_enabled` can be returned raw. The design's stated narrowing (\"`=== true` for `review_enabled`\", Patterns and Conventions) then silently disables gating on a malformed value, and a value outside `ThresholdToken` reaches `evaluateVerdict` with no defined behavior \u2014 a silent fallback (against CLAUDE.md) and a \"silent pass\" the parent arch's **Fail-fast on configuration errors** principle forbids (\"an invalid `workflow.review_threshold` value \u2026 surfaced immediately, not a silent pass or silent block\"). That NFR is also not restated anywhere in the slice doc. Specify `resolveGateConfig`'s behavior for un-narrowable values (explicit error) and for a config-read throw, and restate the fail-fast requirement with its enforcement point.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1: `reviewGate.ts` is a standalone pure module"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Arch requirement that the rationale name the parse failure explicitly is dropped",
+      "description": "240-arch \u00a7Technical Considerations (\"File-read failure modes\") requires that for a review file that exists but cannot be parsed, \"the rationale returned to the caller names the parse failure explicitly.\" The design instead embraces conflation \u2014 \"a read failure and a missing frontmatter both surface as 'no verdict present'\" \u2014 and TD-7's rationale contract names only review type, verdict, and threshold. Verified: `parseFrontmatter` returns the same `{ found: false, data: {} }` for a missing frontmatter block, an unclosed block, and any read/permission error, so the gate as designed cannot distinguish these cases and cannot name a parse failure. The failure-mode *handling* (\u2192 `UNKNOWN` \u2192 `review_unknown_as`, never silently cleared) is correct; what is lost is the rationale-naming requirement. State how the unparseable case's rationale is worded (and record the deviation from the arch if \"verdict absent or unparseable\" is the accepted granularity), or capture the distinction.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Interfaces Required"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`STATUS` const does not cover the two new `SliceStatus` values this slice introduces",
+      "description": "TD-6 defines `STATUS` over the `NormalizedStatus` vocabulary (`complete`/`in-progress`/`not-started`/`deprecated`, union explicitly unchanged), but the slice's new statuses `pending-review`/`review-failed` live in the separate `SliceStatus.status` union (`introspection/types.ts:258`), and the design's own new code must assign and compare them (TD-3 routes `pending-review` \u2192 `review`, `review-failed` \u2192 `blocked`). Those values have no const entry, so the slice's own pattern \u2014 \"No magic strings: \u2026 status values via `STATUS`; never a bare `'code'` or `'complete'` in the new code\" \u2014 cannot be satisfied for exactly the values this slice adds, violating the project's define-once rule. Extend the const to cover the `SliceStatus` vocabulary (or add a second const), while keeping the `NormalizedStatus` derivation byte-identical for 910's sweep.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-6: `STATUS` const introduced here; sweep deferred to 910"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`GateOutcome` includes `pending` but TD-2 assigns the pending outcome to the navigator",
+      "description": "TD-1 declares `evaluateVerdict(verdict, threshold, unknownAs): GateOutcome` with `GateOutcome = 'clears' | 'pending' | 'failed'`, but TD-2 states \"the navigator supplies the `pending` outcome for the **absent** case from the `review === null` signal.\" Under that split `evaluateVerdict` can never return `pending` \u2014 the variant is dead or the ownership is contradictory. Clarify the return contract (drop `pending` from `evaluateVerdict`'s return, or route the absent case through it).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Design resolves an arch-internal inconsistency in `pending-review` semantics",
+      "description": "240-arch's slice-status extension allows \"`pending-review` \u2014 \u2026 (or verdict is `UNKNOWN` and `review_unknown_as` treats it as pending)\", yet the `review_unknown_as` enum (`fail`/`concerns`/`pass`) has no \"pending\" policy. The design's stricter resolution \u2014 present-but-unparseable is never `pending`, always `UNKNOWN` then policy \u2014 is consistent with the arch's own verdict-handling section and the \"must not silently pass\" principle, and is explicitly justified in TD-2. This is a correct resolution of a parent-document inconsistency; worth having 243 document the resolved semantics so the arch's parenthetical is not cited later.",
+      "file_ref": null,
+      "category": "requirements",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches slice plan entry 241 exactly; folded and deferred scope is plan-authorized",
+      "description": "Every item the plan assigns to 241 is present: the two `SliceStatus` values, `deriveSliceStatus()` plus the pre-slice-plan/no-active-slice path, the standalone `reviewGate.ts` evaluator (position\u2192reviewType, decision matrix, threshold/unknown-as resolution) exposed for 242, optional `ConfigManager` ctor injection with gating-off identity, the filled `LIFECYCLE: review-gate` branch with `review`/`blocked` and structured rationale, the `STATUS` const for 910, and full matrix/boundary unit coverage. The potentially-creeping decisions are all explicitly authorized by the plan notes: folding retired slice 244 into the `arch` boundary, leaving `review_type` per-gate keys inert (243 documents), and retaining the per-gate `threshold` override (\"241's design decides\"). Proportionality is respected: the ~50-site `STATUS` sweep is correctly kept out to 910, matching 900's plan entry (`dependencies: 241`).",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Technical Scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration points verified against the code and sibling slices",
+      "description": "The design claims exactly four production navigator call sites to re-wire (`cli/next.ts`, `cli/status.ts`, `workflowTools.ts` \u00d72) \u2014 verified these are exactly the `new WorkflowNavigator()` sites that exist. The consumed 240 interfaces check out: `detectDocuments(path, index, reviewType?)` with lexicographic-last selection, the three `workflow.review_*` keys plus the `workflow.review_gates.*.{review_type,threshold}` override keys, and the reserved `LIFECYCLE: review-gate` slot. The `parseFrontmatter` never-throws contract quoted in Interfaces Required is accurate. Dependency direction is correct: pure `reviewGate` sits beneath the navigator, surfaces only construct `ConfigManager`, and 242 imports the evaluator without dragging in the navigator.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Integration Points"
+    },
+    {
+      "severity": "PASS",
+      "title": "Review-artifact I/O failure modes are enumerated with explicit handling",
+      "description": "Each outcome on the review-artifact read path has an explicit strategy: absent artifact \u2192 `pending`/`pending-review`/`review` (never cleared by absence); present with clearing verdict \u2192 `complete`/advance; present with non-clearing or `UNKNOWN` verdict \u2192 `review-failed`/`blocked`; present-but-unparseable explicitly never collapses into `pending` and never silently passes. The gating-off path is structural (config absent or `review_enabled` false \u21d2 no artifact read at all) and backed by a dedicated regression test. The one unenumerated I/O path on this slice is the config read \u2014 see the first CONCERN.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Config-read failure modes for the new gate path are unspecified; fail-fast NFR not restated",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1: `reviewGate.ts` is a standalone pure module",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Arch requirement that the rationale name the parse failure explicitly is dropped",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Interfaces Required",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "`STATUS` const does not cover the two new `SliceStatus` values this slice introduces",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-6: `STATUS` const introduced here; sweep deferred to 910",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`GateOutcome` includes `pending` but TD-2 assigns the pending outcome to the navigator",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "requirements",
+      "raw_category": null,
+      "summary": "Design resolves an arch-internal inconsistency in `pending-review` semantics",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches slice plan entry 241 exactly; folded and deferred scope is plan-authorized",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Integration points verified against the code and sibling slices",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Integration Points",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Review-artifact I/O failure modes are enumerated with explicit handling",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "against": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-241-slice"
+  },
+  "timestamp": "2026-11-17T06:03:51.273567",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 64416,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 186650,
+  "cached_tokens": 151040,
+  "cache_write_tokens": null,
+  "completion_tokens": 17701,
+  "reasoning_tokens": 14899,
+  "duration_seconds": 313.12541533308104,
+  "cost_usd": 0.03149438,
+  "cost_basis": "alias_pricing"
+}

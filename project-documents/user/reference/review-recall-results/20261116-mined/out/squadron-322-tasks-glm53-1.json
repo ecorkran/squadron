@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T13's result-discovery premise is false and its fallback cannot satisfy the offer contract",
+      "description": "T13 instructs: \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk.\" I verified no such surface exists: `capture.resolve_target` (src/squadron/metrology/capture.py:64-121) resolves a single caller-named target (a per-index glob, not an enumeration); `MetrologyStore` globs only its own record directory (store.py:174); `report.enrich_samples` reads only files already referenced by samples. Worse, the named fallback is logically impossible for the function's purpose: `select_residual_offers` must find results **not yet sampled** (T13's own bullet: \"no `SampleVerdict.result_ref` points at them\"), but store-recorded samples are by definition the **sampled** ones \u2014 the exact complement. Under the fallback the function can never return a non-empty offer set, contradicting T13's own success criteria (\"3 unsampled matching results at `rate=1.0` yields 3 `OfferTarget`s\"), T14's tests (non-empty guarantee, exhausted, `rate=0.5` over 4 unsampled results, pruned file at lines 215-219), and the asserted success criterion \"a graduated config with unsampled results yields a non-empty offer set\" \u2014 an explicit architecture commitment. The lapse-detection bullet (line 203) and the pruned-file test also require enumerating current review files. Fix before execution: add an explicit result-discovery step \u2014 enumerate `project-documents/user/reviews/*-review.*` under cwd, derive each file's `JudgeConfigId` via 320's `derive_judge_config_id`, subtract sampled `result_ref`s \u2014 as a small standalone task or an explicit T13 bullet, replacing the impossible fallback (this also removes the need for the mid-task \"ask the Project Manager\" stall).",
+      "file_ref": null,
+      "category": "task-completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T3's placement of GraduatedConfig creates a circular import with T11's envelope extension",
+      "description": "T3 defines `GraduatedConfig` in `calibration_models.py` with `judge_config: JudgeConfigId` (line 64), and `JudgeConfigId` lives in `src/squadron/metrology/models.py` \u2014 so `calibration_models` must import from `models`. T11 then extends `MetrologyRecord` in `models.py` (line 175) with `graduated_config: GraduatedConfig | None`, forcing the reverse import. Both load orders fail: whichever module is imported first leaves the other partially initialized and its needed name undefined. 321's `report_models.py` has the same one-way shape but no back-edge, which is why it works. A junior AI cannot complete T11 as written without deviating from T3's explicit placement. Fix: define `GraduatedConfig` in `models.py` \u2014 it is a store payload, matching that module's own docstring (\"shapes persisted to and read from the metrology store\", models.py:1-3) and the `SampleVerdict` precedent next to the envelope (models.py:100-111) \u2014 and keep the recommendation/offer models in `calibration_models.py`.",
+      "file_ref": null,
+      "category": "structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's numbered precedence contradicts its own clarification and T8's required test",
+      "description": "T7 says to implement the bands \"in this precedence order\" with case 1 (`n < floor` \u2192 `INSUFFICIENT_EVIDENCE`) evaluated first, then case 4 (`TIGHTEN`) carrying the parenthetical that a below-floor low-match cell \"still surfaces as `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\" (line 119). As literally ordered, case 1 fires first for every below-floor cell, so case 4 is unreachable for exactly the cells the clarification (line 121) and T8's test (line 134: \"`n < floor` with a low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\") require. A junior AI following the numbered order produces code that fails T8. The intent is recoverable \u2014 the clarification and the test agree with each other \u2014 but the spec must be corrected so `match_rate <= tighten_rate` is checked *before* the floor/unversioned gates, and while doing so it should pin the one interaction neither the design's table nor T7 resolves: an **unversioned** cell with a low match rate (`TIGHTEN` or `INSUFFICIENT_EVIDENCE`?).",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed-judge-block failure mode is claimed covered but absent from T7/T8",
+      "description": "The coverage check asserts \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8)\" \u2014 but T8 (lines 129-140) contains no malformed-block test, and T7's `read_current_thresholds` (line 122) specifies handling only for unregistered templates. The design's Failure Modes row requires an explicit handling decision, a WARNING naming the template, and a test (\"malformed judge block \u2192 flagged, not silently defaulted\"). The handling also needs a decision the design leaves open: `resolve_thresholds` (src/squadron/pipeline/actions/judge.py:49-55) does `float(pass_floor)` and raises `ValueError` on a non-numeric floor \u2014 it does not \"fall back\" \u2014 so T7 must catch and flag (e.g., `current=None` + WARNING) rather than inherit silently. Add the branch to T7 and the test to T8, or strike the row from the claimed coverage.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "model_dimension_note spec drops the runtime-drawn-model clause the success criterion requires",
+      "description": "The success criterion requires \"the runtime-drawn-model limitation is stated where the recommendation is produced\", and the design spells it out: where a step draws its model at runtime (a 180 pool), the note states the threshold cannot track the drawn model and the recommendation does not apply to that step. T9's note-text bullet carries only the (template, model)-pairing clause, and T10 asserts only non-emptiness \u2014 so a note omitting the runtime-pool clause passes every test in this breakdown and the criterion's second half ships silently unmet. Add the clause to T9's bullet (and optionally a content assertion to T10).",
+      "file_ref": null,
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "offers --project has no implementable semantics under the specified data model",
+      "description": "Both the design's API contract and T15 give `sq metrology offers [--project ID] ...`, but `GraduatedConfig` (line 64) carries no project dimension \u2014 only `judge_config`, `artifact_level`, `evidence`, `graduated_at`. Samples carry `ProjectId` (that is how `recommend --project` filters via `store.list_samples`), but graduations do not, so there is nothing for the flag to filter on; ignoring it would be a silent no-op, which this slice's own discipline forbids. Either drop `--project` from `offers` or define it (e.g., record the project on the graduation, or filter offer targets by the cwd-derived project via 320's `derive_project_id`). Worth pinning at the same time: `graduate` has no `--project` flag yet must \"re-derive via the same path as `recommend`\", which needs a sample-listing scope \u2014 presumably the cwd-derived project, but T15 does not say.",
+      "file_ref": null,
+      "category": "api-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:231"
+    },
+    {
+      "severity": "PASS",
+      "title": "All success criteria trace to tasks; sequencing is correct and acyclic",
+      "description": "Cross-reference verified against the design's Success Criteria: hash-narrowing regression in both directions (T1/T2, re-run at T17 step 5); floor refusal stating both n and floor (T7/T8, T15, T17 step 2); the non-empty residual-offer guarantee (T13/T14); per-cell model-dimension note present in output including `--json` (T9/T10, T15/T16); unversioned never `GRADUATE` (T7/T8); version-scoped graduation with lapse reporting (T3/T11/T12/T13/T14/T15/T16, T17 step 7); no-mutation asserted at both unit and CLI level (T10/T16, T17 step 4); surface-agnostic parity by test (T16); config keys referenced once, never literals (T5); 321 consumed unchanged (no task touches `report.py` or `report_models.py`); no-migration envelope extension (T11, exercised by T12 round-trip and the T17 full suite). Ordering matches the design's suggested order with no cycles: config keys (T5) before the CLI that reads them, core before CLI, full validation last. Deferred items (automatic threshold mutation, new gating, the 300 write-path field, judge-verdict persistence, 323/324 audit work) are correctly absent.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern, commit markers, and proportionality match the established 320/321 house style",
+      "description": "Every implementation task is immediately followed by its test task (T1/T2 through T15/T16). Each `**Commit**:` marker is a plain line (never a checkbox) at a suite-green point \u2014 17 markers, exactly the density of the 320 and 321 task files, consistent with CLAUDE.md's \"commit at least once per task\"; the T1 commit precedes T2's regression tests, but no existing test asserts a computed `_template_content_hash` value (verified: existing tests use literal fixture hashes or assert `None` for unresolvable templates), so the point is green and T2 follows immediately. T17 gates on the full suite, pyright/ruff, and the design's nine-step walkthrough with pasted output, and closes out the slice-plan checkbox. No load test is needed \u2014 the slice design restates no NFR \u2014 and none is present, so no CI wiring task is required. Task count (17), step detail, and file footprint (3 new core modules, 1 extended CLI, 8 test files) fit the slice's stated 3/5 effort and mirror the sibling slices; nothing here is scope creep.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "task-completeness",
+      "raw_category": null,
+      "summary": "T13's result-discovery premise is false and its fallback cannot satisfy the offer contract",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "structure",
+      "raw_category": null,
+      "summary": "T3's placement of GraduatedConfig creates a circular import with T11's envelope extension",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "T7's numbered precedence contradicts its own clarification and T8's required test",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Malformed-judge-block failure mode is claimed covered but absent from T7/T8",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "summary": "model_dimension_note spec drops the runtime-drawn-model clause the success criterion requires",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "api-contract",
+      "raw_category": null,
+      "summary": "offers --project has no implementable semantics under the specified data model",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:231",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All success criteria trace to tasks; sequencing is correct and acyclic",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Test-with pattern, commit markers, and proportionality match the established 320/321 house style",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T13:08:54.524520",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 903847,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 604972,
+  "cached_tokens": 543616,
+  "cache_write_tokens": null,
+  "completion_tokens": 212806,
+  "reasoning_tokens": 208420,
+  "duration_seconds": 1629.8829109165817,
+  "cost_usd": 1.1635849600000001,
+  "cost_basis": "alias_pricing"
+}

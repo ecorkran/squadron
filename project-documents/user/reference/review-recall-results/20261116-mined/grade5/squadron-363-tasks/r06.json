@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Commit markers use checklist form instead of plain `**Commit**:` lines",
+   "description": "All eight commit markers (lines 99, 125, 164, 185, 221, 254, 296, 351) are checkbox items (`- [ ] Commit: ...`) rather than plain `**Commit**:` lines. The placement itself is correct \u2014 markers sit at working, tested points after each authoring-plus-verify pair, and one after the walkthrough (8.6), not after every task and not only at the end. The format is a cosmetic deviation from the marker convention; consider converting them to plain lines so task-checker does not treat them as checkable work items.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "No document-level check that dropped topics are absent from the generated concept",
+   "description": "SC4 requires dropped topics (why-now, audience evolution, methodology preference) to appear nowhere in the written document. Tasks 4.1/4.2 establish and verify the rule in the skill text, and 5.3 confirms no third question exists in the flow, but the 8.1 checklist does not include a line confirming the generated `000-concept.squadron.md` contains no dropped-topic content or gap markers. The design's own walkthrough omits this too, so the task file mirrors the design; a one-line addition to 8.1 would close the loop cheaply. Not blocking \u2014 the authoring tasks make the omission structurally unlikely.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:311"
+  }
+ ]
+}

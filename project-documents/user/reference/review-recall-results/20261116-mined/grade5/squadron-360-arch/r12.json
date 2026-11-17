@@ -1,0 +1,61 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Repeated comprehension runs can overwrite the protected concept",
+   "description": "Every run targets the same `000-concept.{project}.md`, but no behavior is defined when it already exists. Reconstructing it from a new interview could replace the explicitly immutable **User-Provided Concept** section. Define create-versus-update behavior, preserve existing protected content verbatim, and specify where subsequent interview answers belong.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:146-156"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Grep does not provide bounded structured JSON extraction",
+   "description": "\u201cGrep for the needed section\u201d depends on JSON formatting: valid minified JSON puts the entire graph on one line, while formatted arrays can span arbitrarily many lines. Extracting every file-level node also remains unbounded. Specify semantic JSON projection using the available Python stack, with bounded batches or summaries that retain node IDs and expose omitted coverage.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The prescribed extraction omits dependencies needed by the outputs",
+   "description": "Step 3 extracts layers, tour, and node summaries but not `edges[]`; the output nevertheless promises dependency observations, and Initial Technical Direction includes dependencies. Layer membership and tour order cannot establish dependency direction or cycles. Include relevant edges and define how function/class endpoints are aggregated to file-level nodes, or explicitly limit the promised observations.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:138-153"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Graph validity and unknown freshness have no defined handling",
+   "description": "Preconditions check existence, not whether the graph is parseable or contains the required fields and valid node references. Staleness handling also assumes readable metadata and a locally resolvable commit; missing metadata, shallow history, and uncommitted source changes are unspecified. Define explicit invalid-input errors and an \u201cunknown freshness\u201d provenance state rather than allowing these cases to look current or become empty structural evidence.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The concept-free overview path contradicts its evidence rules",
+   "description": "The common path allows interview-derived purpose when the concept is absent, but the field schema still sources Problem, Audience, and Approach exclusively from the concept. \u201cEvery claim traces to an input artifact\u201d also excludes unrecorded interview answers. Define which fields the initiative plan can support, how interview evidence is preserved, and which unsupported fields become explicit unknowns.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-235"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Status translation can manufacture progress",
+   "description": "The example translates `status draft` into \u201cin progress,\u201d although draft does not establish implementation progress and is rejected elsewhere in this document. The actual initiative plan also contains checked initiatives whose explicit status remains `not_started` or `in_progress`. Define authoritative status precedence and mappings; conflicting or unsupported states must not become confident stakeholder progress claims.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:224-237"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Client output cannot both omit and require frontmatter",
+   "description": "Translation rules say docType frontmatter \u201cnever appear,\u201d while Output Conventions require the overview to carry `docType: analysis` for the existing validation gate. Those instructions conflict for the same Markdown artifact. Require repository frontmatter and restrict vocabulary stripping to the body; any metadata-free presentation should be a separate downstream rendering.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:230-246"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Overflow allocation contradicts the stated naming contract",
+   "description": "The design claims no naming-convention change while authorizing analysis documents beyond its stated reserved range. \u201cRemaining slots in the 900 band\u201d does not define whether availability is checked across analysis files alone or across initiatives, slices, and their related artifacts. Establish an allocation rule consistent with the canonical convention before overflow occurs; document absence alone does not establish that an index is unreserved.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+  }
+ ]
+}

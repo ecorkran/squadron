@@ -1,0 +1,200 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The graph location does not match the installed upstream plugin",
+      "description": "The design exclusively reads `.understand-anything/knowledge-graph.json` and tells users with no graph to run `/understand`. The locally installed upstream 2.9.8 skill instead defaults to `.ua/` for new projects and uses `.understand-anything/` only when that legacy directory already exists. A fresh `/understand` run therefore produces a graph the proposed consumer cannot find; the trash ignore rule also targets the wrong directory. Define supported upstream versions and resolve the active data directory consistently for graph, metadata, ignore rules, and hygiene.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The overview\u2019s required provenance contradicts its concept-absent path",
+      "description": "The common concept-absent path sources purpose from an interview, but Design Goals says the document only restates approved artifacts, and Translation Rules require every claim to trace to an input artifact. The field schema also assigns Problem, Audience, and Approach solely to the optional concept. Consequently the explicitly tested path has no coherent way to populate its required fields without either inventing claims or violating provenance. Define whether interview statements are admissible sources and how they are recorded; specify unknown or omitted fields when neither artifact supplies the information.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Comprehension outputs require graph data the flow never reads",
+      "description": "The read step extracts project, layers, tour, and file-level nodes, but the analysis promises dependency observations and the concept promises frameworks and dependencies. Edges are not included in the extraction, nor is there a specified source for framework or external dependency identification. Specify bounded extraction of the relevant edges and project metadata, including how missing evidence is reported rather than inferred as fact.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing concepts and repeated runs have no safe write policy",
+      "description": "Every comprehension run emits the fixed `000-concept.{project}.md`, yet the document provides no behavior when a concept already exists or a prior run partially succeeded. Overwriting risks destroying the protected verbatim **User-Provided Concept** section and subsequent human edits; refusing all existing files would prevent ordinary reruns. Define explicit create, conflict, and recovery behavior that preserves existing content.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Staleness checks can report a graph as current when it is not",
+      "description": "Comparing `gitCommitHash` with `HEAD` misses uncommitted source changes, and a missing metadata file, unavailable commit, shallow clone, or divergent history makes the promised commit distance unavailable or ambiguous. Define an explicit unknown-staleness result and provenance for these cases, and account for relevant working-tree changes rather than treating equal commit IDs as proof of freshness.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The proposed status translation can misrepresent planned work",
+      "description": "The translation example turns \u201cstatus draft\u201d into \u201cin progress,\u201d although drafting a plan is not evidence that implementation has started. The project\u2019s own initiative plan also contains checked items with differing explicit statuses, including a checked maintenance initiative marked `not_started`. Define precedence for conflicting status indicators and preserve uncertainty instead of converting document maturity or a checkbox into delivery progress.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Output index overflow conflicts with the stated naming convention",
+      "description": "The document says analysis is reserved to 940\u2013949 and that the naming convention will not change, then independently sanctions allocation from 950 onward. That does not establish that those indices are available or valid for this artifact type, and the allocation rule does not address collisions with other analysis producers. Either keep allocations within the existing convention with defined exhaustion behavior, or change the convention and define collision-safe allocation.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The graph reader has no contract for invalid or incompatible input",
+      "description": "The only preconditions are plugin installation and graph existence, while the design relies on particular fields and node types from an actively developed external format. A malformed graph, missing tour, changed schema, or unresolved node references has no specified outcome; the instruction to grep a large JSON file also does not reliably extract nested records across formatting variants. Define supported schema/version checks, structured bounded extraction, and explicit failure or unknown-coverage behavior before generating artifacts.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The graph location does not match the installed upstream plugin",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The overview\u2019s required provenance contradicts its concept-absent path",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Comprehension outputs require graph data the flow never reads",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Existing concepts and repeated runs have no safe write policy",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Staleness checks can report a graph as current when it is not",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The proposed status translation can misrepresent planned work",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Output index overflow conflicts with the stated naming convention",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The graph reader has no contract for invalid or incompatible input",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T13:15:35.216713",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 42759,
+  "cached_tokens": 32896,
+  "cache_write_tokens": null,
+  "completion_tokens": 1081,
+  "reasoning_tokens": 0,
+  "duration_seconds": 43.17454174999148,
+  "cost_usd": null,
+  "cost_basis": null
+}

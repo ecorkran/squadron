@@ -1,0 +1,68 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The \"central\" tick return-type contract describes an interface that does not exist",
+   "description": "The document calls the tick return type \"the central architectural decision\" and states \"Currently `tick()` returns NumPy arrays (positions, velocities)\" and \"The behavior engine's external interface (`tick() \u2192 state arrays`) is preserved at every tier.\" Verified code contradicts both: `src/migratory/engine/tick.py::tick` is declared `-> None` and mutates `state` in place, and `SimulationManager.step()` in `src/migratory_server/simulation.py` likewise returns `None` and mutates `EntityManager.state`. All three options \u2014 (a) internal `field.to_numpy()` returned, (b) return Quadrants fields, (c) return DLPack handles \u2014 are designs for a by-value return the system never had. The actual boundary decision (who owns/allocates the in-place output buffers, the `out=`/pre-allocated question raised in `100-arch`) is left unaddressed, and every tier's \"server calls the same function\" claim rests on a signature that is not there.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical Considerations"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Compiled backends are not drop-in replacements behind the existing interfaces",
+   "description": "\"Quadrants substrate operates behind the existing `SpatialQuery` and `BulkForce` interfaces\" and \"Numba forces coexist with NumPy forces\" (slice 118, interface unchanged) are not achievable as written. Verified `BulkForce.__call__` takes `state: AgentState`, `neighbors: CSRNeighborData`, and `profiles: list[BehavioralProfile]` \u2014 Python dataclasses and a list of Python objects \u2014 while `SpatialQuery` methods are typed to `NDArray[np.float64]`/`NDArray[np.intp]`. `@njit` cannot compile a function receiving arbitrary Python class instances and lists of objects; `@ti.kernel` likewise forbids Python objects and NumPy-array parameters, and the per-tick orchestration in `src/migratory/engine/tick.py` is host-side NumPy (gathers, `cumsum`, force loop). A GPU \"full tick\" therefore cannot be a behind-the-interface swap: it needs either host\u2194device copies (negating the entire DLPack/PCIe rationale) or a rewrite of both protocols and the tick loop. \"Same code, different backend\" understates this to the point of being misleading.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Architectural Principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Current-state wire description is stale and its byte figure is invented",
+   "description": "\"The wire protocol is currently uncompressed JSON over WebSocket. At N=3,500 this is approximately 84 KB/tick (24 bytes \u00d7 3,500 agents)\" conflicts with shipped work: slice 306 replaced JSON with a binary protocol (`9 + N\u00d732` bytes for STATE_UPDATE, float64 positions+velocities), and slice 317 added zstd/lz4 payload compression (`src/migratory_server/protocol_compression.py`). The doc also lists \"Binary WebSocket replaces JSON\" as a Tier 2 gain although it already shipped in slice 306. The \"24 bytes \u00d7 N\" constant matches neither the old JSON (two float64 values as text, tens of bytes each) nor the current 32 bytes/agent binary layout. The \"wire becomes a bottleneck at 50k\" projection is built on this obsolete baseline and should be re-derived before it drives tier milestones.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Current State"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Delta-compression design contradicts the slice assigned to implement it, and ignores stream-rate interaction",
+   "description": "The document specifies \"Quantizing deltas to int16 with a scale factor (e.g., 1/1024...) ... ~32\u00d7 compression\" and \"send full positions for those agents\" on large deltas. Slice 319 (STATE_UPDATE Delta Encoding) in `300-slices.worldserver-foundation.md` \u2014 the actual slice for this work \u2014 specifies dead-band omission of unchanged entities, a keyframe flag every N ticks, and a new DELTA (`0x06`) message type; it explicitly has position-only as the first target and no int16 quantization. These are different protocols. Separately, \"decoupled stream rate (sim 60, stream 30)\" is presented as an independent win, but at 30 Hz a \"tick-over-tick delta\" becomes a delta-since-last-sent frame and the dead-band/keyframe cadence changes meaning. The document must reconcile with slice 319 or the slice will ship something the architecture does not describe.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "GPU-exit decision and frustum culling are mutually load-bearing and both deferred",
+   "description": "Tier 3 requires server-side frustum culling that \"sends only camera-visible agents (~50k visible),\" while Tier 4 says \"The tick return type contract determines whether position data exits the GPU at all\" as though the question were still open. Culling 2M agents requires the server to read all positions; if the point of the return-type decision is to avoid the GPU\u2192CPU transfer (the PCIe cost the document explicitly wants to avoid on NVIDIA), CPU-side culling cannot work. The design never chooses between (a) positions exit the GPU and culling is CPU-side with the transfer accepted, or (b) culling moves into a GPU kernel driven by camera params \u2014 which is not designed, and whose camera channel is a viewer-side addition. This is the initiative's hardest interaction and it is left as \"the contract determines.\"",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Staggered neighbor caching breaks the engine's stateless, pure-tick contract",
+   "description": "`100-arch.behavior-engine.md` states the engine \"is stateless between ticks \u2014 all state lives in the arrays passed to it\" and \"given the same state and inputs, a tick produces the same outputs,\" which is the basis for replay (slice 307). Slice 119's `NeighborCache` makes tick output depend on prior ticks and on `tick_count % stagger_period`; the document concedes that identical initial states with different stagger phases diverge and promises only \"determinism within a given stagger configuration.\" That is weaker than replay-from-initial-state requires and contradicts the stateless, feed-in/get-back test model. The document should state whether the cache is reconstructible from (initial state, config, tick number) and what replay must log; otherwise \"behavioral fidelity is preserved\" is asserted, not established.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical Considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Scope is overweight and includes work the document itself excludes",
+   "description": "Five tiers across three tracks plus a three-mode DLPack abstraction, a cross-platform benchmark harness, a server-side Vulkan\u2192H.264 render path (Tiers 4\u20135), and a biome terrain-shading JSON config. The biome block (\"Biome terrain shading is viewer-only... should ship before or alongside the 50k milestone\") directly contradicts the Scope exclusion of \"viewer/client rendering optimization\" and does not belong in this document at all. The \"support all three behind an abstraction, choice per-platform\" return-type extension point has no design, no registry, and no consumer among the planned slices \u2014 pick one return strategy per tier and defer the rest. The Vulkan/H.264 server-render path is a separate subsystem with no design and should be its own initiative. Cutting these leaves the actual deliverable \u2014 compiled kernels, spatial hash, wire culling, benchmarked tiers \u2014 intact.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Overview"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Independent\" wire work is tightly coupled to out-of-scope viewer work and to existing slice definitions",
+   "description": "\"The wire is a separate problem... should not be gated on the compute substrate migration\" holds for compute, but the wire track is gated on the viewer initiative: client-side interpolation is required for \"sim 60, stream 30,\" and the client\u2192server camera control channel (~48 bytes/frame) is a viewer-side protocol addition \u2014 both in initiative 600, which Scope excludes. The document also ignores slice 311 (Client Spatial Culling) and Future Work item 7 (View-Driven Terrain Streaming) in `300-slices`, which already define a client\u2192server viewport declaration and explicitly note it inverts the server-push model. These are cross-initiative contracts needing named owners on both sides, not self-contained world-server slices.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Architectural Principles"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "\"Unified memory makes `to_numpy()` nearly free\" is an unvalidated load-bearing assumption",
+   "description": "\"On Apple Silicon unified memory, option (a) may be nearly free (no actual copy, just cache flush)\" is treated as a fact that drives the per-platform choice, yet the document's own Architectural Principles require profile-before/profile-after at every tier, and no measurement or reference is provided. Taichi-family field-to-NumPy conversions typically stage through a device-to-host copy even on unified-memory systems. Validate this before making backend and return-mode decisions depend on it.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical Considerations"
+  }
+ ]
+}

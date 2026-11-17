@@ -1,0 +1,200 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Tick output and state ownership are contradictory",
+      "description": "The engine is described as stateless, receiving arrays and returning updated state, but it also exposes state queries and agent registration/removal. The world server architecture assigns array ownership and entity lifecycle to the server and requires an atomic read-compute-commit tick. The document does not say whether `tick()` mutates its input, returns a separate state, or who implements registration and removal. In-place integration also leaves the server without an atomic commit or rollback if a force calculation fails. Define a single owner and an explicit input/output and failure contract.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:60-81"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The spatial interface does not support the promised bulk execution path",
+      "description": "The described flow queries neighbors **for each active agent**, while the design requires NumPy bulk execution and eventually GPU execution without Python callbacks or per-agent branching. A scalar radius-query interface does not specify how variable-length neighborhoods, profile-specific radii, or neighbor attributes reach a bulk force calculation without a Python loop and intermediate allocations. The current `SpatialQuery.query_radius` and `tick()` implementation demonstrate that gap: they issue one Python query per agent and build a list of arrays. Define a batched query/result contract and establish a feasible CPU path; otherwise the stated scale and replaceable GPU query strategy are unsupported.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:64-68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subset ticking does not define elapsed time or neighbor positions",
+      "description": "Selecting an active subset alone does not specify how a 1/16-rate agent advances through the sixteen base timesteps, or which position full-rate neighbors observe between its evaluations. Using one base `dt` makes reduced-rate agents move too slowly; using a larger `dt` changes integration stability and interaction timing. The world server's proposed interpolation adds another state representation that must agree with spatial queries. Specify elapsed-time ownership, interpolation/extrapolation, and what state is indexed before claiming this interface supports variable-rate simulation.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism lacks an ordering and precision contract",
+      "description": "A fixed timestep does not make force reductions reproducible when different spatial indexes return neighbors in different orders, or when CPU and GPU reductions use different floating-point arithmetic. Precision is also left undecided. These differences can alter trajectories and undermine the stated replay and cross-region agreement goals. Define the required reproducibility scope, neighbor ordering and reduction rules, numeric precision, and what must be recorded as tick input; do not imply cross-backend agreement unless the design can enforce it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The state model omits data required by several promised behaviors",
+      "description": "Positions, velocities, and profile indices do not specify where individual home-range centers, leadership attributes, travel corridors, or selected prey targets reside. Profile-wide weights alone cannot distinguish individual territories or establish a shared target for a pack. Define the required per-agent and environmental inputs, their ownership and lifecycle, and whether target selection is transient or persistent. Otherwise the proposed archetypes cannot be implemented from the stated inputs without expanding the state contract.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:70-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stigmergy has no mechanism for agents to modify the environment",
+      "description": "Swarm behavior is described as responding to reinforced paths, but the environment interface is read-only and the tick returns only agent state. No output communicates marker deposition or path reinforcement to the environment owner. Reading a pre-existing field is possible, but agent-created stigmergy is not. Define an output/event boundary and its tick ordering, or narrow the stated swarm capability.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45-47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The aggregation extension point lacks a usable force contract",
+      "description": "The document proposes presenting aggregates through the same neighbor interface as individuals, but does not define their identity, count, spatial extent, profile composition, or how cohesion, separation, and predator-prey forces interpret them. Treating a thousand-agent aggregate as one ordinary neighbor produces materially different forces; expanding it defeats aggregation. Specify a distinct aggregate representation and interaction semantics, or defer the compatibility claim until those decisions are made.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Future GPU constraints are imposed before a concrete backend exists",
+      "description": "The design requires no dynamic allocation or Python callbacks in the hot loop for a hypothetical GPU tier, despite the initial implementation being NumPy on one CPU and the neighborhood representation still being unresolved. Enforcing GPU-kernel constraints throughout the initial engine risks complicating the CPU design without demonstrating that it can meet the actual workload. Keep a bulk boundary where useful, but defer kernel-level allocation and dispatch restrictions until a measured GPU implementation needs them.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Tick output and state ownership are contradictory",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:60-81",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The spatial interface does not support the promised bulk execution path",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:64-68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Subset ticking does not define elapsed time or neighbor positions",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Determinism lacks an ordering and precision contract",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The state model omits data required by several promised behaviors",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:70-79",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Stigmergy has no mechanism for agents to modify the environment",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45-47",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The aggregation extension point lacks a usable force contract",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Future GPU constraints are imposed before a concrete backend exists",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-17T13:16:34.570794",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 36197,
+  "cached_tokens": 32256,
+  "cache_write_tokens": null,
+  "completion_tokens": 1150,
+  "reasoning_tokens": 48,
+  "duration_seconds": 38.25930487504229,
+  "cost_usd": null,
+  "cost_basis": null
+}

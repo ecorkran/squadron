@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "3.7's full-suite gate cannot pass: `adoptionBuild.integration.test.ts` still drives the old `createContextPipeline` signature until 4.1",
+      "description": "Task 3.7 requires `pnpm -r build`, `pnpm typecheck`, `pnpm lint` and `pnpm -r test` to all pass before committing the seam removal. But `core/tests/adoption/adoptionBuild.integration.test.ts` is only deleted in 4.1. At 3.7 it still exists, still calls `createContextPipeline(dir, { adoptionStateWrites: stateWrites, squadronProbe: fakeProbe })` (line 68) against the new one-argument signature \u2014 a `tsc --noEmit` error in core's test project \u2014 and still asserts the removed rendering and state writes (`FACTS_HEADING = '### Adoption Facts'` at line 24, `readAdoptionState(root)).toBe('in_progress')` at lines 123/209). So the workspace is red at the point the task file says to commit, and a junior AI has no instructed option other than deleting/ad-hoc editing 4.1's file early or committing a failing suite. Fix: move the deletion of `adoptionBuild.integration.test.ts` into Section 3 (before 3.7), or split 3.7's commit so the typecheck/test gate runs after 4.1.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+    },
+    {
+      "severity": "FAIL",
+      "title": "3.2a's intermediate commit gate is false: 3.1\u20133.2 break assertions in `pipeline-integration.test.ts` that are not removed until 3.3",
+      "description": "3.2a is stated as a working, tested checkpoint (\"**Success:** `pnpm typecheck` and `pnpm --filter @context-forge/core test` pass\"). It cannot be. The `brownfield build with an injected squadron probe` block (lines ~129\u2013195) builds through the real pipeline and asserts exactly the two renderings that 3.1 and 3.2 delete: `Comprehension: ${COMPREHENSION}` at line 184, the probe JSON/`WARNING` facts at ~165, and the unavailable-probe statement at ~176. Those cases are only deleted by 3.3 (`the probeReturning block`), i.e. after the commit. Either pull the pipeline-integration brownfield/probe deletions into 3.1\u20133.2 (they are render assertions, so they belong with the render removal), or drop `pnpm --filter @context-forge/core test` from 3.2a and gate that commit on the two touched suites plus a note that pipeline-integration is knowingly red until 3.3.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/core/tests/pipeline-integration.test.ts:184"
+    },
+    {
+      "severity": "NOTE",
+      "title": "5.1's self-mutation check adds an edit-and-revert cycle no success criterion requires",
+      "description": "The design's D5 asks for the purity assertions (snapshot unchanged, concept prompt present, no `### Adoption Facts`, no `sq` marker, CLI/MCP parity, explicit-key check) \u2014 all present. The extra step \"temporarily add a `writeFileSync` of `.context-forge.toml` \u2026 confirm the snapshot assertion fails, then revert\" is a test-sensitivity check beyond the criteria, and it costs a source edit/revert round-trip inside a 3-effort task that already carries the checkout builder, the fake-`sq` PATH shim, the snapshot helper, four runs and two one-off checks. Reasonable to keep as a NOTE, but if the section needs trimming this is the first candidate; splitting the harness from the run matrix would also make 5.1 independently completable.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "packages/core/tests/pure-build-golden/\u2026/pureBuild.test.ts (5.1, \"the test fails when run against code that writes state\")"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Post-deletion the `sq` marker assertion can only guard against reintroduction, not against live spawning",
+      "description": "5.1 runs after 4.4 deletes `runSquadronProbe`, so nothing on the build path can execute `sq` and the marker check is structurally unsatisfiable. It is a legitimate regression guard and matches D5's wording (\"a fake `sq` executable placed first on `PATH`\"), and the PATH hygiene the design's Special Considerations require (test-process-only `PATH`, restore in `afterAll`) is spelled out correctly. Noted only so the reviewer does not read the marker as proof of behavior that the deletions already guarantee.",
+      "file_ref": null,
+      "category": "test-value",
+      "raw_category": null,
+      "location": "packages/core/src/detection/squadronProbe.ts:131"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`**Commit**:` marker style is inconsistent across sections",
+      "description": "2.3 and 3.2a put the commit on the task heading as a plain line, while 4.1\u20134.4, 3.7 and 5.1 make it a `- [ ] Commit: \u2026` sub-checkbox. The substantive rule is met \u2014 markers sit at working, tested points, not after every task and not only at the end, and 6.3's conditional commit is correctly phrased as \"otherwise nothing to commit\" \u2014 so this is a formatting nit for the checker agent, not a coverage problem.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Criterion-to-task traceability and design references check out against the code",
+      "description": "The design's Migration Plan and Tests lists are fully accounted for: `adoption/contracts.ts` trimmed to `AdoptionError` (4.2 \u2014 justified, since the kept `comprehensionAnalysis.ts:33/50`, `planningArtifacts.ts:45`, `sourceVolume.ts:47/90` and `adoptionState.ts:19` all still throw it), `adoptionState.ts` write-vs-read split (4.3), `adoption-completed` removal (4.3, with the exhaustive-switch check named as the compiler gate), probe + contract test + fixture deletion (4.4, matching `detection/index.ts:8-17`), `ContextToolOptions`/`adoptionStateWrites` removal from `generateContext` and `registerContextPipeline` (3.6, matching `contextTools.ts:11/65/100/152`), `integrationSetup.ts` probe option (3.6), `node.ts` comment (4.2), and the `outOfTreeLinks.test.ts` rewrite onto kept functions (4.1). 6.2's named exception is accurate \u2014 `COMPREHENSION_PROFILE_VARIABLE = 'fileComprehension'` does live at `detection/comprehensionAnalysis.ts:15` \u2014 and the 6.1 guide-warning criteria name tests that exist at `cli/tests/commands/build.test.ts:91` and `mcp-server/tests/contextTools.test.ts:162`. The build-tooling claims are also correct: root `package.json` has `lint`/`typecheck` and no format script, and core builds to `dist/` that `cli`/`mcp-server` typecheck against, which is why 3.4's `pnpm --filter @context-forge/core build` step is placed where it is. No merge or push task appears, per the git rules.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "3.7's full-suite gate cannot pass: `adoptionBuild.integration.test.ts` still drives the old `createContextPipeline` signature until 4.1",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "3.2a's intermediate commit gate is false: 3.1\u20133.2 break assertions in `pipeline-integration.test.ts` that are not removed until 3.3",
+      "location": "packages/core/tests/pipeline-integration.test.ts:184",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "5.1's self-mutation check adds an edit-and-revert cycle no success criterion requires",
+      "location": "packages/core/tests/pure-build-golden/\u2026/pureBuild.test.ts (5.1, \"the test fails when run against code that writes state\")",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-value",
+      "raw_category": null,
+      "summary": "Post-deletion the `sq` marker assertion can only guard against reintroduction, not against live spawning",
+      "location": "packages/core/src/detection/squadronProbe.ts:131",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "`**Commit**:` marker style is inconsistent across sections",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criterion-to-task traceability and design references check out against the code",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-17T11:43:17.604291",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 221885,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 664357,
+  "cached_tokens": 567296,
+  "cache_write_tokens": null,
+  "completion_tokens": 61765,
+  "reasoning_tokens": 57819,
+  "duration_seconds": 786.2010134169832,
+  "cost_usd": 0.05209814,
+  "cost_basis": "alias_pricing"
+}

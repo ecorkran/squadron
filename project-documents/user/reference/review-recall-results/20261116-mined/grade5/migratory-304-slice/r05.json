@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Two contradictory `step()` implementations; the second skips `post_tick()` when there are no entities",
+   "description": "The document gives two versions of `SimulationManager.step()`. The \"SimulationManager as Simulation Orchestrator\" snippet (lines 176-190) guards only `engine.tick()` with `if self._entity_manager.count > 0:` and calls `post_tick()` unconditionally \u2014 correct. The \"Implementation Details\" snippet (lines 270-288) instead uses `if self._entity_manager.count == 0: return` placed *after* `pre_tick()` and *before* `engine.tick()`. With that version, a zero-entity tick returns before reaching `post_tick()`, so `post_tick()` is never called. This directly contradicts the note on line 291 (\"post_tick() is called even when there are no entities. The early return is moved to wrap only engine.tick()\"), the functional requirement on line 347, and the task file's test \"step() calls post_tick() even when entity count is zero.\" Because time-varying layers (trail decay) must advance with no agents present, an implementer who follows the second snippet produces silently wrong behavior. Pick one snippet and make the zero-entity path call `pre_tick()` and `post_tick()` around a skipped `engine.tick()`.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:270-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Layers register themselves / plug in without server changes\" conflicts with the provider architecture's construction-time composition",
+   "description": "The overview (line 19) and \"Provides to Other Slices\" (line 329) promise that layers \"plug in without server changes\" and \"register themselves,\" but the design hard-codes `Environment(bounds=world_bounds, layers={})` in `server.py` (lines 97, 303). `500-arch.environment-layer.md` explicitly states \"Extension through data, not plugins \u2014 ... The environment layer does not provide a dynamic layer registry or abstract plugin interface. Layers are statically composed in the environment container,\" and `500-slice.grid-infrastructure-and-world-coordinates.md` constructs `Environment(bounds, layers)` with layers \"composed at construction.\" Under that contract, each layer slice that becomes ready (501-507) will require editing this construction site in `server.py`. The design neither explains the composition mechanism nor reconciles it with the static-composition principle, leaving a hidden dependency for the consuming/serving slices. Either state that layer slices must update the construction site (and drop the \"no server changes\" claim) or specify the intended composition hook.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The plan's \"pass environment context to `engine.tick()`\" is not done literally; resolved via constructor injection",
+   "description": "The parent plan (300-slices, entry 304) assigns \"Pass environment context to `SimulationManager` and `engine.tick()`.\" This slice passes the `Environment` to `SimulationManager` and exposes it via a property (lines 264-266, 300), but `engine.tick(state, profiles, spatial, dt, forces)` (line 104) receives no environment argument \u2014 and the slice-100 `tick()` signature has no such parameter. The design resolves this by injecting the environment into forces via constructor (lines 202-215), which is consistent with the architecture's \"forces query the environment\" model and defers environment-aware forces as excluded scope. This is a defensible resolution of the plan's intent, but it is a deliberate divergence worth recording: no force in this slice actually queries the environment, so the integration point is established but not exercised until a future behavior slice.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:104"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"bounds shared with entity manager\" is inaccurate",
+   "description": "State Management describes `bounds: WorldBounds` as \"immutable world boundaries, shared with entity manager.\" In the design, the entity manager was created earlier from `WorldBoundsConfig` (slice 303, and unchanged here per the Component Structure), while this slice builds a separate `WorldBounds` via `build_world_bounds()` and passes only that one to `Environment`. Nothing shares a `WorldBounds` instance between the two components. Minor, but given the architecture's \"authoritative state ownership\" goal, the doc should not imply a single shared bounds object when two derived-from-config instances exist.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:113"
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items instead of plain lines",
+   "description": "All five `**Commit**:` markers (lines 96, 179, 249, 286, 325) are written as checklist items (`- [ ] **Commit:** ...`). The marker convention requires plain lines, never checkboxes \u2014 which is also the house style in every other task file in `project-documents/user/tasks/` (e.g. 301-tasks, 302-tasks, 303-tasks use bare `**Commit**: ...` lines while their steps remain checkboxes). Wrapping markers in checkboxes makes them indistinguishable from actionable steps and muddies the \"working, tested point\" semantics. Placement itself is correct: one marker per section after tests pass, not after every task and not deferred to the end. Fix is to de-checkbox the five marker lines.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Task 3.5's named call-site list is inaccurate but covered by its catch-all",
+   "description": "The step names `tests/test_force_builder.py` and `tests/test_clients.py` as likely `SimulationManager` constructors. Verified: `tests/test_clients.py` contains no `SimulationManager(...)` construction, while `tests/test_repulsor_integration.py:53` does and is not named. The \"or any other file\" catch-all instruction does cover it, so nothing is left unmet, but naming `test_repulsor_integration.py` explicitly (and dropping `test_clients.py`) would reduce the chance a hurried implementer fixes only the named files.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:241"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Frontmatter `status: complete` conflicts with unchecked checkboxes and Task 5.3",
+   "description": "The task file declares `status: complete` (and the slice design does the same) while every checkbox remains `- [ ]`, and Task 5.3 (lines 312\u2013313) still instructs the implementer to set `status: complete`. Whichever artifact is stale \u2014 the status field (if this is a plan awaiting work) or the checkboxes (if the work is done, per CLAUDE.md's \"check off after completing\" rule) \u2014 one should be reconciled so readers can tell what is actually done. This does not affect the breakdown's coverage or sequencing.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  }
+ ]
+}

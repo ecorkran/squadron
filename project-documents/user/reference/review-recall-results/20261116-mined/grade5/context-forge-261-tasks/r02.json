@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The write-failure test does not verify that adoption state remains unchanged",
+   "description": "The Technical Requirements explicitly call for a D9 write-failure test covering both `AdoptionError` and unchanged state (`261-slice.detection-and-adoption-state.md:336`). Task 9T checks the error message but omits any state assertion. Add an assertion that `adoption.state` remains `''` after the failed write. Since permission-based tests are skipped as root or on Windows, use a mock that fails after capturing the attempted write or another platform-independent failure mechanism where practical.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:199"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No automated test covers the CLI and MCP missing-guide error surfaces",
+   "description": "The functional criterion requires `cf build` to exit non-zero with the `AdoptionError` message and `context_build` to return it as an error, without producing the concept prompt (`261-slice.detection-and-adoption-state.md:333`). Tasks 9T and 12 test resolver rejection, and Task 10T tests integrator rethrowing, but neither proves either caller\u2019s external behavior. Task 15 can exercise the CLI manually, but its MCP fallback replaces the whole step with `BLOCKED:`.\n\nAdd caller-level tests: a CLI command test asserting non-zero failure and the message, and an MCP `context_build` test asserting the returned error. These tests should also establish that no concept-prompt result is returned.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:221-222"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The planned-project integration fixture drops the no-source-walk assertion",
+   "description": "The design combines \u201cconcept prompt\u201d with \u201cno source walk is performed\u201d for repositories containing an initiative plan, arch, HLD, or slice plan (`261-slice.detection-and-adoption-state.md:327`). Task 9T covers the no-walk behavior with a resolver spy, but Task 12\u2019s end-to-end planned fixture checks only the prompt. That leaves the integrated factory/integrator wiring free to perform an unnecessary walk while still satisfying its stated test.\n\nAdd the walk assertion to Task 12\u2019s planned fixture, or explicitly retain a factory-level test proving that planning artifacts prevent `measureSourceVolume` from running.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:238"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit checkpoints use checkbox tasks instead of the required plain markers",
+   "description": "Tasks 2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, and 15C are formatted as `- [ ] **Task \u2026C: Commit**`. The required form is a plain, non-checkbox line such as:\n\n```markdown\n**Commit**: `feat(core): add bounded source-volume walk`\n```\n\nThe checkpoints otherwise occur at sensible tested boundaries rather than after every task or only at the end, so retain their placement while changing their format. Tasks 11, 12, 13, and 15 should likewise have their tests completed before their respective commits.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  }
+ ]
+}

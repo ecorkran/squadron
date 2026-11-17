@@ -1,0 +1,120 @@
+{
+ "case": "context-forge-918-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Success Criterion 6 names both `plan-status-vs-entries` and `arch-status-vs-plans`; Task 12 adds regression cases only for `plan-status-vs-entries`, and no other task asserts the arch rule (`ConsistencyChecker.ts:828-850` is a separate rule body). **VALID** (minor, `coverage`): the tests leave out a rule the parent criterion names. Needs: doc (design plus tasks). **Raised by the original review (F001)**; the response added the test.",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     3
+    ],
+    "r07": [
+     2
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [
+     2
+    ],
+    "r10": [],
+    "r11": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 8 widens `resolveEntryStatus`'s `entry` parameter to `Pick<SlicePlanEntry, 'index' | 'isChecked' | 'status'>` and says \"its only caller passes a full `SlicePlanEntry`, so widening the `Pick` is a compatible narrowing-relaxation\" with success \"builds clean\". The only caller of `resolveEntryStatus` is `resolveEntryStatusSafe` (`WorkflowNavigator.ts:740`), whose own `entry` parameter is typed `Pick<SlicePlanEntry, 'index' | 'isChecked'>` (line 736). Passing that to the widened parameter is a type error (`status` missing), so Task 8 cannot build as written; `resolveEntryStatusSafe` must be widened too. **VALID**: task not completable as written. Needs: code.",
+   "hits": {
+    "r01": [],
+    "r02": [
+     1
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [],
+    "r06": [
+     2
+    ],
+    "r07": [],
+    "r08": [],
+    "r09": [
+     3
+    ],
+    "r10": [],
+    "r11": []
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Task 1's unindexed fixture example is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` (no bold). `PLAN_UNINDEXED_RE` (`slicePlanParser.ts:9`) requires `\\*\\*([^(].*?)\\*\\*`, so that line is never parsed, while Task 5 asserts the unindexed `[~]` entry parses (`indexSource: 'fallback'`) and `totalSlices` becomes 7. The design's success criteria give the unindexed form as `N. [~] **Name** \u2014 rationale`. The example line is the non-bold style the fixture uses only under the skipped \"Future Work\" section. **VALID** (minor): the fixture step and the test cannot both be satisfied as written. Needs: doc plus the regex in code.",
+   "hits": {
+    "r01": [],
+    "r02": [
+     0
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [],
+    "r08": [],
+    "r09": [
+     0
+    ],
+    "r10": [
+     0
+    ],
+    "r11": []
+   }
+  },
+  {
+   "id": "F4",
+   "text": "Design Decision 3 and Scope say `completedSlices` is \"computed once, in the parser\" and the consumers take it unchanged, so the change is \"narrow, local\". `mcp-server/src/tools/introspectionTools.ts:117-119` recomputes `completedSlices` as `entries.filter((e) => e.isChecked).length` whenever a worktree index range filters the entries, so after the slice a `[~]` entry counts as resolved in the unfiltered `introspection_slice_plan` result but not in the filtered one. No task touches it. **VALID**: contradicts code. Needs: code.",
+   "hits": {
+    "r01": [],
+    "r02": [
+     6
+    ],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     4
+    ],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": []
+   }
+  }
+ ],
+ "note": "r02 finding 3 counted for F1 as it notes Task 12 omits arch-status-vs-plans (borderline, secondary point). r06 finding 4 and r02 finding 6 counted for F4 (MCP filtered path recomputes completedSlices from isChecked)."
+}

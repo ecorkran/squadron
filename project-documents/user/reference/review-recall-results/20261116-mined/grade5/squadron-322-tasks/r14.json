@@ -1,0 +1,40 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T13 residual-result discovery references a nonexistent 320 surface, and its fallback branch contradicts T14 and the residual-sampling success criterion",
+   "description": "T13 instructs: \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap.\" I verified against the codebase that no result-discovery surface exists: `capture.py` only has `resolve_target` for explicit user-supplied targets; `report.py`'s `enrich_samples` walks only store-referenced files; no list/discover/scan function for persisted review files exists anywhere in `src/squadron`. 320's own capture docstring confirms \"the offer/selection policy is deferred.\"\n\nThe prescribed fallback is not merely weaker \u2014 it is incompatible with the slice. The store contains only **sampled** verdicts; scoping to store-recorded samples makes it structurally impossible to enumerate **unsampled** results. That breaks:\n- The slice's functional success criterion: \"a graduated config with unsampled results yields a non-empty offer set, so agreement data does not freeze (asserted by test).\"\n- T14's first test (the non-empty guarantee) and T15/T16's `offers` behavior.\n\nFix: delete the \"store-recorded samples only\" fallback and instead define the discovery surface inside T13 as a small new function \u2014 e.g., scan `{cwd}/project-documents/user/reviews/*-review.*`, derive each file's `JudgeConfigId` via the existing `derive_judge_config_id`, keep those matching the graduated config exactly, and subtract any result already sampled (matching `SampleVerdict.result_ref.content_hash`). Keep the PM question only for confirming placement (320 capture vs 322 graduation), not for whether discovery ships \u2014 the success criteria require it.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T7's numbered direction-band precedence contradicts the design's floor asymmetry and its own success criteria",
+   "description": "T7 lists the bands in precedence order: (1) `n < floor` \u2192 INSUFFICIENT_EVIDENCE, (2) unversioned \u2192 INSUFFICIENT_EVIDENCE, (3) GRADUATE, (4) `match_rate <= tighten_rate` \u2192 TIGHTEN, (5) HOLD. Implemented literally in that order, a below-floor cell with a low match rate returns INSUFFICIENT_EVIDENCE at case 1 and case 4 is unreachable \u2014 yet T7's own Success line and T8 both require \"a below-floor cell with low match rate returns TIGHTEN, not INSUFFICIENT_EVIDENCE,\" and the design states plainly that tightening is not floor-gated. The item-4 parenthetical tries to amend the list (\"checked first only for the loosening path\"), but the numbered algorithm as written still says otherwise, so a junior AI has contradictory instructions for the slice's core decision function.\n\nFix: rewrite the precedence so the TIGHTEN check precedes the floor/unversioned checks (or express explicitly that cases 1/2 gate only the loosening path), e.g.: unversioned-low-rate handling aside, order = (1) `match_rate <= tighten_rate` \u2192 TIGHTEN, (2) `n < floor` or unversioned \u2192 INSUFFICIENT_EVIDENCE, (3) GRADUATE, (4) HOLD. While rewriting, also state the intended outcome for an *unversioned* cell with a low match rate (TIGHTEN vs INSUFFICIENT_EVIDENCE), which neither the design table nor T7 currently settles.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:114-119"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Idempotent re-graduate has no expressible core API: `find_graduation` returns no record id and `write_graduation` has no update path",
+   "description": "T15 requires that re-graduating an already-graduated pairing \"update its evidence snapshot in place (idempotent \u2014 one record, not two),\" and T16 asserts the record count stays at 1. But T11's API only offers `write_graduation(...) -> str` (generates a new record id) and `find_graduation(...) -> GraduatedConfig | None` (returns the config, not the record id or file path). With these signatures, the CLI cannot address the existing record to overwrite it without re-scanning or inventing a new method. Suggested fix: have `find_graduation` return the record id alongside the config (or have `write_graduation` accept an existing record id), so T15's in-place update is expressible against T11's surface.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:177"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`model_dimension_note` spec omits the runtime-drawn-model limitation sentence the design requires",
+   "description": "The slice design's success criterion requires the note to state not only the config-time model+threshold pairing but also the runtime-drawn-model limitation (\"Where a step draws its model at runtime (a 180 pool), the note states that the threshold cannot track the drawn model\"). T9's note specification includes only the pairing sentence. Since the recommendation core cannot know which step consumes a template, this is necessarily static caveat text \u2014 add one clause to T9's `model_dimension_note` requirement so the design's full criterion is traced.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Every task carries a Commit marker, so odd-numbered implementation tasks commit untested code",
+   "description": "All 17 tasks end with a `**Commit:**` line. CLAUDE.md does require at least one commit per task, so this is not a violation, but the result is that T1, T3, T5, T7, T9, T11, T13, T15 each commit code whose tests only land in the following task. Committing at the implementation+test pairs instead (e.g., one commit after T1+T2) would keep every commit at a tested point without reducing commit frequency meaningfully.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  }
+ ]
+}

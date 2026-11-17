@@ -1,0 +1,40 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force force-total breakdown deferred although the slice plan assigns it to this slice",
+   "description": "The slice plan entry for (141) (`140-slices.simulation-scaling.md:26`) requires per-tick timings \"broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration)\". The design makes `force_total_ns` a single number and defers per-force resolution to slice 142 (\"`force_total` is one number, not per-force, in this slice. Slice 142 introduces per-force timings\"). This is deferral of scope the plan entry assigns to 141. The mitigation is reasonable \u2014 an optional `force_breakdown: dict[str, int] | None` extension point plus a `schema_version` bump path \u2014 but the plan entry must either be amended to move per-force totals to 142, or the breakdown delivered here. As written, the JSON schema promised as \"stable from this slice\" is known to need a version bump in the very next slice.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Numba backend registration is assigned to slice 144, but slice 142's benchmark scope requires it",
+   "description": "The Technical Decisions section states \"Slice 144 registers `numba` \u2026\". But the plan's slice 142 entry (`140-slices.simulation-scaling.md:30`) defines 142 as benchmarking the Quadrants cohesion force \"against the existing NumPy and **Numba** implementations\", with dependencies (141) and (118) only \u2014 144 depends on 142 and comes later. For the harness to answer 142's go/no-go question (\"under what conditions does Quadrants beat Numba?\"), a `numba` backend row must exist by 142. The document is also internally inconsistent: the Overview says backends land \"in slices 142/144/145\" while Out of Scope hedges \"slice 144 / 118 territory\" and Technical Decisions pins it to 144. Fix by assigning the Numba registration to slice 142 (or landing it in 141 alongside 118, which is already complete per the performance journal). The registry mechanism makes this a documentation-only correction.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-344"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Parity-hash definition cannot serve the cross-backend comparisons it exists to support",
+   "description": "Two defects in the parity hash specification:\n1. `sha256(positions.tobytes() + velocities.tobytes())` hashes the full arrays without slicing by `TickResult.count`. Slice 140's contract explicitly anticipates divergence: \"`TickResult` carries `count` explicitly so a future GPU backend can return preallocated max-N buffers with `count <= len`\" (`140-slice.tick-return-type-contract.md:147-149`), and its consumers slice `result.positions[:result.count]`. A capacity-buffer backend hashes uninitialized tail bytes and produces a different-length digest \u2014 incomparable to the NumPy golden, exactly when cross-backend comparison is needed (142/145).\n2. \"for future GPU backends, the harness records the hash and a downstream consumer interprets it within the documented tolerance band\" is not implementable: SHA-256 digests admit no tolerance comparison \u2014 any float difference anywhere in the arrays yields an unrelated digest. Slice 145's plan-required parity is \"within a documented tolerance for non-deterministic GPU reductions\", which demands array-level comparison (the trajectory tool the Open Questions section already identifies as \"the parity oracle\"). Yet Integration Points (line 533) claims \"Slice 145's tick-level parity test consumes the harness's NumPy parity hash as the reference.\"\n\nFix: define the hash over `positions[:count]` / `velocities[:count]`, scope hash comparison to bit-exact regimes (NumPy/Numba CPU), and point GPU tolerance-based parity at array-level comparison via the runner API or the trajectory tool.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes omit the report-write path, the git-SHA probe, and `--all-backends` partial failure",
+   "description": "The Failure modes section enumerates input-side failures (YAML load, unknown backend, `setup` raise with try/finally `finalize`, TPS < 1) but not the new output-side I/O paths this slice introduces:\n- **Report writes:** `bench/results/` is gitignored (line 239), so a fresh clone lacks it. Create-vs-fail semantics and write-failure handling (disk full, unwritable) are unspecified.\n- **`git rev-parse HEAD`** (line 233) is an implicit subprocess dependency. Behavior when git is absent or the tree is not a repo is unspecified \u2014 a silent `\"unknown\"`/`\"\"` value would violate the project's \"never use silent fallback values\" rule the doc invokes elsewhere.\n- **`--all-backends`** (line 481): if one backend errors mid-run, do remaining backends run, which reports get written, and what is the exit code? Only single-backend semantics (\"non-zero on \u2026 backend error\") are defined.\n\nEach is small to specify; the section's \"No silent fallbacks anywhere on these paths\" claim currently covers only the enumerated paths.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Force inventory names five `BulkForce` implementations; the plan enumerates six",
+   "description": "\"The five existing `BulkForce` implementations (cohesion / separation / alignment / momentum / leadership)\" omits `PropulsionForce`, which slice 114 delivers as a `BulkForce` and which the plan's slice 144 entry lists among \"all `BulkForce` implementations (\u2026, PropulsionForce)\". The `mid-flock` workload example's `forces:` list likewise omits `propulsion` while claiming rough equivalence to the live default config. Since force-name resolution is generic (\"resolve to module-level singleton instances in the relevant engine modules\") nothing structurally breaks, but the Interfaces inventory is the vocabulary implementers will build the loader's registry from; a workload naming `propulsion` would then \"fail loudly\" against a five-name registry. Add `propulsion` to the inventory and confirm the mid-flock force set matches the live default's.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:138-140"
+  }
+ ]
+}

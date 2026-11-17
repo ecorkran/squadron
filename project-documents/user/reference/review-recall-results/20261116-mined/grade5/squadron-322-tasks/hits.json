@@ -1,0 +1,178 @@
+{
+ "case": "squadron-322-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "T7 lists `classify_direction` precedence as 1 `n < floor` -> `INSUFFICIENT_EVIDENCE`, 2 unversioned -> same, 3 graduate, 4 `match_rate <= tighten_rate` -> `TIGHTEN`, 5 `HOLD`, and says case 4 is \"reachable even if `n < floor`\". Taken as a precedence list, case 1 returns first for every below-floor cell, so `TIGHTEN` is unreachable there. That contradicts the same task, T8's test (\"a below-floor cell with a low match rate returns `TIGHTEN`\") and the design (`322-slice` line 37 \"tightening is not floor-gated\"; Direction Bands table line 183). **VALID**: self-contradiction. Needs: doc alone. Raised by the original review (F001).",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     1
+    ],
+    "r08": [
+     1
+    ],
+    "r09": [
+     2
+    ],
+    "r10": [
+     0
+    ],
+    "r11": [
+     2
+    ],
+    "r12": [
+     0
+    ],
+    "r13": [
+     1
+    ],
+    "r14": [
+     1
+    ],
+    "r15": [
+     2
+    ],
+    "r16": [],
+    "r17": [
+     1
+    ],
+    "r18": [
+     0
+    ],
+    "r19": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The Coverage Check says the malformed `judge:` block row is \"exercised in T8\", but T8's tests list only registered and unregistered templates. **VALID** (minor): self-contradiction between the Coverage Check and T8. Needs: doc alone. Raised by the original review (F002).",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     4
+    ],
+    "r06": [
+     5
+    ],
+    "r07": [
+     3
+    ],
+    "r08": [
+     3
+    ],
+    "r09": [
+     3
+    ],
+    "r10": [
+     2
+    ],
+    "r11": [
+     3
+    ],
+    "r12": [],
+    "r13": [],
+    "r14": [],
+    "r15": [
+     6
+    ],
+    "r16": [
+     1
+    ],
+    "r17": [
+     3
+    ],
+    "r18": [],
+    "r19": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "T13 says to \"reuse 320's existing result-discovery surface\" to find unsampled judge results, falling back to \"store-recorded samples only\". At `9360d61c`, `metrology/capture.py` has only `resolve_target` (a glob scoped to one `{index}`), and no module enumerates judge results across the project. Unsampled results are by definition absent from the store, so the fallback cannot meet T13's own success criterion (3 unsampled results at `rate=1.0` yield 3 `OfferTarget`s). **VALID**: the task cannot be completed as written, and it names code that does not exist. Needs: code. Raised by the original review (F003, as a note).",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [
+     1
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [
+     0
+    ],
+    "r10": [
+     1
+    ],
+    "r11": [
+     1
+    ],
+    "r12": [],
+    "r13": [
+     0,
+     3
+    ],
+    "r14": [
+     0
+    ],
+    "r15": [
+     0
+    ],
+    "r16": [
+     0
+    ],
+    "r17": [
+     0
+    ],
+    "r18": [],
+    "r19": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "Borderline: r06 f1 (T13 discovery) says it did not check capture.resolve_target but still identifies the fallback as unable to yield unsampled results, counted. r05 f4 counted for the malformed-block part only. r01 f3 and r15 f6 count for malformed-block handling."
+}

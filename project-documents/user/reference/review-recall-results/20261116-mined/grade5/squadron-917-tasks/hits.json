@@ -1,0 +1,56 @@
+{
+ "case": "squadron-917-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 5.2 specifies `_count_lines(root, resolved) -> int | None` that \"return[s] `None` with a WARNING\" for the outside-root, directory, over-cap and `OSError` cases, and Task 5.3 relies on it (\"WARNING already logged there\"). The design (917 slice, line 134) and file 1's standing constraint (line 81) require every `None` on `location_verified` to be \"accompanied by a WARNING naming the finding and the reason\". `_count_lines` receives no finding identifier, so it cannot name one. **VALID**: the task contradicts the standing constraint and the design. Needs: doc (design, file 1, file 2). Raised by the original review (F001).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": [],
+    "r12": [],
+    "r13": [],
+    "r14": [],
+    "r15": [],
+    "r16": [],
+    "r17": [],
+    "r18": [],
+    "r19": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 4.6 says call `save_provider_failure` \"using `slice_info` when present, else the step-name/index\", but Task 4.2's writer takes `slice_info` as a plain parameter (no `| None`) and hardcodes the body title `# Review: {review_type} \u2014 slice {index}`; the slice-less branch has no signature or rendering, and Task 4.7 tests only the `slice_info`-present shape. **VALID**: tasks 4.2 and 4.6 do not compose; the branch cannot be implemented as written under the zero-error pyright gate. Needs: doc alone. (At `251217ba`, `format_review_markdown` already accepts `slice_info: SliceInfo | None = None`, which is the resolution the response picks.) Raised by the original review (F002).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": [],
+    "r12": [],
+    "r13": [],
+    "r14": [],
+    "r15": [],
+    "r16": [],
+    "r17": [],
+    "r18": [],
+    "r19": []
+   }
+  }
+ ],
+ "note": "No borderline calls"
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 4's \"no import of `executor`\" cannot hold while `RunObserver.step_completed` takes `StepResult`",
+   "description": "D12's protocol signature is `step_completed(self, result: StepResult)`, and `StepResult` is defined in `executor.py:178` \u2014 I checked `executor.py`'s import block (lines 11\u201361): it imports nothing from `state.py`, so the dependency is one-directional `state.py:25 \u2192 executor`. A `run_observer.py` that types the callback and does not import `executor` has no legal source for `StepResult`; routing it through `state.py` would be an implicit re-export, which fails pyright strict (`reportImplicitReexport`, and `include = [\"src\"]` with `typeCheckingMode = \"strict\"`), so Task 4's success line and its pyright line cannot both pass. The same task also creates a cycle: `RunStateRecorder` needs `state.py` (`ActiveItem`, `StateManager`) while Task 4 adds `StateManager.observer() -> RunObserver`, which needs `run_observer.py`. As written a junior will either break the stated criterion or invent a `StepResult` move that no task authorizes. Fix: state the intended import shape in Task 4 (TYPE_CHECKING import of `StepResult` from `executor`, annotation-only, with `state.py` importing `run_observer` under `TYPE_CHECKING` \u2014 the pattern already used at `state.py:21`), or drop the \"no import of executor\" line and say what it is actually protecting against.",
+   "location": "src/squadron/pipeline/executor.py:178"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tasks 5 and 6 split one atomic change; the suite is red between them and Task 5's success is written against Task 6",
+   "description": "Task 5 replaces `execute_pipeline`'s `on_step_complete` parameter (`executor.py:390`, call site `:576-577`) and deletes `make_step_callback` (`state.py:267`), while the tests that still pass those names are only updated in Task 6 \u2014 and Task 5's own success line is \"`grep -rn \"on_step_complete\\|make_step_callback\" src tests` is empty after Task 6\", a condition that cannot be observed inside Task 5. This contradicts the file's Context Summary rule that \"every code task ends with ruff format, ruff check, pyright \u2026 and its tests before its commit\", and it means the first commit (Task 7) is the first point where the tree is green even though two code tasks claim to end tested. Merge Task 6 into Task 5 (signature change + its existing-test migration + the `run.py:251` call site as one task, commit at the end of it), and restate Task 5's success as the grep being empty at the end of that task.",
+   "location": "src/squadron/cli/commands/run.py:251"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 16 has no verifiable success criterion; D7's six behaviours are only checked one task later",
+   "description": "Task 16 is where the whole interrupt-and-drain policy lives \u2014 WARNING text, `asyncio.timeout(INTERRUPT_DRAIN_TIMEOUT_S)` around `client.interrupt()`, `is_error` results not re-raised, the usable/unusable branch, `unusable_reason` string, the raise in both cases \u2014 but its only \"Success\" line is \"adjust to the Task 2 spike findings if they differ from the design\". That is an instruction, not a check, so a junior completing Task 16 has no way to tell whether they are done, and the file's own rule (tests before commit) is satisfied only from Task 17. Give Task 16 an observable criterion (e.g. the four D7 branches each named in code and `pyright` clean, with the commit deferred to Task 18 where it already sits), and move Task 17's first fake-client test \u2014 interrupt sent, drain reaches the result, session stays usable \u2014 to immediately follow Task 16 so the usable path is proven before the unusable path is written.",
+   "location": "src/squadron/pipeline/sdk_session.py:212"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Commit markers are written as checkboxes, not plain `**Commit**:` lines",
+   "description": "All seventeen markers are `- [ ] Commit: \u2026` (first at Task 7). The convention is plain, non-checkbox lines so a checker agent does not tick them as work items; AGENTS.md's \"each item and subitem should have a `[ ]`\" rule is about task items, not commit anchors. Placement itself is good: markers sit at tested boundaries (7, 10, 12, 14, 18, 20, 22, 22a, 24, 26, 28, 31, 35, 37, 39, 40, 42), not after every task and not only at the end, and Tasks 1\u20136 correctly carry no commit. De-checkbox and bold them.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Two modules have their implementation split across untested halves",
+   "description": "Tasks 15 and 16 are one change inside `sdk_session.py` with tests only at 17, and Tasks 33 and 34 are one `run_prune.plan_prune` function (selection, then protection rules) with tests only at 35. In both cases the intermediate task cannot be validated, and a junior has to hold a half-written function across two sessions. Given 42 tasks for a 3/5 slice this is not overweight overall \u2014 the file is a single task document, test coverage maps to the design's requirement list rather than exceeding it, and steps that name line numbers mirror the design's own contract \u2014 but merging 15+16 and 33+34 would remove two unverifiable handoffs.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The silent-tool-call risk observation is not scheduled anywhere",
+   "description": "The design's mitigation for \"Silent tool calls\" ends with \"the walkthrough records whether the CLI emits progress during a long Bash call\". That observation lives in walkthrough steps 6\u20137, which Task 42 explicitly permits skipping for lack of credentials, and Task 2's spike prints only the messages that follow `client.interrupt()`, not what arrives while the turn is silent. Add one line to Task 2's record step (log every message received during the long `sleep`, before the interrupt) so the bound's false-positive risk gets evidence even when steps 6\u20137 are skipped.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Hermeticity is attributed to `tests/_hermetic.py` for helpers that are not in it",
+   "description": "The Context Summary says tests are hermetic \"(`tests/_hermetic.py`): `tmp_path` runs dir, real `StateManager`, dead PIDs from a subprocess that has already exited\". I read that module: it defines `credential_env_vars` and `write_git_config` only. The behaviours are real and required (Tasks 10, 12, 14, 37, 39 implement them, and `tests/pipeline/conftest.py` already supplies a `tmp_path` `StateManager`), and the design's \"Tests never read the real runs directory or the user pipelines\" requirement is met in substance \u2014 but pointing a junior at a module that lacks those helpers will cost a debugging cycle. Cite the conftest fixture instead, or state the requirement without naming the file.",
+   "location": "tests/_hermetic.py:33"
+  }
+ ]
+}

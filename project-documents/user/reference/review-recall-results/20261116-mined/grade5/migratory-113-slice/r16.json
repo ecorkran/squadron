@@ -1,0 +1,61 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Hidden dispatcher hook violates the declared spatial-query boundary",
+   "description": "Description: The design says the `SpatialQuery` protocol is unchanged and that the dispatcher is transparent to the engine, but it also requires the engine tick pipeline to perform `hasattr(spatial, \"record_density\")` and pass engine-internal CSR counts into an undeclared optional method. That is a hidden dependency: `record_density` is not in the Interfaces Required section at lines 63-69, and the design explicitly rejects adding it to the protocol at lines 162-164 while still making the pipeline depend on it. This leaves the parent architecture's `Clean boundaries` and `Pluggable spatial queries` principles in `project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles` unmet; use a declared optional lifecycle hook/observer contract or move the density observation to the owning orchestrator with an explicit interface.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "HashGridQuery world-bounds integration contract is mismatched",
+   "description": "Description: The design states that `HashGridQuery` is constructed from `ServerConfig.simulation.world_bounds`, and lines 215-238 repeat that the helper and `_build_spatial` pass this config object through unchanged. The referenced slice-105 task breakdown defines the hash-grid constructor's `world_bounds` as a four-float tuple `(x_min, y_min, x_max, y_max)`, while slices 300/313 define `WorldBoundsConfig` as `width`, `height`, and later `policy`. No conversion is specified, so the plan requirement that `backend: \"grid\"` and `backend: \"adaptive\"` can instantiate the named backend is under-specified.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:63-69"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Determinism claims conflict with accepted hash-grid ordering differences",
+   "description": "Description: The parent architecture's `Tick determinism` goal requires same state and inputs to produce same outputs, and slice 105 claimed deterministic behavioral output. This design simultaneously requires bit-exact integration equality at line 421, same-CSR-neighbor-set equivalence at line 329, full-suite parity \"modulo documented determinism caveats in the hash grid\" at line 358, and set comparison because grid row order may differ at line 430. The selected backend and density history also become cross-tick state that is not defined as part of tick input/replay state. The design needs to state the exact determinism target: canonicalize neighbor order if bit-exact parity is required, or downgrade the claim to behavioral/set parity and adjust replay/determinism expectations accordingly.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:326-335"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Tick-budget and scaling NFRs are not restated as acceptance targets",
+   "description": "Description: This slice changes the spatial-query hot path, which is covered by the parent HLD's `Efficient large-scale evaluation` goal (\"tens of thousands of agents\" on one CPU) and the tick-rate/budget discussion in `project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations`, plus the world-server HLD's 20\u201360 Hz budget context. The slice doc cites historical 20 TPS, 14 TPS, 6\u20137 TPS, 9 TPS, and 16\u201317 TPS observations, but Success Criteria and Technical Requirements do not restate a numeric pass/fail target such as \"20 Hz / 50 ms tick budget at N=2500\" or the 10K-agent single-CPU scaling target. The relative criterion \"overall average TPS >= brute-force-only average\" at line 380 does not satisfy the requirement to restate the applicable NFR with a specific target.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:337-381"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Default threshold rationale is internally inconsistent with the cited geometry",
+   "description": "Description: Line 210 computes about 132 mean neighbors for N=3100, radius \u224835, and a 300\u00d7300 world, then says brute-force is selected. Line 211 says \"the same N\" in a uniformly spread expansion phase can drop below 10 mean neighbors and select grid. For the same world size, radius, and N, a uniform distribution cannot produce both 132 and <10 mean neighbors; the design has not named the actual `test.yaml` radius/world geometry that would make the expansion-phase claim true. This leaves the parent slice plan's \"capture both regime wins\" requirement unproven for the default threshold; derive `10.0` from the actual benchmark config or make the default explicitly provisional with a concrete sweep-based acceptance criterion.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Promised operator `initial_backend` knob is not in the config surface",
+   "description": "Description: Lines 37, 301, and 400 say `initial_backend` is configurable so an operator can choose grid-first for scattered starts. But `SpatialConfig` at lines 170-177, the YAML surface at lines 190-195, validation at lines 198-202, and `_build_spatial` at line 238 contain only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band`, and hard-code `initial_backend=\"brute\"`. The requirement that an operator can choose grid-first is therefore unmet; either add the field, validation, and wiring, or remove the operator-facing claim if this is only a constructor-level test knob.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:294-301"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Test backend pinning introduces an unvalidated hidden input path",
+   "description": "Description: Verification step 2 pins backends with `MIGRATORY_SPATIAL_BACKEND=grid|brute`, but the design's config surface is the YAML `simulation.spatial.backend` field with load-time validation at lines 166-204. The note that env var versus fixture is \"an implementation detail\" leaves precedence, invalid-value handling, and configuration-over-convention behavior undefined. That under-specifies the Success Criteria requirement that the full suite pass under adaptive/grid/brute; define a fixture-only test pin, or specify the env override as a validated config input.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:354-359"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The design is overweight and names future abstractions that this slice does not need",
+   "description": "Description: The required slice is a wrapper, one density signal, hysteresis, three config fields, server wiring, and production-regime verification. Around that, the design adds future KD-tree/GPU \"pluggable dispatcher pattern\" at line 313, a generic future `record_*` subscription hook for LOD at line 315, an operator `initial_backend` knob that the config does not actually expose, env-var pinning at lines 354-359, duplicate data-flow prose at lines 240-253, default-threshold and cell-size restatements at lines 206-219, and long alternative/decision narratives at lines 256-307. Cut or defer: future third-backend abstractions, generic subscriber hooks, sections restating the perf journal/slice 105/slice 112, handling for cases the slice does not have to deliver, and the heaviest helper/reconfiguration options where reusing slice-105's existing derivation suffices. Keep the plan-assigned wrapper, density/hysteresis logic, config backend fields with validation, preserved hash-grid tests, and one production-regime benchmark.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md"
+  }
+ ]
+}

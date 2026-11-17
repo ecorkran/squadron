@@ -1,0 +1,12 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "NOTE",
+   "title": "Development Approach miscounts the `_inject_file_contents` call sites / direct callers",
+   "description": "Step 2 says: \"Update its two `review_client` call sites and the direct callers in `test_content_injection.py`, `test_convention_root.py`, `test_injection_decision.py`, and `test_review_client.py`.\" Against the current source this is slightly off: there is **one** production call site of `_inject_file_contents` (`review_client.py:154` inside `run_review_with_profile`), not two; and `test_injection_decision.py` and `test_review_client.py` are **not** direct callers \u2014 the former exercises the return only via `run_review_with_profile`, and the latter merely patches the symbol (`tests/review/test_review_client.py:224`, `side_effect=lambda p, *a, **k: p`). Only `test_content_injection.py` and `test_convention_root.py` invoke it directly. This slightly misstates the mechanical blast radius of the `(prompt, DiffInjection | None)` return-type change, but it is trivially self-correcting (an implementer's grep finds the true call sites, and the over-listed files simply need no change), so it does not leave a stated requirement unmet. Worth correcting for plan accuracy only.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#development-approach"
+  }
+ ]
+}

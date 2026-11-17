@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Direction precedence contradicts the required tightening behavior",
+      "description": "T7 lists `n < floor \u2192 INSUFFICIENT_EVIDENCE` before the `TIGHTEN` check, so a below-floor, low-match-rate cell will return `INSUFFICIENT_EVIDENCE` and never reach `TIGHTEN`. That conflicts with T7\u2019s prose and success criteria, T8\u2019s regression test, and the slice requirement that tightening is not floor-gated. Reorder or otherwise specify the checks so the implementation instructions and expected behavior agree.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runtime-drawn-model limitation is not required in recommendation output",
+      "description": "T9 requires a note that the recommendation applies to a template/model pairing and that model and threshold are chosen together at config time. The slice design additionally requires the note to explain that, for a step using a runtime-drawn model, the threshold cannot track the drawn model and the recommendation does not apply to that step. T9 does not require that limitation to appear, leaving a stated success criterion uncovered.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are placed after every task, including untested work",
+      "description": "The file has a `**Commit**:` marker after each of T1\u2013T17. In particular, T1\u2019s marker comes before its regression tests in T2, so it marks an untested point; the repeated markers also conflict with the requirement to place them at tested working points rather than after every task. Consolidate markers at tested milestones, such as after implementation-and-test pairs. The no-mutation byte-snapshot assertion is also repeated in T10 and T16; keep the necessary coverage, but remove one redundant automated snapshot check.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Direction precedence contradicts the required tightening behavior",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Runtime-drawn-model limitation is not required in recommendation output",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Commit markers are placed after every task, including untested work",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T12:35:45.248716",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 4918,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 24079,
+  "cached_tokens": 5275,
+  "cache_write_tokens": null,
+  "completion_tokens": 7033,
+  "reasoning_tokens": 6527,
+  "duration_seconds": 74.26359849981964,
+  "cost_usd": 0.00544965,
+  "cost_basis": "alias_pricing"
+}

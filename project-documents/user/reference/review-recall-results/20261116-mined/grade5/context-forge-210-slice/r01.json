@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Overwrite protection excludes generated files and worktrees",
+   "description": "The safety check covers only the two root-level files, although the backend also writes instruction and prompt files and propagates all four destinations to worktrees. Existing unmanaged files in those directories or in a worktree could be overwritten without the warning required by the slice plan\u2019s success criteria. Specify per-destination managed-file checks, confirmation or skip behavior, and backups, including during worktree propagation.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-102"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Setup and propagation failures lack a handling strategy",
+   "description": "The sequence invokes a synchronous guide script and then copies files to worktrees, but does not specify handling for a hung or timed-out script, a failed or partial generation, or a failed worktree copy. Define bounded execution and error reporting, whether propagation stops after generation failure, and how partial results are reported or recovered without printing a misleading success message.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Onboarding time target is not carried into the design",
+   "description": "The parent architecture targets **under two minutes from npm install to useful context output**. This slice adds a new `cf init` onboarding path but does not restate that target or address its impact on it. Include the target and how the Copilot path will be assessed against it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:15-19"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Planned compatibility verification and guide reference are omitted",
+   "description": "The slice plan requires manual verification that a VS Code Copilot agent reads the generated guidance and follows project conventions comparably to Claude, and requires the Copilot tool guide to be referenced in the design. The listed manual check covers only `cf init` execution. Add the agent-consumption verification and reference `project-documents/user/tool-guides/copilot-vscode/setup-ide.md`.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  }
+ ]
+}

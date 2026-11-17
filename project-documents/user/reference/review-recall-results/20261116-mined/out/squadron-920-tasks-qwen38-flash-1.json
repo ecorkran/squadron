@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 8's consumer check has a positive answer that no task acts on",
+      "description": "Task 8 tells the implementer to extend `sdk_session.dispatch`'s `sdk_type` exclusion tuple and then to \"verify no other `sdk_type` exclusion list exists elsewhere in the codebase \u2026 (grep for `SDK_RESULT_TYPE` across `src/`)\". That grep does return others: `src/squadron/review/review_client.py:263` (`if sdk_type in (SDK_RESULT_TYPE, \"tool_use\", \"tool_result\"): continue`), `src/squadron/pipeline/summary_oneshot.py:139`, and `src/squadron/metrology/audit.py:542-557`. All of these consume translated messages from the **agent** paths (`_handle_query_mode` / `_handle_client_mode`), which Task 4 makes newly observable \u2014 before the slice, translation returned `[]` for `RateLimitEvent`; after it, an informational event becomes one `MessageType.system` message that these filters do not exclude and will therefore append into review prose. The gap this leaves unmet is the slice's own issue-#23 defect class on the review/summary/one-shot paths, and it is the exact thing Task 14 claims to check (\"no `rate_limit_event` text appears in the artifact's prose\") with nothing in the plan guaranteeing it. Additionally, Task 4 never specifies the new `Message.content`, so the implementer has no basis for deciding whether this message is prose-carrying. Fix: give Task 8 an outcome for a positive grep hit (extend those tuples, or state that the translated rate-limit message is metadata-only/empty-content and therefore inert), or add a small task naming the four consumer sites.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test rewrites trail their implementation by two tasks; two commits land with a red suite",
+      "description": "Task 6 commits after removing the `is_rate_limit_event(exc.data)` special case, but `test_a_rejected_rate_limit_event_reaches_the_backoff` (tests/providers/sdk/test_agent.py:648) still fabricates a `MessageParseError` carrying a `rate_limit_event` payload and asserts backoff \u2014 from Task 6's commit onward that event is skipped, so the test fails. Task 9 then commits after deleting `install_rate_limit_parser_shim`, while the four `test_the_shim_*` tests (tests/providers/sdk/test_agent.py:684-763) still import it \u2014 those become collection errors. Both are repaired only in Task 10. So two of the thirteen commit points are not at working, tested points, and the test-with pattern is broken for Tasks 6/7/8 (their tests are Tasks 10/11, with intervening commits between). Fix: fold the four shim-test deletions into Task 9, and either move the `test_agent.py` rewrite to immediately after Task 6 or merge Task 6+7+8+9's rewrite into a single commit-bearing unit that lands green. (The pattern is otherwise correct: Task 3 follows Task 2, Task 5 follows Task 4.)",
+      "file_ref": null,
+      "category": "task-sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6 says \"replace both gates\" where `agent.py` has three `RATE_LIMIT_MARKER` sites",
+      "description": "Task 6 reads: \"replace both `RATE_LIMIT_MARKER in str(exc)` gates (in `_handle_query_mode` and `_handle_client_mode`) with `_is_throttle(exc)`.\" In the file there are two gates inside `_handle_query_mode` \u2014 the retry gate at line 167 and the **error-type selection** gate at line 180 (`if RATE_LIMIT_MARKER in str(exc): raise ProviderRateLimitError ... else raise ProviderError`) \u2014 plus one in `_handle_client_mode` at line 216, and one in `sdk_session.dispatch` at line 192 (Task 7). \"Both\" invites a junior implementer to change only the retry gates and leave line 180 keyed on the substring. The requirement that leaves unmet is Success Criterion 6: post-slice, whether a budget-exhausted `RateLimitRejected` becomes `ProviderRateLimitError` depends on the message text chosen at the new raise site (the existing raise inherits `MessageParseError`'s \"Unknown message type: rate_limit_event\" text, which contained the marker; a hand-written raise message may not). Partial backstop: Task 10's rewrite of `test_exhausted_rate_limit_raises_a_distinct_error` asserts `ProviderRateLimitError` on the query-mode path, so it would catch the omission \u2014 but only if that test is pointed at query mode as it is today. Recommend Task 6 name the three agent.py lines (or say \"every `RATE_LIMIT_MARKER in str(exc)` occurrence in the file, including the error-type selection at the tail of `_handle_query_mode`\"). Note also, for accuracy rather than as a gap: client mode's exhausted-budget path raises through the outer handler and becomes `ProviderError`, not `ProviderRateLimitError`, both before and after the slice; that is unchanged behavior and consistent with criterion 6's \"still\", but it means criterion 6's audit clause is not exercised end-to-end by any task (T12 only confirms two CLI-plumbing tests that construct `AuditRunResult` directly).",
+      "file_ref": null,
+      "category": "task-precision",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 3's `RateLimitStats.throttles` increment has no task on the pipeline path",
+      "description": "Criterion 3 states that a `rejected` event reaching *any* of the three dispatch paths triggers backoff, \"`RateLimitStats.throttles` increments and a WARNING is logged naming the attempt number.\" `SDKExecutionSession.dispatch` has no `RateLimitStats` at all \u2014 it imports only `MAX_RATE_LIMIT_RETRIES`, `RATE_LIMIT_MARKER`, `install_rate_limit_parser_shim`, `rate_limit_backoff_s` (src/squadron/pipeline/sdk_session.py:33-38) and logs the WARNING without recording stats; the LLD meanwhile lists \"`RateLimitStats` accumulation\" under **Unchanged**. Tasks 7 and 11 follow the LLD, not criterion 3, so the third path satisfies the WARNING and the retry but never the stats clause. The unmet requirement is criterion 3 as literally written. Fix is a one-line reconciliation: either narrow criterion 3 (or the task's success line) to \"agent paths record stats; the pipeline path logs and retries as today\", or add a step to Task 7/11 that asserts what the pipeline path actually reports.",
+      "file_ref": null,
+      "category": "criteria-mismatch",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:192"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tasks trace cleanly to the design's decisions and probe findings",
+      "description": "D1\u2192T9, D2\u2192T1 (floor only, no ceiling, with the rationale cited rather than restated), D3\u2192T2 (single `_STATUS_REJECTED` definition, typed field read rather than `.raw`), D4\u2192T2/T6/T7, D5\u2192T6/T7 docstring rewrites with the `MessageParseError` branch explicitly retained, D6\u2192T4/T8. The asymmetric pipeline path the design calls \"the most likely place for the slice to half-land\" gets its own task (T7) with the reason it cannot be shared with T6 stated. Criterion 9 is enforced structurally: T10 and T11 carry grep-based completion checks for the fabricated-exception patterns, and the Notes section forbids `MagicMock(spec=RateLimitEvent)` stand-ins. T12's out-of-scope guard on `tests/providers/openai/test_agent.py` correctly implements the accepted F007 correction.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor verifiability and granularity points",
+      "description": "- T3's `pytest -k \"classif or throttle or RateLimitRejected\"` selects on test names not yet fixed; a zero-match run collects nothing. Citing the new test node ids (or just running the file) makes the gate concrete.\n- T5 says create `tests/providers/sdk/test_translation.py` \"if it does not exist\" \u2014 it already exists (tests/providers/sdk/test_translation.py), so the conditional is dead but harmless.\n- T9's success grep is `src` only, while criterion 2 and the LLD walkthrough step 1 grep `src tests`; the `tests/` half is satisfied by T10's deletions, so widening T9's grep to `src tests` would just be clearer about who proves what.\n- T12 modifies no source and its `pytest tests/providers/sdk/test_provider.py tests/metrology/test_audit_cli.py` run is subsumed by T13's `pytest tests/providers tests/metrology`; it could be merged into T13, with its \"don't touch the OpenAI file\" guard and DEVLOG note moving with it. This is the only granularity trim I'd suggest \u2014 16 tasks for this slice is proportionate, since the design states the cost is in test rewriting and live verification, and T14/T15 are mandated by the walkthrough.\n- No load test is required or implied: this slice restates no NFR, and the \"throughput collapse under load\" risk is covered by the live audit (T15) plus the forced-throttle observation, which is the appropriate proxy. Consequently no CI-gating task is owed.\n- Commit markers (13 of 16 tasks) sit at task boundaries per CLAUDE.md's once-per-task rule; their absence at T12/T14/T15 is correct, since those tasks change nothing to commit and T15 explicitly must revert its injection.",
+      "file_ref": null,
+      "category": "task-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Task 8's consumer check has a positive answer that no task acts on",
+      "location": "src/squadron/review/review_client.py:263",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-sequencing",
+      "raw_category": null,
+      "summary": "Test rewrites trail their implementation by two tasks; two commits land with a red suite",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-precision",
+      "raw_category": null,
+      "summary": "Task 6 says \"replace both gates\" where `agent.py` has three `RATE_LIMIT_MARKER` sites",
+      "location": "src/squadron/providers/sdk/agent.py:180",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "criteria-mismatch",
+      "raw_category": null,
+      "summary": "Criterion 3's `RateLimitStats.throttles` increment has no task on the pipeline path",
+      "location": "src/squadron/pipeline/sdk_session.py:192",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Tasks trace cleanly to the design's decisions and probe findings",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:23",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "task-quality",
+      "raw_category": null,
+      "summary": "Minor verifiability and granularity points",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-17T11:16:36.359488",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 302223,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 1341332,
+  "cached_tokens": 1094400,
+  "cache_write_tokens": null,
+  "completion_tokens": 77663,
+  "reasoning_tokens": 73474,
+  "duration_seconds": 855.5850299168378,
+  "cost_usd": 0.08995740999999999,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Length against the project's limits\" won't be measured for squadron or any brownfield project",
+   "description": "The motivation is that \"the project's own size rules (~300-line files, ~50-line functions) are checked by nothing,\" and Current State correctly notes those limits are \"stated in prose in CLAUDE.md and the review rules. No tool reads or checks them\" (verified: CLAUDE.md:26). But the \"Limits come from the project\" principle says length is checked against \"limits the project declares in its own config,\" and explicitly \"does not count violations against a squadron default.\" There is no machine-readable limits declaration in the repo today \u2014 the ~300/~50 values live only in prose. As specified, the snapshot for squadron (and every brownfield project 440 adopts) will find no declared limits and therefore report only length *distributions*, never a violation count. The design therefore does not actually satisfy its own motivation, and the doc never specifies where a machine-readable limits config lives, its schema, or that squadron must adopt one. This is the flagship use case of capability (a) silently degrading to \"no signal,\" not a graceful edge case.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-commit snapshots are the first high-volume writer to a flat-file store 321 already flagged as scale-fragile",
+   "description": "\"Extend the 320 store, don't fork it\" and \"no schema migration\" are correct about the *record envelope*, but the doc says nothing about the *storage backend*. 321 explicitly declined SQLite and left a measured tripwire: \"if a single report invocation must load enough records that in-memory grouping is noticeably slow \u2014 adopt stdlib sqlite3 then.\" 323 already knew about that tripwire and deferred it (\"This slice adds records, not an engine\"). Every existing record type (human samples, audit runs, noise floors, graduations) is written at *occasional* operator/audit events. A *per-commit* snapshot \u2014 especially the \"at fork and merge automatically\" variant \u2014 is the first writer whose volume scales linearly with development activity, which is exactly the workload that trips 321's revisit line, and the \"over time\" + \"per slice\" reports then do group-by over it in a glob-and-filter loop. The doc should engage that tripwire explicitly (acknowledge per-commit snapshots are the natural trigger, or state why they aren't) rather than leave the backend question unaddressed under a \"no migration\" banner that only covers the envelope.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The language adapter contract \u2014 the load-bearing extension point \u2014 is described entirely in prose",
+   "description": "\"Each language is a pluggable adapter\" and \"at least one non-Python language is required before 440 relies on this\" make the adapter contract a cross-language contract, the single most expensive thing in the design to retrofit. Yet it has no interface, no mandatory-vs-optional metric list, no representation of \"absent with reason,\" no shape for the per-metric tool+version and rule-set identity the \"Tool identity is part of the measurement\" principle requires, and no definition of how multiple adapters \"agree on what they report\" for a metric whose definition \"differs by different analyzers.\" 320-arch set the precedent of fixing a keystone's load-bearing commitments (store locality, identity, no-280) up front and leaving only representation to slice design. This doc, whose keystone is \"the snapshot record and first adapter,\" instead leaves the contract's *semantics* (what each adapter must and must not report, how absence is encoded) to slice design, where they'd be decided in Python's shadow. The \"proving the contract wasn't Python-shaped\" goal depends on those semantics being fixed here.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Forcing per-finding review categories onto the audit's 10 repo-wide debt dimensions is a fit risk the doc names but doesn't resolve, and it leaves 180 out of the decision",
+   "description": "The Design Goal \"one category vocabulary\" and the \"Where review categorization happens\" consideration commit to making review templates \"emit categories from the same closed vocabulary the audit uses.\" But the audit's 10 `AuditCategory` values (e.g. `documentation-drift`, `performance-resource`, `type-contract-debt`) are whole-repo debt dimensions chosen for a tech-debt audit; a fine-grained code-review finding (a magic number, a missing type hint, a naming issue, a swallowed exception) does not map cleanly onto them, so expect heavy `other` or mis-bucketing. The doc gestures at this (\"If the vocabulary turns out not to fit review findings, that's a finding to report\") but treats it as a *post-hoc* observation rather than resolving the fit *before* the write-path change and ingest are built around it. Compounding it: the change to review templates alters the meaning of `category`, which 140 defines as half of finding identity (`category` + `location`) for 180's weighted-convergence persisting-vs-novel matching \u2014 180 is a live stakeholder in this write-path change and is never named. Finally, \"323's sync test extends to cover it\" only works if the review templates *enumerate* the 10 values in a parseable form; the doc says templates will \"emit\" from the vocabulary but never says they'll enumerate it in a CI-assertable way.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Per-slice before/after depends on a fork/merge snapshot-capture hook that 140 does not have",
+   "description": "\"A slice's before and after is the snapshot at its fork point against the snapshot at its merge\" is asserted in Envisioned State, but the only mechanism offered to produce those boundary snapshots is \"a pipeline action at fork and merge,\" which \"adds work and a failure mode to every pipeline run.\" 140's built-in `slice-lifecycle` pipeline is design\u2192tasks\u2192implement; branch fork and merge are git operations handled outside the step sequence (branch_ops/git_utils), and 140's step-type set (design/tasks/implement/compact/review/each/devlog) has no slice-boundary or fork/merge hook. The concrete 140 extension point \u2014 new action, new step type, or a 173 event binding \u2014 is unnamed, so the rollup slice's per-slice report silently depends on an un-specified capture mechanism that the doc itself ranks as a non-baseline, optional add-on.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Coverage may require installing/running a brownfield project's own dependencies \u2014 a real supply-chain decision pushed to slice",
+   "description": "The doc correctly notes \"coverage requires running tests... can't be done on every brownfield repo out of the box\" and that deciding whether the snapshot \"installs or runs project dependencies, or only reads a coverage report the project already produces, is a slice decision with real security and environment cost.\" Running an *untrusted existing* brownfield codebase's test suite (install hooks, `postinstall` scripts in a `pyproject`/`package.json`) is the same class of unattended-execution risk 323 treated as architecturally significant with pre-flight checks and an explicit no-partial-run rule. Naming it as a \"slice decision\" is acceptable for an arch doc, but the safe-by-default direction (read a report the project already produced; never install/run foreign deps by default) should be stated here as a constraint, not left to the slice to rediscover.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  }
+ ]
+}

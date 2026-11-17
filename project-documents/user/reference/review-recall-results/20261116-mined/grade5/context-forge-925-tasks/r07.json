@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`template_preview` is omitted from the auto-init call-site coverage",
+   "description": "The slice requires `ensureCheckout()` from every MCP tool that reads guide content and D3 explicitly requires grepping both CLI and MCP packages. Task 22 names only `context_build`, `prompt_list`, `prompt_get`, and `guide_status`; Task 20 greps only `packages/cli/src`. The existing `template_preview` tool reaches `createContextPipeline()` through the shared `generateContext()` function, so it also reads the guide. On a fresh clone it can still fail against the uninitialized checkout. Add `template_preview` explicitly to Task 22 and a cloned-state case to Task 23, or require the shared `generateContext()` implementation to propagate notices for both consumers and test both.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts#generateContext"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Timeout remediation relies on a pattern that is not present",
+   "description": "Task 13 says the existing `/timed out/i` pattern already matches, but the current array only contains `/connection timed out/i` and `/etimedout/i`. The new generic timeout message therefore would not receive `GUIDE_OFFLINE_REMEDIATION`, causing Task 14's required assertion to fail. Task 13 must explicitly add `/timed out/i` or an equivalent timeout-specific pattern.",
+   "location": "packages/core/src/guides/gitExec.ts#NETWORK_ERROR_PATTERNS"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New cross-package constants lack a public-export step",
+   "description": "This barrel uses an explicit export list. Task 1 schedules exports for `normalizeGuideMethod()` and the alias lookup, but Task 10 does not schedule `SubmoduleCheckoutState`, `CHECKOUT_STATE_LABELS`, or `GUIDE_INIT_TIMEOUT_MS` for the barrel, and Task 28 does not schedule `GUIDE_MANAGED_NOTICE`. Tasks 22, 24, 28, and 29 need these symbols through `@context-forge/core/node`; direct imports from an internal source path are not part of the package's export contract. Add the required exports to Tasks 10 and 28.",
+   "location": "packages/core/src/guides/index.ts:3-16"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Several implementation tasks intentionally leave the tree uncompilable",
+   "description": "Task 1 explicitly accepts type errors until Task 3, while Task 10 says typecheck passes only after Task 11 populates a field. This means those implementation tasks do not leave independently completable, green checkpoints. Merge Tasks 1\u20134 into one atomic rename unit with its tests, and merge Tasks 10\u201311 or otherwise make Task 10 compile independently. Keeping each resulting test task immediately after its implementation would preserve the test-with pattern.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The literal-sweep acceptance criteria cannot pass literally",
+   "description": "Task 7 requires `grep -rn \"manual\" packages/cli/src packages/mcp-server/src` to return only the MCP enum and deprecation text, but `packages/cli/src/commands/update.ts:175` already contains the unrelated word \u201cmanually.\u201d Task 32 similarly says no `manual` may remain outside the alias table and enum, while Tasks 30\u201331 explicitly require README and CHANGELOG text mentioning the deprecated alias and the old output value. Scope these checks to strategy literals in source files, use exact-literal matching, and explicitly exempt documentation and unrelated prose.",
+   "location": "packages/cli/src/commands/update.ts:175"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Commit markers do not use the canonical label",
+   "description": "The file uses plain `Commit:` labels rather than `**Commit**:`. Their placement is otherwise reasonable\u2014generally after tested implementation groups rather than after every task\u2014but the labels should be converted to the canonical form if task tooling recognizes only `**Commit**:`.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  }
+ ]
+}

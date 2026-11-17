@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Delete routing contradicts the collision-case remediation path",
+      "description": "The Data Flow states \"**Delete:** mirrors write \u2014 deletes from whichever project file the key's scope maps to. `migrate-personal` \u2026 is the one exception that touches the *other* project file, by design.\" Under that rule, `cf config unset git.integration_branch --project` (a personal-scope key) deletes from `.context-forge.local.toml` only \u2014 i.e., it would remove the developer's *live* personal value and leave the stale `.context-forge.toml` copy in place. But the Migration Plan's Collision Semantics (line 146) names \"`cf config unset <key> --project`\" as the explicit way to clear the stale *shared-file* copy, and Verification Walkthrough step 9 (line 259) runs exactly that command and expects `.context-forge.toml` to be clean afterward. As written, those two passages cannot both hold: the walkthrough step fails (finding persists) and, worse, the user's personal value is destroyed \u2014 the exact hazard the collision section was written to prevent. The requirement left unmet is the plan entry's \"defined migration/compat story\": the story's remediation path for a personal key present in *both* files needs a specified delete semantic (e.g., delete of a personal-scope key also clears its shared-file copy, with an explicit call-out that this is a deliberate, second exception to the routing rule \u2014 or a different remediation mechanism such as a flag or the checker rule). One sentence of clarification resolves it.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "MCP `config_get` tool description becomes stale and is outside the stated configTools update scope",
+      "description": "The Technical Scope limits the `configTools.ts` change to \"surface both project config paths,\" and the Development Approach step 7 repeats only the `configPaths` response addition. The existing `config_get` tool description in `packages/mcp-server/src/tools/configTools.ts` (\"Resolution order: project config \u2192 user config \u2192 built-in default\") becomes factually wrong for personal keys once the precedence is project-personal \u2192 project-shared \u2192 user \u2192 default. Since agent-facing tool descriptions are the guidance surface for this tool, the one-line description update should be included in the configTools change (and a matching note for `cf config get`'s help text if it states resolution order).",
+      "file_ref": null,
+      "category": "documentation-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:34"
+    },
+    {
+      "severity": "PASS",
+      "title": "Migration/compat story and failure modes meet the plan's requirement",
+      "description": "The plan entry's \"defined migration/compat story for projects that already committed personal keys\" is covered end-to-end: read-time fallback (no functional regression, verified consistent with the current `get()` precedence in `ConfigManager.ts`), a `warning`-severity `ConsistencyChecker` rule that surfaces through both `cf check` and MCP `workflow_check` (both confirmed to run the full `checkAll` suite), a dedicated `migrate-personal` command with explicit collision semantics, and per-path failure handling (write-personal-then-delete-shared ordering, per-key failure continuation, idempotent re-run, `cf init` gitignore append aborting via the existing `handleError` path \u2014 verified present in `init.ts`). The rejection of `fixAction` wiring is justified against the actual closed union type in `introspection/types.ts`.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Migration-Plan"
+    },
+    {
+      "severity": "PASS",
+      "title": "Boundaries, dependency directions, and proportionality are correct",
+      "description": "Routing is kept inside `ConfigManager` (core) with unchanged `get/set/delete/list` signatures, so all verified call sites (CLI `config.ts`/`guides.ts`/`check.ts`/`next.ts`/`status.ts`, `branchGuard.ts` via 916, MCP `configTools.ts`) need no changes \u2014 dependency direction (callers \u2192 ConfigManager) is preserved. The `916` reference is correctly historical (916's prerequisite fix is merged; `--project [id]`/`--global` verified in `config.ts`), and the design's `dependencies: [914]` matches the body and the plan. Nothing is overweight relative to the plan entry: no dry-run/confirmation machinery (explicitly deferred in Special Considerations), no gitignore template (deferred to the plan's Future Work), no CLI surface change \u2014 and the explicitly-excluded list correctly fences off user-scope behavior and auto-fix wiring.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Delete routing contradicts the collision-case remediation path",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "documentation-consistency",
+      "raw_category": null,
+      "summary": "MCP `config_get` tool description becomes stale and is outside the stated configTools update scope",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:34",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Migration/compat story and failure modes meet the plan's requirement",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Migration-Plan",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Boundaries, dependency directions, and proportionality are correct",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T12:25:50.075830",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 247407,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 598997,
+  "cached_tokens": 470336,
+  "cache_write_tokens": null,
+  "completion_tokens": 59177,
+  "reasoning_tokens": 55876,
+  "duration_seconds": 243.91712391702458,
+  "cost_usd": 0.18458484000000003,
+  "cost_basis": "alias_pricing"
+}

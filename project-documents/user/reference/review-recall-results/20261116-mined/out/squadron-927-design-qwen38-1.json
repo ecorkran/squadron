@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Design resolves every decision the slice plan delegated, and respects its exclusions",
+      "description": "The plan entry leaves three choices to the design: Part A's minimum frontmatter shape (\"design picks the minimum that lets a gate decide\" \u2014 D1/D2 answer with a tri-state `diffTruncated` boolean and counts in header/JSON), Part B's mechanism (\"Design picks between forcing CONCERNS with a synthetic finding and failing the run\" \u2014 D4 picks capped CONCERNS with `verdictSource: imposed` and justifies not failing the run against `CheckpointTrigger.ON_CONCERNS`), and Part C's substitution definition (D9). Excluded items (default changes, #114) stay excluded; the plan's conditional in-scope items (diff ordering, `--stat`) are deferred to #137 with reasoning, and file-body truncation to #138. Dependency directions are clean: `review/` \u2192 `models/` (mirroring the existing `models/aliases.py` import in review_client), provider agents stamp metadata consumed upward through `collect_turn`.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Load-bearing premises verified against shipped code, not assumed",
+      "description": "The design's prerequisites all hold in the current tree: the SDK floor pin is `claude-agent-sdk>=0.2.152` (pyproject.toml:29); `VerdictSource` with `STATED`/`DERIVED` exists (models.py:28-42), so `IMPOSED` extends a closed vocabulary rather than inventing one; the recovery turn the design must sequence after exists (review_client.py:248-271); `TurnCapture`'s metadata-folding loop where `answering_models` will be read exists (turn_capture.py:78+); both provider stamping points named in the component table exist (sdk/agent.py:183-190 stamps `stop_reason` on the `ResultMessage` translation; openai/agent.py:531-568 stamps telemetry with the tools early-return D8 accounts for); and the CLI/pipeline/PR paths demonstrably share `run_review_with_profile` and `save_review_result`, confirming the single-code-path parity claim.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#dependencies"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`aiModel` meaning change reaches metrology identity and external gates; declared, but the one-time identity shift deserves visibility at rollout",
+      "description": "D10 correctly identifies that `aiModel` now names the answering model and that `metrology/identity.py` keys judge identity on `_FM_MODEL = \"aiModel\"` (identity.py:35, 235), so OpenAI-direct judges will change identity once (alias \u2192 dated snapshot). The design declares this as intended calibration behavior and keeps `requestedModel` presence as the machine-readable substitution signal, which is the right contract shape. This is informational: the consequence is stated rather than hidden, frontmatter changes are additive except for this one redefined key, and the CHANGELOG bullet in the success criteria is the right place to name the metrology identity shift so calibration consumers aren't surprised by split judge series.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D9's substitution rule leans on Phase 6 live-id capture for alias-shaped false positives; the stated cost bounds make this acceptable",
+      "description": "If `requested` reaches `run_review_with_profile` as an alias rather than a resolved id (e.g., a template default), D9's exact rule reports a substitution \u2014 the design names this failure direction explicitly (\"a false report costs one extra frontmatter key and a WARNING\") and the Risk Assessment/Mitigation pair (walkthrough step 6 captures each profile's real ids pre-merge, with fixes as tested explicit forms rather than looser rules) addresses it. The `requested is None` case (SDK default model) is handled. Noting only because the capture-before-merge step is what keeps this from shipping as per-run WARNING noise on an alias-heavy profile; the design already makes it a verification requirement, so no change is needed.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Design resolves every decision the slice plan delegated, and respects its exclusions",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Load-bearing premises verified against shipped code, not assumed",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`aiModel` meaning change reaches metrology identity and external gates; declared, but the one-time identity shift deserves visibility at rollout",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "D9's substitution rule leans on Phase 6 live-id capture for alias-shaped false positives; the stated cost bounds make this acceptable",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T13:13:03.747435",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 140850,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1275207,
+  "cached_tokens": 1064960,
+  "cache_write_tokens": null,
+  "completion_tokens": 38196,
+  "reasoning_tokens": 33819,
+  "duration_seconds": 1115.159005874768,
+  "cost_usd": 0.862662,
+  "cost_basis": "alias_pricing"
+}

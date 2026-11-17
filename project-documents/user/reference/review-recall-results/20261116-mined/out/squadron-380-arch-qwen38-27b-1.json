@@ -1,0 +1,152 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The \"reviewed head sha\" provenance guarantee is wired to the wrong commit",
+      "description": "The design leans twice on the reviewed-sha being authoritative: \"the head sha recorded in the artifact is what was reviewed; a review posted against a PR whose head has since moved must say so\" (Base semantics, L162) and the posted comment \"carries ... the reviewed head sha\" (L140). But the only existing sha-stamping mechanism is `save_review_result` \u2192 `format_review_markdown(..., reviewed_sha=resolve_reviewed_sha(\".\"))` (`src/squadron/review/persistence.py:515`), where `resolve_reviewed_sha` runs `git rev-parse HEAD` against `\".\"` \u2014 the **process working directory** \u2014 and its own docstring states the assumption: \"The reviews directory is resolved relative to the process working directory, so HEAD is resolved against the same root.\"\n\nFor a PR review the reviewed content lives in a squadron scratch worktree at a namespaced ref, while the process runs in the operator's normal checkout. Unless the process is `chdir`'d into the worktree (which the document never states), `resolve_reviewed_sha(\".\")` returns the **operator's branch tip**, not the PR head \u2014 so the artifact's `reviewedSha` misrepresents what was reviewed, and the \"head moved since review\" staleness signal (a stated feature) compares against the wrong base. The \"one review engine ... inherits every fix\" framing (Design Goals) treats this stamp as carried over unchanged, but it is precisely the one provenance field that is cwd-dependent and wrong in the common case. The fix is concrete (re-target the stamp at the PR head ref, or run the process in the worktree) but the document must state it; as written the guarantee does not hold.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"One review engine / the existing code review, unchanged\" understates the changes required in the shared path",
+      "description": "\"Design Goals\" and \"Envisioned State\" repeatedly sell the design as reusing the existing code review \"unchanged\" \u2014 \"the existing code review, with every existing review flag behaving as it does today,\" \"hands range, working directory, and PR metadata to the existing code review,\" \"inherits every fix that lands on the code path.\" Two of the things it hands over actually require editing the code path, not just feeding it:\n\n1. **Tool jail root.** For a tool-enabled PR review the reviewer must read the PR's files, so its jail root (`inputs[\"cwd\"]`, resolved by 916's `_resolve_review_cwd` = `find_git_root(resolved_cwd) or resolved_cwd`, `src/squadron/cli/commands/review.py`) must become the **scratch worktree**, not the operator's checkout. That is a change to the 916-established cwd/jail-root resolution the document otherwise treats as fixed (\"Isolated checkout\" principle creates the tree; \"one review engine\" keeps the wiring \u2014 the two only reconcile if the jail root moves, which is never said). The Current State section itself names the defect this prevents (\"Reviewing a ref that is not checked out means the diff and the files a reviewer opens can disagree\"), so the requirement is real; it is just not connected to the \"unchanged\" claim.\n2. **Prompt inputs.** \"PR metadata (title, body, linked issues, unresolved review threads) is available to the prompt as additional inputs\" (L129). But `code.yaml` declares `inputs` of only `cwd`/`files`/`diff`, and `code_review_prompt` (`src/squadron/review/builders/code.py`) builds the prompt from exactly those keys \u2014 there is no slot for PR title/body/issues/threads. Carrying that metadata \"into the prompt\" requires extending both the code template and its builder, which contradicts \"the existing code review, unchanged\" and \"Nothing else moves.\"\n\nThese are additive and feasible, but the document's central, repeated claim that the code path is untouched misstates how much of it must be modified. A slice plan built on \"reuse the existing code review unchanged\" will miss the template/builder and jail-root changes.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The PR-keyed persistence name and frontmatter \u2014 the load-bearing naming decision \u2014 are never specified",
+      "description": "\"Envisioned State\" asserts a PR review \"saves under a PR-keyed name that satisfies the review docType frontmatter\" and that \"archiving, digest, and integrity checks from the 900-band review work apply unchanged,\" and the principle \"Persistence takes a target, not a slice ... The existing pattern of fabricating a minimal slice record ... is not extended to PRs.\" But the persistence layer is hardwired to `SliceInfo` throughout, not generic:\n- `save_review_file`/`save_review_result` build the filename as `{slice_index}-review.{review_type}.{slice_name}.md` (`src/squadron/review/persistence.py`).\n- `format_review_markdown` emits `slice: {slice_name}`, `project: {project_name}`, and a numeric index into the title, all read from `SliceInfo` (`src/squadron/review/persistence.py`).\n\nThe \"generic save target\" is real only at the CLI wrapper \u2014 `_resolve_save_outcome` is generic over `SaveTargetT` (`src/squadron/cli/commands/review.py`) \u2014 but the persistence side it must become \"generic\" over is not. For a PR there is no slice index or name, yet the document never defines: the PR-keyed filename shape, the `reviewType:` value a PR review emits, or what the `slice:`/`project:`/numeric-index frontmatter fields carry. Those are exactly the fields 917's verdict gate and the frontmatter contract key on, and the \"integrity checks apply unchanged\" claim depends on them. Declaring the name \"satisfies the frontmatter contract\" without defining the name, while asserting a `SliceInfo`-shaped persistence layer must accept it, leaves the single load-bearing naming decision implicit. (The exact `cf` frontmatter contract could not be re-verified here \u2014 `file-naming-conventions.md` is referenced throughout the repo but is absent from this working copy \u2014 which makes the unverified \"satisfies the contract\" assertion more, not less, risky.)",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:133"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unplanned-repo degradation does not cover the code template's hardcoded CLAUDE.md reference",
+      "description": "\"Technical Considerations\" (Rules outside a planned project) commits that in an unplanned repo \"the review runs with the template's rules and language auto-detection only, and says so, rather than silently reviewing with no conventions.\" That covers the rules *directory*. But the code template's `system_prompt` hard-codes \"Apply the project conventions from CLAUDE.md and language-specific best practices\" (`src/squadron/data/templates/code.yaml`). In a repository \"never planned in squadron\" there is no `CLAUDE.md`, so the model is still instructed to apply project conventions that are not present \u2014 a silent, not explicit, degradation, and it is in the system prompt, not the rules path the document's degradation story addresses. Worth stating how the conventions reference degrades (or that it does not) for unplanned repos.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Merge-base range requires the base ref locally, but only the head is fetched",
+      "description": "The reviewed range is \"merge-base to head\" and the keystone slice's job is \"head fetch into a namespaced ref.\" Computing `git merge-base <base> <head>` needs **both** refs present locally. The document specifies fetching the PR head but is silent on the PR's base branch. In a clone where `origin/<base>` is already tracked this is free, but in the \"never planned in squadron\" / fresh-clone case the base may not be a local ref, in which case the range cannot be computed. The document should state that the base ref must be fetched (or resolved to a present ref) as part of head/base resolution, not just the head.\n\n---\n\nThe architecture's core idea \u2014 one adapter boundary, one review engine, explicit degradation in unplanned repos, reads-before-writes with identity refusal \u2014 is sound and well-motivated, and the enumerated failure modes are a genuine strength. The concerns above are all fixable seams (re-target the sha stamp, re-root the jail at the worktree and state it, define the PR-keyed name/frontmatter, state base-ref fetch, address the CLAUDE.md reference), but each currently rests on an assumption the existing code contradicts or the document never makes, so they should be resolved before the keystone slice is planned.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The \"reviewed head sha\" provenance guarantee is wired to the wrong commit",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:162",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"One review engine / the existing code review, unchanged\" understates the changes required in the shared path",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The PR-keyed persistence name and frontmatter \u2014 the load-bearing naming decision \u2014 are never specified",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md:133",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Unplanned-repo degradation does not cover the code template's hardcoded CLAUDE.md reference",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Merge-base range requires the base ref locally, but only the head is fetched",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-17T12:16:20.493734",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 242402,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 769735,
+  "cached_tokens": 709056,
+  "cache_write_tokens": null,
+  "completion_tokens": 60913,
+  "reasoning_tokens": 56739,
+  "duration_seconds": 263.63087979191914,
+  "cost_usd": 0.18402436,
+  "cost_basis": "alias_pricing"
+}

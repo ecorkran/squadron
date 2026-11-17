@@ -1,0 +1,19 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Local head SHA required by the precondition has no producer",
+   "description": "`check_head_pushed(..., local_sha: str, ...)` (Task 6.1) needs the local head SHA for the \"behind\" comparison, but no task specifies computing it. Task 3.1 adds only `current_branch` (`rev-parse --abbrev-ref HEAD`) and `commits_in_range` (`git log`), neither of which returns the head SHA; `commits_in_range` needs `base`, which is not selected until after preconditions in Task 13.1's ordering (\"resolve locator \u2192 preconditions (identity, then pushed) \u2192 base selection\"). So at the point `local_sha` is needed, nothing in the breakdown produces it. A junior cannot complete the \"host sha differs from local\" criterion without inventing an unspecified `git rev-parse HEAD` call. Name a producer (e.g. add a `head_sha` helper in Task 3.1 and call it from Task 13.1) so the precondition is independently implementable.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Review verdict is required downstream but never gathered",
+   "description": "Task 9.1 requires `PrFacts` to carry the review's \"verdict,\" and Task 11.1 requires writing \"the artifact path, verdict, and reviewed sha under 'review provenance'.\" But the only producer of review input is `find_latest_in_range_review` (Task 8.1), which reads frontmatter \"for `reviewedSha`\" only and says nothing about capturing the verdict. Task 9.1 forbids deriving values in assembly (\"Every field is copied from an input\"), so the verdict has no source. The functional criterion only names artifact + reviewed sha, so the practical impact is a field that is always absent, but the tasks are internally inconsistent. Either drop verdict from `PrFacts`/provenance or extend Task 8.1 to read and return it with the reviewed sha.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199"
+  }
+ ]
+}

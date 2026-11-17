@@ -1,0 +1,33 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" is impossible; no task repairs the four-metric fixtures",
+   "description": "Adding four `SnapshotMetric` members makes `LanguageSnapshot._one_measurement_per_metric` (`src/squadron/metrology/snapshot_models.py:186-192`) reject any section missing a metric. Three 400 tests hard-code exactly four measurements and fail the moment Task 2 lands: `tests/metrology/snapshot/test_render.py:31-64` (`python_snapshot()`), `tests/metrology/snapshot/test_snapshot_models.py:225-253` (`test_json_round_trip_is_lossless`), and `tests/metrology/snapshot/test_python_length.py:60` (`assert adapter.metrics == set(SnapshotMetric)`, broken by Task 2 narrowing `PythonAdapter.metrics`). No task edits `test_snapshot_models.py`; Task 9 only *adds* cases to the length tests and Task 27 only describes new render assertions, never the shared fixture. So the suite stays red from Task 2 through Task 25+, contradicting Task 2's own success criterion, the Context Summary's \"tests for the touched area\" on every commit, Success Criterion 12, and the Technical Requirement \"the full suite passes\" that Task 30 checks only at the end. Add a Task 2 sub-step (or a dedicated task) that derives these fixtures from `SnapshotMetric` and updates the adapter-metrics assertion.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:45"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`MemoryError` in the TypeScript tokenizer is routed to two mutually exclusive outcomes",
+   "description": "Task 14 says \"Token errors are `TypeScriptParseError` and `MemoryError`\", which sends a tokenizer `MemoryError` into `measure_duplication`'s per-file `unparsed_files` branch (Task 10, second bullet). But Task 10's ceiling bullet (line 123), Task 11's \"a tokenizer that raises `MemoryError` gives `tool_failed` with a WARNING\" (line 139), design D3 (\"A `MemoryError` is handled the same way\"), and the failure-mode table all require a `MemoryError` to yield `duplicated_lines = tool_failed` naming the count and ceiling \u2014 \"Never a partial figure\", with other metrics unaffected and a WARNING. A junior AI following Task 14 makes Task 11's own test fail for the TypeScript tokenizer and violates the table row. Drop `MemoryError` from Task 14's `token_errors`, or state explicitly that it must escape the per-file handler to the whole-pass one.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two named failure-mode assertions have no test",
+   "description": "The Technical Requirement says \"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table.\" (a) The Cobertura row names \"a non-integer `number` or `hits`\", and Task 19 implements both, but Task 20's case list (line 206) has only `hits=\"x\"` \u2014 no non-integer `number` case, so half of that row is unverified. (b) The token-ceiling row says \"Other metrics are unaffected\" and Success Criterion 10 says \"and its other metrics are unchanged\", but Task 11's monkeypatched-ceiling test (line 138) exercises `measure_duplication` in isolation with a test tokenizer; it never asserts file length, function length, complexity, lint or type counts are unchanged. Task 13/15's adapter-level tests don't trip the ceiling. Add the `number` case to Task 20 and an adapter-level ceiling case asserting the other metrics.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138-206"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The NFR / load-test rule is not triggered here",
+   "description": "The parent architecture has no Non-Functional Requirements section (its headings are Overview, Design Goals, Architectural Principles, Current State, Envisioned State, Technical Considerations, Anticipated Slices, Non-Goals, Related Work), and the 401 slice design neither restates one nor sets a latency, throughput or resource target in its Success Criteria. D3's \"133 bytes per token\" / 4,000,000-token ceiling is a sizing rationale introduced by this design, enforced functionally by Tasks 10/11; it is not a restated NFR. No `tests/load/` task is needed, so the CI-gating rule is not triggered either. Correctly absent, not a gap.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md"
+  }
+ ]
+}

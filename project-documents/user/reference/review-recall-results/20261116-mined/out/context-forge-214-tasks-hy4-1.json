@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit checkpoints are checkbox tasks, not plain `**Commit**:` markers",
+      "description": "The five commit checkpoints (lines 71, 94, 117, 126, 134) are `- [ ] **Task 2C: Commit** \u2014 ...` checkbox items. The Phase 6 prompt finds checkpoints by scanning for lines that start with `**Commit**:` (`project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:368`) and falls back to \"commit at the end of the task\" when none match \u2014 so an implementer would commit after every task, including empty no-op commits for the \"Task nC: Commit\" tasks themselves, and could lose the intended semantic messages. Placement is otherwise correct: after 2T, 3T, 4T, 5 and 6, i.e. at working, tested points, not after every task and not only at the end. Two secondary problems in the same markers: Task 5C/6C are conditional (\"only if Task 5/6 changed files\"), which conflicts with AGENTS.md's \"Git add and commit from project root at least once per task\"; and Task 5 may change code/tests when a `DIFF` is a bug (line 123), yet Task 5C would commit all of it as `docs: record slice 214 parity sweep results`, violating the semantic-prefix rule. Fix: use plain `**Commit**: <message>` lines after 2T, 3T and 4T, and give parity-sweep code/test fixes their own `fix:`/`test:` commit.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4T's worktree and real-template setup could leave design:173 unverified",
+      "description": "Line 114 permits \"with `--project` **or** a worktree checkout fixture\". A `--project` run from the main checkout only proves that a named project resolves; it does not prove \"the template is read from the invoking checkout's guide, so a worktree uses its own guide copy\" (slice design line 173). The cited `packages/cli/tests/commands/validate-worktree-scope.test.ts` shows the requirement: it needs two checkout roots with distinct templates so a wrong root cannot satisfy the assertion. Make the two-checkout fixture mandatory and drop the `--project` alternative. Separately, line 107 says \"following the setup in `validate.test.ts`\", whose `vi.mock('@context-forge/core/node')` stubs the validator and sets `projectPath: '/tmp/test'` \u2014 the derived template path there does not exist, so a junior AI is nudged toward mocking the new core entry function, which would make the \"real slice designs ... PASS\" case (and the \"missing template\" case) assert mock behavior instead of the real validator against `project-documents/ai-project-guide/project-guides/templates/slice-design.md`. `validate-worktree-scope.test.ts` instead uses `vi.importActual` and real temp directories, so the two cited setups conflict. State explicitly how the real template reaches the command under test (e.g. mock `FileProjectStore.getById` to return the repo root, or write the template into the temp checkout) and keep the core entry function un-mocked for the real-design cases.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:107-114"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two enumerated exit-2 conditions have no dedicated assertion",
+      "description": "The criterion at slice design line 171 enumerates \"a missing, non-regular or unreadable file, a missing or unreadable template, or a template with no required headings\" as each exiting 2 with empty stdout, \"including under `--json`\". Task 4T covers no arguments, nonexistent path, valid-before-missing and missing template in both modes; Task 3T covers a directory, a missing template and a template with no markers at the file layer. No test exercises an unreadable file or unreadable template, and no CLI-level test asserts exit 2/empty stdout for a template with no required headings under `--json`. This is assertion coverage only, not a behavior gap: Task 3's readability preflight and its \"wrap any unexpected `fs` error in `SliceDesignValidationError`\" bullet implement these, and the criterion explicitly mandates just one test (valid file before missing one), which Tasks 3T and 4T both provide. Informational; no action required.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+    },
+    {
+      "severity": "PASS",
+      "title": "All functional, technical and integration criteria trace to tasks, with no scope creep",
+      "description": "Cross-reference: design:167 (PASS/exit 0) \u2192 Task 4T real designs + Task 5 parity sweep; design:168 (`FAIL`, `  missing:`, exit 1) \u2192 Tasks 3T/4T broken copy; design:169 (frontmatter message) \u2192 3T/4T; design:170 (order, exit 1, later files still checked) \u2192 3T/4T; design:171 (exit 2) \u2192 Task 3 preflight, 3T/4T error cases, Task 4's `handleError(err, 2)`; design:172 (`--json` contract) \u2192 Task 4 + 4T; design:173 \u2192 Task 4 root resolution + 4T (strength flagged above); design:176\u2013181 (unit tests, real-template test, real-design command test) \u2192 2T, 3T, 4T; design:183 (build/lint/full suite, <300 lines) \u2192 per-task build successes plus Task 6. I verified the real template and bash script exist at the paths the tests will consume, and that `parseFrontmatter`, `withJsonOption`, `withProjectOption`, `resolveProjectWorktree`, `resolveOperationPath` and `handleError(err, 2)` all exist as referenced. The Integration Requirement (design:186) is guide-side and explicitly excluded (design:44, 156\u2013162, deferred until after the cf release), so its absence is not a gap; Task 5's parity sweep is the correct cf-side precondition. No task adds excluded work (`cf check` wiring, `SLICE_DESIGN_TEMPLATE` env override, guide edits) or unrelated files.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and proportionality fit the slice",
+      "description": "Dependencies form one linear chain with no cycles: 0 \u2192 1 \u2192 2 \u2192 2T \u2192 3 \u2192 3T \u2192 4 \u2192 4T \u2192 5 \u2192 6. Task 3 explicitly consumes Task 2's exported functions, and Task 4 consumes Task 1's constant (Task 1 correctly tells the implementer to add it to the explicit `packages/core/src/guides/index.ts` barrel, which I confirmed is name-listed) and Task 3's `node.ts` entry function. Each test task immediately follows its implementation task (2T/2, 3T/3, 4T/4). One task file of ~135 lines, 10 work tasks, three new source files and three test files is proportional to the slice plan's effort-1/5, low-risk entry; the largest task is effort 3 with seven bullets, and none is too granular. The design restates no NFR (no performance/latency/throughput requirement; \"State Management: None\"), so no `tests/load/` task or CI-gating task is needed, and none exists to leave unwired.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit checkpoints are checkbox tasks, not plain `**Commit**:` markers",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 4T's worktree and real-template setup could leave design:173 unverified",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:107-114",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Two enumerated exit-2 conditions have no dedicated assertion",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All functional, technical and integration criteria trace to tasks, with no scope creep",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and proportionality fit the slice",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-17T08:53:58.872440",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 406127,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 688481,
+  "cached_tokens": 555264,
+  "cache_write_tokens": null,
+  "completion_tokens": 100619,
+  "reasoning_tokens": 92576,
+  "duration_seconds": 987.6538464576006,
+  "cost_usd": 0.19298578299999997,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Exit gate redefined away from the plan's baseline; k-first regression guard dropped",
+      "description": "The parent slice plan entry (140-slices.simulation-scaling.md:56) assigns these exit criteria: \"k-nearest TPS at N=200k within 20% of k-first TPS at the same N; parity ... within 5% ...; no regression on k-first path.\" This doc instead (a) swaps the comparison baseline from `k_first` to the newly invented `radius_only`, and (b) removes `k_first` entirely (lines 34, 67, 179), which makes \"no regression on k-first path\" untestable and vacuous. The comparison at line 358 and verification step 4 (line 395) therefore no longer measure what the plan committed to, and a removed path cannot be shown non-regressed. Neither the doc nor the plan record this re-baselining as an approved scope change. Reconcile with the plan: either retain `k_first` and its gate, or get the plan entry's exit criteria amended before treating this gate as authoritative.",
+      "file_ref": null,
+      "category": "requirements-traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mode-set overhaul and multi-million-agent probes are overweight for the assigned fix",
+      "description": "The assigned deliverable is a coherent reindex that makes k-nearest viable at 200k. The doc bundles several larger items that are not required by that deliverable: a new `radius_only` neighbor mode with its own JIT specialization (68, 181-185), removal of `k_first` plus a default flip in two public config surfaces (67, 197-199, 349), and 500k/1M headroom probes with new workloads (357-358, verification step 5). These exist mainly to chase the published 16M boid reference, which the doc itself says is \"not the destination\" and defers to a future FRNN slice (Future Work, line ~459). It also changes the external `neighbor_mode` config surface while claiming \"does not change any external interface other than collapsing three neighbor_mode values to two\" (Value) \u2014 that collapse *is* an interface change consumed by server/workload/bench. A lighter slice that keeps the existing two modes, adds the reindex, and measures against the plan's `k_first` baseline would satisfy the assigned criteria. Cut or defer `radius_only`, the `k_first` removal/default flip, and the 500k/1M probes into the already-planned FRNN/reference slices.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67-68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No absolute throughput NFR restated; the load-bearing gate is purely relative",
+      "description": "The architecture's overarching throughput goal is 60 TPS at the tier targets (Overview; tier milestones in 140-slices:148), and this slice touches that exact GPU fused-tick path. Criterion 4 sets only a relative gate (`k_nearest \u2265 0.8 \u00d7 radius_only` at 200k) and criterion 3 explicitly gives `radius_only` \"no pass/fail\"; the doc further calls the gate \"a checkpoint ... not a ceiling\" (line 44). Consequently every stated criterion can pass at any absolute TPS (e.g. single-digit TPS at 200k), so a \"green\" result is indistinguishable from meeting the architecture's tier target. Restate the relevant absolute target (and the tier NFR it tracks toward) in the gate, or state explicitly which future slice owns it and make clear that this slice's pass is not tier completion. This is not blocking because the plan defers absolute validation to the Tier 3 production-scale slice, but the doc should say so rather than omit it.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357-358"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration boundaries and dependency direction are sound",
+      "description": "The change is confined to the GPU fused-tick layer (`agent_state`, `quadrants_fused_kernels`, `build_spatial_hash`), with `run_fused_tick` unchanged and no new cross-layer coupling. Dependency direction is correct (150 \u2192 152), the retained-heap / reindex placement is consistent with slice 150's seam, and invariant writebacks to original-order fields plus the tick-scoped coherent scratch are well specified. The stated 5.6 MB addition (line 226) is consistent with the architecture's memory budget, where memory is explicitly not a gate.\n\nNote on tool use: I opened slice 150's design to verify the retained `k_first`/`k_nearest` modes and heap/pruning behavior that slice 152 claims to build on; those claims check out, which is why the concerns above target scope/exit-criteria divergence rather than incorrect technical integration.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Component Structure"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "requirements-traceability",
+      "raw_category": null,
+      "summary": "Exit gate redefined away from the plan's baseline; k-first regression guard dropped",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Mode-set overhaul and multi-million-agent probes are overweight for the assigned fix",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67-68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No absolute throughput NFR restated; the load-bearing gate is purely relative",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357-358",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Integration boundaries and dependency direction are sound",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Component Structure",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-17T08:06:14.307313",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 54228,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 172392,
+  "cached_tokens": 120320,
+  "cache_write_tokens": null,
+  "completion_tokens": 14377,
+  "reasoning_tokens": 12668,
+  "duration_seconds": 95.44170924974605,
+  "cost_usd": 0.00401578,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,68 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Dependency observations require reading node types the architecture forbids",
+   "description": "Section 6 says \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped\". The architecture's Read discipline (360-arch.document-intelligence.md:107-109) says function- and class-level nodes are not read; slice plan 362 says \"read only file-level node types and skip function/class nodes\"; the 361 design (line 109) says they are never read; this slice's own Success Criterion 9 (line 333) and walkthrough step 7 (lines 422-424) forbid reading them. Resolving a `function:`/`class:` endpoint to an owning file and then to a layer is undefined here: `layers[].nodeIds` contains only file-level nodes per this design's own Verified graph facts (lines 101-102), so the owning-file\u2192layer step has no named field, and deriving the owning file from the architecture's type-prefixed node IDs is never specified. This is a hidden dependency that leaves the slice plan's \"read only file-level node types\" requirement unmet. Fix: specify ID-based resolution to a file-level node with explicit handling for unresolvable IDs, or drop the function/class endpoint resolution and exclude those edges.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Exclusion filter replaces the architecture's file-level allow-list and contradicts its own wording",
+   "description": "The architecture enumerates nine file-level types and says those are sufficient (360-arch.document-intelligence.md:107-109), and slice plan 362 says \"read only file-level node types\". The design first says the selector \"becomes an explicit type allow-list\" (line 151) and then says it is \"Stated as an exclusion rather than an allow-list deliberately\" (line 157) with `select(.type != \"function\" and .type != \"class\")`, which admits every unknown upstream type. That silently broadens the input contract, conflicting with the architecture's requirement that \"A renamed upstream field must surface as a loud failure, never as a silently thinner document\" (lines 135-137) and with the 361 design's field-scoped `select(.type == \"file\" or ...)` allow-list (line 108). The retained cross-check at lines 138-141 also needs to inspect the node types the design says are never read. Fix: use the architecture's nine-type allow-list, report unrecognized types as drift, and reconcile the allow-list/exclusion wording.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-161"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "363 integration claims verbatim reuse of a mapping that does not cover 363's concept sections",
+   "description": "Line 36 says the extraction mapping is \"reused verbatim by slice 363\", and lines 299-301 say 363 needs \"exactly this per-section field mapping\". Slice plan 362 requires providing \"the extraction mapping reused by 363\", and slice plan 363 reuses it for Solution Approach and Initial Technical Direction. But the architecture already defines a different, concept-section mapping (360-arch.document-intelligence.md \"Interview scope\", lines 217-223): Solution Approach needs `layers[]` and `tour[]` **node ordering** (`tour[].nodeIds`), Initial Technical Direction needs `project.languages`, `project.frameworks`, and `config` nodes, and Development Approach needs test/CI `config` nodes. The seven-row table here (lines 174-180) is keyed to comprehension sections, uses `tour[].description` rather than `tour[].nodeIds`, and never names `config` nodes. \"Verbatim\" reuse by 364 is also overstated \u2014 lines 303-305 say 364 consumes the corrected layer composition and file-level definition, not the table. This leaves 363's extract-then-ask rule (\"attempt extraction from its named graph fields first\") without the mapping it expects. Fix: supply the concept-section fields in the provided interface, or state that 363 uses the architecture's table and drop \"verbatim\".",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:297-301"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "New file reads and optional fields have silent third outcomes despite a binding two-outcome rule",
+   "description": "The mapping states \"on absence emits that fallback and nothing else\" (line 170), \"The fallback column has no third option\" (lines 186-189), and Success Criterion 2 (lines 317-318) says \"never inferred prose, never a silent omission\". But Section 4 omits `languageNotes` \"silently where absent\" (lines 210-212) even though it is named as a source field in row 4 (line 177); Section 7 says an absent optional `config.json` setting is not a gap (lines 228-231) and an all-comments `.understandignore` is reported as \"defaults only\", explicitly \"not a gap\" (lines 232-235). These are third outcomes / silent fallback values against the project convention and the 361 gap-marker rule, which requires naming what is missing and which input would supply it. For the new I/O paths (`config.json`, `.understandignore`, `meta.json` `analyzedFiles`, `nodes[].tags`, `edges[].weight`/`.direction`, `tour[].description`) the relevant failure modes \u2014 missing file, unreadable file, malformed JSON, missing key, empty value \u2014 are not enumerated: row 7's fallback only names \"the unreadable file\", with no handling for a missing `analyzedFiles` key, absent `.understandignore`, malformed `config.json`, or a record without `weight`. Walkthrough step 5 (lines 394-410) copies only `knowledge-graph.json` and `meta.json` into the scratch repo, so the gap-marker run also lacks the two new coverage files, and the mutated `kg-*.json` / `meta-wrong.json` outputs (lines 413-419) are never installed as the files the flow reads. Fix: enumerate per-read failure modes with explicit strategies (gap marker naming file and key, or an explicitly recorded sentinel in provenance), reconcile the third outcomes, and make the scratch runs actually exercise the states they claim.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:186-235"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Changed-file list contradicts \"retain the document unchanged\"",
+   "description": "The Overview (line 22) says \"Everything here is markdown edits to the existing `commands/analysis/understand.md`\", Technical Scope (line 42) says \"Included \u2014 all within `commands/analysis/understand.md`\", and the reuse decision says \"retain the document unchanged\" and \"the document stays in `user/reference/` unchanged, as the architecture requires\" (lines 258, 277). The same paragraph says \"A one-line note is added to it\" (lines 278-280), and Success Criterion 11 (lines 336-338) plus walkthrough step 8 (lines 434-435) list `user/reference/analyze-codebase-prompt.md` among changed files. The architecture's \"Prior art (retained, not superseded)\" section requires the document be retained and not superseded \u2014 not byte-identical \u2014 and slice plan 362 requires only that it \"remains in place\". The design therefore invents a stricter constraint and then violates it, leaving the deliverable's file boundary ambiguous. Fix: either keep the reference document truly unchanged (cutting the cross-reference line, which no consuming slice needs), or list it explicitly in Technical Scope and drop the \"unchanged\" claim.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:256-280"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The two \"corrections\" misstate the 361 contract and depend on artifacts the referenced design does not establish",
+   "description": "Lines 121-122 assert the 361 skill \"states that `nodeIds` mixes file, function, and class nodes and instructs intersecting with `type == \"file\"`\"; line 147 says 361's skill text \"collapsed that to `select(.type == \"file\")`\". The referenced 361 slice design instead specifies `select(.type == \"file\" or ...)` (an allow-list) and \"Function- and class-level nodes are never read\" (lines 108-109), and defines Layer architecture as name/description/file count from `layers[]` (line 244); it contains neither claim. It also does not defer `config.json`, `.understandignore`, or `analyzedFiles` \u2014 those deferrals appear in 361 tasks F011/F012, not the 361 design \u2014 yet line 54 calls them \"361 explicitly deferred\". The design says both corrections \"change existing text in `understand.md`\" (line 115) while Technical Scope (line 65) and Integration Points (lines 310-311) say the 361 contract is \"executed unchanged\" and preflight is unchanged. Line 136 states \"the generated `943` sample carries both wrong counts\", but the reviewed workspace has no `943` comprehension document, no `commands/analysis/understand.md`, and no `.understand-anything/`; the 361 tasks frontmatter records \"No graph exists in this repo yet\" and makes graph generation a prerequisite. Slice plan 362 requires consuming the 361 contract (dependency [361]), not redefining it against an unverified implementation state. Fix: cite the exact 361 text being corrected, reclassify these as new 362 rules if that text does not exist, list contract edits explicitly as in-scope, and state the graph/943 artifacts as prerequisites rather than measurements.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:113-165"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Success criteria hardcode a single graph snapshot",
+   "description": "Criteria 4-5 assert \"Packaged Declarative Content reports **34** and Project Configuration reports **6**\" and \"it yields **238** nodes, reconciling with `meta.json`'s `analyzedFiles`\"; walkthrough step 2 (lines 367-369) asserts \"943 exists, so expect **944**\" and fixed values for analyzed files and ignore patterns, and Implementation Notes (lines 466-468) treats 943 as an existing sample with wrong counts. The 361 tasks make graph generation a prerequisite, and this design's own step 1 (lines 346, 364-365) says the graph may have been refreshed and the three numbers may disagree. The criteria are therefore pinned to one unverified snapshot and become unsatisfiable on a refreshed graph, leaving slice plan 362's \"Running against squadron itself produces a document a reader can check against the real repo\" without a stable check. Fix: express criteria as invariants (layer count equals `nodeIds | length`, file-level count equals `analyzedFiles`, reported numbers match the current graph) and keep measured values as walkthrough examples only.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:322-326"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Design is overweight for a one-file markdown edit; name cuts",
+   "description": "Slice plan 362 rates effort 3/5 and the design itself says everything is markdown edits to one existing skill file (lines 22-23), yet the document runs ~470 lines with a 13-row \"Verified graph facts\" table (lines 95-109), an 8-step walkthrough (lines 340-435) containing three scratch mutations plus a synthetic `analyzedFiles = 999` discrepancy run (lines 413-419), `uv run ruff format --check .` despite no Python changed (lines 428-432), a Risk Assessment and Implementation Notes that largely restate earlier sections, and handling for cases this repo does not have: an unknown tenth file-level type (lines 157-159), an unrecognized complexity tier (line 212), an all-comments `.understandignore` (lines 234-235), and unmeasured graphs with function/class layer members (lines 439-445). Some measurements feed no decision (`tour[].languageLesson` 9/15 at line 106; `tags` coverage 201/201 at line 104). Cut or defer: the unused measurement rows, the synthetic discrepancy walkthrough (one gap-marker path plus the reconciliation rule suffices), the ruff check, the repeated \"Read discipline, unchanged\" restatement of 361, and the unobserved-case handling. Keep the extraction mapping, the two recorded decisions, and one happy-path plus one gap-marker verification \u2014 this trims mechanisms without dropping any scope the slice plan assigns to 362.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:340-435"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Parent architecture states the read-discipline constraint qualitatively",
+   "description": "The parent architecture contains no numeric latency/throughput NFR; its performance-flavoured constraints are \"the graph is large ... never load the whole file into context\" (360-arch.document-intelligence.md:107-109) and the qualitative observation that the retained prior art is \"materially lighter on token use\" (line 372). The slice restates the qualitative rule in \"Read discipline, unchanged\" and Success Criterion 9 without inventing a target, which is consistent because no specific target exists to restate. If a numeric context or token budget is later set for the skill, this slice doc should restate it with that target.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293"
+  }
+ ]
+}

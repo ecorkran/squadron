@@ -1,0 +1,224 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Agent-state ownership is described three inconsistent ways",
+      "description": "The Envisioned State describes a pure function: step 5 \"Returns the updated state array\" (line 68) and \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it... feed in state, get back state\" (line 70). But the same section's interface list (line 81) includes \"register/remove agents\" \u2014 an engine-owned entity registry, i.e. state the engine holds between ticks. The world server contract (300-arch.worldserver-foundation.md, \"Entity management is centralized in the server... The behavior engine operates on whatever entities the server provides \u2014 it does not manage the entity lifecycle itself\") assigns lifecycle to `EntityManager`, and the realized `tick()` (100-slice.agent-state-and-tick-function.md) mutates `AgentState` in place and returns `None`. Four different ownership stories: pure in/out arrays, engine-side registry, server-side registry, and in-place mutation. This is the primary boundary of the subsystem and it must be pinned to exactly one story before slices 102\u2013104 build on it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stigmergic swarm archetype is incompatible with the model the doc specifies",
+      "description": "The Envisioned State lists \"Swarm agents respond to environmental stigmergy (reinforced paths) rather than direct neighbor forces\" and then asserts \"The same force-accumulation loop handles all archetypes. The profiles just change which forces dominate.\" Stigmergy is not a force weight: reinforced paths require agents to *write* into the environment (deposit/decay markers), while the Architectural Principles declare the environment \"a read-only interface\" (line 47). The Design Goal \"Archetype fidelity\" (line 27) also promises all five archetypes \"from shared underlying mechanics with different parameter weights,\" which stigmergy violates. The slice plan (100-slices.behavior-engine.md, Notes) already concedes this \u2014 swarm is deferred to (106) because it \"requires Environment Layer... that the behavior engine alone cannot provide\" \u2014 so the architecture's claims at lines 27 and 77\u201379 are contradicted by its own downstream plan. Either the environment surface needs a documented write path or the archetype claim must be narrowed.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:77-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism goal conflicts with every planned execution path",
+      "description": "\"Tick determinism\" is stated as \"given the same state and inputs, a tick produces the same outputs,\" justified by \"eventual distribution (where regions must agree on simulation results from shared boundary state).\" But the document's own roadmap contains multiple divergence sources it never reconciles: (a) GPU force accumulation (line 99) changes float reduction order versus CPU; (b) subset/variable-rate ticking (line 97, \"Subset-evaluable tick\") means two regions evaluating the same agents at different rates produce different trajectories, and reduced-rate agents are observed through world-server-interpolated positions the engine never computed; (c) the float64\u2192Float32 conversion at the serialization boundary (line 95) is lossy across region boundaries; (d) \"Pluggable spatial queries\" promises replacement \"without affecting consumers\" (Design Goals) and slice (105) demands \"behavioral output is identical before and after the swap\" \u2014 but brute force vs. spatial hash return neighbors in different orders, and float summation is order-dependent. The doc needs an explicit determinism contract (bitwise-per-run vs. cross-backend tolerance, canonical neighbor ordering, canonical reduction order) or the distribution claim must be dropped.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The hard part \u2014 the hot-loop data contract \u2014 is asserted, not designed",
+      "description": "The GPU path claims the \"BulkForce pattern\" is \"structurally identical to a GPU compute dispatch\" with \"no Python-level per-agent branching... no callbacks into Python during the hot loop,\" and the Design Goals require the hot loop be \"structured for vectorized computation over arrays of agent state, not object-by-object iteration\" (line 33). Nowhere does the document define how variable-length per-agent neighbor sets become rectangular bulk input \u2014 no CSR/flattened index contract, no padded-matrix option, no statement of what `BulkForce` actually receives. This is the load-bearing representation decision, and it is the one place where \"step 3: magic happens.\" The consequences are already visible: the implemented forces (101-slice.flocking-behavior.md, \"Vectorization strategy\") use \"a Python-level loop over active agents\" over ragged neighbor lists \u2014 exactly the object-by-object iteration line 33 forbids \u2014 which makes the \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" target (line 33) implausible at 20\u201360 Hz without a flattened neighbor contract this document never specifies. The same gap applies to the environment surface (line 47): a per-agent `query(x, y)` shape would violate the \"no callbacks into Python\" constraint; a batched sampling interface is required and undescribed. Note also that the \"no dynamic allocation / no Python callbacks\" constraints shape v1 interfaces for a hypothetical 1M+ tier that this layer explicitly does not serve.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregate-entity extension point cannot be carried by the neighbor query interface",
+      "description": "The Multi-resolution section says aggregates \"would be presented through the same neighbor query interface.\" But that interface (as realized: `query_radius` \u2192 `NDArray[np.intp]` indices; `BulkForce` takes `neighbor_lists: list[NDArray[np.intp]]`) can only name rows that exist in the agent state arrays. An aggregate is a statistical descriptor (center of mass, heading, dispersion, count) with no index, no per-agent velocity, and no profile row \u2014 feeding it through the same channel forces either phantom rows in the state arrays (contaminating every bulk op and the spatial index) or a heterogeneous neighbor descriptor that invalidates every `BulkForce` implementation written against the index-array contract. When slice (108) arrives it will require rearchitecting the force interface \u2014 the very thing extension points are supposed to avoid. The right seam is a separate neighbor-source abstraction returning typed descriptors (or aggregates as a distinct force term), decided now, not \"the same interface\" hand-waved now.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Inter-profile interaction and target selection contradict the stated principles",
+      "description": "Line 91 admits \"Profile-to-profile interaction rules add a combinatorial dimension to the parameter space\" (elk-vs-wolf separation \u2260 elk-vs-elk), but \"Profile as data\" (line 43) defines a profile as \"a set of named weights, ranges, and thresholds\" \u2014 a flat per-profile parameter set with no slot for an N_profiles\u00d7N_profiles interaction matrix. Likewise \"Forces, not decisions\" (line 41) explicitly rejects \"behavioral state machines or decision trees,\" yet the Anticipated Slices require \"target selection\" (line 111) and line 91 names \"pack-target-selection\" \u2014 choosing one target among candidates is a discrete decision, not a summable force, and \"pack hunting as coordinated convergence\" additionally needs a shared target (shared state beyond local force sums). Meanwhile line 79 claims \"the same force-accumulation loop handles all archetypes. The profiles just change which forces dominate.\" The document identifies these as open problems but its central abstraction claims assume they are already solved; the profile schema and force model need to be extended (or the claims narrowed) before slices 102\u2013103 can be built \"profile-driven.\"",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dead cross-reference to the world server architecture, with number drift",
+      "description": "Related Work links `200-arch.world-server-foundation.md`, which does not exist; the actual file is `project-documents/user/architecture/300-arch.worldserver-foundation.md` (different index *and* different name spelling). Line 21 refers to \"the world server (300-arch)\" while line 122 and 100-slices.behavior-engine.md say 200-arch. This is load-bearing, not cosmetic: nearly every scaling requirement in this document (subset-evaluable tick, aggregate neighbors, 10K\u20134M+ tiers at line 97) is justified solely by that document's scaling tiers, and a reader following the link finds nothing.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Core numerical decisions remain \"needs validation\" while implementation has already fixed them",
+      "description": "Array layout (\"needs validation,\" line 85), internal precision (line 95, \"the engine should define its internal precision\"), and integrator choice (line 93, \"Verlet or semi-implicit Euler may be needed\") are each flagged as open, yet each is load-bearing for the determinism and GPU goals above, and the completed slice designs have already committed: SoA, float64 internal with Float32 conversion owned by the world server, semi-implicit Euler (100-slice). The architecture is now stale relative to its own implementation and should record these as decided. Related gap: no failure semantics for `tick()` \u2014 degenerate geometry (two agents at identical positions make the inverse-square separation of 101-slice divide by zero \u2192 Inf/NaN that then propagates through integration), out-of-range `active_indices`, or non-finite profile parameters \u2014 despite the project rule \"Never use silent fallback values\" and the doc's own determinism claim, which NaN silently violates.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-95"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice list drifts from the slice plan it spawned",
+      "description": "The Anticipated Slices list \"Aggregation interface support\" as near-term work, but 100-slices.behavior-engine.md demotes it to Future Work (108) with an unbuilt prerequisite (\"World Server multi-resolution implementation\") \u2014 which is correct and cheaper; the architecture should match, since the aggregate work serves a capability no other document yet owns. Conversely the plan adds (107) Migration and Seasonal Movement, absent from the architecture's slice list, and the architecture's \"Spatial query abstraction\" slice (interface + first concrete strategy) is split differently in the plan (interface folded into (100), optimization as (105)). Align the two lists so the roadmap has one shape.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Anticipated-Slices"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Agent-state ownership is described three inconsistent ways",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Stigmergic swarm archetype is incompatible with the model the doc specifies",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:77-79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Determinism goal conflicts with every planned execution path",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The hard part \u2014 the hot-loop data contract \u2014 is asserted, not designed",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Aggregate-entity extension point cannot be carried by the neighbor query interface",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Inter-profile interaction and target selection contradict the stated principles",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Dead cross-reference to the world server architecture, with number drift",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Core numerical decisions remain \"needs validation\" while implementation has already fixed them",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-95",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Slice list drifts from the slice plan it spawned",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Anticipated-Slices",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-17T06:38:14.204739",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 121304,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 126447,
+  "cached_tokens": 97424,
+  "cache_write_tokens": null,
+  "completion_tokens": 30079,
+  "reasoning_tokens": 26839,
+  "duration_seconds": 1392.6150072081946,
+  "cost_usd": 0.039183431000000005,
+  "cost_basis": "alias_pricing"
+}

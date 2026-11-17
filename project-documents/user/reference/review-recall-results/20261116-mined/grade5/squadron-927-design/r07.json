@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Unhandled \"diff key present but no diff content produced\" path reports `diffTruncated: false`",
+   "description": "D2 makes `diffTruncated` \"always written, `true` or `false`\" when `inputs` has a `diff` key, and D3 names exactly one zero-injection case: `_add_injection` returning `False` under the total budget. But `_run_git_diff` is a separate subprocess call that can fail (`FileNotFoundError`/`OSError` on a missing git, non-zero exit) and return `None`, in which case `review_client.py:423-424` never calls `_add_injection` for the diff at all \u2014 no `DiffInjection` measurement exists to record. If the implementation follows D2's presence rule literally, that run writes `diffTruncated: false` while the model saw zero diff characters: the false-clean signal this slice exists to eliminate (and D4's cap will not fire either, since `truncated` is false). This is the one failure mode on the new measurement path that neither D2 nor D3 enumerates. The design should state the outcome for \"diff key present, content absent\" \u2014 e.g. record `injected_chars=0` (truncated=true, per D3's own \"worst case of the same fact\" reasoning) or a distinct non-false state.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:117-125"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D6 fixes the not-parsed notice's placement but not its wording, which then contradicts `verdictSource: imposed`",
+   "description": "D6 identifies the exact collision \u2014 a `fallback_used=True` PASS that receives the synthetic finding \u2014 and prescribes only a render-order change (\"renders whenever `fallback_used` is set, after any findings\"). The existing notice body (`persistence.py:528`) reads \"A verdict of {resolved_verdict} was parsed, but no findings could be extracted\u2026\". In the capped case `resolved_verdict` is the imposed `CONCERNS`, so the artifact would simultaneously claim \"a verdict of CONCERNS was parsed\" and `verdictSource: imposed`, while the actually-parsed verdict (PASS) appears nowhere in that sentence. The same artifact then asserts the opposite elsewhere (the synthetic finding says \"The model's own verdict was PASS\"). Since D6 exists solely for this case, the wording change (key on the model's stated verdict, or say \"imposed\") belongs in D6's fix, not left to the implementer to notice.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Integration contract statement \"No existing key changes meaning except `aiModel`\" is inaccurate",
+   "description": "The \"Provides to Other Slices\" contract says only `aiModel` changes meaning. But Technical Scope and SC12 also move `ActionResult.metadata[\"model\"]` from the requested/resolved id (today `model_id`, `pipeline/actions/review.py:420`) to the answering model, adding `metadata[\"requested_model\"]`. That metadata rides run state and run JSON \u2014 a surface other tools read (the 265 telemetry notes name `~/.config/squadron/runs/*.json` as consumer-facing). The design may well be right to follow the answering model here, but then the integration statement must name the second meaning change so downstream readers of run output are not told the key is stable. Either correct line 273, or keep `metadata[\"model\"]` as the requested id and put the answering model under a new key alongside `requested_model` \u2014 consistent with D8's own \"a new key avoids repurposing an existing one\" reasoning for provider message metadata.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "PR-metadata truncation falls outside both Included and Excluded",
+   "description": "The Excluded list carefully names file-body/glob/`CLAUDE.md` truncation (#138) and `judge-findings-addressed`'s `round_diff` (never passes through `_truncate`), but not PR-metadata truncation. `_pr_block` runs `pr_metadata` through the very `_truncate` this slice instruments (`builders/code.py:58-60`); the design references that call site only to justify keeping `_truncate`'s signature (line 68). A `sq review pr` run whose PR body was silently cut by `pr_max_bytes` will write `diffTruncated: false` and no other truncation record \u2014 the same silent-cut class, on the one review type whose diffs routinely exceed the cap. The slice need not fix it (routing it to #138 is consistent), but the boundary must be explicit: add it to Excluded, or state that `diffTruncated` covers diff content only and does not speak for the PR block.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:40-46"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "D4's success formula contradicts the \"never `or 0`\" pattern the doc itself sets",
+   "description": "D4 computes successful calls as `(tool_calls_made or 0) - (failed_tool_calls or 0)`, while Patterns and Conventions (line 215) states \"`None` means 'not reported' and is never replaced by a plausible value. `is None` checks, never `or 0`, for counts.\" The formula is safe today because both providers stamp the two counts together, but the pairing is an assumption the design never names \u2014 a provider that stamps `tool_calls_made` without `failed_tool_calls` would report successes that were in fact unreported failures, and the cap would stay off. State the assumption (both stamped or both absent) or treat `failed_tool_calls is None` with `tool_calls_made` non-None as unmeasurable rather than zero.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-140"
+  }
+ ]
+}

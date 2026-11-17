@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The overwrite guard is wired to a function `sq review code` never calls",
+      "description": "T12/T13 scope the archive-on-overwrite guard to `save_review_file`, and T13's tests exercise that function directly. But `sq review code <N>` \u2014 the command named in success criterion 7 (slice design:364) and walkthrough step 7 \u2014 persists via `save_review_result` (`src/squadron/cli/commands/review.py:746`), which writes with `path.write_text` directly (`src/squadron/review/persistence.py#save_review_result`). `save_review_file` is reached only from `pipeline/actions/review.py:272`, in the no-`slice_info` fallback. So T12, T13 and their commit can all pass while re-running `sq review code` still destroys hand-written review content; criterion 10 (failed/unverifiable archive aborts the overwrite, original byte-identical) is likewise unmet on that path. No task routes `save_review_result` (or its `as_json` branch) through a shared archive helper, and no test drives the CLI path \u2014 T40's walkthrough would only discover the gap at closeout. A task must cover the `save_review_result` writer before Part D lands.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-273"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Derivation wiring omitted: no mapping to the resolution vocabulary, no `judge_failed`, no disputed outcomes for `--no-judge`",
+      "description": "T27 says to reuse `derive_addressed_verdict` \"verbatim\" for the final `resolution`, but that function returns `Verdict.PASS|FAIL|UNKNOWN` (`src/squadron/pipeline/actions/findings_addressed/verification.py:113`), while Decision 5, the Data Flow and the artifact schema require `ADDRESSED|UNADDRESSED|UNKNOWN`. No task defines that translation (T29's `render_resolution` just receives a `resolution` value). Worse, 305's policy explicitly passes `judge_failed=judge.failed` (`policy.py:76`), but T25 asserts transport failure \"falls out of the existing behavior \u2026 not to add new logic\": `JudgeLegResult(failed=True, outcomes=[])` with the default `judge_failed=False` derives PASS \u2192 ADDRESSED. The same applies to `--no-judge`, where T25 says residue \"stays disputed\" but no task materializes those `disputed` outcomes (`statuses_to_outcomes` is fed by a judge response that never happens), so an empty outcome list derives PASS. Criteria 2, 3, 4 and 9 depend on this wiring. T26/T28's tests would catch the wrong result, but the implementation instructions actively steer the implementer away from the fix; state the mapping, the `judge_failed` threading, and the `--no-judge` disputed-outcome construction explicitly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:238-249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T5/T6 demand unchanged 305 tests but the extraction moves the symbol those tests patch",
+      "description": "T5 moves the `run_review_with_profile` call into `review/addressed/judge.py`; T6 requires `test_findings_addressed_judge.py` and `test_findings_addressed_e2e.py` to pass unchanged and explicitly says \"Confirm no test needed rewriting to pass\". Both files patch the string target `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile` (`tests/pipeline/test_findings_addressed_judge.py:32`, `tests/pipeline/test_findings_addressed_e2e.py:27`), which ceases to be a callable attribute once the transport moves. T1's importer sweep (`grep -rln \"findings_addressed.models\\|findings_addressed import\"`) does not match a patch-target string literal, so no task updates it. Success criterion 12 (\"305's full test suite passes unchanged \u2014 including after the relocation\") is therefore unsatisfiable as written. A task must reconcile the patch seam \u2014 keep a patchable re-export in the wrapper, or plan the mechanical test-target edits and say explicitly which test changes are allowed.",
+      "file_ref": null,
+      "category": "test-with",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The relocation reintroduces review\u2192pipeline imports and a package-level cycle",
+      "description": "The design's F002 (slice design:141) moves the context-free core precisely so `review/` never imports `pipeline/actions/` internals. T3 nevertheless keeps `review/addressed/verification.py` importing `RoundDiff` from `pipeline/actions/findings_addressed/screens.py` (and mislabels that direction as \"pipeline\u2192review\"), T21 tells the new `review/resolution.py` to import `RoundDiff` and `screen_byte_identical` from that same pipeline module, and T7 populates `review/addressed/__init__.py` with `verify_outcomes`/`derive_addressed_verdict`. Result: initializing `review.addressed` runs `__init__` \u2192 `verification` \u2192 `pipeline.actions.findings_addressed.screens`; importing that package runs its `__init__` \u2192 `policy`, which (after T3's importer updates) imports `review.addressed.verification` before it has defined those names. `RoundDiff` is shared vocabulary used by screens, verification, judge and resolution \u2014 it belongs in `review/addressed/` \u2014 but no task moves it. This risks import errors at T8's full-suite pass and contradicts the stated dependency direction.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Only one of the two `reviewedSha` persistence paths is verified",
+      "description": "Success criterion 1 (slice design:349) requires the stamp \"from both the CLI and the pipeline persistence paths\". T10 wires both, but T11's integration test is explicitly either/or \u2014 \"`save_review_result` (or the pipeline review action, whichever is more directly testable)\" \u2014 and walkthrough step 1 / T40 grep a single review file. `pipeline/actions/review.py:265-272` also builds markdown via `format_review_markdown` + `save_review_file` in the no-`slice_info` branch, which T10 never mentions. No task verifies the pipeline-action path's stamp or that fallback branch; add a test per path (or drive both through one shared helper so a single test proves parity).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:214"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"review discovery\" half of the metrology criterion has no test task",
+      "description": "Success criterion 11 (slice design:375) requires both `discover_judge_results` **and** review discovery to return no resolution artifacts, \"test against the real glob\". T32 covers only `discover_judge_results` (`src/squadron/metrology/discovery.py:46`). The second surface \u2014 `resolve_target`'s `reviews_dir.glob(f\"{index}-review.*\")` at `src/squadron/metrology/capture.py:97` \u2014 is never exercised with a resolution artifact in the directory. T40 asks to \"cite the test that proves it\" for every criterion; there is no test to cite for this half. Add one assertion against the real `resolve_target` glob in T32.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:317"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13's commit lands Part D before T14's go/no-go answer is known",
+      "description": "The design's Phase 5 note (slice design:381) requires the cf `archive/`-scanning verification \"sequenced before Part D lands\", and Decision 7 says to confirm it \"before landing\". The breakdown puts T14 after T12/T13, whose `Commit:` marker (`fix: archive prior review content before overwrite, fail closed on archive failure`) is the point Part D lands. The \"do not mark T12 done until T14's verification outcome is known\" note gates a checkbox, not the commit: in the recursive case T14 mandates changing the archived filename scheme and updating T12/T13 *after* they were committed and marked tested. Move T14 ahead of T12, or hold the Part D commit until after T14, so the marker sits at a verified working point.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:258-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part 0's four identical full-suite checkpoints are redundant for a pure relocation",
+      "description": "The slice is 3/5 with 13 criteria; the breakdown is 40 tasks across two files (305, comparable scope, used 31). Part 0 is four mechanical moves, each followed by a verification task running the *same* findings-addressed suite unchanged (T2, T4, T6), plus a fourth full-project run (T8), and T40 repeats the full suite at closeout. Criterion 12 needs one \"305 suite passes unchanged after the relocation\" proof, not four. T7 (effort 1/5 `__all__`/docstring edit) is too granular to justify its own dedicated ruff/pyright/full-suite task. Merge T1+T3 into one move pair with one verification, fold T7 into T5/T6, and keep a single full-suite checkpoint \u2014 the test-with pattern is preserved while cutting ~3 tasks and three redundant suite runs.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "All 13 success criteria trace to task pairs, with consistent test-with ordering",
+      "description": "Cross-reference: criterion 1\u2192T9\u2013T11, 2\u2192T29\u2013T34, 3\u2192T21/T22, 4\u2192T25/T26, 5\u2192T27/T28, 6\u2192T19/T20, 7+10\u2192T12/T13, 8\u2192T23/T24, 9\u2192T25/T26, 11\u2192T32, 12\u2192T2/T4/T6/T8/T40, 13\u2192T31/T32/T34. Nearly all implementation tasks are immediately followed by their test task in both files, and `Commit:` markers are plain lines at tested points (T2, T4, T6, T8, T11, T13; T16\u2013T37, T40), not checkboxes and not only at the end. T14 correctly appears as its own checklist task per the Phase 5 note, and T37\u2013T39 cover slash-command parity, the schema docs and the PM procedure without cf code changes \u2014 no scope creep. No load/NFR restatement in the parent design, so no `tests/load/` or CI-gating task is needed here.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The overwrite guard is wired to a function `sq review code` never calls",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-273",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Derivation wiring omitted: no mapping to the resolution vocabulary, no `judge_failed`, no disputed outcomes for `--no-judge`",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:238-249",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-with",
+      "raw_category": null,
+      "summary": "T5/T6 demand unchanged 305 tests but the extraction moves the symbol those tests patch",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:128",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "The relocation reintroduces review\u2192pipeline imports and a package-level cycle",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:131",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Only one of the two `reviewedSha` persistence paths is verified",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:214",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The \"review discovery\" half of the metrology criterion has no test task",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:317",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T13's commit lands Part D before T14's go/no-go answer is known",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:258-296",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Part 0's four identical full-suite checkpoints are redundant for a pure relocation",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All 13 success criteria trace to task pairs, with consistent test-with ordering",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-17T08:47:16.363991",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 420348,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 937528,
+  "cached_tokens": 824384,
+  "cache_write_tokens": null,
+  "completion_tokens": 106652,
+  "reasoning_tokens": 101758,
+  "duration_seconds": 1093.1132847499102,
+  "cost_usd": 0.19780811199999998,
+  "cost_basis": "alias_pricing"
+}

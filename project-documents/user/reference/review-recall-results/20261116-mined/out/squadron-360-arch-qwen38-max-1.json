@@ -1,0 +1,206 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Output Conventions section contradicts Capability 1's declared outputs",
+      "description": "The Output Conventions section states: \"Both capabilities write to the existing `project-documents/user/analysis/` directory with the existing `docType: analysis`. No new directory, no new docType.\" The Resolved Design Decisions section repeats this (\"existing `user/analysis/` directory and `docType: analysis`, in the 940-949 reserved range\"). But Capability 1's Outputs section declares a `000-concept.{project}.md` with `docType: concept` written to `project-documents/user/project-guides/` \u2014 a different directory and a different docType \u2014 plus initiative-plan candidates that are by definition not `analysis` documents. The convention claim is only true of the analysis doc and the overview doc, not of Capability 1 as a whole. Slice design built on the Output Conventions statement will have an incorrect output map; the section needs to enumerate all four artifact classes (concept, analysis, candidates, overview) with their real docTypes and locations.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Initiative-plan candidates have no defined artifact shape",
+      "description": "The third Capability 1 output \u2014 \"Initiative-plan candidates ... written only on explicit confirmation\" \u2014 is the initiative's most consequential artifact and the least specified. The document never says: where a confirmed candidate is written, what docType it carries (`initiative-plan`? then it belongs in `project-guides/` and conflicts with the \"analysis range\" indexing rule), what its frontmatter looks like, what \"explicit confirmation\" means operationally (approve all? approve a subset? candidates are rejected \u2014 deleted or kept?), or what \"derived from layer boundaries and complexity clustering\" refers to \u2014 the graph contract supplies `layers[]` and per-node `complexity`, but no clustering mechanism exists or is defined. The non-goal \"squadron does not silently author a commitment document\" settles the *whether* and leaves the *what* entirely open. This is the \"step 3: magic happens\" part of the design.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Concept-document index collides with existing convention evidence and has no existing-doc guard",
+      "description": "The skill writes `project-documents/user/project-guides/000-concept.{project}.md`, but the existing initiative plan's frontmatter carries `source: user/project-guides/001-concept.squadron.md` \u2014 evidence that squadron's own convention anchors the concept at index 001, not 000. The document never reconciles this. More importantly, the Flow's precondition step checks only plugin presence and graph existence: there is no defined behavior when a concept document already exists (refuse? overwrite? merge?). Given the CLAUDE.md rule that the \"User-Provided Concept\" section is sacred and never rewritten, a generation path that can land on top of an existing concept document with no collision rule is a real gap. Capability 2 handles its analogous case (missing concept) explicitly; Capability 1 handles the opposite case not at all.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Staleness warning must appear \"in the generated document's provenance,\" but no output schema defines a provenance section",
+      "description": "Flow step 1 requires the graph-staleness warning to be \"prominent\" and to \"appear in the generated document's provenance, because the genuine failure mode is a confidently wrong concept doc built on a stale graph.\" None of the document's output schemas contain a provenance home: the interview-scope table lists five concept sections (none is provenance), the analysis doc's contents are never enumerated beyond \"layers, complexity hotspots, entry points, dependency observations,\" and Capability 2's field schema (Purpose\u2026Risks) has no provenance field either. A load-bearing honesty requirement is attached to a structure the architecture never defines \u2014 the slice designer must invent it, and two slices could invent two incompatible places.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Overflow into 950+ is sanctioned\" asserts authority squadron does not hold",
+      "description": "The document sanctions drawing indices past 949 while simultaneously asserting \"no change to `file-naming-conventions.md`.\" But that convention file is owned outside this repo \u2014 `project-documents/ai-project-guide` is a git submodule (`ecorkran/ai-project-guide`) whose `file-naming-conventions.md` is described in the project's own devlog as the canonical frontmatter/index schema Context Forge reads. The architecture names no sanctioning authority for the overflow and no check that `cf validate frontmatter` or other cf consumers tolerate a 950-band analysis index. The mitigating claim \u2014 the gate validates only `docType` and `status` \u2014 is accurate for squadron's own gate (verified: `frontmatter_gate.py` delegates to `cf validate frontmatter`, and `DocumentStatus`/`DocType` enums in `src/squadron/documents/schema.py` match the doc's listed values), but index-range compliance is a convention owned by another repository, and \"sanctioned\" is asserted, not obtained.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graph-reading discipline (\"grep for the needed section\") is not a workable extraction strategy for the stated selection",
+      "description": "Step 3 of the Capability 1 flow must \"Extract `project`, `layers[]`, `tour[]`, and file-level nodes with their `summary`, `filePath`, and `complexity`\" while the contract section orders: \"Grep for the needed section before reading; never load the whole file into context.\" Grepping cannot implement that extraction: file-level nodes are nine `type` values scattered through a single `nodes[]` array interleaved with the function/class nodes that must be excluded, and the knowledge graph is large (the comparable graph artifact in this repo's own reference data runs to multi-megabyte, tens of thousands of lines). The natural mechanism \u2014 a `jq`/python structural filter \u2014 is never mentioned, and the token-budget table in the prior art (`user/reference/analyze-codebase-prompt.md`) shows large repos exceed single-context budgets outright. Reading the structure is the hard part of Capability 1; the document handwaves it with a prompt heuristic that doesn't accomplish the specified selection.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`/sq:overview` delivery ignores that the first-party command set is pinned by tests",
+      "description": "Capability (b) ships as `commands/sq/overview.md` \"alongside `sq:review` and `sq:task`,\" with no mention of the maintenance surface that pins that directory: `tests/cli/test_install_commands.py` asserts an exact 9-file set (`EXPECTED_FILES`), asserts `len(... glob(\"*.md\")) == 9` in three tests, and hardcodes the set in `test_all_command_files_exist_in_source`. Adding `overview.md` requires updating those fixtures, and `install_commands()` in `src/squadron/cli/commands/install.py` also deletes target files not present in source, so the new command ships into users' `~/.claude/commands/sq/` on their next `sq install-commands`. Trivial work, but the \"no machinery\" framing should acknowledge the command set is test-locked rather than discovering it during the slice.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Contract table promises inputs the flow never reads",
+      "description": "The output-contract table lists `config.json` with role for squadron \"`autoUpdate`, `outputLanguage` \u2014 read only,\" but neither Capability 1 flow step (Preconditions, Hygiene, Read structure, Interview, Draft) ever reads `config.json`. `outputLanguage` in particular raises a decision the document never makes: are generated planning documents written in the graph's output language? Either strike the row or define where `config.json` is consulted \u2014 as written it is a consumed-path claim with no consumer.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Output Conventions section contradicts Capability 1's declared outputs",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Initiative-plan candidates have no defined artifact shape",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Concept-document index collides with existing convention evidence and has no existing-doc guard",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Staleness warning must appear \"in the generated document's provenance,\" but no output schema defines a provenance section",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "\"Overflow into 950+ is sanctioned\" asserts authority squadron does not hold",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Graph-reading discipline (\"grep for the needed section\") is not a workable extraction strategy for the stated selection",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`/sq:overview` delivery ignores that the first-party command set is pinned by tests",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Contract table promises inputs the flow never reads",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T13:33:14.909073",
+  "model": "qwen/qwen3.8-max-0902",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 129333,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-max-0902",
+  "answering_models": [
+    "qwen/qwen3.8-max-0902"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 873258,
+  "cached_tokens": 671744,
+  "cache_write_tokens": null,
+  "completion_tokens": 33795,
+  "reasoning_tokens": 30221,
+  "duration_seconds": 887.3568944581784,
+  "cost_usd": 0.773734,
+  "cost_basis": "alias_pricing"
+}

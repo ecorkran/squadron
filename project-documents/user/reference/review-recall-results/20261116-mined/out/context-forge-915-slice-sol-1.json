@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Collision remediation deletes the winning personal value",
+      "description": "The prescribed `cf config unset <key> --project` cannot remove the stale shared copy: Delete routing explicitly targets the personal file (line 89). This removes the developer\u2019s preference, reactivates the stale shared value through fallback, and leaves the warning unresolved. Define a working shared-copy cleanup operation, and update the collision walkthrough accordingly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing projects can commit the new personal file",
+      "description": "Ignore protection runs only during `cf init`, but existing projects can create `.context-forge.local.toml` through either migration or a project-scoped write without reinitializing. Migration can therefore move personal settings into another unignored file, leaving the plan\u2019s \u201cmust never be committed\u201d requirement unmet. Reuse the minimal ignore safeguard before creating the personal file through either path, with explicit failure handling.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Compatibility walkthrough contradicts the specified precedence",
+      "description": "Step 1 creates a personal value of `dev/erik`; step 4 leaves that file untouched but expects the shared value `legacy/value` to win. Correct precedence produces `dev/erik`, and migration subsequently encounters a collision rather than the expected successful move. Remove the personal value before testing legacy fallback, and test precedence and collision behavior separately. Otherwise the walkthrough cannot verify the compatibility requirement or satisfy the parent architecture\u2019s behavior-verification principle.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-257"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Collision remediation deletes the winning personal value",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Existing projects can commit the new personal file",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-159",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Compatibility walkthrough contradicts the specified precedence",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-257",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T05:29:04.525503",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 42477,
+  "cached_tokens": 29440,
+  "cache_write_tokens": null,
+  "completion_tokens": 568,
+  "reasoning_tokens": 166,
+  "duration_seconds": 39.87871091719717,
+  "cost_usd": 0.034698,
+  "cost_basis": "alias_pricing"
+}

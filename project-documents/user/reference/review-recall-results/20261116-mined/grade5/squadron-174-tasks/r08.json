@@ -1,0 +1,26 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Load-test CI-gating claim misstates how CI runs tests",
+   "description": "Task 22a's success line asserts \"no new CI wiring is needed because `testpaths = [\"tests\"]` already collects `tests/load/`.\" The conclusion happens to be true \u2014 `.github/workflows/ci.yml:38` runs a bare `uv run pytest`, which collects all of `tests/` including `tests/load/`, so the load test is gated \u2014 but the stated reason is wrong on its own terms: `testpaths` governs *bare* pytest collection, not CI, and \"collected\" is not \"gated.\" The rules (`project-documents/ai-project-guide/project-guides/rules/python.md:57`) say \"CI must gate load tests for slices touching these paths,\" and the breakdown leaves the gating to an accident of configuration while citing a wrong justification. Replace the rationale with the real one: CI invokes plain `pytest` with no path or marker filter, so anything under `tests/load/` runs on every push and PR \u2014 and state that any future deviation (a path filter or `-m` deselect) would require an explicit wiring task.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:318"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Spike tasks halt on PM confirmation for decisions the design already made",
+   "description": "Task 2 contains two \"stop and ask the Project Manager\" gates: (1) if no `ResultMessage` arrives after `interrupt()`, stop; (2) if any state write runs off the event-loop thread, stop. In both cases the slice design has already pre-decided the branch: the Risk Assessment mitigation says \"If no result arrives, D7's fallback applies (session unusable, step fails). The decision then narrows to 'always mark unusable' and the design is updated,\" and D5 says \"If one does, `StateManager` gains a per-run `threading.Lock` around load, modify and write.\" The spike's job is to measure and then *apply* the pre-stated rule; turning it into a PM round-trip stalls Part B and Part C on a confirmation the design does not require. Rewrite the two gates so the junior AI records the finding and applies the design's designated fallback (updating the design where the design says to), reserving escalation only for findings that match neither branch.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:55"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Walkthrough step 7 is the only acceptance proof for #165 and may go unrun",
+   "description": "Task 42 lets walkthrough steps 6\u20137 be \"record[ed] as not run\" when credentials are unavailable, and step 7 (the live foreground-stall interrupt) is the end-to-end proof of #165's success criteria. This is acceptable because Tasks 17\u201318's fake-client tests assert the same criteria automatically (interrupt sent, drain reaches result, error prefix `dispatch stalled:`, WARNING with no traceback, session usable/unusable), but the DEVLOG note should say explicitly which success criteria were verified only by test rather than by walkthrough.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:517"
+  }
+ ]
+}

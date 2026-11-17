@@ -1,0 +1,33 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Prescribed profile-weight list comprehension contradicts the slice's defining constraint and its own verification grep",
+   "description": "The \"Per-Agent Profile Weight Vectorization\" section prescribes `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` (line 133) built \"once per force call\" \u2014 i.e., a Python per-agent loop executed inside `BulkForce.__call__`, 5\u00d7 per tick. This directly contradicts:\n- Success criterion line 198: \"No Python-level per-agent loops in any `BulkForce.__call__` implementation (the defining constraint)\".\n- Verification step 4 (line 223): the grep pattern `for.*eval_indices` matches line 133's own comprehension, so the walkthrough's \"Should return no matches\" fails out of the box.\n- The Overview claim (line 27) of \"constant Python overhead, regardless of agent count\": this is O(n) Python work per force per tick, which grows at the architecture's target scale (100-arch line 36: \"tens of thousands of agents\").\n\nThe architecture also prescribes the right fix for the GPU path (100-arch, Technical Considerations): \"index-based dispatch: profile interaction parameters stored in lookup tables that GPU kernels index into.\" Build a per-profile weight LUT of shape `(n_profiles,)` once and gather with `weights = lut[state.profile_indices[eval_indices]]` \u2014 a fully vectorized `np.take`, zero Python iteration, satisfying both the constraint and the grep.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Architecture scale NFR not restated and verification exercises only n=100",
+   "description": "The parent architecture's \"Efficient large-scale evaluation\" goal states a specific target \u2014 \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" (100-arch.behavior-engine.md:36) \u2014 and the world server architecture sets the operating range at 10K\u201350K entities (300-arch:97). This slice is the one that directly serves that NFR, yet no success criterion or verification step restates the target: Verification Walkthrough step 2 (line 215) measures only the default 100-agent config against the 50ms budget, and the Technical Requirements (lines 196-201) contain no agent-count threshold. The slice's headline claim \u2014 cost independent of \"agent count or clustering density\" (line 27) \u2014 is therefore asserted but never tested at the architecture's scale. Add a criterion restating the tens-of-thousands target, plus a verification that measures force-computation-only time at ~10K agents (force-only timing isolates this slice from the brute-force spatial query, which remains 105's scope).",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#success-criteria"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "\"Never dereferenced\" invariant contradicts the representative code example; mask duplicates counts",
+   "description": "Line 80 states padded `-1` entries are \"never dereferenced thanks to `mask`\", but the representative cohesion example (lines 110-113) gathers with the full padded array first \u2014 `state.positions[neighbor_data.indices]` dereferences `-1`, which wraps to the last row (agent n-1's state) \u2014 and only zeroes those entries afterward via the mask. Numerically correct as written, but fragile: any future force that consumes gathered values before applying the mask silently reads a real agent's state, and the documented invariant gives false assurance. Additionally, `mask` is fully derivable from `counts` (`arange(max_neighbors) < counts[:, None]`), so `indices`/`counts`/`mask`/`-1` encode the same validity information three ways. Clarify the actual invariant (\"padded entries are dereferenced at gather but must be masked before any use\") or drop the redundant field, per CLAUDE.md's \"resist adding complexity.\"",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:80"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "NeighborData hard-codes homogeneous-neighbor semantics while architecture flags heterogeneous neighbors as a future breaking-change risk",
+   "description": "The architecture (100-arch:100) warns that aggregate neighbors \"have a fundamentally different shape from individual agents\" and that interfaces \"must be designed from the start to accommodate heterogeneous neighbor types, or aggregate support will require a breaking change.\" `NeighborData.indices` can only express indices into individual-agent SoA arrays, so when slice 108 (aggregation) lands, this structure will need extension \u2014 and the slice's \"Provides to Other Slices\" section presents `NeighborData` as the template future forces consume without noting that extension point. The spatial query interface itself is correctly left unchanged here, so this is not a violation, but a one-line note that `NeighborData` must eventually admit non-index neighbor descriptors would prevent 108 from being surprised by a second breaking change to the `BulkForce` signature.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-184"
+  }
+ ]
+}

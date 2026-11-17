@@ -1,0 +1,47 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Density signal pseudocode records post-cap counts, violating the slice's own pre-cap requirement",
+   "description": "The Value section and the Density Signal section both state the signal must be **pre-cap** \u2014 \"reads the CSR's raw `counts` output \u2026 not anything capped\" and \"`mean_neighbors_per_agent = counts.sum() / n_active`, recorded from the CSR `filtered_counts` (post-`exclude_self`, **pre-cap**)\" (line 116). The plan entry (100-slices.behavior-engine.md, item 113) states the same: \"`max_neighbors` \u2026 does NOT shift the dispatch decision \u2026 pre-cap neighbor counts, not capped counts.\"\n\nBut the Tick Integration pseudocode (lines 147\u2013160) and the Data Flow diagram (lines 240\u2013252) both place `spatial.record_density(filtered_counts)` **after** step 4 `apply_neighbor_cap(...)`, annotated \"unchanged\". I verified `src/migratory/engine/tick.py:71-75`: when any profile has `max_neighbors > 0`, `filtered_flat, filtered_counts = apply_neighbor_cap(...)` **reassigns the same variable names** to capped arrays. So implemented as pseudocoded, the recorded signal is post-cap. With the slice's own walkthrough config (`test.yaml`, `max_neighbors=1`), mean neighbors would read \u22481.0 forever, pinning the dispatcher to grid and contradicting walkthrough step 5's expectation that \"dispatcher flips at least once\" and brute dominates steady state. The intended wiring is only recoverable from prose; the integration tests inject mocked density, so nothing in the test plan would catch this. Fix the pseudocode/data-flow to capture the pre-cap array (record immediately after `exclude_self`, or via a dedicated variable) so all three statements agree.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Conflicting parity criteria: bit-exact positions vs set-only neighbor comparison",
+   "description": "Implementation step 5 requires an integration test that \"confirms **bit-exact** position equality against brute-force-only over N ticks\" while injecting a density sequence that \"exercises both backends in one run\". The Testing Strategy (line 431) for the same comparison says \"order within a row **may differ** for grid, so compare as sets\", and the Functional Requirements (line 329) only promise \"identical (same CSR **neighbor sets**)\".\n\nI verified this is a real conflict, not hypothetical: `brute_force.py:141` emits rows via `np.nonzero` (ascending agent index per row), while `hash_grid.py:261-276` emits candidates grouped by the 3\u00d73 cell-neighborhood order \u2014 per-row orders differ whenever neighbors span more than one cell. CSR force evaluation sums floats over the row in stored order (`np.add.reduceat`-style primitives from slice 111), and floating-point addition is not associative, so a mixed-backend run will diverge from brute-only in trailing bits after the first grid tick, and the divergence compounds over N ticks. The test as specified will fail even when the dispatcher is correct. Reconcile: either relax step 5 to behavioral parity (set equality of neighbors plus a tolerance-based position comparison, which is what the Value section's \"behavioral parity\" wording already promises), or add a canonical per-row sort of the CSR output so ordering is part of the protocol contract \u2014 noting that sort is per-edge work the design elsewhere pledges to avoid (\"no per-edge work\", line 339).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`initial_backend` promised as an operator knob but missing from the config surface",
+   "description": "The Technical Decisions section states \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator running a scattered-start scenario can choose grid-first\" (line 301), and the Risk Assessment treats it as reachable: \"If an operator sets `initial_backend: grid`\u2026\" (line 400). However, the specified `SpatialConfig` (lines 172\u2013179) contains only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band`; the YAML surface (lines 190\u2013196) and `_validate_spatial` omit it; and `_build_spatial` hardcodes `initial_backend=\"brute\"` (line 238). The knob the design promises does not exist in the design. Either add the field with validation to `SpatialConfig` (and the YAML/`_build_spatial` wiring), or cut the \"make it configurable\" and operator-scenario risk language and state that `brute` is fixed at construction \u2014 the lighter option, since no requirement in plan entry 113 asks for it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Density signal divides by `n_active` with no empty-subset handling",
+   "description": "`mean_neighbors_per_agent = counts.sum() / n_active` (line 116, rendered in Value as `float(counts.sum()) / len(counts)`) has no guard for `n_active == 0`. The architecture requires the \"subset-evaluable tick\" (parent arch, Architectural Principles), so an empty `active_indices` is a legal call: `tick()`'s early return only covers `state.count == 0` (`src/migratory/engine/tick.py:29-30`), not an empty eval subset \u2014 `query_radius_batch` returns a length-0 `counts` in that case, and the unconditional end-of-tick `record_density(filtered_counts)` would then divide by zero (raising) or produce NaN, whose threshold comparisons are all false, silently freezing the dispatcher on its current backend. The design's own parity test matrix includes an \"empty\" distribution (line 366), so this input is in scope. Specify explicit handling: skip the recording (and log) when `n_active == 0`, keeping the current backend selection.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`O(1)` claim for `record_density` is self-contradictory",
+   "description": "\"`record_density` is `O(1)` given `counts.sum()` already known (it is; `np.ndarray.sum()` is one BLAS reduction\u2026)\" \u2014 a reduction over n elements is O(n), and nothing in the pipeline caches `counts.sum()` beforehand (the design's own Value section says the signal is \"one `float(counts.sum()) / len(counts)`\" per tick). The cost is negligible and fine; just state it as \"one O(n) reduction per tick, no per-edge work\" rather than `O(1)`, so the technical requirement is testable as written.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:340"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`MIGRATORY_SPATIAL_BACKEND` introduces an unspecified second config channel",
+   "description": "Walkthrough step 2 pins the backend via an env var that appears nowhere in the Server Configuration section (lines 166\u2013205), which defines only YAML-driven `SpatialConfig` validated at load time. The doc hedges it as \"an implementation detail\", which is acceptable, but if this route is chosen during implementation it needs precedence rules against `simulation.spatial.backend` (which wins, and does the env var bypass `ConfigError` validation?) to avoid the silent-fallback pattern prohibited by project conventions. Cheaper alternative: a pytest fixture parametrized over `SpatialConfig.backend`, which the Testing Strategy (line 429) already says is \"sufficient\".",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:356"
+  }
+ ]
+}

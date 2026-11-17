@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Overwrite-guard tasks do not cover the `sq review code` path named in the success criterion",
+   "description": "T12/T13 add and test the fail-closed archive guard only in `review/persistence.save_review_file`. The success criterion \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns; nothing is silently destroyed\" cannot be met by that scope: `src/squadron/cli/commands/review.py:746` calls `save_review_result`, which writes directly via `path.write_text(...)` with no archive attempt and no guard; `save_review_file` is reached only from the pipeline action's fallback path (`src/squadron/pipeline/actions/review.py:272`). File 1's own T10 already identifies `save_review_result` as the CLI persistence path for Part A, so Part D's scoping is internally inconsistent. Add a task that applies the same guard to `save_review_result` (or routes the CLI through the guarded function) and extend T13 to test the `sq review code`/`save_review_result` path.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T14 verification checkpoint is numbered after the Part D work it gates",
+   "description": "The design's Phase 5 note requires the cf archive-scanning verification to be \"sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme.\" T14 is placed after T12/T13 and relies on a prose note (\"do not mark T12 done until T14 is known\") to reverse the order. A junior working the checklist top-down will implement the archive scheme before the go/no-go that may force mangling it. Move T14 ahead of T12 (and renumber) so the dependency is expressed by task order rather than by a caveat.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Unreadable-judge-response failure mode has no test on the resolve path",
+   "description": "The success criterion requires that \"Judge transport failure and an unreadable judge response on the resolve path yield UNKNOWN with a WARNING.\" T26 tests a transport raise (`judge transport mocked to raise`) and the cap, but never an unreadable/unparseable judge response. `src/squadron/pipeline/actions/findings_addressed/judge.py` has two distinct fail-closed branches \u2014 the `except Exception` transport branch and the `is_parse_failure(residue, statuses)` branch \u2014 and only the first is exercised; T6's unchanged 305 suite covers parse failure on the pipeline path, not this path. Add a case where the mocked judge returns output with no readable status lines and assert UNKNOWN plus a WARNING.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:224"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Injection-cap step leaves the threshold and measurement undefined",
+   "description": "T25 says to \"reuse whatever threshold/measurement 305's architecture already defines for the injection cap,\" and T26 requires a diff \"constructed to exceed the injection cap.\" I found no diff-injection cap in `src/squadron/pipeline/actions/findings_addressed/`; the only configured caps are `review.max_file_size_bytes` and `review.max_total_injection_bytes` in `src/squadron/config/keys.py`, applied to file injection in `review/review_client.py`, not to a diff string passed in as `inputs`. A junior has no concrete value or measurement to implement or test against. Name the cap source and measurement explicitly in T25 and the over-cap fixture in T26.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:193-223"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Review discovery\" from the metrology criterion is not exercised by T32",
+   "description": "The success criterion asks that both `discover_judge_results` *and review discovery* return no resolution artifacts, tested against the real glob. T32 tests only `discover_judge_results`; the precedent `tests/metrology/test_capture_discovery.py` also covers only that function. The other review-discovery surface is `resolve_target` in `src/squadron/metrology/capture.py`, which globs `{index}-review.*`. Add a `resolve_target` assertion to T32. The behavior is likely correct by construction (the `-resolution.` filename contains no `-review.`), but that is exactly what the criterion asks to demonstrate rather than infer.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:317"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Part 0 verification repeats the same suite three times",
+   "description": "Eight tasks cover a move the design calls mechanical. T2 runs the five-file 305 suite plus pyright; T4 runs the identical command again; T6 re-runs a subset; T8 then runs the full suite, ruff, and pyright. Merge the models/parsing/verification moves (T1 + T3) into one move task with one verify, keep T5/T6 for the judge extraction and T7/T8 for exports plus final suite. That removes two redundant verification tasks without weakening the \"305 suite unchanged\" criterion.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+  }
+ ]
+}

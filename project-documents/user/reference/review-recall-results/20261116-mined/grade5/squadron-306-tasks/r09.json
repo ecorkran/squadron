@@ -1,0 +1,159 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The cf archive-scanning gate (T14) is sequenced after the Part D commit it gates",
+   "description": "The design's Phase 5 note (slice design lines 381\u2013383) says the cf `archive/` check must be \"sequenced before Part D lands.\" In the breakdown, T14 (line 275) follows T12 and T13, and T13's commit (line 272, `fix: archive prior review content...`) lands the guard before the answer exists. The note at T12 (lines 253\u2013255) only blocks the checkbox, not the commit. Move T14 ahead of T12 so its result (plain or mangled archive name) is built into T12/T13 from the start.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:272-275"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Review-to-pipeline imports contradict the F002 dependency direction",
+   "description": "The design says `review/` must not import `pipeline/actions/` internals, because that creates a review\u2194pipeline cycle (slice design lines 141\u2013155). Two tasks break this:\n- File 1 T3 (lines 109\u2013113) moves `verification.py` into `review/addressed/` but keeps its `RoundDiff` import from `screens.py`. The task calls this \"the pipeline\u2192review direction,\" but the import runs review\u2192pipeline.\n- File 2 T21 (lines 132\u2013149) has `review/resolution.py` import `RoundDiff` and `screen_byte_identical` from `screens.py`.\n\nOnly some of the screens need to move. `RoundDiff` (screens.py:34) is a plain dataclass. `screen_byte_identical` (:183) and `screen_git_failure` (:209) are context-free, taking only findings or a `RoundDiff`. Decide this in file 1 before T3: move those value types and the context-free screens into `review/addressed/`, and leave in `screens.py` only what needs a fresh review. The design's \"screens stay\" claim is wrong for these two, and the \"pipeline\u2192review\" wording should be corrected.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/screens.py:34"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The archive name collides on a second overwrite, so archived content is silently lost",
+   "description": "T12 copies the prior file to `archive/{original filename}`. A second re-review copies the earlier archive over the same name, so the first archived content is gone. The success criterion (slice design lines 364\u2013365) says \"nothing is silently destroyed.\" The T12 WARNING names the file archived, not the archive that was lost. Pick a collision-safe scheme (a unique suffix per archive, or a counter like the `-r{n}` pattern), state it in T12, and add a T13 test for two consecutive overwrites. This choice also has to fit T14's answer, so decide both together.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:235-237"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T12 drops two specified behaviors: terminal output on abort and the exception-handling rule",
+   "description": "The design (slice design lines 327\u2013329) says that on abort \"the review content is still printed to the terminal.\" T12 omits this. T12 also does not say how the OSError from the archive write is handled. The project rule requires either a re-raise after `logger.exception`, or a specific exception with a comment justifying the swallow. T12 should name the exception and the handling, and T13 should assert the terminal output.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:238-246"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T13 misses the \"unverifiable\" copy case and the success-path WARNING",
+   "description": "The success criterion (slice design lines 372\u2013374) covers a \"failed or unverifiable archive copy.\" T13 tests only the unwritable directory. Nothing forces the read-back comparison to fail, so the verification step has no test. Add a case where the read-back does not match and assert the abort. Also assert the success-path WARNING from T12 (lines 250\u2013252). For the mismatch, choose a seam that does not need monkeypatching internals (review-code.md, DIP).",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:258-269"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The pipeline-path persistence test is optional",
+   "description": "The success criterion (slice design lines 349\u2013350) requires `reviewedSha` from both the CLI and pipeline persistence paths. T11 tests `save_review_result` \"or the pipeline review action, whichever is more directly testable,\" so the pipeline path can go untested. Require tests for both paths, covering `src/squadron/pipeline/actions/review.py` and the git-unavailable WARNING.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:219-222"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The \"same count\" regression check has no baseline step",
+   "description": "T2 and T4 say \"same count as before the move,\" but no task records the count before T1. T8 (line 178) hard-codes 2832 passed from slice 305's close-out, which may be stale. Add a step before T1 that runs the findings-addressed suite and records the pass count, and compare against that recorded number in T2, T4, T6, and T8.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:94-96"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Commit markers are not in the `**Commit**:` form",
+   "description": "Both files write `Commit: \\`...\\`` as a bare line (file 1 lines 99, 121, 152, 183, 226, 272; file 2 uses the same form). The commit cadence reads `**Commit**:` markers, so a bare `Commit:` may not be recognized and the cadence would fall back to committing per top-level task. Change them to `**Commit**:`. Placement is otherwise right: each marker sits after a verified point.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The context-free judge core is never tested on its own",
+   "description": "The point of T5 is that `judge_residue_core` runs without an `ActionContext`, taking explicit `model_id`, `profile`, and `cwd`. T6 runs only the existing wrapper tests, which go through `ActionContext`. Nothing shows that the core works on its own. Add a direct test that calls `judge_residue_core` with explicit parameters and asserts the `failed=True` and parse-failure outcomes.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:143-153"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "T14 has no executable check, and its suggested fallback does not remove the match",
+   "description": "T14 starts by consulting `ai-project-guide/tool-guides/context-forge/`, but no `project-documents/ai-project-guide/**` file exists in this checkout, so that step cannot run here. It then falls back to asking the PM. A check that needs no PM: create a `*-review.*` file under `archive/` in a scratch project, then run the cf command that lists review artifacts (find its name in cf's help). Also, the recursive-case example `{original}.archived` still contains `-review.`, so it still matches a `*-review.*` glob. Only the `-review.`\u2192`-archived.` option removes the match, so name that one.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-296"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "T29 allows a duplicate `_yaml_safe` helper",
+   "description": "File 2 T29 (lines 265\u2013278) lets the implementer leave `evidence.py`'s copy in place and add \"an equivalent in the new module.\" The design says the helper is extracted (slice design line 293), and the DRY rule forbids duplicated logic. Keep only the extraction option.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/evidence.py:96"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The injection cap is left conditional, although the config key exists",
+   "description": "File 2 T25 (lines 212\u2013221) has the implementer check whether 305 enforces a cap, and says to add one and flag the PM if it does not. The cap already exists as `review.max_total_injection_bytes` (config/keys.py:107), read through `get_config` in `src/squadron/review/review_client.py:238`. Name that key as the single source, measure diff bytes against it, and drop the conditional. Otherwise the implementer may add a second cap constant.",
+   "location": "src/squadron/config/keys.py:107"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "No test for an unreadable judge response",
+   "description": "The success criterion (slice design lines 369\u2013371) requires transport failure and an unreadable judge response to each yield UNKNOWN with a WARNING. T26 tests only the raise case. Add a case where the judge returns text that does not parse, and assert UNKNOWN with a WARNING.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:224-231"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "T36 names a test file that does not exist, and the intended name is already taken",
+   "description": "`tests/cli/commands/test_review.py` does not exist. The CLI review tests live in `tests/cli/test_review_*.py`. `tests/cli/test_review_resolve.py` already exists and tests the unrelated `_resolve_slice_number`. Name a new file for the resolve command (for example `tests/cli/test_review_resolve_command.py`) so the implementer does not add to the wrong one.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:383"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The metrology review-discovery glob is not tested",
+   "description": "The success criterion (slice design lines 375\u2013376) names \"review discovery\" as well as `discover_judge_results`. T32 tests only the second. `capture.py:97` globs `{index}-review.*` separately. The new filename cannot match it, but that is not tested. Add one assertion to T32.",
+   "location": "src/squadron/metrology/capture.py:97"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "T23/T24 are numbered after the diff tasks but must run before them",
+   "description": "T23 says the screen runs before T19\u2013T22's diff machinery, and the design's Data Flow puts it there. Moving T23\u2013T24 ahead of T19 makes the file order match the text. Nothing breaks as written.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:177-178"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "The name `resolve_diff_base` clashes with an existing function",
+   "description": "T19 adds `resolve_diff_base` in `review/resolution.py`. `review/git_utils.py:178` already has `resolve_diff_base(cwd, cf_client)` for slice diffs, with different semantics. Rename the new one (for example `resolve_resolution_base`).",
+   "location": "src/squadron/review/git_utils.py:178"
+  },
+  {
+   "i": 17,
+   "severity": "NOTE",
+   "title": "The design names the wrong module for `records_from_frontmatter`",
+   "description": "Part B says the function goes in `findings_addressed/models.py`. The Component Structure and file 2 T15 put it in `review/addressed/models.py`, which is correct. Fix the design text.",
+   "location": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md:305-306"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "File 1's stated test-with discipline is not literally true",
+   "description": "T9 is followed by T10, also an implementation, before T11 tests both. Merge T9 and T10, or reword the discipline line.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:68-72"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "T33's sequencing sentence refers to itself",
+   "description": "\"sequences T17\u2192T33\" should read T17\u2013T31, the tasks that build the pieces.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:337-338"
+  },
+  {
+   "i": 20,
+   "severity": "NOTE",
+   "title": "T40 runs walkthrough step 8, a manual PM verdict edit",
+   "description": "The governing constraint bars agents from editing `verdict:`. Walkthrough step 8 is the PM's manual procedure. T40 should say it runs steps 1\u20137 and leaves step 8 to the PM. The walkthrough is also labeled \"draft \u2014 refine at Phase 6,\" which T40 should account for.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:443-445"
+  },
+  {
+   "i": 21,
+   "severity": "NOTE",
+   "title": "The verify-only tasks repeat the same commands",
+   "description": "T2, T4, T6, and T8 each repeat a test command. They work as gates in front of commits, so no change is required. Folding each into the move task before it would also be fine.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:94-100"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers omit the entire Part 1 rename/alias work (Tasks 1\u20138)",
+   "description": "Task 4 ends Part 1's sweep with no commit line, then only Task 6 (silent-catch removal) and Task 8 (alias acceptance) carry commits. Tasks 1\u20133 (the rename itself) and Task 7 (CLI/MCP alias boundaries) have no marker, so a junior implementer following the file may land a single commit after Task 8 (or none until Task 8) covering the rename, `normalizeGuideMethod`, ConfigKeys default sourcing, and the boundary wiring \u2014 a mix of refactor/fix/feat that contradicts the three semantic messages the file itself defines. The project convention (CLAUDE.md: \"Git add and commit from project root at least once per task\") also points the other way. Suggest adding `refactor(core): rename guide strategy manual to tarball` at the end of Task 3 (or Task 4, whose step currently reads \"tests pass\" but whose *named* commit belongs to the sweep, not just the test updates), and a commit after Task 7 (e.g., `feat: normalize guide strategy alias at CLI and MCP boundaries`) so Task 8's existing `feat:` message then closes the feature cleanly.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 27's `--strategy bogus` case reaches past the testable boundary",
+   "description": "`--strategy bogus` failing \"before any install\" depends on commander's option-string validation, but `init.ts` is described as calling `normalizeGuideMethod(opts.strategy)` only at runtime pass-through (Task 26) \u2014 with a plain `<method>` option type and no `.choices()`, commander will pass `bogus` straight to the handler, and the valid-values error would fire only after the init flow has run. The case is traceable to D5's \"rejects anything else with an explicit error naming the valid values,\" so it isn't a gap, but as written a junior implementer may find the test cannot pass without adding validation Task 26 never asks for. Either add one step to Task 26 (validate via `normalizeGuideMethod` before any install side effect) or adjust Task 27's wording to test the handler-level rejection.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:369"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 21's `outOfSync()` expectation assumes fixture state can be mutated in place",
+   "description": "Task 9's fixture creates three states in separate clones, while Task 21 pairs `outOfSync()` with `cf build` in the same test file as a \"registered project\" scenario. This is doable (register the `outOfSync()` host path, or flip the checkout in a `cloned()` fixture as the design's walkthrough step 2 does), but the task states neither. Not blocking \u2014 the design walkthrough itself prescribes `git checkout HEAD~1` inside the submodule \u2014 but a clause naming the state to set up would keep the test deterministically completable.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:303"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "No NFR or load-test dimension exists to cover",
+   "description": "The slice restates no NFR (Review Resolution F006 explicitly closes this as \"no action\") and is synchronous CLI/MCP work with no performance or throughput criterion, so the absence of any `tests/load/` task or CI wiring task is correct, not a gap.",
+   "location": "project-documents/user/slices/925-slice.guide-install-robustness.md"
+  }
+ ]
+}

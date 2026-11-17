@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`cf config unset` remediation contradicts the design's own delete routing",
+      "description": "Line 89 defines delete routing as \"mirrors write \u2014 deletes from whichever project file the key's scope maps to\" and states `migrate-personal` is \"the one exception that touches the *other* project file.\" For a personal key with `scope: 'project'`, that means `unset git.integration_branch --project` deletes from `.context-forge.local.toml` (the personal file) \u2014 it cannot touch the shared file.\n\nYet the collision-semantics paragraph (line 146) prescribes \"a separate, explicit `cf config unset <key> --project`\" to clear the *stale shared-file copy*, and Verification Walkthrough step 9 (line 259) requires exactly that and then \"confirm `cf check` is clean again.\" Under the line-89 routing this sequence instead (a) deletes the developer's confirmed personal value \u2014 the exact \"destroy the developer's local preference\" outcome line 146 says must not happen \u2014 and (b) leaves the stale shared copy in place, so `cf check` still reports the finding and the walkthrough step fails.\n\nThe design must pick one coherent story, e.g.: `unset --project` removes the key from both project files (making line 89's \"mirrors write\" apply to the primary file plus a documented shared-file cleanup), or the collision remediation becomes \"re-run `migrate-personal` after `unset`\" / manual edit with the walkthrough updated accordingly. As written, the required migration/compat story's edge-case remediation is broken.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`.env.local` analogy oversells the routing semantics",
+      "description": "The classification rationale (lines 113, 120) justifies the split by pointing at the `.env.local` convention \u2014 but in Next.js, `.env.local` overrides *any* variable, whereas this design routes strictly by the key's classification (read step 1 consults the personal file only for `scope === 'personal'` keys). A developer who manually places a shared key (e.g. `workflow.review_enabled`) in `.context-forge.local.toml` gets it silently ignored, with no checker rule or warning (the new `ConsistencyChecker` rule only flags the personal-in-shared direction). Either extend the new rule symmetrically to flag shared-scope keys found in the personal file (cheap, and consistent with the slice's \"no silent leak/ignore\" goal), or state the ignore behavior explicitly so the analogy doesn't set the wrong expectation.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`.gitignore` dedup via substring check can silently skip the needed line",
+      "description": "The gitignore append uses \"a substring/line check.\" A pure substring test false-positives on near-miss lines (e.g. `.context-forge.local.toml.bak`, or a commented `# .context-forge.local.toml`), causing `cf init` to skip adding the line and leaving the personal file unignored \u2014 silently reintroducing the leak this slice exists to prevent. An exact trimmed-line comparison is no more complex than the substring check and eliminates the false-positive direction.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:159"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependency metadata mismatch with the slice plan",
+      "description": "Plan entry 915 declares \"Dependencies: none,\" while the design lists 914 as a prerequisite and leans on a \"916 prerequisite fix (already merged to `main`)\" \u2014 i.e. work sequenced after this plan entry has already shipped under it. The design's substance is consistent (914 is complete and the plan text itself references `git.integration_branch`), but the plan entry's dependency field should be updated to name 914 so the recorded dependency graph matches reality.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:42"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`cf config unset` remediation contradicts the design's own delete routing",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "`.env.local` analogy oversells the routing semantics",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`.gitignore` dedup via substring check can silently skip the needed line",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:159",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Dependency metadata mismatch with the slice plan",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:42",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T06:12:27.124975",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 44901,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 164066,
+  "cached_tokens": 136448,
+  "cache_write_tokens": null,
+  "completion_tokens": 11969,
+  "reasoning_tokens": 10004,
+  "duration_seconds": 285.3968650419265,
+  "cost_usd": 0.022972652,
+  "cost_basis": "alias_pricing"
+}

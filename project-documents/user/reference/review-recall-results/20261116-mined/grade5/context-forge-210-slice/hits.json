@@ -1,0 +1,100 @@
+{
+ "case": "context-forge-210-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Scope names the helper `isManagedCopilot(filePath)`; Files Changed names it `isManagedCopilotFiles(projectPath)`, a different name and parameter (and the Sequence checks two files). **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     10
+    ],
+    "r04": [
+     1
+    ],
+    "r05": [],
+    "r06": [
+     2
+    ],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [
+     3
+    ],
+    "r11": [],
+    "r12": [
+     7
+    ],
+    "r13": [],
+    "r14": [],
+    "r15": [],
+    "r16": [
+     7
+    ],
+    "r17": [
+     9
+    ],
+    "r18": [],
+    "r19": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The parent plan's success criteria (200-slices, entry 210) require the \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design\". The file exists at `25498dee`; the design never mentions it. **VALID** (minor): leaves out something the parent criterion required. Needs: doc (design plus parent plan).",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     5
+    ],
+    "r03": [
+     7
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     4
+    ],
+    "r08": [
+     5
+    ],
+    "r09": [],
+    "r10": [
+     0
+    ],
+    "r11": [],
+    "r12": [
+     6
+    ],
+    "r13": [
+     0
+    ],
+    "r14": [
+     9
+    ],
+    "r15": [
+     0
+    ],
+    "r16": [],
+    "r17": [
+     5
+    ],
+    "r18": [
+     5
+    ],
+    "r19": []
+   }
+  }
+ ],
+ "note": "F1: r04 and r06 raise the helper naming mismatch as a secondary point inside a finding about the two-of-four coverage gap; counted. F2: r01 and r07 are combined findings that also name the tool guide reference; counted."
+}

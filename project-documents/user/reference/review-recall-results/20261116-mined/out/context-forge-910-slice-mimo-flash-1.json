@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Success criterion 1 demands zero matches in files whose remaining literals are explicitly out of scope",
+      "description": "The criterion requires the grep to return \"zero matches in the six swept files,\" and names `WorkflowNavigator.ts` and `types.ts` among them. But the Excluded section (lines 49) and TD-3 state that `SliceStatus.status`'s `'complete'` member must not be swept, and it lives precisely in those two files: `WorkflowNavigator.ts:312`, `:345`, `:588` are `slice.status === 'complete'` / `status: 'complete'` (the `SliceStatus` union), and `types.ts:269` contains the union's `'complete'` literal. As written, the criterion can only be satisfied by sweeping sites the design says are out of scope \u2014 or it will fail verification. Narrow the criterion (e.g., exclude `SliceStatus` comparison lines, or drop `WorkflowNavigator.ts` from the zero-match list and rely on the explicit \"excluded unions untouched\" criterion).",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "WorkflowNavigator is listed as a 3-site sweep target, but all three sites are the excluded `SliceStatus` union",
+      "description": "The Included table claims `WorkflowNavigator.ts` has 3 `` `=== 'complete'` `` sites to sweep (repeated at lines 75 and 90). Direct inspection confirms the file contains exactly three bare status literals \u2014 lines 312, 345, 588 \u2014 and every one is a `SliceStatus.status` comparison/assignment, which TD-3 and the Excluded section explicitly rule out as a different union. The file therefore has **zero** in-scope sites (its `NormalizedStatus` comparisons already use `STATUS` since 241, e.g. line 577). Remove the file from the included sweep (or restate what, if anything, is actually swept), so step 4 doesn't instruct an implementer to conflate the two unions the design warns against.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Claim that no test asserts these literals is false",
+      "description": "\"grep confirms zero `.test.ts` files assert against these literals directly (tests exercise behavior through parsers/fixtures, not string comparison)\" is incorrect. Numerous tests assert the literals directly, e.g. `packages/core/tests/introspection/taskFileParser.test.ts:48` (`expect(result.inferredStatus).toBe('in-progress')`), `statusNormalizer.test.ts:24`, `slicePlanParser.test.ts:69`, `WorkflowNavigator.test.ts:89`, and `packages/cli/tests/commands/list-derived-status.test.ts:109`. The *conclusion* still holds \u2014 `STATUS.X === 'x'` by construction, so no test changes are needed and the suite remains a valid regression guard \u2014 but the stated evidence must be corrected to the actual reason (identical runtime values), since a reviewer auditing the claim will find it plainly false.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification grep filter cannot work as written",
+      "description": "The command uses `grep -roE` (no `-n`), whose output is `path:match`, yet filters with `grep -v 'introspection/types.ts:[3-6]:'` \u2014 a line-number pattern that never matches without `-n`. Consequently the `STATUS` definition literals in `types.ts:3-6` are not excluded as intended, making the \"Before: ~75 / After: 4\" walkthrough arithmetic (line 149) unachievable with the given command. Add `-n`, or filter on the file only (`grep -v 'introspection/types.ts'`) while keeping the separate out-of-scope-list criterion.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Site counts in the Included table are approximate but presented as exact",
+      "description": "Verification against the sources shows drift from the tabulated figures: `statusNormalizer.ts` has 14 `STATUS_MAP` entries (14 value-side literals), not \"13 of 16\"; `ConsistencyChecker.ts` has ~30\u201331 single-quoted value literals, not 36; `types.ts` non-`STATUS` literals are 4 (line 44) + 1 (`SliceStatus`), not 5 of 8. The totals (~65 across 6 files) are directionally right and the mechanical ordering/TD-2/TD-3 rationale are sound, but marking estimates as exact \"Site count\" values invites false precision in the walkthrough counts. Label the column as approximate or re-derive it from the same grep used in Success Criteria.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#technical-scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Maintenance architecture's \"test coverage before and after\" principle is satisfied only implicitly",
+      "description": "The parent architecture (project-documents/user/architecture/900-arch.maintenance-and-refactoring.md, Architectural Principles) requires refactoring slices to have \"test coverage verifying preserved behavior before and after the change.\" The design relies on the existing suite plus a before/after literal count and a deliberate typo-compile check, which is a reasonable reading for a value-identical sweep \u2014 no action needed unless the reviewer wants the criterion phrased explicitly as the satisfying evidence.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#success-criteria"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Success criterion 1 demands zero matches in files whose remaining literals are explicitly out of scope",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "WorkflowNavigator is listed as a 3-site sweep target, but all three sites are the excluded `SliceStatus` union",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Claim that no test asserts these literals is false",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification grep filter cannot work as written",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Site counts in the Included table are approximate but presented as exact",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Maintenance architecture's \"test coverage before and after\" principle is satisfied only implicitly",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#success-criteria",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-17T07:38:15.639252",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 220346,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 544895,
+  "cached_tokens": 408992,
+  "cache_write_tokens": null,
+  "completion_tokens": 60054,
+  "reasoning_tokens": 57213,
+  "duration_seconds": 1356.6268147500232,
+  "cost_usd": 0.020783714000000002,
+  "cost_basis": "alias_pricing"
+}

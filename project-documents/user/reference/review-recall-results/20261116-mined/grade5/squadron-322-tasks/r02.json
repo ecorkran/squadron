@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Malformed `judge:` block failure mode has no implementation step or test despite claimed coverage",
+   "description": "The slice design's Failure Modes table (322-slice:242) gives the malformed `judge:` block row an explicit handling decision (\"fall back to `resolve_thresholds`' documented merge; **flag the target**\"), an observable signal (\"WARNING naming the template\"), and a test (\"malformed judge block \u2192 flagged, not silently defaulted\"). The task file's Coverage Check (line 287) claims this row is \"inherited from `resolve_thresholds`, exercised in T8\" \u2014 but T8 (lines 129-141) contains no malformed-block test, and T7's `read_current_thresholds` step (line 122) only handles the *unregistered template* case (`return None` + WARNING); the \"flag the target\" behavior for a resolvable template with a non-numeric floor appears in no task step. The slice design asserts a test for this boundary, so the gap is a named requirement left unmet, and the Coverage Check misreports it as covered. Add a T8 case (malformed `judge:` block \u2192 flagged per `resolve_thresholds`' merge, WARNING) and a matching T7 step, or explicitly document that the flagging is deferred and remove the row's test promise.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:129-141"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model limitation is absent from the `model_dimension_note` spec",
+   "description": "Functional Requirement 4 (322-slice:270) requires that \"**the runtime-drawn-model limitation is stated where the recommendation is produced** (asserted: the note is present in output, including `--json`)\", and the Technical Decisions section (322-slice, \"(template, model) \u2194 (template, step) mismatch\") specifies the note must state that where a step draws its model at runtime (a 180 pool), the threshold cannot track the drawn model and the recommendation does not apply to that step. T9's `model_dimension_note` spec (the bullet starting near line 148) covers only the \"this template paired with this model / choose model and threshold together at config time\" half; no task mentions the runtime-drawn-model limitation at all (grep for \"runtime\"/\"180\"/\"drawn\" in the task file finds nothing relevant). Since the criterion asserts the limitation is present in output, T10/T16's \"non-empty note\" assertions do not cover it. Extend T9's note spec with the runtime-limitation clause and assert its presence in T10.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:143-155"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T7's enumerated precedence order contradicts its own required TIGHTEN behavior",
+   "description": "T7 presents `classify_direction` \"in this precedence order\" with case 1 (`n < floor` \u2192 `INSUFFICIENT_EVIDENCE`) before case 4 (`match_rate <= tighten_rate` \u2192 `TIGHTEN`). Implemented literally, case 4 is unreachable below the floor \u2014 a below-floor cell with a low match rate would return `INSUFFICIENT_EVIDENCE`, violating both T7's own success criteria (\"a below-floor cell with low match rate returns `TIGHTEN`\") and T8's explicit regression test. The task hedges with case 4's parenthetical and a corrective second bullet (\"Re-read the design's Direction Bands table\u2026\"), so the intent is recoverable \u2014 but the steps as written direct a literal implementer to produce code that fails its own tests. Rewrite the precedence so the floor gate applies only to the loosening path (e.g. `TIGHTEN` checked before, or exempted from, the floor check).",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Commit markers appear after every task",
+   "description": "All 17 tasks carry a `**Commit**:` marker \u2014 the \"after every task\" cadence the review criteria flag. However, CLAUDE.md mandates \"Git add and commit from project root at least once per task\", and each marker sits at a working point where the existing suite is green (T17 confirms the hash re-key breaks no existing test), with regression tests landing in the immediately following task. This is consistent with project convention and the markers are plain lines (not checkboxes); no change required.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  }
+ ]
+}

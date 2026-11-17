@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The plan's FRNN collect-then-sort mechanism is deferred to an unnamed follow-up slice",
+   "description": "Plan 140 entry 13 (architecture/140-slices.simulation-scaling.md:56) defines this slice around coherent reads making \"k-nearest via FRNN (collect all within radius R, then partial-sort the small candidate set per thread) ... viable at scale\", and slice 150's coherent-grid solution spells that out as \"Implementation Plan \u2014 Phase 2: FRNN + small-set sort ... This replaces the max-heap with a simpler structure\". Slice 152 puts that work in **Out of scope** (line 75), keeps the slice-150 heap (lines 32, 187\u2013193), and schedules the replacement as a \"high-priority next slice\" (line 458) with no plan entry behind it. The consequence is material: the load-bearing exit gate (line 358) is measured on a selection structure the design itself expects to be the limiter (lines 395, 402), and the plan's Effort 3/5 scope is split across two slices without amending the plan. Either include FRNN here, as slice 150's Phase 2 does, or get the plan entry amended to assign it to a named, sequenced slice.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:75"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Mode-set change, `k_first` removal, and gate re-specification break the plan's exit criteria and the config contract",
+   "description": "Plan entry 13 (line 56) sets three exit criteria: \"k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N\", 5% parity, and \"**no regression on k-first path**\". The design removes `k_first` entirely (lines 34, 67, 199, 349), flips the production default to `k_nearest` (lines 197, 349), adds `radius_only` (line 31), and rewrites the gate as k-nearest within 20% of `radius_only` (line 358). With `k_first` gone, \"no regression on k-first path\" cannot be verified at all, yet the removed mode's 213.9 TPS baseline is still used as a slice-stop sanity check (lines 357, 387, 424). Nothing in the plan authorizes a `ComputeConfig`/`Workload` accepted-value or default change for a GPU-internal optimisation; this expands the production-server config surface and crosses the architecture's \"Clean ownership boundaries ... tick return type contract is the single shared interface\" goal (140-arch.simulation-scaling.md:32). Line 55's claim that the slice \"does not change any external interface\" is also wrong twice over: config values and `--neighbor-mode` are external, and slice 150 shipped **two** mode values (`k_first`, `k_nearest`; uncapped is a `max_neighbors <= 0` sub-branch, not a third value \u2014 slice 150 line 240), so \"collapsing three ... to two\" is inaccurate. Cut/defer: retain `k_first` as the no-regression baseline and move `radius_only`, the default flip, and the `ConfigurationError` boundary to a separately planned slice.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Architecture throughput and memory NFRs are not restated with specific targets; the only gate is a ratio with no absolute floor",
+   "description": "The parent HLD states the scaling NFR as \"3,500 entities at 57 TPS to 2 million entities at 60 TPS\" (140-arch.simulation-scaling.md:18), with Tier 2 = 60 TPS at N=50k and Tier 3 = 250k on production-class NVIDIA hardware (\u00a7Envisioned State, line 74). This slice touches exactly that fused-tick path but never restates a 60 TPS or absolute-TPS target: criterion 3 says \"There is no pass/fail\", and the sole gate is `k_nearest_tps >= 0.8 \u00d7 radius_only_tps` (lines 358, 395), which can pass at single-digit TPS \u2014 slice 148 measured 3 TPS at N=200k (plan line 48). Lines 17 and 44 also mislabel N=200k on a dev-class box as \"the architecture's Tier 3 target/milestone\"; the HLD's Tier 3 is 250k on production-class hardware, and the plan assigns 200k only as this slice's viability checkpoint. Line 226 compares the 5.6 MB addition at N=200k against the 320 MB budget at N=2M instead of the HLD memory table's ~40 MB Tier 3 working set (line 90). Restate the specific targets this slice serves \u2014 an absolute TPS floor at N=200k on the dev-class CUDA box alongside the ratio, the 60 TPS tier target as the downstream obligation, and the correct ~40 MB Tier 3 budget \u2014 or name the tier-level NFR as explicitly out of scope with its successor slice.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357-358"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Overweight design: verification, reference-analysis, and future-work sections exceed the plan's Effort 3/5 checkpoint",
+   "description": "The plan assigns one coherent reindex plus k-nearest viability at N=200k (Effort 3/5), but the design carries ~460 lines: 7 new fields + kernel + mode-set churn + two template specializations + 7-step verification + 4-item Future Work. Name what to cut or defer: (a) \u00a7Overview \"Reference points\" (lines 36\u201344), \u00a7Value (46\u201355), and \u00a7Technical Decisions \"Why we keep `k_nearest` despite the reference path being faster\" (185) restate slice 150's root-cause doc and external papers (Ballerini, Hoetzlein, BoidsWebGPU) without changing the design; (b) criterion 3's `radius_only` baseline at N=1M \"no pass/fail\" (357), verification step 5's 500k/1M headroom probes (399\u2013402), and the 16M published-reference comparison are beyond the plan's N=200k exit and unmeasurable on the dev-class box by the doc's own line 459; (c) \u00a7Future Work (458\u2013461) \u2014 FRNN, Tier 3+ production measurement (already plan 140 Future Work item 1 at line 108), LBVH, double-coherent writeback \u2014 belongs in the slice plan, not this design; (d) line 68's `(neighbor_mode, max_k_heap)` specialization for `radius_only` compiles JIT variants keyed on a template value that mode explicitly ignores \u2014 specialising on mode alone is the lighter option.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Integration surface is under-declared and contradicts the stated component boundary",
+   "description": "\u00a7Component Structure claims \"No file outside the GPU compute path is touched\" (line 93) and \u00a7Interfaces Required (84\u201387) lists only `GpuAgentState._allocate_fields()` and `_bind_state_fields`, yet \u00a7Technical Scope item 7 (67), line 349, and verification step 7 (414\u2013416) require edits to `migratory_server.config` (`ComputeConfig`), `migratory.bench.workload` (`Workload`), `_NEIGHBOR_MODE_MAP`, `tests/migratory_server`, `tests/bench`, and the bench YAML workload registry (443, 451). Verification step 5 (399\u2013400) invokes `mid-flock-500k` and `mid-flock-1M` workloads that are never declared as added in scope (only `mid-flock-200k` is), and criterion 3's required `radius_only` TPS at N=1M (357) has no matching walkthrough step \u2014 step 5 measures `k_nearest` at those N. Slice 146's `GpuSimulationDriver.step()` calls `build_spatial_hash(state)` and `fused_force_integrate_kernel(...)` directly (\u00a7Architecture), so the new `neighbor_mode` template value and field aliases must be threaded from `ComputeConfig` through that driver; the doc names only the bench `run_fused_tick` path (line 98) and never declares the production driver as a consumer. Enumerate these files, the mode-forwarding call chain, and every workload the walkthrough consumes, and drop the \"no file outside\" claim.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:91-98"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The `k_first` lifecycle is specified three mutually incompatible ways",
+   "description": "Mitigation Strategies (line 433) says to \"ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning)\" and remove parsing only in the final commit. Lines 34, 67, 199 and 349 say `k_first` is \"removed entirely\" and that configs using it \"raise a `ConfigurationError` at parse time\" \u2014 an explicit-failure boundary, not a deprecation warning. Development Approach step 2 (442) adds `radius_only` \"alongside the existing `k_nearest` branch\" with no `k_first` branch, and step 4 (444) performs only a default flip. An implementer cannot tell whether the first commit parses `k_first`, whether the shipped behaviour is an error or a warning, or when removal occurs; combined with the plan's \"no regression on k-first path\" criterion, this also determines whether the baseline is even runnable. Pick one lifecycle consistent with the project's explicit-failure convention and update the exit criteria, scope items, and development steps together.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:429-433"
+  }
+ ]
+}

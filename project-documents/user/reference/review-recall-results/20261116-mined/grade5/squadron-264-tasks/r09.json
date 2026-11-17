@@ -1,0 +1,61 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 6's unconditional registration breaks an existing registry-invariant test; no task updates it",
+   "description": "`test_exactly_the_three_builtin_tools_are_registered` asserts `set(tools.list_tools()) == {\"read_file\", \"write_file\", \"bash\"}` and `test_materialize_binds_every_registered_tool` asserts `len(executors) == 3`. Task 6.4 registers five `cf_*` tools at package import via the side-effect line in `src/squadron/tools/__init__.py`, so both assertions fail the moment Task 6 lands \u2014 contradicting the file's own Sequencing claim that \"Each task leaves the suite green,\" and Task 6's success criteria don't name the fix. A junior implementer at Task 6 hits a red test in an unrelated module with no instruction. No task in 1\u20139 mentions editing `tests/tools/test_package.py`. Add that edit to Task 6 (and note the `__init__.py` docstring claim \"registers the built-in tools and does nothing else\" also becomes stale), or the plan should state the new invariant once (builtins \u222a cf_* read from `list_tools()`) so the two assertions follow.",
+   "location": "tests/tools/test_package.py:11-22"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The \"non-text blocks are noted by type\" mapping rule is implemented but has no test",
+   "description": "The design lists four Result mapping rules (`264-slice...:132-137`), and Task 4.2 implements all four including \"Non-text blocks noted by type in the content.\" Success criterion 2 requires results be mapped \"per the Result mapping rules,\" but the Task 3 fake server exposes only `echo`, `fail`, `sleep`, `empty` (task file:105-111) \u2014 every block it can return is text. Task 5.1 therefore tests join, `isError`, and zero-content, and nothing can exercise the non-text branch; it ships untested. Requirement left unmet: a non-text `CallToolResult` must surface its block type rather than being dropped. Fix cheaply \u2014 add one fake-server tool that returns an `ImageContent`/non-text block and one assertion in Task 5.1.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:135-138"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Success criterion 6 is only half scheduled; the slice merges with its second half unmet",
+   "description": "SC6 (`264-slice...:229-231`) requires two things: the materialized `cf_workflow_status` executor returning real project status, **and** a dispatch with a tool-capable non-SDK model calling `cf_build_context` and receiving assembled context (walkthrough \u00a74). Task 9.1 covers the first (step 2); 9.3 mentions step 4 in prose as \"remains open alongside 263's demo,\" and Task 9's success criteria gate on \"walkthrough steps 1\u20133 recorded\" before 9.4 merges the branch. So the plan's close-out criteria permit merging while a named success criterion is unverified, with the deferral recorded only inside a docs sub-bullet rather than as an explicit open checklist item. Either add step 4 as its own unchecked task item (carried as an open item with an owner) or amend the slice design to move it out of SC6. The `CLAUDECODE`-guard justification is legitimate; the tracking form is not.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 8's availability rationale contradicts this repo's CI, and the `network` marker is unhandled",
+   "description": "Task 8 justifies the gate as \"CI without node stays green, any environment with CF verifies the contract\" (task file:255-260). This project's CI does the opposite: it installs `setup-node@v4` with node 22, runs `npm i -g @context-forge/cli` and `cf init --lite --no-ide`, then `uv run pytest` (ci.yml:20-24, 32). So the live contract test will actually run in CI against `cf.mcp_command`'s default `npx -y @context-forge/mcp`, which the design's own Risks section says downloads the package on first call. Consequence: the plan's determinism assumption for CI is wrong, and `pyproject.toml:83-85` already declares a `network` marker that Task 8 does not mention applying. Task 8 should state the real CI behavior and choose one: mark the module `network`, or have CI pin `cf.mcp_command` to a pre-fetched/pinned launch. (CI gating itself is not implicit \u2014 it is already wired by the existing `uv run pytest` step, so no extra gating task is required.)",
+   "location": ".github/workflows/ci.yml:20-24"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Proportionality: 9 tasks / 9 mandated commits for a 2/5-effort, two-module slice",
+   "description": "Effort is self-scored 2/5 for two new source modules (~80 + ~150 lines) and four test files, yet the breakdown spends a full task and a full commit on adding two `CONFIG_KEYS` dict entries (Task 1, effort 1/5) plus two assertions in an existing test class (Task 2, effort 1/5). The design's Files-changed table lists eight paths; the plan needs roughly half this task count. Merge Task 1+2 into one task (they are one commit point by the test-with pattern anyway \u2014 splitting them forces an untested commit at Task 1), and fold Task 3's fixture into the Task 4/5 bridge pair so the commit cadence lands on genuinely tested points rather than one commit per task. The per-task `ruff format` + commit lines are also encoded as checklist items (`- [ ]`) inside success criteria; commit markers belong as plain lines at working/tested points, not as a nine-item checkbox column.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 3's stated justification is wrong for the tasks it names",
+   "description": "\"tasks 5, 6 both need a real stdio peer\" \u2014 Task 6 (`cf_tools.py`) delegates to `call_mcp_tool`, and Task 7's success criterion explicitly requires \"green with no network and no node\" via a mocked transport; Task 8 uses the real CF server, not the fake one. Only Task 5 needs the fixture. Ordering is harmless; the rationale should say so to stop a junior from wiring descriptors against the fake server.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:98-101"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 5.2's process-reaping assertion offers one path that needs an unavailable dependency",
+   "description": "\"scan for the fixture's command line\" requires a process-listing facility; `psutil` is not in `pyproject.toml` dependencies or dev groups. The PID-temp-file alternative works with stdlib (`os.kill(pid, 0)`), but the plan should name that as the approach and say how the fake server learns the path (env var or argv), since Task 3.1 currently describes no such hook.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:166-169"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Execute-time config reads put TOML file I/O inside an async turn",
+   "description": "Task 6.3 reads `cf.mcp_command`/`cf.mcp_timeout_s` at execute time, which is deliberate (it keeps `sq config set` effective without re-materializing, and Task 7.3 tests it). It does, however, sit against the convention documented in the openai provider \u2014 \"no config file I/O happens inside an async turn\" \u2014 for these tools' loop bounds. Given the same call already spawns a subprocess and runs `initialize()`, two small TOML reads are noise; recording why this is the accepted exception in the module comment would keep the rule from looking inconsistently applied.",
+   "location": "src/squadron/providers/openai/agent.py:92-96"
+  }
+ ]
+}

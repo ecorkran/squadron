@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "Development Approach miscounts the `_inject_file_contents` call sites / direct callers",
+      "description": "Step 2 says: \"Update its two `review_client` call sites and the direct callers in `test_content_injection.py`, `test_convention_root.py`, `test_injection_decision.py`, and `test_review_client.py`.\" Against the current source this is slightly off: there is **one** production call site of `_inject_file_contents` (`review_client.py:154` inside `run_review_with_profile`), not two; and `test_injection_decision.py` and `test_review_client.py` are **not** direct callers \u2014 the former exercises the return only via `run_review_with_profile`, and the latter merely patches the symbol (`tests/review/test_review_client.py:224`, `side_effect=lambda p, *a, **k: p`). Only `test_content_injection.py` and `test_convention_root.py` invoke it directly. This slightly misstates the mechanical blast radius of the `(prompt, DiffInjection | None)` return-type change, but it is trivially self-correcting (an implementer's grep finds the true call sites, and the over-listed files simply need no change), so it does not leave a stated requirement unmet. Worth correcting for plan accuracy only.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#development-approach"
+    },
+    {
+      "severity": "PASS",
+      "title": "Design aligns with the slice plan and 900 architecture scope",
+      "description": "For the record: no scope was dropped or deferred that the slice plan entry (927) assigns to this slice \u2014 Parts A/B/C are all delivered, and the items deferred (#137 ordering/`--stat`, #138 file-body truncation, #114, `max_file_size_bytes` default change) are the exact items the plan marks \"not in scope\" or routes to issues via its own \"otherwise it becomes an issue\" clause. The verdict-capping rule and the answering-model record are presented as run-integrity facts consistent with the 916\u2013920 artifact-trust lineage, not as a new gated capability, so they remain within the maintenance initiative's boundary.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Development Approach miscounts the `_inject_file_contents` call sites / direct callers",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#development-approach",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Design aligns with the slice plan and 900 architecture scope",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T12:10:13.507787",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 121312,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 940564,
+  "cached_tokens": 792448,
+  "cache_write_tokens": null,
+  "completion_tokens": 31655,
+  "reasoning_tokens": 28658,
+  "duration_seconds": 102.85565775027499,
+  "cost_usd": 0.14481124,
+  "cost_basis": "alias_pricing"
+}

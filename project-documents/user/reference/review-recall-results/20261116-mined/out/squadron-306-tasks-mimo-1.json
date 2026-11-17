@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T3 leaves a review\u2192pipeline import in the relocated core, recreating the F002 package-level cycle",
+      "description": "T3 moves `verification.py` into `review/addressed/` but keeps its `RoundDiff` import from `pipeline/actions/findings_addressed/screens.py`, calling it \"a cross-package import in the pipeline\u2192review direction\". The direction label is backwards: a review module importing `pipeline/actions/` internals is a **review\u2192pipeline** edge \u2014 the inversion the design explicitly forbids at `306-slice...md:141-145` (\"Having `review/resolution.py` import `pipeline/actions/` internals would invert that and create a review \u2194 pipeline package-level cycle\"). Verified in code: `findings_addressed/verification.py:17` imports `RoundDiff` from `...screens`, and `screens.py:15-23` imports `findings_addressed.models` (\u2192 `review.addressed.models` after T1/T3) plus `review.git_utils`, `review.models`, `review.parsers` \u2014 so after the move the chain `review.addressed.verification \u2192 pipeline...screens \u2192 review.*` is exactly the cycle F002 resolved against, exercised through partially-initialized package `__init__`s once T7 makes `review/addressed/__init__.py` re-export `verify_outcomes`. T5 inherits the same dependency unmentioned: `judge_residue_core(..., diff, ...)` types `diff` as `RoundDiff` (`judge.py:21`), so the extracted \"context-free\" judge core in `review/addressed/judge.py` would also import from `pipeline/actions/` internals. File 2 compounds it \u2014 its T21 instructs `review/resolution.py` to import `RoundDiff` and `screen_byte_identical` from `pipeline/actions/findings_addressed/screens.py` (\"import it, do not redefine it\"), which is verbatim the design-forbidden sentence. Fix: include `RoundDiff` (a plain context-free dataclass, `screens.py:34`) and whatever shared screen logic Part B needs in the relocation to `review/addressed/`, with `screens.py` importing them from there in the already-established pipeline\u2192review direction \u2014 i.e., resolve the design's own component-diagram/dependency-direction tension in favor of the dependency rule, and adjust file 2's T21/T27 accordingly.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:102-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "F005 checkpoint T14 is numbered after the Part D commit it gates",
+      "description": "The slice design's binding Phase 5 note requires the cf `archive/`-scanning verification to appear \"as its own checklist task in the breakdown, sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme.\" T14 exists as its own task (good) but is placed after T12/T13, and T13's `Commit: fix: archive prior review content...` marker (line 272) precedes it in file order. The gating language in T12 (\"Do not mark this task done until T14's verification outcome is known\") and T14 (\"gates T12 in practice even though it is numbered after it\") mitigates the risk, but a top-to-bottom executor reaches the Part D commit marker before running the checkpoint; if T14 finds cf scans recursively, the committed archive-filename scheme needs rework after the fact. T14 has no code dependency on T12 \u2014 move it before T12 (right after Part A) so the go/no-go genuinely precedes Part D landing.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-297"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Context-free core\" move carries `read_findings`/`ActionResult` across the boundary",
+      "description": "T1 moves `models.py` \"verbatim\", including `from squadron.pipeline.models import ActionResult` (line 14) and `read_findings(result: ActionResult | None)` (line 93). Per F002's own criterion (\"What stays in `pipeline/actions/findings_addressed/` is exactly what is loop-specific\"), `read_findings` is loop-specific: it parses pipeline `ActionResult.findings`, and the interactive path uses file 2's `records_from_frontmatter` instead. Moving it drags a review\u2192`pipeline.models` dependency into the relocated core and undercuts the \"context-free\" characterization the design and the task file's handoff claim (\"every task in file 2 imports from there\") rely on. This is acyclic (`pipeline/models.py` imports only stdlib/typing, verified) and the design's component list does place `read_findings` in `review/addressed/models.py`, so this is not blocking \u2014 but the cheap fix now is to leave `read_findings` behind in a pipeline-side module (or split it from the moved models), rather than cement a boundary crossing that F002's narrative claims to have eliminated.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria fully traceable across the two-file split",
+      "description": "All 13 success criteria plus the F005 Phase 5 note map to tasks: `reviewedSha` stamping (T9\u2013T11), archive-on-overwrite and fail-closed abort (T12\u2013T13), 305 suite unchanged after relocation (T2/T4/T6/T8), and the F005 checkpoint (T14) in file 1; file 2 (verified to exist) covers the resolve-command criteria \u2014 byte-identical review (T34), empty-diff\u2192UNADDRESSED (T21/T22), `--no-judge` (T25/T26), untouched-path downgrade (T27/T28), legacy fallback + `--since` (T19/T20), F001 (T23/T24), F004 (T25/T26), metrology-glob exclusion (T32), and `-r2` versioning (T31/T32/T34), with slash-command parity (T37) and docs (T38). No gaps and no scope creep in file 1; task count and step detail are proportionate to the slice.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with discipline and commit-marker placement are correct",
+      "description": "Every implementation task is immediately followed by its verification/test task (T1\u2192T2, T3\u2192T4, T5\u2192T6, T7\u2192T8, T9/T10\u2192T11, T12\u2192T13). Commit markers (plain list lines, not checkboxes) appear only at tested points \u2014 T2/T4/T6/T8/T11/T13 \u2014 neither after every task nor only at the end, with semantic prefixes (`refactor`/`feat`/`fix`) matching the work. (The one placement caveat is T13's marker preceding T14, covered in the sequencing concern above.)",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:82-297"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "T3 leaves a review\u2192pipeline import in the relocated core, recreating the F002 package-level cycle",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:102-115",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "F005 checkpoint T14 is numbered after the Part D commit it gates",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-297",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "\"Context-free core\" move carries `read_findings`/`ActionResult` across the boundary",
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criteria fully traceable across the two-file split",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Test-with discipline and commit-marker placement are correct",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:82-297",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-17T05:53:08.626970",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 113567,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 264836,
+  "cached_tokens": 213888,
+  "cache_write_tokens": null,
+  "completion_tokens": 29866,
+  "reasoning_tokens": 26744,
+  "duration_seconds": 576.628321332857,
+  "cost_usd": 0.049001352,
+  "cost_basis": "alias_pricing"
+}

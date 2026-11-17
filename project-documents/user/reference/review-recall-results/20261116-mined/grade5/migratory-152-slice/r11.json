@@ -1,0 +1,96 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Slice 150's `max_neighbors` edge cases are dropped; the k_nearest inner loop overruns the heap",
+   "description": "In the AFTER inner loop, the k_nearest branch is `if heap_size < max_neighbors: push` / `elif dsq < heap_dsq[0]: evict heap_idx[0]`. Two supported values break it:\n- `max_neighbors <= 0` (uncapped). The first test is false and `heap_dsq` starts at INF, so the eviction branch runs with `heap_idx[0] = -1` and reads `_px_c[-1]`.\n- `max_neighbors > max_k_heap`. `heap_size` grows past the heap length, so `heap_push` writes out of bounds.\n\nSlice 150 requires both behaviors: accept-all for uncapped (150 lines 202, 207, verification step 5 at 231\u2013232), and a cap at `MAX_K_HEAP` with a WARNING for over-capacity (150 lines 202, 205). This doc mentions neither. A grep for `uncapped`, `warning`, and `MAX_K_HEAP` finds only the radius_only text. The default flips to k_nearest (line 349), so existing uncapped profiles would reach this path by default.\n\nThe doc also treats \"uncapped\" as a global mode (lines 68, 273). Slice 150 defines it per profile (`max_neighbors <= 0`). The two contracts conflict. Specify both edge cases for each neighbor mode before the inner loop is written.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:300-306"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The exit gate, mode set, and k-first criteria drift from the slice plan entry",
+   "description": "The plan entry for 152 (`140-slices`, line 56) assigns three things: an exit criterion of k-nearest TPS at N=200k within 20% of k-first at the same N, a \"no regression on k-first path\" criterion, and a mechanism of FRNN-style collect-then-sort that makes k-nearest viable at scale.\n\nThis doc instead gates k_nearest against a new radius_only mode (line 358), removes k_first (lines 67, 199), drops the k-first no-regression criterion entirely, and defers FRNN (lines 75, 187\u2013193). Each change may be sound on its own, but the plan entry assigns the k-first criteria and FRNN to this slice. Once k_first is removed, the plan's gate cannot be measured. Resolve this with the Project Manager before implementation starts. Until the plan changes, its entry is the authority.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "radius_only is overweight for this slice, and its purpose rests on a 16M reference outside the architecture",
+   "description": "Neither `140-arch` nor the plan entry calls for radius_only. The architecture's destination is 2M entities at 60 TPS (`140-arch` line 18). This slice sets a 16M 2D destination (lines 44, 458). The mode costs a config value, a kernel specialization, a new TPS baseline at three N values (criterion 3; verification steps 3 and 5), a headroom probe, and a new Future Work item. The main design anchor (Babylon.js at 16M, line 40) is cited as an r/GraphicsProgramming 2023 post; the doc does not verify it.\n\nCut or defer:\n- Move radius_only to its own slice, with its own parity reference (see the verification finding below).\n- Keep the plan's k_first vs k_nearest gate.\n- Reduce the 16M framing to one line.\n- Replace the restatements of slice 150 (lines 187\u2013193, which repeat 150's Phase 2) and of Future Work (lines 454\u2013461) with pointers.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:23-44"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The k_first removal is scheduled three different ways",
+   "description": "Scope item 7 (line 67) and Technical Decisions (line 199) say k_first is removed from the kernel, `ComputeConfig`, `Workload`, and `_NEIGHBOR_MODE_MAP`, and that configs using it raise `ConfigurationError`. The risk mitigation (line 433) says to keep k_first parsed with a deprecation warning until the final commit. The Development Approach (lines 441\u2013445) never removes k_first. Step 2 adds radius_only, and step 4 only flips the default.\n\nThe implementer cannot tell whether commits 1\u20133 keep or remove k_first, or what happens if criterion 4 fails. Pick one, and add the removal to the commit sequence.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The interface claim is inaccurate, and the frontmatter omits the interfaces involved",
+   "description": "Line 55 says the slice changes no external interface \"other than collapsing three `neighbor_mode` values to two.\" Slice 150 defines two values (`150` line 240), and this doc's own line 67 describes two-to-two. Two behavior changes are missing from the claim:\n- Removing k_first breaks existing configs.\n- The default flip (lines 349, 444) changes what every config that omits `neighbor_mode` runs on the live server.\n\n`140-arch` requires tiers to deploy independently with no big-bang transitions (line 30), so the default flip should be a separate, stated change. The frontmatter's `interfaces: []` (line 7) also omits the interfaces this slice changes or that 146 consumes: `GpuAgentState` fields, `ComputeConfig`, and `Workload`.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:55"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tier 3 is misattributed as N=200k",
+   "description": "The overview calls N=200k \"the architecture's Tier 3 target,\" and line 44 repeats \"current Tier 3 milestone of 200k.\" `140-arch` defines Tier 3 as 250k on production-class NVIDIA hardware (lines 74, 90). The 200k run on the dev box is a checkpoint toward Tier 3, not Tier 3 itself. Restate it that way, and point to the Tier 3 validation item (`140-slices` line 108) for the 250k hardware result.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The doc says slice 150 is shipped; the plan and slice 150 disagree",
+   "description": "Line 81 says 150 \"is shipped on `main` as of 2026-05-05.\" Slice 150's frontmatter says `status: in_progress` (`150` line 10), and the plan's entry for 150 is unchecked (`140-slices` line 52). I cannot read git state in this session, so I cannot confirm the merge. Confirm that 150 is on `main`, then update the plan and slice 150 status. If it is not, 152 is blocked.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "radius_only has no parity reference",
+   "description": "`140-arch` Design Goal 1 (line 26) requires every optimization to be verifiable against the current NumPy implementation, with regression testing at each tier transition. Criterion 2 and verification step 2 cover only `k_nearest`. The CPU reference is topological (cKDTree k=13, `140-arch` line 55), so nothing in the design verifies radius_only's output. Either give radius_only a parity reference, such as a CPU radius-query pass with the same accumulators, or state that it is unverified. The proportionality finding recommends moving it out of this slice.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:379"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The speed sanity check compares across hardware and can trigger a stop",
+   "description": "Criterion 3 says radius_only at N=10k should beat \"the slice 150 `k_first` baseline of 213.9 TPS,\" and \"if it does not, stop.\" Slice 149 records that figure as \"2026-05-04, Mac/Metal\" (`149` line 164). The architecture makes CUDA the performance-gate hardware (`140-arch` line 28). The criterion names no hardware, so a CUDA run compared against a Metal figure can produce a false stop or a false pass. Measure k_first on the same host in the same run, and do not use the absolute threshold as a stop condition on its own.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The performance gate omits the formation-dependent live measurement the architecture requires",
+   "description": "`140-arch` Architectural Principles (line 38): \"Synthetic benchmarks are supplemented with live-server measurements across formation states, since performance is formation-dependent.\" Gate step 4 and the headroom probe (lines 397\u2013403) are synthetic only. The live check (lines 404\u2013410) checks formation shape, not TPS. The doc also does not report the reindex cost separately, although risk 1 depends on it, and the benchmark harness is meant to report per-phase timings (`140-slices` line 26).\n\nAdd a live-server TPS sample on the gate hardware across at least two formation states, and report the reindex phase separately.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:389"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The spawn/despawn lifecycle contradicts slice 146",
+   "description": "Line 451 says spawn/despawn \"re-run `setup()` and reallocate\" the coherent fields. Slice 146 calls `setup()` once at server startup (`146` line 32). Spawn/despawn does `field.from_numpy()` when the agent count changes, plus a re-upload method (`146` lines 31, 90). The plan says \"re-upload changed agent state\" (`140-slices` line 44). Nothing in 146 resizes N-sized fields.\n\nThe seven new fields, and the `n` passed to `coherent_reindex_kernel`, depend on N. When N grows, the reindex writes past fields sized for the old N. Specify who resizes the coherent fields on a count change, and add that step to 146 or to this doc.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:451"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Metal wording conflicts with the architecture",
+   "description": "`140-arch` calls Metal \"fully functional and supported as a first-class operating mode\" (lines 28, 100). This doc, like the plan (`140-slices` lines 32, 40), calls it \"best-effort.\" The verification step at line 367 runs mid-flock on Metal, which meets the architecture's functional requirement. Align the wording with the architecture. The tests need no change.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:364"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The implicit-sync claim conflicts with the explicit sync",
+   "description": "Line 146 says `qd.sync()` is \"implicit at kernel boundaries in graph=True mode.\" The `build_spatial_hash` pseudocode (line 344) calls `qd.sync()` explicitly. Keep the explicit call and drop the implicit claim unless it is verified.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:146"
+  }
+ ]
+}

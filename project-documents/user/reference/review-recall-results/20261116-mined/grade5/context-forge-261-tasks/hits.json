@@ -1,0 +1,51 @@
+{
+ "case": "context-forge-261-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Technical Requirements say unit tests cover \"`renderAdoptionFacts` (every outcome, the state-set notice, ...)\". Task 8T covers `brownfield` (capped), `adoption-in-progress` and `NOT_EVALUATED`; Task 8 requires an exhaustive switch over all outcome kinds, but no test renders `greenfield`, `already-planned` or `adoption-closed`. **VALID** (minor, `coverage`): the tests leave out branches the parent design's requirement names. The design's D4 does make those kinds unreachable through the resolver, which is why the reviewer called it defensible. Needs: doc (design plus tasks). **Raised by the original review (F004, note)**.",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r02": [],
+    "r03": [
+     3
+    ],
+    "r04": [],
+    "r05": [
+     0
+    ],
+    "r06": [],
+    "r07": [
+     0
+    ],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": [
+     2
+    ],
+    "r12": [
+     0
+    ],
+    "r13": [
+     2
+    ],
+    "r14": [],
+    "r15": [
+     2
+    ],
+    "r16": [],
+    "r17": [],
+    "r18": [
+     0
+    ],
+    "r19": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "Borderline: r03 finding 3 notes the omission but calls it defensible; counted since it names the same gap."
+}

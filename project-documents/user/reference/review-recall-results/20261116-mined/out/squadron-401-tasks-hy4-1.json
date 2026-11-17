@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 2's \"suite passes unchanged\" is impossible; no task repairs the four-metric fixtures",
+      "description": "Adding four `SnapshotMetric` members makes `LanguageSnapshot._one_measurement_per_metric` (`src/squadron/metrology/snapshot_models.py:186-192`) reject any section missing a metric. Three 400 tests hard-code exactly four measurements and fail the moment Task 2 lands: `tests/metrology/snapshot/test_render.py:31-64` (`python_snapshot()`), `tests/metrology/snapshot/test_snapshot_models.py:225-253` (`test_json_round_trip_is_lossless`), and `tests/metrology/snapshot/test_python_length.py:60` (`assert adapter.metrics == set(SnapshotMetric)`, broken by Task 2 narrowing `PythonAdapter.metrics`). No task edits `test_snapshot_models.py`; Task 9 only *adds* cases to the length tests and Task 27 only describes new render assertions, never the shared fixture. So the suite stays red from Task 2 through Task 25+, contradicting Task 2's own success criterion, the Context Summary's \"tests for the touched area\" on every commit, Success Criterion 12, and the Technical Requirement \"the full suite passes\" that Task 30 checks only at the end. Add a Task 2 sub-step (or a dedicated task) that derives these fixtures from `SnapshotMetric` and updates the adapter-metrics assertion.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`MemoryError` in the TypeScript tokenizer is routed to two mutually exclusive outcomes",
+      "description": "Task 14 says \"Token errors are `TypeScriptParseError` and `MemoryError`\", which sends a tokenizer `MemoryError` into `measure_duplication`'s per-file `unparsed_files` branch (Task 10, second bullet). But Task 10's ceiling bullet (line 123), Task 11's \"a tokenizer that raises `MemoryError` gives `tool_failed` with a WARNING\" (line 139), design D3 (\"A `MemoryError` is handled the same way\"), and the failure-mode table all require a `MemoryError` to yield `duplicated_lines = tool_failed` naming the count and ceiling \u2014 \"Never a partial figure\", with other metrics unaffected and a WARNING. A junior AI following Task 14 makes Task 11's own test fail for the TypeScript tokenizer and violates the table row. Drop `MemoryError` from Task 14's `token_errors`, or state explicitly that it must escape the per-file handler to the whole-pass one.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two named failure-mode assertions have no test",
+      "description": "The Technical Requirement says \"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table.\" (a) The Cobertura row names \"a non-integer `number` or `hits`\", and Task 19 implements both, but Task 20's case list (line 206) has only `hits=\"x\"` \u2014 no non-integer `number` case, so half of that row is unverified. (b) The token-ceiling row says \"Other metrics are unaffected\" and Success Criterion 10 says \"and its other metrics are unchanged\", but Task 11's monkeypatched-ceiling test (line 138) exercises `measure_duplication` in isolation with a test tokenizer; it never asserts file length, function length, complexity, lint or type counts are unchanged. Task 13/15's adapter-level tests don't trip the ceiling. Add the `number` case to Task 20 and an adapter-level ceiling case asserting the other metrics.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138-206"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion traces to a task and no task is scope creep",
+      "description": "SC 1 \u2192 Tasks 8\u201315/27; SC 2\u20133 \u2192 4/6/9; SC 4 \u2192 11/13/15; SC 5 \u2192 21/22/24/26; SC 6 \u2192 20/24; SC 7 \u2192 20/24 plus walkthrough step 9; SC 8 \u2192 19/20/24; SC 9 \u2192 16/17 plus step 7; SC 10 \u2192 10/11; SC 11 \u2192 26 plus step 10; SC 12 \u2192 7/8/9/13. Technical Requirements \u2192 18 (real fixtures), 30 (ruff/pyright/full suite), per-task success lines and the `test_take.py`/`test_preflight.py` updates; Integration Requirements \u2192 28 and 30's enum-only diff check; walkthrough 1\u201310 \u2192 29. Task 1 (branch) and Task 30 (final validation) come from AGENTS.md git rules and the design, so nothing is untraceable work. Proportionality fits: one task file (no split), 30 tasks for a four-metric/two-adapter slice with six decisions and a ten-step walkthrough, comparable to slice 400's 34 tasks; the prescriptive sub-steps are transcribed from D2/D3/D4/D5 rather than invented. Task 10 (Effort 4) is the largest but is one <300-line module with its own test task, so no split is required.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and commit checkpoints are sound",
+      "description": "Every implementation task is immediately followed by its tests: 3\u21924, 5\u21926, 8\u21929, 10\u219211, 12\u219213, 14\u219215, 16\u219217, 19\u219220, 21\u219222, 23\u219224, 25\u219226; Task 27 carries its own tests. No circular dependencies: Task 5's counted-function predicate is injected in Task 7; Task 7's read/decode helper is consumed by Task 10; Task 18's fixtures precede Task 19's reader and Task 20's tests; Task 19's reading precedes Task 21's `read_coverage` and Task 23's `coverage_measurements`; Task 26's snapshot tests follow Task 25's wiring. Commit lines sit at tested points (after Tasks 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29), distributed throughout rather than after every task or only at the end. There are no `**Commit**:` plain-line markers, which the review rule explicitly permits; the `- [ ] Commit:` items match AGENTS.md's checklist convention and slice 400's task file.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The NFR / load-test rule is not triggered here",
+      "description": "The parent architecture has no Non-Functional Requirements section (its headings are Overview, Design Goals, Architectural Principles, Current State, Envisioned State, Technical Considerations, Anticipated Slices, Non-Goals, Related Work), and the 401 slice design neither restates one nor sets a latency, throughput or resource target in its Success Criteria. D3's \"133 bytes per token\" / 4,000,000-token ceiling is a sizing rationale introduced by this design, enforced functionally by Tasks 10/11; it is not a restated NFR. No `tests/load/` task is needed, so the CI-gating rule is not triggered either. Correctly absent, not a gap.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 2's \"suite passes unchanged\" is impossible; no task repairs the four-metric fixtures",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:45",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`MemoryError` in the TypeScript tokenizer is routed to two mutually exclusive outcomes",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Two named failure-mode assertions have no test",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138-206",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Every success criterion traces to a task and no task is scope creep",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and commit checkpoints are sound",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The NFR / load-test rule is not triggered here",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T08:36:44.239692",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 722031,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1289392,
+  "cached_tokens": 1072832,
+  "cache_write_tokens": null,
+  "completion_tokens": 179054,
+  "reasoning_tokens": 174946,
+  "duration_seconds": 1679.0766647499986,
+  "cost_usd": 0.336652492,
+  "cost_basis": "alias_pricing"
+}

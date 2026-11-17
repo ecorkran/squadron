@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The failed-diff-fetch path is unspecified \u2014 a silent total loss of the diff can still produce a clean PASS",
+      "description": "Description: D2 establishes the invariant \"`diff_injection` is `None` when `inputs` has no `diff` key \u2026 When a diff was part of the review, the key is always written\", and D3 defines the recording for the one silent-loss path it found (`_add_injection` returning `False`). But the other silent-loss path is not specified: `_run_git_diff` returns `None` on git failure (`_logger.warning` + `return None`), which means `_add_injection` is never called. D2 forces the implementer to produce a `DiffInjection` anyway (the key exists), and the design does not say what values it carries. The natural implementation \u2014 `DiffInjection(total_chars=0, injected_chars=0)` \u2014 records `truncated == False`, so Part B never fires and the artifact reads as \"saw it all\". This is reachable in practice: `_run_git_diff_filenames` (`--name-only`) and `_run_git_diff` (full diff) are separate invocations, and a repository with a misconfigured external diff driver or textconv filter fails the body fetch while the name-only call succeeds \u2014 so `EmptyDiffError`'s pre-flight guard does not cover it. The requirement this leaves unmet is the slice's own Value claim: \"After this slice a PASS means the model either saw the whole diff or read files with its tools.\" The fix is one sentence in D3: a `None` return from the body fetch records the same truncation-to-zero shape D3 already defines for the budget-skip case (which then makes Part B fire correctly on it).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d3-a-diff-dropped-by-the-total-injection-limit-is-a-truncation-to-zero"
+    },
+    {
+      "severity": "PASS",
+      "title": "All three parts the slice-plan entry assigns are delivered, with the plan's open decisions each resolved and justified",
+      "description": "Description: The plan entry (900 #927) requires: Part A with \"design picks the minimum that lets a gate decide\" (D1/D2 pick the boolean + counts in header/JSON \u2014 the minimum a gate needs); Part B with \"design picks between forcing CONCERNS with a synthetic finding and failing the run\" (D4 picks CONCERNS, with the #5-precedent argument made explicitly); Part C with \"design must decide what counts as 'differs' \u2026 so an alias resolving to its own snapshot is not reported as a substitution\" (D9). Both paths (CLI and pipeline) are covered structurally by riding `ReviewResult` through the shared `run_review_with_profile`. The plan's exclusions (defaults, #114) are honored, and diff ordering/`--stat` were conditional scope (\"in scope only if design shows it is small\") that the design deferred to #137 per the plan's own fallback instruction.",
+      "file_ref": null,
+      "category": "scope-and-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The design's load-bearing factual claims about the codebase are accurate",
+      "description": "Description: Verified against source: `_truncate` truncates at `max_file_size` and warns only; the diff-injection call site discards `_add_injection`'s boolean return, so the total-limit skip is real and silent; `builders/code.py` imports `_truncate` (keeping its signature is necessary); `persistence.py`'s render is exactly the `if findings / elif fallback_used / elif degraded` chain D6 claims, so a synthetic finding would hide the not-parsed notice without D6's fix; `VerdictSource` is a closed two-member enum whose docstring's stated concern is open reason strings, not member count; `_stamp_tool_telemetry` stamps before its tools early-return exactly as D8 assumes; the OpenAI `metadata[\"model\"]` stamp carries the requested id; and `metrology/identity.py` keys judge identity on `aiModel` (line 35), making D10's metrology consequence real and correctly disclosed.",
+      "file_ref": null,
+      "category": "factual-verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality holds \u2014 no scope creep, and weight matches the plan's 3/5 effort",
+      "description": "Description: Every mechanism traces to a plan requirement: D11/D13 exist because Part C must define behavior when a provider reports nothing; D12 covers the multi-model case the #92 recovery turn makes possible; D6 is required for Part B's own correctness. The two new modules (`review/coverage.py`, `models/snapshot.py`) are each a single pure function placed at the correct layer, and `_truncate`'s signature is deliberately preserved rather than refactored. Nothing restates other documents, and no abstraction is introduced that nothing uses.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`aiModel`'s meaning change is disclosed but carries a cross-repo consequence the design handles by disclosure rather than a coordination step",
+      "description": "Description: Changing the value domain of an existing externally-read frontmatter key is a stronger contract change than adding one; slice 919's precedent required a context-forge coordination step for its `verdictSource` addition. Here the design's argument is defensible \u2014 in-repo the only reader is `metrology/identity.py` (verified), the change makes `aiModel` mean what consumers assumed, and the one visible consequence (metrology identity shift for dated snapshots) is stated explicitly. Worth confirming CF/Amoeba consumers of `aiModel` accept dated ids, but nothing gates on it today per the design's grep.",
+      "file_ref": null,
+      "category": "integration-contracts",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d10-aimodel-is-the-answering-model-requestedmodel-appears-only-on-substitution"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The failed-diff-fetch path is unspecified \u2014 a silent total loss of the diff can still produce a clean PASS",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d3-a-diff-dropped-by-the-total-injection-limit-is-a-truncation-to-zero",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope-and-alignment",
+      "raw_category": null,
+      "summary": "All three parts the slice-plan entry assigns are delivered, with the plan's open decisions each resolved and justified",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "factual-verification",
+      "raw_category": null,
+      "summary": "The design's load-bearing factual claims about the codebase are accurate",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality holds \u2014 no scope creep, and weight matches the plan's 3/5 effort",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "integration-contracts",
+      "raw_category": null,
+      "summary": "`aiModel`'s meaning change is disclosed but carries a cross-repo consequence the design handles by disclosure rather than a coordination step",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d10-aimodel-is-the-answering-model-requestedmodel-appears-only-on-substitution",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T12:44:19.436558",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 139451,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1278011,
+  "cached_tokens": 1152704,
+  "cache_write_tokens": null,
+  "completion_tokens": 36006,
+  "reasoning_tokens": 33060,
+  "duration_seconds": 157.53388258302584,
+  "cost_usd": 0.6335592400000001,
+  "cost_basis": "alias_pricing"
+}

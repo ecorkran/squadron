@@ -1,0 +1,26 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough asks for baseline/isolation runs the branch cannot produce",
+   "description": "Step 3 lists four gate runs, two of which require counter-gating: \"Baseline (S=1, counter-gating \u2014 should reproduce slice 145 ~38 TPS)\" and \"Cell subdivision only (S=3, counter-gating)\". But Intervention 1 makes the `break` permanent (line 25, \"Replace counter-gating\"), with no flag to disable it. On this branch every S=1 and S=3 run has early exit enabled, so the 38 TPS counter-gating baseline and the \"subdivision only\" isolation point cannot be reproduced as written \u2014 yet A2 uses that baseline as its \u22655\u00d7 denominator and Step 3 says \"force_total \u2265 5\u00d7 reduction vs baseline.\" The implementing task file resolves this by capturing the baseline from `main` (T1) and forbidding re-running counter-gating on the branch (T12). The walkthrough should be corrected to state that the baseline is a recorded value from `main` and that only the combined (S=3 + break) configuration is measurable here; otherwise the gate as documented cannot be executed.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-179"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A7 seam is claimed \"preserved\" but is functionally bypassed by the new break",
+   "description": "Option A states the removed seam \"becomes unreachable when the break fires, but remains the documented swap point for distance-ranked selection (still needed for slice design A7).\" A count-based `break` at the top of the `for kk` loop is precisely the opposite of what a distance-ranked k-nearest kernel needs (it must keep evaluating candidates and compare distances, then exit on a distance threshold, not at `k_found >= k_max`). So the future A7 slice must now change two sites \u2014 the new break and the seam \u2014 rather than swapping one. This is a hidden coupling to a named future consumer: the seam is preserved in name only, and the doc's cross-slice claim (line 112) that it \"remains intact\" overstates it. The design should acknowledge that A7 must replace the break as well, or define the seam at a level (e.g., the whole per-agent scan policy) that genuinely remains the single swap point.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:33"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Config surface for `S` is ambiguous and inconsistent with the implementing task",
+   "description": "Intervention 2 and the Component Interactions diagram define `S` as a `BenchConfig`/workload value (\"Add ... to the bench configuration,\" \"reads from config\"), but the walkthrough expresses it only as an ad-hoc CLI override (`--subdivision-factor 3`, lines 165-175). No authoritative config surface is specified. The implementing task file instead creates a `mid-flock-50k-s3.yaml` workload variant with `subdivision_factor: 3` embedded (T11/T12). Relatedly, \"No changes to ... Parity test infrastructure\" (line 104) sits awkwardly with the task's T11b fixture change needed for S=3 parity testing. These are not blocking, but the design should name one canonical way S enters `BenchConfig` so the gate config is reproducible.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:48-80"
+  }
+ ]
+}

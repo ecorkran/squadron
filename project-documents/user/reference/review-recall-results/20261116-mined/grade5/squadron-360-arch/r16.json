@@ -1,0 +1,89 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Generated outputs collide with initiative 320's audit-artifact exemption while claiming independence from 320",
+   "description": "The Dependencies section states 360 is \"Independent of \u2026 300, and 320 \u2014 no pipeline, judging, or agent-provider machinery is involved.\" Mechanically true, but the artifact shape couples them. `src/squadron/metrology/audit.py` defines `_AUDIT_ARTIFACT_PATTERN` as `project-documents/(?:user/(?:analysis/(?:\\d+-analysis\\..+\\.md)?)?)?|\u2026` \u2014 any *untracked* file matching `NNN-analysis.<anything>.md` under `user/analysis/` is exempted from `preflight_project(require_clean=True)` as \"the audit's own output.\" Both proposed output shapes \u2014 `{index}-analysis.overview.md` and `{index}-analysis.codebase-comprehension.md` \u2014 match that pattern exactly. Likewise `find_audit_file` globs `project-documents/user/analysis/*-analysis.*.md` and returns the max-mtime match; without a time window a fresh 360 document can be returned as \"the audit file.\" The effects are mostly benign today (a generated document is not a code change, so exemption is arguably the desired outcome), but the misattribution is unstated, untested in either initiative, and contradicts the independence claim. Slice design should either pick a naming segment 320's harness can attribute precisely, schedule the 320-side pattern tightening as an explicit coordination, or document why the conflation is acceptable.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Output Conventions contradicts Capability 1's concept output",
+   "description": "The section opens: \"Both capabilities write to the existing `project-documents/user/analysis/` directory with the existing `docType: analysis`.\" But Capability 1's Outputs place `000-concept.{project}.md` in `project-documents/user/project-guides/` with `docType: concept`, and the third output (initiative-plan candidates) has no stated location at all. The normative summary is wrong for one of three outputs and silent on another \u2014 a slice designer reading only Output Conventions would misplace the concept document.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The 950+ index \"sanction\" is self-granted against a convention this repo does not own",
+   "description": "\"Overflow into 950+ is sanctioned\" \u2014 sanctioned by whom is unstated. `file-naming-conventions.md` lives in the `ai-project-guide` submodule (per `.gitmodules`), which is not checked out in this tree, so neither the claimed 940-949 reservation nor any overflow rule can be verified from here; the only in-repo corroboration is `commands/analysis/tech-debt-audit.md`'s \"nnn starts at 940 (analysis range),\" which states no upper bound. The mechanical gate (slice 172's `sq validate docs` / `cf validate frontmatter`) validates status, docType, dates, and required fields \u2014 not index bands \u2014 so 950+ files would pass the gate while violating the prose convention, exactly the \"convention that is only written down is a suggestion\" failure shape slice 172 was built to eliminate. The arch acknowledges the band \"may need to be widened or re-cut later\" yet commits to writing 950+ documents now. Either make the overflow contingent on the guide-repo change (the same cross-repo seam DEVLOG records for `revision_number:`) or cite the convention text that permits it.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Capability 1's preconditions assume a cf-managed project it exists to serve",
+   "description": "The design goal \u2014 \"Everything written lands in `project-documents/user/` with correct docType frontmatter and index conventions, so downstream phases and `cf` introspection consume it unchanged\" \u2014 presupposes the conventions already exist in the target. But the motivating scenario is \"a codebase that was never planned in squadron\": a repo that may have no `project-documents/` tree, no CLAUDE.md convention pointers, and no frontmatter gate. Flow step 1 checks only plugin installation and graph presence; it never checks whether the target is cf-managed. The nearest prior art handled this explicitly: `metrology/audit.py` searches both `analysis/` and `project-documents/user/analysis/` because \"both are real locations and both are searched \u2014 observed in practice.\" The arch must state what happens in a bare repo \u2014 bootstrap the tree (and which conventions get installed), write to bare `analysis/`, or refuse with instruction. Unspecified, this is where the first real run fails.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#design-goals"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The initiative-plan-candidates output has no path, docType, or naming, and looks deferrable",
+   "description": "Three outputs are listed; two have full paths, docType, and frontmatter treatment. Candidates have none. There is no representation for a \"candidate\" in the fifteen-value DocType enum (`src/squadron/documents/schema.py`); writing one as `docType: initiative-plan` would put a commitment document's type on a non-commitment artifact \u2014 which the arch itself calls \"worse than none.\" Either specify the representation (e.g., candidates as a section inside the comprehension analysis document, requiring no new artifact or convention change) or cut candidates from this initiative and ship the two well-specified outputs; the concept and analysis documents carry the initiative's core value on their own.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The overview's lifecycle is undefined: regeneration, staleness, and index semantics",
+   "description": "The index-range paragraph adopts the audit series' semantics \u2014 \"each run is an independent sample rather than a revision of the last\" \u2014 for both capabilities. That fits comprehension runs; it does not fit the overview, which is a derived, revisable artifact whose required input (the initiative plan, status `in_progress` in squadron's own repo) changes constantly. Unspecified: does a refresh burn a new index (littering `user/analysis/` with stale client-facing documents, each implicitly current \u2014 the exact \"overstates progress\" liability the Status rule warns about), overwrite in place, or use revision suffixes (`-1`, `-2`, per `000-process-journal.md` and the naming convention)? Nothing marks a stale overview or records which initiative-plan commit produced it, even though the whole document's value proposition is honesty.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Repeat-run behavior for capability 1's own outputs is unspecified \u2014 including a sacred-section hazard",
+   "description": "The flow specifies graph-staleness handling but nothing about re-running the skill when its own outputs already exist. Does a second comprehension run overwrite `000-concept.{project}.md`? The project convention makes `## User-Provided Concept` sacred and \"never rewritten\" \u2014 a wholesale regeneration would destroy the first run's interview answers unless the skill diffs and preserves. The tech-debt-audit skill solved the identical problem with an explicit repeat-run / independent-run protocol; this arch has no counterpart. Note also the incoherence: the analysis output follows increment-per-run indexing, but the concept's path is fixed at index 000 \u2014 the two artifacts necessarily follow different revision models, and neither is stated.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The concept output path `000-concept.{project}.md` conflicts with the only in-repo precedent",
+   "description": "The sole concept precedent in this ecosystem is the squadron initiative plan's own frontmatter: `source: user/project-guides/001-concept.squadron.md` \u2014 base index 001, shared with its initiative plan (\"related documents share a base index\"). The arch pins `000-concept.{project}.md` as the canonical output for every project. The concept guide that would settle the question lives in the `ai-project-guide` submodule (not checked out here), so this cannot be resolved from the repo \u2014 but an architecture that pins an exact filename for its primary artifact while the only observable precedent uses a different index should verify before slice design; generating `000-concept` into a project whose conventions expect `001-concept` breaks the lineage the frontmatter gate and `cf` introspection rely on.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The external graph contract has no validation, degradation, or drift policy",
+   "description": "The contract table is asserted from the plugin's reference at v2.8.1 \u2014 the same document that describes upstream as \"actively developed,\" i.e., a drift risk. Nothing specifies: (a) behavior when `tour[]` is empty or absent in an otherwise valid graph, despite the tour being \"a strong signal for a concept's Solution Approach section\" \u2014 the design's single most load-bearing input; (b) a required-keys shape validation at read time \u2014 per the project's own no-silent-fallback principle, a drifted v2.9 graph (renamed keys, changed node-type vocabulary) must fail explicitly, not yield a confidently wrong concept; (c) Flow step 1 conflates \"plugin installed\" with \"graph exists\" \u2014 a graph-absent repo yields the instruction \"run `/understand`\" even when the actual problem is the plugin isn't installed, a misleading remediation the Non-Goals section says the skill should \"detect and instruct\" on distinctly.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "\"Must appear in the generated document's provenance\" \u2014 the carrier is undefined and the obvious one is externally owned",
+   "description": "Neither Flow step 1 nor the Resolved Design Decisions defines what \"the document's provenance\" physically is. The natural carrier \u2014 a frontmatter key \u2014 sits on contested ground: `src/squadron/documents/schema.py`'s docstring says \"Context Forge owns the frontmatter schema,\" and DEVLOG records this exact seam for `revision_number:` \u2014 \"whether CF's own frontmatter consumers tolerate an unregistered key must be confirmed before it is proposed.\" Yet the existing audit files carry an unregistered `model:` key per the tech-debt-audit skill, so the evidence on tolerance is contradictory. The arch neither schedules that confirmation nor picks an alternative (e.g., a mandated body-level provenance section). Resolve the carrier before slice design; staleness provenance is the mechanism the arch itself calls the guard against \"a confidently wrong concept doc.\"",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#resolved-design-decisions"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The read-discipline strategy presumes a greppable graph serialization",
+   "description": "\"Grep for the needed section before reading; never load the whole file into context\" only works if `knowledge-graph.json` is pretty-printed. Compact single-line JSON \u2014 the shape this repo's own sample extraction uses (`reference/repowire-probe-sample.json` is one line) \u2014 makes grep return the entire file as one \"line,\" defeating the discipline. Verify the plugin's actual serialization before relying on it; otherwise the skill needs field-targeted extraction (e.g., `jq`) rather than grep.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "\"Features become outcomes\" and \"derive, never invent\" pull against each other, and the document's own example straddles the line",
+   "description": "The example translates \"weighted review convergence with decay-based finding dismissal\" (initiative 180, status `not_started`) into \"automated review that converges without human babysitting\" \u2014 an outcome claim no input artifact asserts. Benefits are \"derived from initiative descriptions,\" including not_started ones, so the document will carry benefit claims about unbuilt work with only the Status field hedging. Slice design should pin the boundary: benefits of planned work are phrased as planned outcomes, or they move to the Roadmap field.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules"
+  }
+ ]
+}

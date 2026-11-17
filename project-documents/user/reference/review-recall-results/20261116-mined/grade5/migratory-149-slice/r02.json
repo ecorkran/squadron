@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough invokes a bench entry point and flags that do not exist",
+   "description": "All five walkthrough steps use `python scripts/bench.py --backend ... --config ... --ticks ... --parity-check ... --subdivision-factor ...`. The repository has no `scripts/bench.py` (only `scripts/148_*.py` measurement scripts), and the real harness CLI (`src/migratory/bench/cli.py`) is `python -m migratory.bench --workload <name> --backend <name>` with only `--workload`, `--backend`, `--workload-dir`, `--results-dir`, `--list-*` flags \u2014 no `--config`, `--ticks`, `--N`, `--parity-check`, or `--subdivision-factor`. Every gate (A1\u2013A5) is verified through this walkthrough, so as written it cannot be executed. Compounding this, Intervention 2 says S is added \"to the bench configuration\" but never says *where*: a new CLI flag (as the walkthrough implies), a workload YAML field (where `max_neighbors=32` already lives in `src/migratory/bench/workload.py`), or a `BenchConfig`/`GpuAgentState` field (where `cell_size` is currently derived at `quadrants_fused_state.py:150`). The walkthrough also uses `pytest` where project convention is `uv run pytest`. The doc's own note (\"draft demo script; will be refined\") softens but does not resolve this \u2014 the design should specify the flag/config surface it is adding, since that is part of the slice's deliverable.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:150-188"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Gate ablation compares two identical commands; no mechanism specified to toggle counter-gating vs. early exit",
+   "description": "Step 3 defines four ablation runs: \"Baseline (S=1, counter-gating)\", \"Early exit only (S=1, break enabled)\", \"Cell subdivision only (S=3, counter-gating)\", \"Both (S=3, break enabled)\". The first two commands are byte-for-byte identical (`--subdivision-factor 1 --ticks 200`), and S=3's \"counter-gating\" variant likewise has no distinguishing flag. The design specifies only an `S` knob; it specifies no way to disable the `break` and run the slice-145 counter-gating path for comparison. Without one, the \"baseline\" and \"early-exit only\" rows of the ablation cannot be produced as described, and A2's \"\u22655\u00d7 faster than slice 145 CUDA baseline\" loses its in-run control (it can fall back to the recorded 38 TPS from slice 145, but the walkthrough explicitly promises a reproduced baseline: \"should reproduce slice 145 ~38 TPS\"). Either add a spec'd toggle (e.g. `S=0`-style sentinel is *not* acceptable per the no-silent-placeholder rule \u2014 an explicit config flag is) or rewrite the walkthrough to compare against the recorded slice 145 numbers.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-176"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A5's primary verification method is documented as unavailable on the CUDA host",
+   "description": "A5 says register spill is \"confirmed via `nvcc --ptxas-info` or benchmark log\", and Step 4 (lines 180-182) directs the reader to look for `lmem` when `TI_PRINT_KERNEL_STATS=1 or equivalent`. Slice 148's envelope measurement (project-documents/user/notes/148-notes.envelope-measurement.md, \u00a72A) explicitly records that \"`ptxas`, `cuobjdump`, and `nvcc` are not installed on this host \u2014 only the CUDA runtime driver,\" and that slice obtained the same register/spill evidence by inspecting the Quadrants PTX cache (`~/.cache/quadrants/qdcache/...ptx`, `.local` declarations = 0) plus `qd.profiler`. The design's fallback is hedged (\"or equivalent\", `TI_PRINT_KERNEL_STATS` is a Taichi variable, unverified for Quadrants 0.7.5) \u2014 the exact anti-pattern the re-diagnosis notes for this very slice warn against (\"when debugging, get the actual error message\" / no speculative mechanisms). Since A5 is a gate, the walkthrough should name the method proven to work on this host (PTX cache inspection / `qd.profiler.print_kernel_profiler_info()`), with the nvcc path as secondary.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Plan entry's 7-neighbor benchmark target is dropped from the design",
+   "description": "The slice plan entry (project-documents/user/architecture/140-slices.simulation-scaling.md:50) states: \"the 7-neighbor operating point is a benchmark target,\" echoing the re-diagnosis notes' observation that at `max_neighbors=7` the counter-gating waste is worst and early-exit gain scales with `candidates/max_neighbors`. The design's only benchmark configuration is fixed at `max_neighbors=32` (line 128, and no gate run varies it). Either carry the `max_neighbors=7` run into the gate set (it is cheap \u2014 one more bench invocation on the same host) or state explicitly why it is deferred, so the plan entry and the design don't diverge silently.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`break` exits only the innermost per-cell loop; remaining cells in the scan block are still entered",
+   "description": "The proposed `break` is inside `for kk in range(start, end)`, so once the cap is hit, the agent still enters the remaining `drow`/`dcol` cell iterations of the 3\u00d73 (or 7\u00d77 at S=3) block \u2014 each doing a first-iteration break check. The residual cost is bounded by (2S+1)\u00b2 \u2248 48 loop entries per capped agent, which is negligible against the ~45,000 candidates removed, so this is not a defect; but the design's \"early exit\" framing implies the whole scan terminates. One sentence acknowledging the bounded per-cell re-entry cost (or hoisting the cap test to the cell-loop level if Quadrants permits a nested break) would close the gap between the stated mechanism and the implemented one.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:37-45"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Subdivision formula should reference `max_query_radius`, not per-profile `query_radius`",
+   "description": "The design states `cell_size = query_radius / S`, but the code derives `cell_size = max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER` (`quadrants_fused_state.py:150,151`) precisely so a single cell size covers *every* profile's query radius \u2014 the invariant that makes the (2S+1) cell walk sufficient. Writing the formula with the max (and noting S replaces/parameterizes `DEFAULT_CELL_SIZE_MULTIPLIER`) keeps the single-source-of-truth property and prevents a mixed-profile workload from under-covering the largest-radius profile. Also, the Component Interactions diagram's `build_spatial_hash(cell_size=cell_size)` misstates the signature \u2014 it takes `state` and reads `state.cell_size` (`quadrants_fused_kernels.py:411`); the prose immediately below (\"only the cell_size value changes\") is correct.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:53"
+  }
+ ]
+}

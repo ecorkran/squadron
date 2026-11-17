@@ -1,0 +1,26 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Function/class edge endpoints contradict the slice's own read discipline",
+   "description": "The design requires, in Section 6 detail, that \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts as an inter-layer signal.\" This is in direct tension with three statements of the read discipline: the architecture (\"function- and class-level nodes are not read\"), this slice's own \"Read discipline, unchanged\" section (line ~330, \"the excluded 687 function and class nodes remain excluded\"), and Success Criterion 9 (\"no function- or class-level node is read\"; walkthrough step 7: \"no function- or class-level node data appears in any section\"). Resolving an edge endpoint to a function's owning file requires consuming function/class node identity, which is excluded by the discipline the design claims to leave unchanged. The design never reconciles these. State explicitly whether this is derived purely from parsing edge-ID strings (not node reads) and whether such counts may appear in a section, or drop the clause \u2014 otherwise implementers get contradictory instructions on a boundary the architecture treats as a principle.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Corrections to the 361 contract\" assume 361 skill text that is neither specified nor present yet",
+   "description": "The design's stated reason for being (\"the reason this slice is not merely additive\") is two corrections premised on specific defects in 361's *generated skill*: \"The 361 skill states that `nodeIds` mixes file, function, and class nodes and instructs intersecting with `type == \"file\"`\" (line 121) and \"361's skill text collapsed that to `select(.type == \"file\")`\" (line 146). Neither claim matches the 361 slice design, which says only \"each layer's name, description, and file count, from `layers[]`\" and uses `select(.type == \"file\" or ...)` (an allow-list, not a bare `== \"file\"`). Moreover 361 is `not_started` and `commands/analysis/understand.md` does not currently exist (`commands/analysis/` holds only `tech-debt-audit.md`). The consumer's expectations of its prerequisite therefore don't match the prerequisite as designed. The underlying end-state (count layers as `nodeIds|length`; exclude `function`/`class` by name) is architecturally correct and should be kept, but it should be stated unconditionally as part of the extraction mapping, or made explicitly conditional on observing that text at implementation time \u2014 not asserted as fact about an artifact that doesn't exist and whose design says otherwise.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:121"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Design is overweight relative to the slice's assigned scope; name what to cut",
+   "description": "The slice plan assigns 362: the field-to-section extraction mapping (fields/order/fallback), the unchanged read discipline, and the `analyze-codebase-prompt.md` reuse decision (effort 3/5, risk Low). The design carries materially more: a large empirical \"Verified graph facts\" table; an extensive \"Corrections to the 361 contract\" apparatus with type-breakdown tables, cross-checks, and a dedicated risk mitigation; and a new seven-section \"Coverage and scope limits\" section that closes three 361 deferrals (`config.json` key reporting, `.understandignore` listing, `analyzedFiles` discrepancy detection). The architecture's comprehension output lists only layers, complexity hotspots, entry points, and dependency observations, and neither 363 nor 364 consumes the coverage section. Cuttable/deferrable: (a) trim the \"Verified graph facts\" table to the few numbers the decisions actually depend on \u2014 it is re-measured in walkthrough step 1 anyway; (b) defer the coverage/scope-limits section and its discrepancy handling to a later slice, since it is not assigned here and feeds no downstream slice; (c) once Finding 2 is resolved by stating the correct end-state, the correction-specific measurement tables and cross-check machinery shrink substantially.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+  }
+ ]
+}

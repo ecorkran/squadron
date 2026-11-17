@@ -1,0 +1,15 @@
+squadron-129-design terra 1
+squadron-401-tasks terra 1
+squadron-927-design terra 1
+squadron-360-arch terra 1
+squadron-197-tasks terra 1
+squadron-322-tasks terra 1
+squadron-917-tasks terra 1
+context-forge-210-slice terra 1
+context-forge-261-tasks terra 1
+context-forge-915-slice terra 1
+migratory-100-arch terra 1
+migratory-100-slice terra 1
+migratory-113-slice terra 1
+migratory-149-slice terra 1
+migratory-313-tasks terra 1

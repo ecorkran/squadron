@@ -1,0 +1,68 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2 cannot pass the existing suite unchanged",
+   "description": "Adding enum members makes existing four-metric `LanguageSnapshot` fixtures invalid. It also makes the explicit four-metric Python adapter fail the assertion in `test_python_length.py` that it declares every enum member. Update the affected fixtures and temporary adapter assertion in Task 2; retain the existing length-value assertions.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:41-46"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The Python complexity fixture contradicts the counting rules",
+   "description": "With the listed constructs, D2 counts `if`, `elif`, `and`, the comprehension\u2019s `for` and `if`, and `except`: six decisions plus the base of one, for **7**, not 6. Reconcile the fixture and expected value with the slice design before implementation.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:65"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The function-set test cannot use the specified measurements",
+   "description": "Both measurements contain distributions, not function identity rows; complexity explicitly has no `per_file` or `over_limit`. Test the function set at the shared extraction or builder boundary instead. The design\u2019s proposed downstream join by function identity also needs reconciliation with the frozen record contract. Additionally, an unparsed file still contributes to file length, so \u201cnowhere else\u201d must not exclude it from that measurement.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:109-113"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "First-occurrence-only indexing can miss real clones",
+   "description": "If distinct windows have the same hash, the first is retained; two later identical windows with that hash will each be compared only to the different first window and missed. The collision test checks false positives but not this false negative. Revise the collision strategy and test that repeated windows are detected even after a colliding distinct window.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:124-125"
+  },
+  {
+   "i": 4,
+   "severity": "FAIL",
+   "title": "Coverage path containment needs normalization",
+   "description": "The existing `repo_relative` helper performs lexical `relative_to` checks; it does not resolve `..` or symlinks. Passing it a joined path alone can admit an entry that resolves outside the repository, contrary to D4. Normalize or resolve the joined path before checking containment, and test traversal and symlink escapes.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:195-196"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Duplication\u2019s linear bound has no load test or CI gate",
+   "description": "D3 explicitly requires linear time and memory behavior and specifies a token ceiling. Add a load test under `tests/load/` covering that bound and ceiling behavior, plus an explicit CI task that gates on it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117-142"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Coverage failure tests do not cover the required signals end to end",
+   "description": "The parser tests check returned failures, and a separate generic test checks conversion to `tool_failed`; neither requires malformed or versionless reports to produce both absent metrics **and** a WARNING through the reader and measurement path. Add those assertions, and cover report-stat failure as well as tracked-file stat failure, as required by the failure-mode table.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:201-208"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Coverage failure logging conflicts with the per-language warning requirement",
+   "description": "Task 21 logs each failure, then Task 23 calls `tool_failed` for each of the two metrics; that helper also logs. A single failed read can therefore produce three warnings per language. Assign logging responsibility so failures remain visible without duplicating the design\u2019s per-language warning.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218-233"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Old-record compatibility can remain unverified",
+   "description": "Task 29 permits skipping the old-record part of walkthrough step 10 when no 400-written snapshot exists. Create a representative old-format record in a test or fixture and verify it is skipped with a warning while other records still load; this avoids depending on a developer\u2019s store contents.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:278-280"
+  }
+ ]
+}

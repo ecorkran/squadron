@@ -1,0 +1,33 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes and occur too frequently",
+   "description": "The `Commit:` entries are checkbox items rather than plain `**Commit**:` lines, and markers appear after most tasks, including documentation and fixture-only tasks. Consolidate them at a smaller number of working, tested milestones.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "TypeScript memory failures have conflicting outcomes",
+   "description": "Task 10 treats exceptions listed in `token_errors` as per-file failures but requires `MemoryError` to fail the entire duplication measurement. Task 14 includes `MemoryError` in TypeScript\u2019s `token_errors`, so a junior implementer could reasonably catch it as a per-file error and return a partial result. Remove it from that list or explicitly give whole-pass handling precedence, and test the TypeScript path.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:120-123"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Duplication tasks do not explicitly exclude blank lines",
+   "description": "D3 requires `per_file` to count duplicated **non-blank** lines. Task 10 instead says to mark every line under the windows, and the tests do not assert that blank lines within a duplicated block are excluded. Clarify the count and add that assertion to the existing duplication test.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125-126"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Repeated-token test conflicts with the non-overlap rule",
+   "description": "The test says a run of one repeated token does not count, but a sufficiently long run contains non-overlapping 100-token windows, which D3 permits as copies. Specify a run shorter than 200 tokens for the overlap-only case, or distinguish overlapping from non-overlapping occurrences in the assertion.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:134"
+  }
+ ]
+}

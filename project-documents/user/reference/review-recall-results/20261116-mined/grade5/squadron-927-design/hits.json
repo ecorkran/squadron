@@ -1,0 +1,64 @@
+{
+ "case": "squadron-927-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "D6 and Success Criterion 7 assume a stated PASS with `fallback_used=True` (verdict read, findings not parsed) can reach the PASS-to-CONCERNS cap, and prescribe rendering the \"Findings Not Parsed\" notice whenever `fallback_used` is set, in the artifact and the terminal. In `review/parsers.py` at `4748b63c`, `fallback_used` is set only in two branches: a derived verdict (computed from findings that did parse) and the mismatch branch (verdict CONCERNS or FAIL with no findings, never PASS). The premise is false, and the prescribed change would stamp \"Findings Not Parsed\" on every derived-verdict review. **VALID**: contradicts code. Needs: code (`parsers.py` lines 963-1030). Not found by the original review.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [
+     1
+    ],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": [],
+    "r12": [
+     2
+    ],
+    "r13": [
+     0
+    ],
+    "r14": [],
+    "r15": [],
+    "r16": [],
+    "r17": [],
+    "r18": [],
+    "r19": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Walkthrough step 6 says \"one run per configured profile\" but the command pins `--model sonnet`, which exercises one profile only. The correction uses each profile's default model and `--profile <profile>`. **VALID** (minor): self-contradiction. Needs: document alone. Found by the original review (F \"Walkthrough step 6 ... hardcodes `--model sonnet`\"), so a control.",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": [],
+    "r12": [],
+    "r13": [],
+    "r14": [],
+    "r15": [],
+    "r16": [],
+    "r17": [],
+    "r18": [],
+    "r19": []
+   }
+  }
+ ],
+ "note": "r07 #1 and r08 #0 touch the derived-PASS/fallback_used area but accept the premise (treat PASS-with-fallback as reachable) and raise wording/provenance problems; not counted for F1."
+}

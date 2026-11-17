@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2\u2019s unchanged-suite success condition is impossible",
+   "description": "Task 2 expands `SnapshotMetric` and narrows `PythonAdapter.metrics` to the original four metrics, then requires the full suite to pass unchanged. The existing assertion at `tests/metrology/snapshot/test_python_length.py:60` requires `adapter.metrics == set(SnapshotMetric)`, so it must fail after this change. Tasks 8, 12, 14 and 25 also legitimately expand the declared metric sets while retaining \u201cedited only for the rename\u201d expectations.\n\nThis leaves Task 2 without an achievable success condition and risks an implementer reverting the correct narrowing or making unrelated test edits. Identify this declaration assertion as an intentional update as metrics are enabled, while keeping all length values and other tests unchanged.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:42-46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Duplication ceiling tests omit isolation of other metrics",
+   "description": "Success Criterion 10 requires not only `tool_failed` with a WARNING naming the count and ceiling, but also that the language\u2019s other metrics remain unchanged (`401-slice...md:278`). Task 11 tests only the standalone duplication result, including `MemoryError`; Tasks 13 and 15 do not exercise the ceiling through an adapter.\n\nAdd an adapter-level assertion that file length, function length, complexity and the existing lint/type measurements retain their expected results when duplication exceeds the ceiling or raises `MemoryError`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138-139"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Report-stat failure lacks a freshness-path test",
+   "description": "Task 21 requires an `OSError` while stating either the report or a tracked file to become a failure naming that path, never fresh and never skipped. Task 22 tests only the tracked-file branch. The unreadable-report test in Task 20 exercises the later XML-reading branch, not a report `stat` failure during freshness checking. The slice\u2019s failure-mode table explicitly covers both cases and requires both signal and outcome to be tested.\n\nAdd a report-stat `OSError` case asserting `tool_failed`, the report path in the detail, and WARNING logging.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:221-227"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Function identity comparison has no specified observable input",
+   "description": "Task 9 requires complexity and function length to expose the same `(path, qualified name, start line)` set, but Task 8 explicitly gives complexity only a distribution, with no `per_file` or `over_limit` rows. Those identities exist on the internal `MeasuredFunction` objects, not on the emitted complexity measurement. Function-length `over_limit` rows also disappear when no limit is configured.\n\nSpecify that this assertion compares the extractor-produced `MeasuredFunction` identities against the functions used by the complexity builder, or provide another internal test seam. Otherwise a junior implementer can satisfy the written test only by comparing counts or by adding forbidden per-function complexity records.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:108-115"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers use checkboxes instead of plain marker lines",
+   "description": "Commit instructions throughout the file are written as `- [ ] Commit: ...`. The required form is a plain `**Commit**: ...` line, never a checklist item. Convert the markers while retaining their current placement after tested implementation groups.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Overall scope and dependency ordering are sound",
+   "description": "The four metrics, absence reasons, real Cobertura fixtures, rendering, documentation, compatibility warnings, determinism/read-only checks, contract freeze and walkthrough all have corresponding tasks. Implementation tasks are immediately followed by their tests, dependencies flow forward, and no circular dependency or material scope creep is apparent. The duplication ceiling is a functional failure-mode requirement in the supplied slice, not a restated NFR requiring a `tests/load/` task or CI load-test gate.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

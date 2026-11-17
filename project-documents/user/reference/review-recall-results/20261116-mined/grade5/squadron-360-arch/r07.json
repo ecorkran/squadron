@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Capability (b) delivery understates its CLI/test impact",
+   "description": "Capability (b) ships `/sq:overview` as \"a first-party command in `commands/sq/`\". That directory currently holds exactly 9 files, and `tests/cli/test_install_commands.py` pins that inventory in four places: `EXPECTED_FILES` (a 9-member set asserted with `installed == EXPECTED_FILES`), plus `len(...) == 9` in `test_install_creates_directories`, `test_target_flag_overrides_default`, and `test_get_commands_source_returns_valid_dir`, and the 9-entry `EXPECTED_COMMANDS` map. Adding `overview.md` makes it a 10th file and breaks all four. The Delivery section frames both capabilities as \"skill-level document transforms\" adding \"no machinery,\" and Dependencies cites `[100] CLI command registration` only at headline level \u2014 the document never acknowledges that (b) mutates the pinned command set and therefore requires a coordinated test change (and rides the wheel force-include of `commands/`). This isn't a blocker, but the slice's real change surface is larger than the document states.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Naming-range reservation and \"950+ sanctioned\" overflow are unverifiable and partly self-authorized",
+   "description": "The document's correctness rests on \"the naming convention reserves 940-949\" and \"Overflow into 950+ is sanctioned ... no change to `file-naming-conventions.md`.\" The authority for both claims \u2014 `file-naming-conventions.md` \u2014 lives in the `project-documents/ai-project-guide` git submodule, which is not initialized in this checkout (the directory is empty), so neither the reservation's upper bound nor any permission to exceed it can be confirmed. Only the 940 *start* is corroborated in-repo (`commands/analysis/tech-debt-audit.md`, `.claude/skills/analyze/SKILL.md`). The doc cites no convention text granting the overflow; it asserts the sanction itself. Two compounding facts: (a) `user/analysis/` already mixes review docs at indices 244/303/320/322/323/341 with the 940-942 analyses, so the \"reserved range\" is already shared rather than exclusive; (b) the DEVLOG records that this exact external file (owned by context-forge) has caused frontmatter-drift bugs before. If the convention does not actually bless 950+, generated docs would violate a range controlled by another owner \u2014 the precise failure mode the document is trying to avoid.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Derived, not authored\" principle contradicts the concept-absent degradation path",
+   "description": "Design Goals state the client document \"is derived, not authored ... not a place where new claims about the project appear,\" and Translation rules add \"Derive, never invent. Every claim traces to an input artifact.\" The field-schema table lists Purpose's source as \"Concept Overview / initiative plan.\" Yet the Inputs section declares that when the concept is absent \u2014 explicitly \"the common case ... the tested path\" \u2014 \"the skill degrades gracefully and sources purpose from the initiative plan **plus interview**.\" An interview injects content that is not in any input artifact, which is exactly the \"new claim\" the design goal forbids and which the Purpose Source column omits. The document can't simultaneously hold (b) as purely derivative and interview-driven in its primary path; it must either scope the interview to confirmation of existing artifact content or relax the \"derived, not authored\" rule for the concept-absent case.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No schema/version guard on the external knowledge graph",
+   "description": "Capability 1's preconditions check only that the plugin is installed and `knowledge-graph.json` exists; the Flow then trusts the v2.8.1 shape (`tour[]`, `layers[]`, type-prefixed node `id`s, `meta.json` fields). There is no validation that the graph actually conforms to the expected schema or version, and no defined behavior for a malformed, truncated, or differently-versioned graph. Given the project's \"fail explicitly\" and \"never silent fallback\" principles, a present-but-foreign-schema graph should fail loudly rather than be read on faith. The document pins \"v2.8.1\" descriptively but specifies no compatibility check or drift handling for an upstream-maintained contract that can change under squadron.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`analysis` docType/range reused for a non-analysis artifact",
+   "description": "The document argues capability (b) must not route through the analysis dispatcher because \"nothing about it audits a codebase,\" yet files its output under `docType: analysis` in the codebase-analysis range purely to avoid a gate change. The rationale is acknowledged and pragmatic, but the artifact's stored type/range no longer matches its semantics; the document should state plainly that `analysis` is being used as a convenience bucket rather than its \"codebase analysis\" meaning, so future readers of `cf list` aren't misled.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Audience \"emphasis parameter\" present in one section, deferred in another",
+   "description": "Translation rules state \"Emphasis is a generation parameter; the factual content is identical\" (present tense, as if part of the shipped design), while Resolved Design Decisions says \"An emphasis parameter is added only if real use demonstrates the need\" (deferred). The two sections disagree on whether the parameter exists in this initiative; reconcile the wording so slice design doesn't build a deferred knob.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#resolved-design-decisions"
+  }
+ ]
+}

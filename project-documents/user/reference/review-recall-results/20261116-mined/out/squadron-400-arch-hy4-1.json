@@ -1,0 +1,350 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The \"one command, no project edits\" adoption baseline is impossible against the reused 320 harness",
+      "description": "Description: Design Goals promise \"An existing project gets a full baseline from one command, without editing the project's config files or code\", and Envisioned State says \"Taking a snapshot doesn't modify the measured repository\". The reused pieces contradict both. `derive_project_id` (`src/squadron/metrology/identity.py`) requires a git remote or a recorded `metrology.project_id`; its own error text tells the operator to run `sq config set metrology.project_id <id> --project`, which writes `.squadron.toml` into the measured repo. The audit baseline's variance path is `preflight_project(..., require_clean=True)` in `src/squadron/metrology/audit.py`, which refuses any dirty worktree, and the audit skill writes `analysis/nnn-analysis.{project}.md` into the measured repo (the `_AUDIT_ARTIFACT_PATTERN` exemption exists precisely because it does). A brownfield repo with no remote, uncommitted files, or an in-progress adoption (CF has just written planning docs) cannot be baselined by one command as described. The doc never reconciles the goal with these preconditions.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Measured at any commit\" has no mechanism and conflicts with \"doesn't modify the measured repository\"",
+      "description": "Description: \"A project can be measured at any commit\" combined with \"Taking a snapshot doesn't modify the measured repository\" requires a detached worktree, temp clone, or `git archive` extraction \u2014 none is named. This project already has a concurrency hazard there (slice 929, \"serialize concurrent git worktree add on one checkout\"), so a snapshot action that creates worktrees needs the same serialization and a cleanup/failure policy. The problem compounds with \"Limits come from the project\", \"The project's own configured rules\", and \"Exclusions come from project config\": which config version governs a historical commit \u2014 the tree at that commit or the current working tree \u2014 is unspecified. Coverage \"where tests run\" additionally needs that commit's environment. These are load-bearing mechanics, not slice details.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The baseline's audit half cannot run from the CF handoff agent session",
+      "description": "Description: \"CF offers this at handoff through 440's capability probe\" and Technical Considerations (\"Baseline cost... three audit runs plus the baseline run, all LLM calls\") assume the audit harness can execute where the handoff happens. `323-slice.tech-debt-audit-baseline-harness.md` records a hard prerequisite: \"audits cannot be driven from inside a Claude Code session. The SDK profile spawns its own CLI process, and that process refuses to launch inside another (`Claude Code cannot be launched inside another Claude Code session`)\", and `320-reference...md` records that 324's live `audit delta` run was unexecutable for the same reason. `capability-probe-contract.md` states \"There is no plain CLI path; the analysis skills run inside an agent.\" So the agent that reads the probe is exactly the context in which the baseline's audit half fails. The architecture says nothing about a non-SDK `metrology.audit_profile`, a plain-terminal boundary, or the ~3600s timeout plus 60s inter-run cooldown of a 3-run variance campaign in an interactive handoff.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The agreed capability-probe contract has no field to \"offer\" a baseline",
+      "description": "Description: `project-documents/user/reference/capability-probe-contract.md` defines `sq probe --json` with `\"baseline\": {\"available\": false}` \u2014 a bool meaning \"400's adoption baseline can run\", a read-only capability flag. Its versioning rules (\"Renaming or removing a field, changing a field's type or meaning... bumps `probe_version`\"), its \"Not in the probe\" section, and the fact that CF \"tests field names\" mean 400 cannot \"offer\" a baseline *through the probe* without a contract change agreed with CF. The architecture also never names the baseline command, its output shape, or its exit codes even though a cross-repo consumer is claimed. Related Work's \"offered at CF's handoff through 440's capability probe\" conflates the probe with CF's handoff flow \u2014 and that flow depends on 360's slice 366 per the contract's shipping order, which is nowhere in 400's dependencies.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Related Work"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependencies omit 140 and 340, and the planned pipeline action inverts 320's dependency direction",
+      "description": "Description: Frontmatter is `dependencies: [100, 320]` and Related Work bounds 100 to \"CLI command registration\". But \"Capturing at slice boundaries automatically, through a pipeline action at fork and merge\" requires 140's `Action` protocol and `ActionType` registry (`src/squadron/pipeline/actions/__init__.py`, `protocol.py`) plus the `branch` action from 196/197 (`src/squadron/pipeline/actions/branch.py`, `src/squadron/data/pipelines/P6.yaml`); \"git topology, cf slice records\" attribution is the same 140/196 machinery. The baseline's audit harness resolves the skill via `squadron.skills.resolver._resolve_bundled(\"analysis\")`, a 340 pack \u2014 323 declares `dependencies: [320, 340]` explicitly, 400 omits 340. More seriously, 320-arch (\"Pre-emption data flows down as configuration, never up at runtime\") forbids 140's dispatch path depending upward on the metrology store because it \"adds a new runtime failure mode to every dispatch when the store is absent\"; a snapshot-*writing* pipeline action is that upward dependency. The doc also ignores the existing POST_ACTION hook extension point (slices 171/173, `src/squadron/events/dispatcher.py` with `events.timeout_seconds` and Fail attribution), which already implements \"adds work and a failure mode to every pipeline run\" with a defined isolation policy, instead proposing a bespoke \"never fail the step but record absent\" rule for a new action.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"One category vocabulary\" collides with the existing arch-review vocabulary, user template overrides, and the 323 sync test",
+      "description": "Description: `src/squadron/data/templates/arch.yaml` already mandates a closed category tag with a different set \u2014 `consistency, completeness, feasibility, technology, abstraction, extension-points, dependencies, antipattern, other` \u2014 on its own line before `location:`. The doc nonetheless says \"One category vocabulary\", \"Review templates emit categories from the same closed vocabulary the audit uses\" (plural templates), and \"the vocabulary then has a third copy (enum, audit skill, review templates), and 323's sync test extends to cover it\", while the Non-Goal forbids changing the audit skill. `tests/metrology/test_audit_skill_sync.py` locates backticked kebab-case tokens between \"### Category vocabulary\" and \"## Phase 3\" in `commands/analysis/tech-debt-audit.md`; it cannot read YAML templates without a second parser. Worse, `load_all_templates` (`src/squadron/review/templates/__init__.py`) lets `~/.config/squadron/templates/*.yaml` override built-ins by name, so a user override can drop the mandated vocabulary while a built-in-only sync test still passes. The doc doesn't scope which of the five-plus templates change, or how write-time categorization is guaranteed against overrides.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Recategorizing review output invalidates 320's content-addressed human-sample references",
+      "description": "Description: `identity.py:_canonical_projection` hashes persisted review frontmatter findings including `\"category\": str(item.get(\"category\", \"\"))`; `derive_result_ref` stores that hash in `JudgeResultRef`, which `SampleVerdict.result_ref` (320) binds every blind human verdict to, and which 321's agreement report and 322's residual offers join on. Scope says \"the category contract for review output\" and Technical Considerations say \"Review templates\" (plural) \u2014 if that includes judge/design templates, changing free-form categories (`design`, `error-handling`, `uncategorized`, seen in `project-documents/user/analysis/303-review.code.*.md`) to `AuditCategory` values changes the hash of any re-persisted result and silently detaches all accumulated calibration evidence. 320-arch flagged exactly this class of \"template edited under an unchanged name blends incompatible data\". 400 never bounds the change to `code` reviews only, nor acknowledges the downstream data.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review ingest has no source set, no join keys, and would swallow judge results",
+      "description": "Description: \"An ingest step reads review files into the store as normalized finding records tied to project, commit and slice where known.\" In reality: `sq review code` without a slice number is `SaveOutcome.NOT_PERSISTABLE` (`src/squadron/cli/commands/review.py`) and writes no artifact; PR reviews land in `~/.config/squadron/reviews/<host>/<owner>/<repo>/` via `resolve_reviews_dir` (380); `project-documents/user/analysis/` holds review copies with disagreeing verdict frontmatter (320-reference \"Known documentation debt\"). Frontmatter `project` is a CF project name, `slice` is a display name not an index, and `reviewedSha` is optional \u2014 none is 320's `ProjectId`. `discover_judge_results` (`src/squadron/metrology/discovery.py`) globs the same `*-review.*` directory, so an unfiltered ingest counts judge findings as code-review findings. Finally, `AuditRun` (`src/squadron/metrology/models.py`) has `project_id` and `commit_sha` but **no slice field**, so \"per-slice rollup across all three sources\" has no join key until \"The mapping source (git topology, cf slice records, or both) is a slice decision\" resolves it \u2014 the load-bearing decision of the rollup is deferred.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Keys on project and commit SHA\" is not a key, and the comparability identity is wider than the stated key",
+      "description": "Description: \"A snapshot measures a commit. The record keys on project and commit SHA\" and \"one snapshot record per commit\" sit beside \"A snapshot identifies the project, commit, language, tool versions, rule set and exclusions it was taken under\" and \"reports refuse to diff across a tool change without flagging it\". Multi-language repos are explicitly in scope (323's variance set includes `migratory`: Python + GPU kernels), the doc allows \"either or both\" rule sets, tool versions change, and a dirty tree may be \"recorded with an explicit dirty marker\" \u2014 all produce several mutually incomparable snapshots at one (project, commit) pair. `MetrologyStore` has no natural-key lookup or upsert: `_record_path` is id-based and `write_*` mint uuid ids (only `write_graduation`/`write_noise_floor` accept an explicit id to overwrite). Whether a second snapshot at one commit replaces, appends, or is deduped \u2014 and whether the pre-upgrade measurement survives to be flagged \u2014 is unstated, so ownership of the mutable \"current snapshot for a commit\" is unclear. A mixed-language repo also needs a per-language metric collection, not the singular \"language\" identity field.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-slice and over-time \"noise floor\" display has no applicable floor record",
+      "description": "Description: \"LLM-sourced numbers are shown against their noise floor\" for per-slice, per-project and over-time reports, and the adoption baseline \"captures a static snapshot plus an audit baseline with its noise floor\". `AuditNoiseFloor` (`src/squadron/metrology/models.py`) is keyed by `(project_id, commit_sha, audit_prompt_hash)` with `n_runs`; 323 Decision 6 measures it per project at one pinned commit, Decision 8 re-measures only when prompt or model changes, and `BaselineReport` marks groups \"no floor measured\" rather than borrowing. 324's `FreshnessResult` checks pre-emption fragments, not floors. An audit taken at a slice's merge commit, or after `metrology.audit_model` changes, therefore has no floor to display; the doc never says whether the report shows \"no floor measured\" or reuses the adoption floor. 323's own walkthrough measured spreads of 35\u2013111% of the mean and concluded totals are not gate-worthy \u2014 silently reusing one baseline floor over time would be precisely the overclaiming the design forbids.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Naming a rule set is not rule-set identity \u2014 the design repeats 320's known versioning failure",
+      "description": "Description: \"A snapshot may record either or both, but it must name the rule set each count came from. A count with no named rule set can't be compared to anything.\" 320-arch's \"Comparability across template and model versions\" says the opposite for content: a template edited under an unchanged name \"blends incompatible data \u2014 the exact failure this consideration forbids\"; 322 and 323 solved it with `template_content_hash` (`identity.py`) and `audit_prompt_hash` (`audit.py`). Ruff/pyright counts depend on the *measured repo's* `[tool.ruff.lint] select` and `[tool.pyright] typeCheckingMode` (squadron: `[\"E\",\"F\",\"W\",\"I\",\"UP\",\"BLE\",\"ASYNC\",\"B\"]`, `strict`). A rule-set edit under the name \"project\" silently changes the count, and \"Tool identity is part of the measurement\" covers tool+version but not rule-set content. A content hash of the effective config per metric is needed; the doc supplies only a name.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No failure-mode enumeration for the deterministic adapters, where a nonzero exit is the normal case",
+      "description": "Description: \"Absent is not zero\" lists reasons (no adapter, tool not installed, tests failed, coverage not configured) but specifies no detection or observability policy for the adapters themselves. `ruff check` exits 1 when it finds violations and `pyright` exits nonzero on type errors \u2014 the exact signals the \"lint and type-error counts\" must be derived from \u2014 so an adapter using `check=True` records \"absent (tool failed)\" for precisely the codebases with the most findings, biasing the rollup toward clean. Missing also: tool hang/timeout, version-schema drift in JSON output, coverage subprocess hang, one language adapter failing while others succeed, and store write failure. `.claude/rules/review-code.md`'s Failure-Mode Enumeration rule and AGENTS.md's exception-handling rule require observable (WARNING+) signals and a test per mode; only the pipeline-attached snapshot gets \"logged and recorded as absent\", and even there no timeout or `logger.exception` policy is named.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The keystone cannot prove the initiative's headline metric, and no measurement tools ship at runtime",
+      "description": "Description: \"Limits come from the project... It does not count violations against a squadron default\" plus \"When none are declared, the snapshot reports length distributions\" means the keystone \"proven on Python against squadron itself\" produces *no violation count*: squadron states ~300-line/~50-line limits only in prose (AGENTS.md Code Structure, `.claude/rules/review-code.md`), and `src/squadron/config/keys.py` has no file/function length keys \u2014 the doc's own Current State says \"Stated in prose... No tool reads or checks them.\" Initiative plan entry 14 assigns \"file and function length against the project's limits\"; the architecture quietly drops that capability for the reference project. Compounding it, \"the measurement adapters that produce snapshots\" hides the hard parts: no tool is named for duplication or complexity, `pyproject.toml` has no duplication/complexity analyzer in `[project] dependencies`, and `ruff`/`pyright` exist only in `[project.optional-dependencies] dev` / `[dependency-groups] dev` \u2014 an installed wheel has no deterministic tools at all. Function-length measurement requires per-language parsing (an AST/tree-sitter dependency per adapter). `set_config` (`config/manager.py:_coerce_value`) also supports only bool/int/float/str, so the structured limits and exclusion sets the design requires cannot be set via `sq config set`.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Anticipated Slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The flat-file store is sized for a handful of samples, not one record per commit plus three-source joins",
+      "description": "Description: \"Extend the 320 store, don't fork it... No new store, no schema migration\" is fixed as both a principle and a Non-Goal. `MetrologyStore._iter_records()` (`src/squadron/metrology/store.py`) globs `*.json` and Pydantic-validates every record on every `list_*` call; `321-slice.agreement-dispersion-reporting.md` (line 134-136) declined SQLite only because the workload is \"a handful of human spot-checks per artifact level\", recording a measured trip-wire: adopt stdlib `sqlite3` when a report's full scan becomes the latency/memory bottleneck. 400 adds one record per commit per project, a normalized record type for review findings (granularity unspecified \u2014 per finding would be far larger), and over-time reports that must scan snapshots, audit runs (findings inline) and review findings together. No capacity estimate or trip-wire acknowledgment appears; a later slice cannot take 321's own escape hatch without overturning an architectural Non-Goal.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"No composite score anywhere\" contradicts the 420 consumer the architecture exists to serve",
+      "description": "Description: \"No composite quality score. Not as output, and not as an internal ranking signal\" and \"No weighted composite is computed anywhere, including as an intermediate value\" are unscoped. Motivation says \"Initiative 420 (Model Benchmark) needs objective, comparable scores for implementation output\"; plan entry 15's Scoring explicitly composes \"objective signals (tests, lint and type checks) first, then the code review findings normalized by 400\", alongside cost/turns/wall time, plus a Bradley-Terry ranking, and declares 400 a dependency for \"normalized review findings and static metrics for scoring\". 420 will build exactly the composite/ranking signal 400 forbids \"anywhere\". The boundary needs stating: 400 emits only breakdowns, 420 may compose them; \"Measure, never gate\" likewise needs to say whether a 420 replay score is a gate.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Non-Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for the two named consumers: mechanisms nothing uses yet",
+      "description": "Description: The named consumers need only 420 \u2192 snapshots + normalized review findings, and 440 \u2192 adoption baseline. Beyond the plan-assigned scope, the architecture adds: a \"fixed reference rule set\" and \"A snapshot may record either or both\" for cross-project comparability that no consumer requests and that the doc immediately hedges (\"reports refuse to diff across a tool change\", cross-language comparisons \"labelled as such\"); automatic fork/merge pipeline capture with its own bespoke failure policy (\"adds work and a failure mode to every pipeline run\") while \"On demand from the CLI is the baseline\" and 320 forbids the upward runtime dependency; a dirty-marker mode alongside refusal, with the choice deferred; and a third copy of the category vocabulary with an extended sync test. Name what to cut from the architecture: the fixed reference rule set and dual rule-set storage (plan entry 14 says counts come \"under the full rule set\", i.e. the project's), and the automatic fork/merge pipeline action (keep on-demand CLI capture; if boundary capture is needed later, use the existing POST_ACTION hooks). Those are the heaviest options where a lighter one meets the requirement; the snapshot record, Python adapter, review normalization, rollup, and baseline are plan-assigned and should stay.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The \"one command, no project edits\" adoption baseline is impossible against the reused 320 harness",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Measured at any commit\" has no mechanism and conflicts with \"doesn't modify the measured repository\"",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The baseline's audit half cannot run from the CF handoff agent session",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The agreed capability-probe contract has no field to \"offer\" a baseline",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Related Work",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies omit 140 and 340, and the planned pipeline action inverts 320's dependency direction",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "\"One category vocabulary\" collides with the existing arch-review vocabulary, user template overrides, and the 323 sync test",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Recategorizing review output invalidates 320's content-addressed human-sample references",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Review ingest has no source set, no join keys, and would swallow judge results",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Keys on project and commit SHA\" is not a key, and the comparability identity is wider than the stated key",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Per-slice and over-time \"noise floor\" display has no applicable floor record",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Naming a rule set is not rule-set identity \u2014 the design repeats 320's known versioning failure",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No failure-mode enumeration for the deterministic adapters, where a nonzero exit is the normal case",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The keystone cannot prove the initiative's headline metric, and no measurement tools ship at runtime",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Anticipated Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The flat-file store is sized for a handful of samples, not one record per commit plus three-source joins",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"No composite score anywhere\" contradicts the 420 consumer the architecture exists to serve",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Non-Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Overweight for the two named consumers: mechanisms nothing uses yet",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-17T08:37:26.306031",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 336317,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 1151937,
+  "cached_tokens": 932288,
+  "cache_write_tokens": null,
+  "completion_tokens": 82107,
+  "reasoning_tokens": 76138,
+  "duration_seconds": 819.083044916857,
+  "cost_usd": 0.213805431,
+  "cost_basis": "alias_pricing"
+}

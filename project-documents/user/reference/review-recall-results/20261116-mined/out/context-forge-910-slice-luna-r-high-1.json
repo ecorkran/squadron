@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Preserve the narrower task-status type",
+      "description": "`TaskFileResult.inferredStatus` is described as having only three possible values; task files cannot be `deprecated`. Retyping it to the full `NormalizedStatus` union admits a state the field cannot represent, weakening its compile-time contract. The literal sweep does not require that widening: derive a three-value task-status type from `STATUS` (for example, excluding `STATUS.Deprecated`) so the values remain centralized while the field stays precise.",
+      "file_ref": null,
+      "category": "type-safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#TD-1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Trim verification and procedural detail for a mechanical refactor",
+      "description": "This is a no-behavior-change sweep, but the design repeats file-by-file work and test instructions across its scope, migration plan, success criteria, and verification walkthrough; the task breakdown also specifies those steps in detail. Cut the duplicated procedural instructions, the temporary typo-and-revert exercise, and the live CLI spot-check. Keep the literal-count check, build, and regression test suite as verification appropriate to the change.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Migration-Plan"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "type-safety",
+      "raw_category": null,
+      "summary": "Preserve the narrower task-status type",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#TD-1",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Trim verification and procedural detail for a mechanical refactor",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Migration-Plan",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-17T12:37:55.553299",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 3464,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 55564,
+  "cached_tokens": 24068,
+  "cache_write_tokens": null,
+  "completion_tokens": 3474,
+  "reasoning_tokens": 2937,
+  "duration_seconds": 43.246834999881685,
+  "cost_usd": 0.0051272800000000006,
+  "cost_basis": "alias_pricing"
+}

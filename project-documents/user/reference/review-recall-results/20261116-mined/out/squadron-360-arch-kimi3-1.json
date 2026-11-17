@@ -1,0 +1,188 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The concept and interview outputs do not obey the Output Conventions",
+      "description": "Output Conventions says \u201cBoth capabilities write to \u2026 `user/analysis/` \u2026 with `docType: analysis`,\u201d but Capability 1\u2019s Outputs also places `000-concept.{project}.md` in `user/project-guides/` with `docType: concept`. The delivery rationale therefore covers only the comprehension analysis and overview, not the initiative\u2019s most consequential downstream artifact. Resolve the scope statement and specify the concept\u2019s required metadata (`project`, dates, valid `status`) and its relationship to the existing `001-initiative-plan.squadron.md` source reference (`user/project-guides/001-concept.squadron.md`).\n\nThe same boundary omits interview material for Capability 2. Inputs says that, when the concept is absent, purpose comes from \u201cthe initiative plan plus interview,\u201d yet `/sq:overview` has no specified interview flow, question boundary, or destination for the answers. It cannot inherit Capability 1\u2019s concept interview by assumption: the optional concept is specifically allowed to be absent. Define where `/sq:overview` obtains Purpose/Audience in that case and how its interview answers remain traceable to an input artifact rather than becoming untraceable authored claims.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:241-246"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sharing the analysis directory can corrupt tech-debt audit measurements",
+      "description": "The new `{index}-analysis.codebase-comprehension.md` and `{index}-analysis.overview.md` match the existing metrology harness\u2019s unfiltered `project-documents/user/analysis/*-analysis.*.md` glob. `src/squadron/metrology/audit.py:259-283` selects the newest matching file by mtime, not by `topic: tech-debt-audit`. If an overview or comprehension run writes after an audit starts, that newer file can be selected; it lacks the audit findings block, so the audit is discarded as `BLOCK_MISSING`. More seriously, a generated document written during a later audit can make the harness parse that document rather than the actual fresh audit.\n\nThis directly affects the claimed \u201cno change to consumers\u201d integration. The architecture must either reserve a consumer-invisible location/name for these artifacts or include a bounded metrology change that filters by audit topic and rejects multiple fresh candidates explicitly. The 900-band numbering alone does not address this glob collision.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:241-258"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Index allocation and output update semantics are unspecified",
+      "description": "\u201cIncrementing per run\u201d and \u201ctake remaining slots in the 900 band as needed\u201d leave several incompatible implementations: increment independently per directory, per topic, or globally across analysis documents; inspect only `940-949`, or scan all 900-band directories before choosing an index. Those choices produce different results with existing review files such as `940`\u2013`949` in other bands and with future parallel runs. No allocation authority, collision check, or behavior when two generators choose the same index is defined.\n\nUpdate ownership is also unclear. An overview will need regeneration as initiative statuses change, but the document simultaneously treats analysis runs as independent samples, permits `{index}-analysis.overview.{topic}.md`, and never says whether the default overview is replaced, versioned, or accumulated. Existing squadron review persistence explicitly archives before overwriting; these document generators have no corresponding preservation rule. Define one deterministic allocation rule and whether reruns revise an artifact or create a new sample.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:248-258"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The client-overview source contract is incomplete for actual squadron plans",
+      "description": "The required input is hard-coded as `001-initiative-plan.{project}.md`, while the concept is optional and all fields have prescribed sources. The real plan has `status: in_progress` while individual completed initiatives also retain that status, and non-started initiatives already contain checked items. The rules \u201cStatus is honest\u201d and \u201cno phase numbers or slice indices\u201d do not define how to reconcile plan-level and initiative-level states, checked work, and dates without inventing progress.\n\nLikewise, Roadmap requires \u201cdependency-driven ordering,\u201d but this document does not say whether to parse `Dependencies:` embedded in numbered initiative prose, the separate Cross-Initiative Dependencies section, or both. Those representations can drift. Scope requires \u201cnon-goals,\u201d and Risks requires \u201cnotes,\u201d but neither is a required section of the stated input. The skill needs an explicit source precedence and missing-source behavior for each such field; \u201cflag the gap\u201d alone does not make Status/Roadmap deterministic enough to implement and test.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-225"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The external graph contract has no compatibility or validation boundary",
+      "description": "The design pins behavior to understand-anything v2.8.1 and requires several exact structures, including `tour[]`, type-prefixed node IDs, and the listed `meta.json` fields, but specifies no version check, schema check, or behavior when an upstream release changes them. Preconditions covers only plugin absence and missing graph. Missing `meta.json`, absent `tour[]`, malformed JSON, missing `nodeIds`, and unsupported versions have no defined failure or degradation behavior, despite the plugin being external and unpinned by squadron.\n\nThe read discipline is also incomplete for the stated purpose: Initial Technical Direction is to come from \u201clanguages, frameworks, dependencies,\u201d yet Flow step 3 extracts only `project`, layers, tour, and file-level nodes\u2019 summary/path/complexity. It does not identify which node types or edges supply languages/frameworks/dependencies, nor how `.understandignore` coverage limitations constrain those claims. Require a captured v2.8.1 fixture, explicit structural validation with actionable errors, and a defined reduced-output mode for optional sections rather than allowing empty parses to become confident planning prose.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:79-110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Audience handling is specified as both present and deferred",
+      "description": "Translation rules states \u201cAudience variants share one document\u201d and \u201cEmphasis is a generation parameter.\u201d Resolved Design Decisions instead selects \u201cone neutral document, not per-audience variants\u201d and says an emphasis parameter is added only if real use demonstrates need. The former puts an argument and selectable behavior into the current interface; the latter excludes it. Remove the generation-parameter statement from the current design or explicitly mark it as a future extension, including whether `/sq:overview` accepts any audience argument now.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:234-235"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Installation and failure checks need stack-specific preconditions and transactional behavior",
+      "description": "Preconditions says to verify that the plugin is installed, but Non-Goals rules out squadron driving Claude Code\u2019s plugin system. No reliable detection mechanism is named; graph existence is separately checkable, but \u201cplugin installed\u201d cannot be inferred from the graph. Define what evidence is checked, or reduce the precondition to the artifacts actually consumed.\n\nHygiene also needs the target repository root, not merely `$PROJECT_ROOT` in an abstract skill: analysis skills support targets, and editing the wrong checkout\u2019s `.gitignore` would be a side effect outside the analyzed project. Finally, the flow writes `.gitignore`, then interviews, then drafts several artifacts, with no behavior for declined interview, malformed input discovered late, or partial write failure. A subsequent run should not mistake an empty placeholder concept for an approved source. Make the graph/`.gitignore` target explicit and define validation-before-write plus partial-output handling; no rollback machinery is needed, but silently leaving apparently valid partial planning documents is not safe.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-143"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The concept and interview outputs do not obey the Output Conventions",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:241-246",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Sharing the analysis directory can corrupt tech-debt audit measurements",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:241-258",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Index allocation and output update semantics are unspecified",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:248-258",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The client-overview source contract is incomplete for actual squadron plans",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-225",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The external graph contract has no compatibility or validation boundary",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:79-110",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Audience handling is specified as both present and deferred",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:234-235",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Installation and failure checks need stack-specific preconditions and transactional behavior",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-143",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T12:49:40.549291",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 22430,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "moonshotai/kimi-k3.1-pro",
+  "answering_models": [
+    "moonshotai/kimi-k3.1-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 772130,
+  "cached_tokens": 650240,
+  "cache_write_tokens": null,
+  "completion_tokens": 8148,
+  "reasoning_tokens": 4263,
+  "duration_seconds": 77.2399120843038,
+  "cost_usd": 0.45530800000000005,
+  "cost_basis": "alias_pricing"
+}

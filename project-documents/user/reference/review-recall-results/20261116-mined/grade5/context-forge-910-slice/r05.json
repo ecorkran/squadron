@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator's three `'complete'` literals are `SliceStatus.status` values the design itself excludes from the sweep",
+   "description": "The site inventory (line 36), component table (line 75), and Migration Plan step 4 (line 90) all instruct sweeping \"3 bare-string comparisons\" in `WorkflowNavigator.ts` to `STATUS.Complete`. In the source those three literals are `WorkflowNavigator.ts:312` (`slice.status === 'complete'`), `:345` (`slice.status === 'complete'`), and `:588` (`return { ...base, status: 'complete', taskProgress }`) \u2014 all of type `SliceStatus['status']`, the lifecycle-position union. That is precisely the union that TD-3 (lines 104\u2013106) and the Success Criteria (line 136, \"SliceStatus.status remain untouched \u2026 not accidentally swept\") say must be left alone, and the Verification Walkthrough's \"After\" tally (line 151) still counts these as remaining `SliceStatus.status` sites. WorkflowNavigator has no bare `NormalizedStatus` literals left \u2014 241 already converted its three real `NormalizedStatus` comparisons to `STATUS.*` (`:319`, `:577`, `:695`). The design therefore gives contradictory instructions: following the sweep table/task 9 conflates the two status vocabularies TD-3 deliberately separates; following TD-3 means WorkflowNavigator contributes 0 sites and the \"3 sites / 6 files / ~65 sites\" inventory (and task 9) is wrong. Resolve before implementation \u2014 most cleanly by dropping WorkflowNavigator from the sweep and correcting the counts, or by explicitly revising TD-3 and line 136.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The claim that \"zero `.test.ts` files assert against these literals\" is factually false",
+   "description": "The design states that \"grep confirms zero `.test.ts` files assert against these literals,\" using this to justify excluding tests from scope and to justify relying on them as the regression guard. An actual grep of `packages/core` finds many, e.g. `tests/introspection/ArtifactIntrospector.test.ts:79` (`expect(result.data.status).toBe('in-progress')`), `ConsistencyChecker.test.ts:313/369/545/625` (`expect(...).toEqual({ key: 'status', value: 'in-progress' })`, `expect(...).toContain('not-started')`), and `ConsistencyChecker.reviewGate.test.ts:48` / `reviewGateWidened.test.ts:49` (`status: 'complete'`). The conclusion \"no test changes are needed\" still holds \u2014 swept values are byte-identical (`STATUS.X === 'x'`), tests live under `packages/core/tests` (outside the swept `src`), and retyping `inferredStatus` to the `NormalizedStatus` superset is backward-compatible \u2014 so scope is unaffected. But the stated premise is wrong; the design should correct it and state the real assumption explicitly (tests stay green because values are unchanged) rather than resting a scope decision on an incorrect \"grep confirms\" claim.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  }
+ ]
+}

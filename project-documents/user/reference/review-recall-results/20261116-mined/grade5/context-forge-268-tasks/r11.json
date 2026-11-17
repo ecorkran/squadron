@@ -1,0 +1,12 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Golden-capture success check is self-contradictory as written",
+   "description": "Task 2.2 says to \"Remove the write step before committing\" and then \"Run the test twice. **Success:** both runs pass, and `git status` shows the golden files unchanged after the second run.\" Once the write step is removed, the test only compares against goldens; it can no longer capture or rewrite them, so \"the golden files unchanged after the second run\" is a static condition rather than evidence of determinism, and the text does not tell the executor at which point to remove the write step relative to the two runs. A junior could either capture, remove the step, then run twice (the intended reading), or try to run twice with the write step still present and destroy the just-captured goldens. Reorder the steps explicitly: capture once with the write step \u2192 remove the write step \u2192 run twice and check `git status`. The same pattern appears in 5.1 (\"confirm the snapshot assertion fails, then revert\"), where the expected-failure outcome should also be a named success condition rather than an unstated one.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:75-77"
+  }
+ ]
+}

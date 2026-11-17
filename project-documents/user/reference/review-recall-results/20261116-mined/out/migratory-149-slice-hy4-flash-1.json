@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "NFR restated; design stays within assigned scope and boundaries",
+      "description": "The Success Criteria explicitly restate the parent architecture's Tier 2 NFR (\"60 TPS at N=50k on CUDA\") and gate at \u2265100 TPS as documented headroom before slice 146. The two interventions are exactly those assigned to slice 149 in plan 140, so there is no scope creep; the design is driven by slice 148's Phase 2 profiling (architecture's \"profile before/after\" and \"algorithmic wins before constant-factor wins\" principles) and preserves the `quadrants-fused` external API, the `TickResult` contract, and the CPU backends.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough asks for baseline/isolation runs the branch cannot produce",
+      "description": "Step 3 lists four gate runs, two of which require counter-gating: \"Baseline (S=1, counter-gating \u2014 should reproduce slice 145 ~38 TPS)\" and \"Cell subdivision only (S=3, counter-gating)\". But Intervention 1 makes the `break` permanent (line 25, \"Replace counter-gating\"), with no flag to disable it. On this branch every S=1 and S=3 run has early exit enabled, so the 38 TPS counter-gating baseline and the \"subdivision only\" isolation point cannot be reproduced as written \u2014 yet A2 uses that baseline as its \u22655\u00d7 denominator and Step 3 says \"force_total \u2265 5\u00d7 reduction vs baseline.\" The implementing task file resolves this by capturing the baseline from `main` (T1) and forbidding re-running counter-gating on the branch (T12). The walkthrough should be corrected to state that the baseline is a recorded value from `main` and that only the combined (S=3 + break) configuration is measurable here; otherwise the gate as documented cannot be executed.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A7 seam is claimed \"preserved\" but is functionally bypassed by the new break",
+      "description": "Option A states the removed seam \"becomes unreachable when the break fires, but remains the documented swap point for distance-ranked selection (still needed for slice design A7).\" A count-based `break` at the top of the `for kk` loop is precisely the opposite of what a distance-ranked k-nearest kernel needs (it must keep evaluating candidates and compare distances, then exit on a distance threshold, not at `k_found >= k_max`). So the future A7 slice must now change two sites \u2014 the new break and the seam \u2014 rather than swapping one. This is a hidden coupling to a named future consumer: the seam is preserved in name only, and the doc's cross-slice claim (line 112) that it \"remains intact\" overstates it. The design should acknowledge that A7 must replace the break as well, or define the seam at a level (e.g., the whole per-agent scan policy) that genuinely remains the single swap point.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Config surface for `S` is ambiguous and inconsistent with the implementing task",
+      "description": "Intervention 2 and the Component Interactions diagram define `S` as a `BenchConfig`/workload value (\"Add ... to the bench configuration,\" \"reads from config\"), but the walkthrough expresses it only as an ad-hoc CLI override (`--subdivision-factor 3`, lines 165-175). No authoritative config surface is specified. The implementing task file instead creates a `mid-flock-50k-s3.yaml` workload variant with `subdivision_factor: 3` embedded (T11/T12). Relatedly, \"No changes to ... Parity test infrastructure\" (line 104) sits awkwardly with the task's T11b fixture change needed for S=3 parity testing. These are not blocking, but the design should name one canonical way S enters `BenchConfig` so the gate config is reproducible.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:48-80"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "NFR restated; design stays within assigned scope and boundaries",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification walkthrough asks for baseline/isolation runs the branch cannot produce",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-179",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "A7 seam is claimed \"preserved\" but is functionally bypassed by the new break",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:33",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Config surface for `S` is ambiguous and inconsistent with the implementing task",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:48-80",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T08:08:55.988269",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 146890,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 207540,
+  "cached_tokens": 170496,
+  "cache_write_tokens": null,
+  "completion_tokens": 37469,
+  "reasoning_tokens": 35806,
+  "duration_seconds": 294.5709913750179,
+  "cost_usd": 0.006797944000000001,
+  "cost_basis": "alias_pricing"
+}

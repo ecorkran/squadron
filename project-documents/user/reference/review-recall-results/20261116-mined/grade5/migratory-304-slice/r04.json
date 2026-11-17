@@ -1,0 +1,54 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`step()` specification is self-contradictory: early return skips `post_tick()` on an empty world",
+   "description": "The Implementation Details `step()` block (line 276: `if self._entity_manager.count == 0: return`) exits before `post_tick()` at line 288, so `post_tick()` is never called when no entities exist. This directly contradicts the note at line 291 (\"`post_tick()` is called even when there are no entities\u2026 The early return is moved to wrap only `engine.tick()`\"), the Technical Decisions version of `step()` (lines 176\u2013192, which correctly wraps only `engine.tick()`), and the success criterion \"environment.post_tick() is called after engine.tick() each tick\". It would also violate the dependency contract from 500-slice \u2014 time-varying layer state (trail decay, seasonal modulation) must advance every tick via `pre_tick`/`post_tick` regardless of agent count. Fix the stale code block so both versions wrap only `engine.tick()`. Related minor inconsistency: `_seasonal_parameter` is declared as SimulationManager state (line 119) but the shown `__init__`/`step()` never set it \u2014 `seasonal_parameter` arrives as a per-call parameter and is passed through; drop the field or use it.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Plan-assigned post-tick write handling is dropped and `post_tick()` is called without the write parameters the provider interface defines",
+   "description": "The slice plan entry for 304 explicitly assigns \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\", and 500-arch states slice 304 \"calls `post_tick()` with agent-originated writes\". The delivered dependency (500-slice) establishes the signature `post_tick(trail_deposits, threat_mutations)` with typed parameters (\"the signature is established\"). This slice calls `environment.post_tick()` with no arguments everywhere (lines 105, 190, 288), describes the interface at line 57 as \"container with `query()`, `pre_tick()`, `post_tick()` methods\" without the write parameters, and contains no plumbing for collecting trail deposits/threat mutations from the tick and passing them through \u2014 while the Excluded list (lines 42\u201348) does not cover this write pathway at all (excluding \"environment-aware forces\" is not the same responsibility). When slices 505/506 arrive, server-side write plumbing will need retrofits this slice was assigned to establish. Either plumb the typed write path now (empty writes are fine today) or explicitly defer it and amend the plan entry.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:105"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Environment context is not passed to `engine.tick()` as the plan and the 500/300 contracts require",
+   "description": "The slice plan entry says \"Pass environment context to `SimulationManager` and `engine.tick()`\"; 300-arch's tick cycle step 3 says \"Pass current entity state and environment context to the behavior engine\"; 500-slice's \"World Server Integration (slice 304)\" says \"The `query` method (or the `Environment` object itself) is passed to `engine.tick()` as environmental context\". This slice keeps `engine.tick()`'s signature unchanged (100-slice's `tick()` indeed has no environment parameter) and instead routes access via constructor injection into future environment-aware forces \u2014 which are excluded from this slice (line 46). The result: after this slice, nothing consumes the environment, and no named slice owns wiring the environment into forces (the `interfaces` frontmatter lists no behavior-engine entry; \"force construction code in `server.py`\" is unassigned work). The constructor-injection approach may be technically reasonable, but it is presented as satisfying the plan rather than as a deviation: either plumb the environment through `engine.tick()` now (even with no consumers) or record the deviation and update the plan/500 integration notes plus name the slice that wires forces.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Terrain summary in snapshots is re-deferred past the slice plan's assignment to 304",
+   "description": "Slice 305's design (line 52) and the slice plan entry 305 (\"Terrain summary in snapshots deferred to (304) Environment Layer Integration\") assign environment/terrain data in client snapshots to this slice. Line 47 excludes \"Environment data in client snapshots/broadcasts \u2014 deferred to future work\" \u2014 with no owner and no plan entry, the work now falls between slices twice removed from its assigned home. Either include a minimal environment/terrain summary hook in the broadcast path (the environment is created and available at the broadcast site in this slice) or amend the slice plan to name a new owning slice.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Plan-assigned configuration scope (grid resolution, layer selection) deferred without a plan amendment",
+   "description": "The slice plan entry assigns \"Server-side environment configuration (seed, grid resolution, layer selection) in YAML\". The slice delivers only `seed`; grid resolution is deferred at line 48 and \"layer selection\" is not mentioned anywhere in the scope lists. The rationale is architecturally sound \u2014 500-arch routes layer configuration through the environment specification (507), and no layers exist yet \u2014 but the plan entry still assigns these fields to 304. Record the deferral with its named target (507/layer slices) in the Excluded list and amend the plan entry so the scope is not silently dropped.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:42-48"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tick-budget NFR from 300-arch is not restated for the per-tick work this slice adds",
+   "description": "This slice inserts `pre_tick`/`post_tick` into the tick body \u2014 a path with a stated NFR in 300-arch (fixed-timestep tick with budget-overrun warning, target tick rates 20\u201360 Hz; default 20 Hz \u21d2 50 ms budget). The slice neither restates this constraint with a specific target for environment lifecycle cost nor includes any verification step covering it, even though the pattern established here is what 501+ layers will populate with real per-tick work. Restate the constraint (e.g., lifecycle calls must fit within the tick budget; overrun behavior remains owned by 301) or explicitly delegate cost expectations to the layer slices.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:89-108"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`_seasonal_parameter` state field is declared but unused by the shown design",
+   "description": "State Management declares `_seasonal_parameter: float \u2014 current seasonal value, fixed at 0.0 until slice 308`, but `step()` receives `seasonal_parameter` as a call parameter and passes it straight to `pre_tick()`; the field is never assigned in any shown code. This is state nothing uses (against the project convention of no unused abstraction) and conflicts with the per-call design that slice 308 will exercise. Drop it, or document why SimulationManager must retain the value.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:118-119"
+  }
+ ]
+}

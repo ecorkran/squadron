@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "T13's result-discovery dependency does not exist, and its fallback cannot satisfy the residual-sampling guarantee",
+      "description": "T13 instructs the implementer to \"reuse 320's existing result-discovery surface\" to enumerate unsampled persisted judge results, with a fallback to \"scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk\". Verified against the code: `src/squadron/metrology/capture.py:37-113` only has `resolve_target()` (a glob for one index's `{index}-review.*` files), and `src/squadron/metrology/store.py:160-191` `list_samples()` returns `SampleVerdict` records \u2014 every one of which is, by definition, already sampled. There is no enumeration surface for unsampled review files anywhere in `src/`. The fallback therefore yields zero unsampled candidates and cannot produce the non-empty offer set required by the Functional Requirement \"a graduated config with unsampled results yields a non-empty offer set\", by T13's own success criteria (\"3 unsampled matching results at rate=1.0 yields 3 OfferTargets\"), by T14's non-empty-guarantee test, by T16's `offers` test, and by walkthrough step 6. Because the \"note the gap\" escape hatch lets T13 be checked off without the capability, T13/T14/T16/T17 are not independently completable as written. Fix: specify the enumeration explicitly in T13 (reuse `_REVIEWS_SUBDIR` from `capture.py:37`, derive each candidate's identity with `derive_judge_config_id`, subtract `result_ref`s already in the store) and remove the stub fallback.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's numbered precedence makes TIGHTEN unreachable for below-floor cells",
+      "description": "Step 1 states `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`; step 4 states `match_rate <= tighten_rate` \u2192 `TIGHTEN` and is annotated \"reachable even if `n < floor` \u2026 only cases 1/2 above are [gated], since they're checked first only for the loosening path\". A returning check 1 short-circuits step 4, so these instructions are mutually exclusive. T7's own success criterion and T8's test both require \"a below-floor cell with low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\". A junior implementing the stated precedence produces code that fails its paired test. Fix: state the precedence as TIGHTEN evaluated before the floor/unversioned refusal (which gates only the loosening path), then GRADUATE/HOLD, and delete the contradictory parenthetical.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:116-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The runtime-drawn-model limitation has no implementing task or assertion",
+      "description": "The Functional Requirement at slice design line 270 requires the `(template, model)` pairing **and** \"the runtime-drawn-model limitation is stated where the recommendation is produced (asserted: the note is present in output, including `--json`)\"; the design's mismatch decision (line 201) says the note must state that a step drawing its model at runtime cannot track the drawn model and that the recommendation does not apply to that step. T9 (line 147) specifies only the config-time model+threshold pairing sentence. T15 renders \"the model-dimension note\"; T16 asserts a note appears in rows and that `--json` parses back to `RecommendationReport`, with no assertion on the note's content or presence in the JSON payload. The runtime-limitation half of this success criterion therefore has no corresponding task or test. Fix: add the runtime-limitation sentence to T9's note spec and assert it in both table and `--json` output in T16.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The unversioned-cell criterion is tested only on `classify_direction`, not wired through `recommend_thresholds`",
+      "description": "Functional Requirement (slice design line 271) requires un-version-keyable data to be \"excluded from graduation and flagged, never pooled (asserted: unversioned cell cannot produce `GRADUATE`)\". `AgreementReport.cells` does contain unversioned configs: `src/squadron/metrology/report.py#agreement_report` groups all admissible enriched samples, including those with `template_content_hash is None` (they are additionally counted in `ExclusionSummary`). `classify_direction` takes `versioned: bool` (T7), but T9 says only \"classify its direction (T7)\" and never says to derive `versioned` from `cell.group.judge_config.template_content_hash`. T10 has no unversioned-cell test. T8's `versioned=False` unit test alone does not prove the report path cannot emit `GRADUATE` for such a cell. Fix: specify that derivation in T9 and add an unversioned-cell assertion to T10/T16.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two Failure Modes rows have no implementing step or test, and the Coverage Check falsely claims one is covered",
+      "description": "The design's Failure Modes table requires \"each boundary \u2026 a test\". (a) The \"threshold read / malformed `judge:` block (non-numeric floor)\" row requires a flagged target, a WARNING naming the template, and a test. T7's `read_current_thresholds` simply calls `resolve_thresholds(template.judge, None)`; `src/squadron/pipeline/actions/judge.py#resolve_thresholds` does `float(pass_floor)` and would raise `ValueError` on a non-numeric value, and T8 contains no malformed-block test. Coverage Check line 287 nevertheless claims \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8)\". (b) The \"recommendation input / store empty\" row requires a \"no evidence\" line with `floor_applied` still stated and an empty-store test; T15 does not require that line and T16 has no empty-store CLI test (T10 checks only the model shape). Fix: add the handling and tests to T7/T8 and T15/T16, and correct the Coverage Check claim.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers sit after every task, including implementation-only points before their paired tests",
+      "description": "All 17 tasks carry a plain-line `**Commit:**` marker (lines 39, 52, 69, 82, 97, 108, 125, 139, 153, 167, 181, 194, 208, 222, 236, 252, 272). The format is right (plain lines, never checkboxes), but marking every task means commits land after untested implementation: T1's hash change is committed before T2's regression tests exist, T3's models before T4's round-trip tests, T13's offer core before T14's tests. Markers should sit at working, tested points. Fix: consolidate to roughly nine markers after each implementation+test pair (T1/T2 \u2026 T15/T16) plus T17, and reconcile explicitly with CLAUDE.md's \"commit from project root at least once per task\" rule if per-task commits are retained.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweighted verification detail: one invariant asserted three times, plus untraced bookkeeping and stale ordering prose",
+      "description": "The success criterion asks for a single assertion that after `recommend` the template YAML and config are byte-identical. The breakdown asserts it three times: T10's unit-level byte snapshot of `recommend_thresholds` (a pure function receiving an already-built `AgreementReport`, with no file handle \u2014 trivially true), T16's CLI-level SHA-1 regression, and T17 walkthrough step 4 (which the design does require). Cut T10's no-mutation sub-item; keep the CLI and walkthrough assertions. T17 line 270 also adds \"mark this slice-design's frontmatter `status: complete` and update the 320 slice-plan's `(322)` entry to `[x]`\", which traces to no success criterion \u2014 drop it or name the project rule that requires it. Finally, the Context Summary \"Suggested order\" (line 25) places config keys at T13-T16 and graduation at T9-T12, but the actual numbering is config keys T5/T6, recommend report T9/T10, registry T11/T12, offers T13/T14, CLI T15/T16; fix those ranges so the sequencing guidance is not misleading.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:163"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pairing, single-file scope, and NFR handling are sound",
+      "description": "All seven Functional Requirements plus the Technical/Integration Requirements have a corresponding implementation task; the hash-narrowing fix lands first (T1/T2, the design's explicit constraint), config keys (T5/T6) precede their consumers (T7/T9/T15), models (T3/T4) precede the core, the registry (T11/T12) precedes offers (T13/T14), CLI shells come last (T15/T16), and validation is T17 \u2014 no circular dependencies. Each of the eight implementation tasks is immediately followed by its paired test task. One task file for a 3/5-effort slice is proportionate; there is no unnecessary split. The slice design restates no NFR or performance/latency/throughput requirement (no such section or text) and no `tests/load/` task exists, so no load-test task and no CI-gating task are required here.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T13's result-discovery dependency does not exist, and its fallback cannot satisfy the residual-sampling guarantee",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T7's numbered precedence makes TIGHTEN unreachable for below-floor cells",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:116-121",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The runtime-drawn-model limitation has no implementing task or assertion",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The unversioned-cell criterion is tested only on `classify_direction`, not wired through `recommend_thresholds`",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Two Failure Modes rows have no implementing step or test, and the Coverage Check falsely claims one is covered",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers sit after every task, including implementation-only points before their paired tests",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweighted verification detail: one invariant asserted three times, plus untraced bookkeeping and stale ordering prose",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:163",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pairing, single-file scope, and NFR handling are sound",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T08:48:09.431771",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 472672,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 562689,
+  "cached_tokens": 470656,
+  "cache_write_tokens": null,
+  "completion_tokens": 114465,
+  "reasoning_tokens": 110893,
+  "duration_seconds": 1121.9283607499674,
+  "cost_usd": 0.19134278700000001,
+  "cost_basis": "alias_pricing"
+}

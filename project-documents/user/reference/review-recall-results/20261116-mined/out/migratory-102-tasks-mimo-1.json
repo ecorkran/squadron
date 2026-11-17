@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Profile differentiation test has an ill-defined, weakly disjunctive assertion",
+      "description": "Task 5.3 requires asserting \"the difference is statistically measurable (herding heading variance < flocking heading variance, **or** herding mean eastward component > flocking mean eastward component)\". Two problems for a junior implementer: (a) \"statistically measurable\" is meaningless for a single seeded deterministic run \u2014 there are no repeated samples or significance test, so the phrase invites either a flaky multi-seed test or a vacuous one; (b) the disjunctive OR with no margin means the test passes on trivially small differences (e.g., variance 0.999 vs 1.0), which the slice's intent (\"statistically different movement patterns\") does not support. The slice design's differentiation criterion (herding vs equivalent flocking-only profile) is covered in scope, but the task should name one primary metric (e.g., heading variance, as the slice lists first) with a concrete margin, or explicitly specify multi-seed aggregation. As written, the test can pass while the behaviors are not meaningfully distinct.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:161"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit checkpoints are checkbox tasks rather than plain `**Commit**:` markers",
+      "description": "The five commit points (1.3, 2.3, 3.3, 4.3, 5.4 at lines 48, 73, 103, 134, 164) are checklist items, not plain-line `**Commit**:` markers. Note this conflicts with CLAUDE.md (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\"), so the file follows project convention while deviating from the marker convention. Substantively the placement is correct: commits land at working, tested points (after the accompanying test tasks), not after every task and not only at the end. No action required unless marker formatting is enforced.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Vectorization requirement is never restated or verified in any task",
+      "description": "The slice's Technical Requirements state \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops,\" but neither implementation task (3.1, 4.1) mentions vectorization and no test or verification step checks for it. The step formulas do implicitly steer toward numpy (`state.leadership[neighbors]`, `neighbors[neighbors != agent_idx]`), so a compliant implementation is likely, but the requirement is currently unverifiable at acceptance time. If it matters, add one line to 3.1/4.1 (\"neighbor operations must be numpy-array operations, no Python loop over neighbors\").",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage is complete",
+      "description": "Every success criterion in the slice design maps to a task: `BulkForce` conformance (3.1, 4.1, 6.2), hand-constructed correct output (3.2, 4.2), zero-force edge cases for no-neighbors / zero-leadership / zero-velocity (3.2, 4.2), `active_indices` isolation (3.2, 4.2), self-exclusion (4.1, 4.2), five-force `tick()` directional bias convergence (5.2), profile differentiation (5.3), and the mandated updates to all `BehavioralProfile`/`AgentState` call sites (1.2, 2.2). No scope creep: excluded concerns (waypoints, predators, visualization, leader election) appear nowhere in the tasks.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:24"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern are correct",
+      "description": "Dependencies are respected: AgentState extension (Section 1) precedes BehavioralProfile (Section 2), which precedes the forces (Sections 3\u20134), which precede integration (Section 5). Every implementation task is immediately followed by its test task (1.1\u21921.2, 2.1\u21922.2, 3.1\u21923.2, 4.1\u21924.2), and each force's commit follows its tests. MomentumForce is correctly sequenced before LeadershipForce as the simpler, dependency-free force, matching the slice's development approach. No circular dependencies. Proportionality is right: 6 sections / 16 tasks for a two-force slice, with no load-test requirement (the slice restates no NFR, so no `tests/load/` task or CI gating is needed).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:30"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Profile differentiation test has an ill-defined, weakly disjunctive assertion",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:161",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit checkpoints are checkbox tasks rather than plain `**Commit**:` markers",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Vectorization requirement is never restated or verified in any task",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criteria coverage is complete",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:24",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern are correct",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:30",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-17T06:31:54.713913",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 21596,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 3,
+  "prompt_tokens": 25071,
+  "cached_tokens": 13600,
+  "cache_write_tokens": null,
+  "completion_tokens": 6551,
+  "reasoning_tokens": 5095,
+  "duration_seconds": 242.22363625001162,
+  "cost_usd": 0.010743655000000001,
+  "cost_basis": "alias_pricing"
+}

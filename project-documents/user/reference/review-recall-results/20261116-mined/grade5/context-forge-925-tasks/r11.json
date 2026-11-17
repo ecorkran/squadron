@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`init()` timeout supply is contradictory between Task 15 and Task 17",
+   "description": "Task 15's first bullet gives the signature `init(operationPath: string)` and says it runs the submodule update \"with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`\" \u2014 i.e. the timeout is built into `init()`. Its second bullet then says `sync()` must call `init()` \"without the timeout: pass the timeout as an `init()` option so `sync()` and `update()` keep unbounded behavior (D10)\" \u2014 i.e. the timeout is opt-in via a parameter. These cannot both hold: if `init()` applies the constant internally, `sync()` inherits the bound and D10's \"install/update stay unbounded\" is violated; if the timeout is opt-in, no task says who passes `GUIDE_INIT_TIMEOUT_MS` \u2014 Task 17's `ensureCheckout()` steps (line 249) never mention supplying it, so a literal implementation leaves auto-init unbounded, the exact hang D10/F004 was raised to close. Pin one shape (e.g. `init(operationPath, opts?: { timeoutMs?: number })` with `ensureCheckout()` passing `GUIDE_INIT_TIMEOUT_MS`) and name the supplying caller in Task 17.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Config-file alias deprecation warning is implemented but never tested",
+   "description": "The slice design's functional success criterion (925-slice\u2026md:193) requires: \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning.\" Task 7's second bullet implements the print (`guidesInstallAction()` emits the config-path deprecation warning from Task 5's return shape), but no test asserts it: Task 6(b) only checks that the manager reports the alias, and Task 8's CLI cases cover only the `--strategy manual` flag path, not the config-sourced path's stderr output. Add one case to Task 8 (config with `guide.git_strategy: manual`, no flag \u2192 deprecation line on stderr) so the criterion is verified end-to-end.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:130"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit directives live inside checklist items instead of plain `**Commit**:` lines",
+   "description": "The file has no `**Commit**:` markers as such; commit messages are embedded in the \"Success criteria\" checkbox text (lines 100, 127, 153, 204, 224, 246, 276, 312, 333, 342, 373, 389, 412). The placements themselves are correct \u2014 each sits at a working, tested point after the paired test task passes, not after every task and not only at the end \u2014 so this is purely a format note: extracting them as plain `**Commit**:` lines would match the convention and keep them out of checklist items the task-checker ticks off. Absence of markers is acceptable; no action strictly required.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 10 is not independently completable as written",
+   "description": "Task 10's own success criterion is \"typecheck passes once Task 11 populates the field\" \u2014 i.e. its completion depends on a later task. Adding a required `checkout: SubmoduleCheckoutState | null` field to `GuideInfo` will break existing constructors until Task 11 (or an interim `checkout: null` fill) lands. Either make the field optional in Task 10 and narrow it in Task 11, or merge Tasks 10\u201311 into one task; as-is the pair is fine in sequence but Task 10 alone cannot reach its stated success state.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:186"
+  }
+ ]
+}

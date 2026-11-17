@@ -1,0 +1,19 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Delete routing contradicts the collision-case remediation path",
+   "description": "The Data Flow states \"**Delete:** mirrors write \u2014 deletes from whichever project file the key's scope maps to. `migrate-personal` \u2026 is the one exception that touches the *other* project file, by design.\" Under that rule, `cf config unset git.integration_branch --project` (a personal-scope key) deletes from `.context-forge.local.toml` only \u2014 i.e., it would remove the developer's *live* personal value and leave the stale `.context-forge.toml` copy in place. But the Migration Plan's Collision Semantics (line 146) names \"`cf config unset <key> --project`\" as the explicit way to clear the stale *shared-file* copy, and Verification Walkthrough step 9 (line 259) runs exactly that command and expects `.context-forge.toml` to be clean afterward. As written, those two passages cannot both hold: the walkthrough step fails (finding persists) and, worse, the user's personal value is destroyed \u2014 the exact hazard the collision section was written to prevent. The requirement left unmet is the plan entry's \"defined migration/compat story\": the story's remediation path for a personal key present in *both* files needs a specified delete semantic (e.g., delete of a personal-scope key also clears its shared-file copy, with an explicit call-out that this is a deliberate, second exception to the routing rule \u2014 or a different remediation mechanism such as a flag or the checker rule). One sentence of clarification resolves it.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "MCP `config_get` tool description becomes stale and is outside the stated configTools update scope",
+   "description": "The Technical Scope limits the `configTools.ts` change to \"surface both project config paths,\" and the Development Approach step 7 repeats only the `configPaths` response addition. The existing `config_get` tool description in `packages/mcp-server/src/tools/configTools.ts` (\"Resolution order: project config \u2192 user config \u2192 built-in default\") becomes factually wrong for personal keys once the precedence is project-personal \u2192 project-shared \u2192 user \u2192 default. Since agent-facing tool descriptions are the guidance surface for this tool, the one-line description update should be included in the configTools change (and a matching note for `cf config get`'s help text if it states resolution order).",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:34"
+  }
+ ]
+}

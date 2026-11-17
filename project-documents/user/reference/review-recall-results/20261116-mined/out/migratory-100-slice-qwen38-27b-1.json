@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent Force protocol is not wired into tick, yet success criteria require exercising both protocol paths",
+      "description": "The `Force` protocol is introduced (line 124, \"Per-agent version (used for testing, reference implementations)\") but the `tick` signature takes only `forces: list[BulkForce]` (line 185), and the data flow's force-accumulation step (line 90) describes per-agent force calls with no mechanism. The line-152 sentence \"The tick loop prefers the bulk variant when available\" implies an ad-hoc duck-typed variant selection, but no selection/descalation behavior is specified \u2014 what happens when a `Force` is passed, how neighbor lookups are obtained, or how the two paths are kept consistent is undefined. Meanwhile Technical Requirements (line 248) demands \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths,\" a criterion the specified design cannot satisfy. Either specify how `Force` is consumed (e.g., a `Force` adapter run through the bulk path, or `tick` accepting `list[Force | BulkForce]` with defined dispatch), or drop the dual-path success criterion.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "BruteForceQuery's stated algorithm contradicts its own protocol contract, and the per-agent query API leaves the vectorized hot-path requirement unmet",
+      "description": "The docstring for `build()` (line 160) says it \"Rebuilds the index from current positions,\" but the stated brute-force algorithm \"computes all pairwise distances on `build()` and filters by radius on `query_radius()`\" (line 173) \u2014 a pair list cannot be \"built\" and then radius-filtered per query unless one of the two statements is wrong, and a per-tick O(n\u00b2) matrix build is the opposite of an index. Beyond that, the protocol exposes only the per-agent `query_radius(position, radius)`, and the data flow step 3 (line 88) is \"For each *active* agent, `SpatialQuery.query_radius(...)`\" \u2014 a Python-level per-agent loop. That directly conflicts with (a) this slice's own Technical Requirement \"No Python-level per-agent loops in the hot path\" (line 247) and (b) the architecture's design goal that \"The hot loop must be structured for vectorized computation over arrays of agent state, not object-by-object iteration,\" and with the architecture's GPU-compatibility principle (\"no Python-level per-agent branching\"). Since the `BulkForce` contract (line 143) consumes a pre-built `neighbor_lists`, the protocol also lacks any bulk neighbor-extraction entry point. The doc should specify a correct, index-like brute-force build (e.g., store positions and compute the distance matrix in one vectorized pass, or per-query vectorized distance filtering), and either a batched query entry or an honest statement of where per-agent querying happens and why it does not violate the vectorized-hot-path requirement. This also matters downstream: slice 105's \"behavioral output identical before and after the swap\" check depends on the reference implementation actually being a reference.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dual force protocol plus tick-side variant selection is mechanism nothing in this slice's scope uses yet",
+      "description": "The slice ships two force protocols, a \"prefers the bulk variant when available\" selection branch in `tick`, and a `BulkForce` that takes `neighbor_lists: list[NDArray[np.intp]]` \u2014 a per-agent ragged list that is exactly the non-bulk, dynamic-shape structure the architecture's GPU-compatibility requirement rules out (\"bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation\"). A GPU-compatible bulk force wants a packed representation (e.g., CSR offsets + flat neighbor array), which would be cheap to add to the protocol now but cannot be evolved in from a list of arrays. The lighter design that meets the slice plan: a single bulk force signature (constant drift and drag only need it) and no variant-selection branch; keep the per-agent `Force` form as a documented equivalent rather than a second first-class protocol, or defer it until slice 101 actually consumes it. This trims one protocol, one unspecified dispatch path, and a GPU-incompatible parameter shape while leaving slices 101\u2013105's stated needs (add forces; don't touch tick) intact.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`accelerations` array is declared but never populated by the specified integration",
+      "description": "`AgentState` includes `accelerations` (N\u00d72 float64) per line 96 and line 35, but the integration spec (lines 205\u2013215) goes straight from force to `velocity += force * dt` and never writes the array, and no data-flow step assigns it. It is unused dead state as specified. Either add one line defining when it is written (e.g., tick stores the accumulated force/mass in `accelerations` before integration), or drop the array from this slice.",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Integration section heading is indented and won't render as a section",
+      "description": "The `### Integration: Semi-Implicit Euler` heading and its code block carry four leading spaces, so strict Markdown parsers render the whole block (including the heading) as a code block rather than a titled section. De-indent it so the section renders as part of the \"Tick Function Signature\" area.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+    },
+    {
+      "severity": "PASS",
+      "title": "Core design aligns with the plan entry and parent architecture goals",
+      "description": "Everything the plan entry (100) in `100-slices.behavior-engine.md` assigns is present and shaped correctly: SoA NumPy state with positions/velocities/profile indices; profile dataclass with no silent defaults (\"no `getattr` with defaults\", per project guidelines); semi-implicit Euler (satisfying the architecture's integration-stability consideration); tick determinism as an explicit success criterion (satisfying the \"tick determinism\" design goal); subset-evaluable tick with `build()` always receiving the full population and inactive agents visible as neighbors (satisfying \"subset-evaluable tick\" and the multi-resolution contract); float64 internally with Float32 conversion explicitly deferred to the world server's serialization boundary (matching the architecture's precision consideration and the concept's Float32Array transfer spec); dependency direction is correct (foundation slice, `dependencies: []`, everything else builds on it); boundaries respect the architecture's scope line (no persistence/networking/rendering); and the brute-force spatial query is deliberately left unoptimized per the plan's slice-105 timing note.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Per-agent Force protocol is not wired into tick, yet success criteria require exercising both protocol paths",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "BruteForceQuery's stated algorithm contradicts its own protocol contract, and the per-agent query API leaves the vectorized hot-path requirement unmet",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Dual force protocol plus tick-side variant selection is mechanism nothing in this slice's scope uses yet",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "`accelerations` array is declared but never populated by the specified integration",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Integration section heading is indented and won't render as a section",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core design aligns with the plan entry and parent architecture goals",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-17T12:27:53.125454",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 129431,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 107823,
+  "cached_tokens": 75200,
+  "cache_write_tokens": null,
+  "completion_tokens": 31145,
+  "reasoning_tokens": 28635,
+  "duration_seconds": 121.17944437498227,
+  "cost_usd": 0.08010851999999999,
+  "cost_basis": "alias_pricing"
+}

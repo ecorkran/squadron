@@ -1,0 +1,26 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Direction precedence contradicts the required tightening behavior",
+   "description": "T7 lists `n < floor \u2192 INSUFFICIENT_EVIDENCE` before the `TIGHTEN` check, so a below-floor, low-match-rate cell will return `INSUFFICIENT_EVIDENCE` and never reach `TIGHTEN`. That conflicts with T7\u2019s prose and success criteria, T8\u2019s regression test, and the slice requirement that tightening is not floor-gated. Reorder or otherwise specify the checks so the implementation instructions and expected behavior agree.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model limitation is not required in recommendation output",
+   "description": "T9 requires a note that the recommendation applies to a template/model pairing and that model and threshold are chosen together at config time. The slice design additionally requires the note to explain that, for a step using a runtime-drawn model, the threshold cannot track the drawn model and the recommendation does not apply to that step. T9 does not require that limitation to appear, leaving a stated success criterion uncovered.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are placed after every task, including untested work",
+   "description": "The file has a `**Commit**:` marker after each of T1\u2013T17. In particular, T1\u2019s marker comes before its regression tests in T2, so it marks an untested point; the repeated markers also conflict with the requirement to place them at tested working points rather than after every task. Consolidate markers at tested milestones, such as after implementation-and-test pairs. The no-mutation byte-snapshot assertion is also repeated in T10 and T16; keep the necessary coverage, but remove one redundant automated snapshot check.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  }
+ ]
+}

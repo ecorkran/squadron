@@ -1,0 +1,33 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Success criterion 5 has no serializer implementation task",
+   "description": "Description: Slice success criterion 5 (`project-documents/user/slices/313-slice.world-bounds-policy.md:365`) requires `config_to_yaml` to emit `WorldBoundsConfig.policy` as a plain string and for the emitted YAML to reload into an equal `ServerConfig`. The task file's \"Files touched\" list only assigns `config.py` work for \"enum + field + loader validation\" (lines 30-38), and Task 1.4 only asks for `test_bounds_policy_yaml_round_trip` to \"assert policy matches\" (line 88). There is no task to modify `config_to_yaml` serialization or assert the emitted YAML is plain-string/equal-config. This matters because the actual code needed a dedicated `_serialize_for_yaml` conversion before `yaml.dump` (`src/migratory_server/config.py:657-680`); a junior AI following the breakdown would not know to implement that. This leaves SC5's plain-string and equal-`ServerConfig` requirement unmet.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:30-89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox lines instead of plain marker lines",
+   "description": "Description: All five commit markers at lines 96, 179, 249, 286, and 325 are written as `- [ ] **Commit:** ...` checkbox items. The review rule requires `**Commit**:` markers to be plain lines, never checkboxes; a file with no markers would be acceptable, so markers are not being required here. Placement at section boundaries is reasonable and is not \"after every task\" or \"only at the end,\" but the format is wrong. Convert each to a plain `**Commit**: ...` line or remove the markers entirely.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96-325"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Integration test setup for one-step reflect is under-specified and can fail as written",
+   "description": "Description: Task 3.4 says to build a minimal `SimulationManager` with a 100\u00d7100 world, 4 agents, outward velocities, and `forces=[]`, then specifically asks `test_reflect_policy_flips_velocities_at_edges` to seed one agent at `(99, 50)` with velocity `(10, 0)`, step once, and assert `vx < 0`. The task does not specify `dt`, profile `max_speed`, `profile_indices`, or the `EntityManager` setup. With the common `dt=0.05` used in `tests/test_simulation.py:142`, the engine clamps velocity and then does `positions += velocities * dt` (`src/migratory/engine/integration.py:43-44`), so x becomes `99.5`, still inside a 100-wide world, and REFLECT never flips the velocity. A junior AI copying existing fixtures can produce a failing or non-isolating test. Specify a `dt` and seed state that guarantees an edge crossing on the first step, plus profile limits and state construction details.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-233"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task file is overweight for a 2/5 slice and includes low-value granularity",
+   "description": "Description: The task file is 334+ lines, has 23 top-level tasks, and lists 10 touched files for a slice marked effort 2/5. It is more detailed than the success criteria need: Task 2.3 enumerates roughly 18 unit tests (lines 147-172), Task 3.4 adds five more integration tests (lines 224-235), Task 3.5 and Task 5.1 both run the full pytest suite (lines 238-242 and 290-292), and finalization is split across Tasks 5.3-5.5 (lines 310-325). Several steps dictate implementation detail the slice does not require, such as exact `np.mod(..., out=...)`, boolean-mask mechanics, and the logger string. To fit the slice, merge Tasks 1.1-1.3 into one config implementation task, merge Tasks 4.1-4.2 into one shipped-config update task, keep a single final full-suite run, fold status/changelog/final commit into one finalization task, cut the redundant parametrized dispatch test at line 171 and duplicate single-step velocity-flip test at line 231, and reduce exact-code steps to observable success criteria.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:30-334"
+  }
+ ]
+}

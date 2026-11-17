@@ -1,0 +1,26 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tick integration adds dispatcher-specific state to the engine path",
+   "description": "The architecture describes the engine tick as stateless between ticks, with the caller owning and managing the spatial index (architecture \u00a7Envisioned State, lines 65\u201373). This design feeds state back from `tick.py` through `record_density`, guarded by `hasattr`, making the tick pipeline aware of a capability specific to this dispatcher. That weakens the existing `SpatialQuery` boundary and introduces a dispatcher-specific hook into the engine path. Keep density measurement and backend selection outside `tick.py`, or define an interface that preserves the engine\u2019s stated ownership boundary.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Adaptive threshold is not normalized for simulation scale",
+   "description": "The design says the crossover varies with world size, agent count, and query radii, but dispatches on raw mean neighbors per agent using a fixed default threshold. Its examples derive very different neighbor counts from population and radius, yet the document does not explain how one configured threshold remains meaningful across those changes. Since adaptive selection is the slice\u2019s core deliverable, specify how the threshold is calibrated or scoped to a deployment and what happens when the signal is not representative of backend cost.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-136"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Verification scope is heavier than the slice-plan effort suggests",
+   "description": "The plan assigns this slice Medium risk and effort 3/5, but the design adds a multi-backend full-suite matrix, a threshold sweep, a long live simulation, performance-journal updates, and escape-hatch/configuration runs. Some validation is appropriate, but the long live run and repeated suite runs appear disproportionate to adding a wrapper around already-tested backends. Keep the focused parity and dispatcher tests; defer extended benchmarking/live simulation unless a measured performance claim is required for acceptance.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Verification-Walkthrough"
+  }
+ ]
+}

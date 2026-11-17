@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Success criterion 12 has no explicit acceptance check",
+   "description": "Task 8.1 checks many concrete properties of the generated concept, but never asks the PM to judge whether it is something they would edit rather than discard. The PM\u2019s correction of the description does not establish that success criterion 12 is met. Add an explicit acceptance check to the walkthrough.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Walkthrough does not verify all required attribution and inference rules",
+   "description": "Tasks 3 and 7 specify the attribution and `[INFERRED]` rules, but Task 8.1 checks only selected examples and that the provenance line exists. It does not require checking that every intent claim cites its prose source, every structural claim names its graph field, and every `[INFERRED]` sentence satisfies the rule (success criteria 3 and 10). Add an explicit audit of those properties to the written output\u2019s acceptance checks.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Guide failure coverage omits absent and unreadable cases",
+   "description": "Tasks 2.1 and 6.1 define distinct stop behavior for a missing guide tree, an absent or unreadable guide, and a missing section title. Task 8.3 exercises only the renamed-title case. Success criterion 7 also requires loud stops for the absent/unreadable cases; add verification for those branches or otherwise state how their behavior will be confirmed.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers use checkbox form and are too frequent",
+   "description": "The commit entries are written as checkbox subitems (`- [ ] Commit:`), rather than plain `**Commit**:` lines. There are also entries after nearly every authoring group. Convert them to plain markers and retain only meaningful working, tested commit points rather than marking each group.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The breakdown is overweight for a single-file flow addition",
+   "description": "Tasks 1\u20137 repeatedly separate authoring from short fidelity checks, and the walkthrough repeats premise and source checks already covered earlier. Consolidate the paired author/verify steps into fewer cohesive tasks, and remove duplicated checks where one verification can establish the same fact. Task 8.6 also includes a repository-wide Ruff format check despite the design specifying no Python changes; drop that unrelated check unless a project-specific requirement justifies it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  }
+ ]
+}

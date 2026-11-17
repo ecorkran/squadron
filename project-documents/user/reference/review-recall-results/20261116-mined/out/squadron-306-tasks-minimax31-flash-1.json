@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Injection-cap check is left undefined and may duplicate 305 scope",
+      "description": "T25's cap bullet says to \"reuse whatever threshold/measurement 305's architecture already defines for the injection cap; if 305 does not enforce a cap in code today ... add the same check here and flag to the Project Manager.\" But 305 does not enforce any such cap: `src/squadron/review/review_client.py:238-258` enforces `review.max_total_injection_bytes` (default 500_000) only as a *truncation/skip* rule inside `_inject_file_contents`, and that function is never invoked on the 305 gate's judge leg (the judge core calls `run_review_with_profile` with `prior_findings`/`round_diff` string inputs, not `diff`/`files` paths, so `_SKIP_KEYS` filtering means nothing is injected). There is no 305 \"diff-over-cap \u2192 UNKNOWN\" rule to reuse. As written, T25 leaves the implementer to invent a cap value and a measurement unit, and the design's own success criterion (\"a diff exceeding the injection cap yields UNKNOWN naming the cap and the base used\") is only satisfied if a threshold is actually specified. Name the threshold and its source (e.g. the existing `review.max_total_injection_bytes` config key) in the task so T25/T26 are implementable without a design decision, and state explicitly that 305 lacks the equivalent check rather than deferring it to \"reuse whatever 305 defines.\"",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T14 is numbered after the task it gates, and its blocking rule is not a sequencing constraint",
+      "description": "The slice design's Phase 5 note requires the cf `archive/`-scanning verification to be \"its own checklist task in the breakdown, sequenced **before** Part D lands \u2014 it is a go/no-go on the archive filename scheme.\" The breakdown puts it at T14, after T12/T13, and handles the ordering with prose (\"do not mark T12 done until T14's outcome is known\"). That is workable but fragile: T12's own bullet also forbids completion until T14 resolves, so T12, T13, and T14 form a soft cycle with no clean break. Move the verification ahead of T12 (e.g. renumber it T12, shifting the guard to T13/T14) so the go/no-go genuinely precedes the implementation it constrains, as the design requires.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T14's fallback path has no task that owns the resulting code change",
+      "description": "T14's \"If recursive\" branch says to \"apply the design's stated fallback \u2014 strip or alter the `-review.` segment in the archived copy's filename ... and update T12/T13 accordingly before T12 is considered complete.\" That means T12's implementation and T13's test both change after T13 has been written and (per the commit marker) already committed. There is no task whose scope is \"implement the mangled filename scheme and add its test\" \u2014 the change is silently folded into two earlier, already-committed tasks. Either split the recursive-case work into its own numbered task with its own commit, or have T14 explicitly reopen T12/T13 as a scoped follow-up commit.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`save_review_result` is a third authoring path the Part A stamp does not cover",
+      "description": "T10 wires `reviewed_sha` through exactly two callers: `review/persistence.save_review_result` (\"the CLI path\") and `pipeline/actions/review.py` (\"the pipeline-action path\"). But the CLI actually calls `save_review_result` from four places \u2014 `src/squadron/cli/commands/review.py:451` (`review slice`), `:523` (`review arch`), `:610` (`review tasks`), and `:746` (`review code`) \u2014 and the pipeline action has two branches: `save_review_result` when `slice_info` is available and `save_review_file` when it is not (`src/squadron/pipeline/actions/review.py:255-276`). T10's \"both callers\" framing silently excludes the pipeline's `save_review_file` branch and the `as_json=True` branch of `save_review_result` (which serializes via `result.to_dict()`, not `format_review_markdown`, so it carries no frontmatter at all). The success criterion \"A review authored after this slice carries `reviewedSha:` in frontmatter, from both the CLI and the pipeline persistence paths\" is therefore only met for markdown reviews written through `format_review_markdown`. Either state explicitly in T10 that the JSON path and the `save_review_file` fallback path are out of scope for the stamp, or add them \u2014 right now a reviewer reading the breakdown would believe coverage is complete when it is not.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:257"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T29 leaves the shared-helper decision open, deferring a design call to implementation time",
+      "description": "T29 asks the implementer to \"decide based on what the code actually looks like once file 1's T5\u2013T7 have landed\" whether to promote `_yaml_safe` into `review/addressed/` or \"leave `evidence.py`'s copy in place and add an equivalent in the new module.\" The design's Part C explicitly says the artifact is \"Serialized via the shared `yaml.safe_dump` helper extracted from `evidence.py`,\" and the project's CLAUDE.md forbids duplicating logic and scattering comparison values. Leaving the choice open in the task permits the duplicate-helper outcome the design ruled out. T29 should state the intended end state (one shared helper, `review/addressed/` as the home, `evidence.py` importing it) and let only the mechanical details be left open.",
+      "file_ref": null,
+      "category": "scope-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T21's `compute_diff_since` is specified as diverging from 305's `compute_round_diff` in a way worth flagging",
+      "description": "T21 asks for `git diff <base_ref> HEAD --name-only` plus `git status --porcelain`, unioned \u2014 while 305's `compute_round_diff` (`src/squadron/pipeline/actions/findings_addressed/screens.py:100`) uses `git diff HEAD --name-only` (working tree vs HEAD) plus `git status --porcelain`. The union is correct for this path (it must see committed fixes since `reviewedSha` *and* uncommitted ones), but note that `git diff <base> HEAD` already includes committed changes and `git status --porcelain` adds working-tree changes; if `base == HEAD` the two agree. The task's own phrasing (\"mirroring `compute_round_diff`'s existing pattern but parameterized on an arbitrary base ref\") is accurate enough that this is informational rather than a defect \u2014 just make sure T22's \"no changes since `reviewedSha`\" fixture exercises a non-HEAD base so the parameterization is actually proven.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`screen_byte_identical` reuse in T21 requires a small adaptation the task does not name",
+      "description": "T21 says to \"reuse `screen_byte_identical` from `pipeline/actions/findings_addressed/screens.py` rather than reimplementing.\" That function (`screens.py:172`) takes `prior_findings` and returns `ScreenResult` with `leg_verdict=Verdict.FAIL` \u2014 a *Verdict* value, not the `resolution:` vocabulary (`ADDRESSED | UNADDRESSED | UNKNOWN`) this slice requires. T22 correspondingly asserts `resolution=UNADDRESSED`, so the mapping must happen somewhere. The task should name the mapping explicitly so the implementer does not import the `Verdict.FAIL` string into the resolution artifact's `resolution:` field, which would violate Decision 5's closed vocabulary.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part 0 relocation is correctly scoped and traced",
+      "description": "T1\u2013T8 map exactly onto design Decision 4 and the \"305's full test suite passes unchanged\" success criterion. The four expected test files (`tests/pipeline/test_findings_addressed.py`, `_e2e.py`, `_evidence.py`, `_judge.py`) all exist, and `tests/metrology/test_capture_discovery.py` also exists as claimed. T3's note that `verification.py`'s import of `RoundDiff` becomes a pipeline\u2192review cross-package import is accurate against the current code (`screens.py:49`, `verification.py:20`) and matches the design's stated dependency direction. No scope creep here.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part D's fail-closed archive guard satisfies F003 and the design's two required tests",
+      "description": "T12/T13 implement the design's Part D spec faithfully: copy-then-verify-then-overwrite, `None` return matching `save_review_file`'s existing failure contract (`src/squadron/review/persistence.py:220-255` returns `Path | None` and logs WARNING on OSError), ERROR naming both paths on abort, original untouched. The cited test idiom is real: `tests/pipeline/test_findings_addressed_evidence.py:183` is exactly `test_unwritable_reviews_directory_warns_and_returns_none`, using \"a file where the directory should be.\" T13's third case (no pre-existing file \u2192 no archive directory created) is a genuine fail-closed edge, not padding.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The metrology-exclusion success criterion has a dedicated, real-glob test task",
+      "description": "The success criterion \"Metrology `discover_judge_results` and review discovery return no resolution artifacts (test against the real glob)\" is covered by T32, which runs the real `discover_judge_results` (`src/squadron/metrology/discovery.py:46`, glob `*-review.*`) and asserts the resolution filename cannot match \u2014 matching 305's precedent at `tests/pipeline/test_findings_addressed_evidence.py:78`. The `-resolution.` filename genuinely contains no `-review.` substring, so the exclusion holds by construction. T34 additionally asserts the review file is byte-identical before and after, directly proving the design's primary success criterion rather than inferring it.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The F001 verdict-consistency screen and F004 failure modes have separate, dedicated test tasks",
+      "description": "T23/T24 (verdict-consistency \u2192 UNKNOWN on FAIL/CONCERNS with zero CONCERN+ findings, citing #28 lineage) and T25/T26 (judge transport failure, unreadable response, injection cap \u2192 UNKNOWN with WARNING) each have their own implementation task and their own immediately-following test task, as the breakdown's Context Summary promises. T26 mocks the judge transport rather than asserting the underlying behavior, which is correct given the behavior lives in 305's already-shipped code.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers are placed at working, tested points",
+      "description": "Markers appear on T2, T4, T6, T8, T11, T13 in file 1 and T16, T18, T20, T22, T24, T26, T28, T30, T32, T34, T36, T37, T40 in file 2 \u2014 plain lines (not checkboxes), each at the end of a task whose tests have just passed. They are neither after every task (T1, T3, T5, T7, T9, T10, T12, T14 carry none) nor only at the end. T8 and T40 sit at full-suite-verified points.",
+      "file_ref": null,
+      "category": "commit-discipline",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `derive_addressed_verdict` / `verify_outcomes` reuse is faithful to existing behavior",
+      "description": "T27/T28's claims about the reused functions check out against the source: `verify_outcomes` downgrades `MOVED` to `DISPUTED` when the successor is not in `fresh_findings` (which, with `fresh_findings=[]`, is always), and downgrades `ADDRESSED` when the diff never touched the finding's location; `derive_addressed_verdict` evaluates `DISPUTED \u2192 UNKNOWN` before `UNADDRESSED \u2192 FAIL`. T28's three test cases map one-to-one onto those code paths. The `location` suffix-matching logic in `_diff_touches` also means T28's \"untouched path\" fixture will exercise real comparison rather than a trivial miss.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:76"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Injection-cap check is left undefined and may duplicate 305 scope",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "T14 is numbered after the task it gates, and its blocking rule is not a sequencing constraint",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T14's fallback path has no task that owns the resulting code change",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`save_review_result` is a third authoring path the Part A stamp does not cover",
+      "location": "src/squadron/review/persistence.py:257",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope-clarity",
+      "raw_category": null,
+      "summary": "T29 leaves the shared-helper decision open, deferring a design call to implementation time",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "T21's `compute_diff_since` is specified as diverging from 305's `compute_round_diff` in a way worth flagging",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`screen_byte_identical` reuse in T21 requires a small adaptation the task does not name",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Part 0 relocation is correctly scoped and traced",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Part D's fail-closed archive guard satisfies F003 and the design's two required tests",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The metrology-exclusion success criterion has a dedicated, real-glob test task",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The F001 verdict-consistency screen and F004 failure modes have separate, dedicated test tasks",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "commit-discipline",
+      "raw_category": null,
+      "summary": "Commit markers are placed at working, tested points",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `derive_addressed_verdict` / `verify_outcomes` reuse is faithful to existing behavior",
+      "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:76",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-17T10:31:55.967207",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 227982,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1016473,
+  "cached_tokens": 865024,
+  "cache_write_tokens": null,
+  "completion_tokens": 56490,
+  "reasoning_tokens": 51966,
+  "duration_seconds": 315.1035334998742,
+  "cost_usd": 0.034360843,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,26 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 8.5's live routing checks conflict with 8.6's changed-file assertion and omit the `concept` route",
+   "description": "8.5 says \"No argument and `comprehension` route to the comprehension flow (unchanged behavior)\". Running that flow is not a no-op: `commands/analysis/understand.md` writes a new `9nn-analysis.codebase-comprehension.md` per run, and `project-documents/user/analysis/` already holds 943/944, so two full runs produce 945 and 946. Yet 8.6 (line 346) asserts `git diff --name-only main` shows \"only `commands/analysis/understand.md`, the generated concept, this slice's documents, and the DEVLOG\". The design has the same tension (walkthrough steps 2 and 7), but the task breakdown gives the implementer no instruction to verify routing without completing the write, or to remove/account for the generated analysis documents \u2014 so 8.6 becomes unsatisfiable as written. Separately, 8.5 tests only three of the four routing cases; the `concept` \u2192 new flow case required by SC1 is absent, which makes 1.2's parenthetical \"(Live selection behavior is exercised in Task 8.5.)\" (line 97) inaccurate. 8.1 runs the concept flow but never explicitly confirms the `concept` argument was recognized. Fix: state in 8.5 that routing is observed at flow selection without a document write (or add cleanup/accounting), and add the `concept` \u2192 new flow case.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:338-351"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 7 breaks the verify-after-author pattern and leaves SC4/SC10 output properties unverified",
+   "description": "Every authoring task from 1 through 6 is immediately followed by a verification subtask (1.2, 2.2, 3.4, 4.2, 5.3, 6.3). Task 7 (lines 258\u2013296: `[INFERRED]` governance, output conventions, provenance block, cross-reference fix) has no paired verify \u2014 it jumps straight to the Task 8 walkthrough. The walkthrough does not close the gap: 8.1's check list (lines 308\u2013317) mirrors design step 3 but omits three explicit success-criterion requirements \u2014 SC4's \"dropped topics appear nowhere in the document \u2014 neither as content nor as gap markers\" (only authored in 4.1 and checked as skill text in 4.2/5.3, never in the generated `000-concept.squadron.md`); SC10's \"per-section sourcing over the full outcome set\" (authored in 7.3, but 8.1 checks only the engagement-questions and inferred-claims lines); and SC10's \"every `[INFERRED]` sentence satisfies the checkable rule\" (the rule is authored in 7.1, never applied to output). These are named, mechanically checkable requirements with no verification point. Fix: add a 7.5-style verification against the design, and extend 8.1 with a dropped-topics scan, a section-sourcing outcome-set check, and an `[INFERRED]` rule check.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers are rendered as checkboxes rather than plain `**Commit**:` lines",
+   "description": "All eight commit markers (`99`, `125`, `164`, `185`, `221`, `254`, `296`, `351`) are `- [ ] Commit: \\`feat: ...\\`` checkbox items, not plain bold `**Commit**:` lines. They do sit at working, tested points \u2014 each follows the paired verification subtask and a successful build \u2014 and the frequency (one per task, plus 9.3) matches CLAUDE.md's \"commit at least once per task\". The completed sibling breakdowns 361 and 362 use the identical checkbox form, so this is an established project convention rather than a defect; noted only as a deviation from the plain-line marker form.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  }
+ ]
+}

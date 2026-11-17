@@ -1,0 +1,19 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Manual walkthrough exceeds the defined verification need",
+   "description": "Task 5.2 adds a port check and interactive viewer runs for all three policies, while the slice\u2019s criteria require manual viewer verification only for agents staying in bounds under the shipped configuration. The unit and integration tests already cover policy behavior; trim the extra interactive modes or explain why they are needed.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Full-suite regression check is duplicated",
+   "description": "Tasks 3.5 and 5.1 both require running the full pytest suite. Keep the regression run after the integration work, and remove the duplicate final run unless later changes could affect test behavior.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

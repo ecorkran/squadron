@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Early exit bypasses the future neighbor-selection seam",
+   "description": "The caller breaks as soon as the first `k` neighbors are found, before consulting the selection seam. A future distance-ranked implementation cannot consider later candidates merely by swapping that seam, contrary to slice 145\u2019s A7 contract. Make termination part of the selection strategy, or specify how the caller\u2019s break will change when distance-ranked selection is introduced.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-41"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Grid sizing does not specify mixed-profile radii",
+   "description": "The design uses a singular `query_radius` for the shared grid, while slice 145 stores a query radius per profile and sizes cells from the **maximum** query radius. If a smaller profile radius is used, scanning only `S` cells can miss neighbors for larger-radius profiles. Define the shared cell size as `max_query_radius / S`, preserve per-profile distance filtering, and cover mixed-radius profiles in verification.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:49-56"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Benchmark walkthrough cannot distinguish the proposed variants",
+   "description": "The baseline and early-exit commands are identical, as are the subdivision-only and combined commands; the design specifies no switch that disables early exit. Consequently, the walkthrough cannot reproduce the slice 145 baseline or measure the interventions separately, leaving the \u22655\u00d7 baseline comparison ambiguous. Run the baseline from the slice 145 revision or a preserved artifact, and either provide a real way to measure each variant or remove the unsupported variant claims.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:159-175"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Seven-neighbor benchmark target is omitted",
+   "description": "The slice plan explicitly identifies the biologically motivated `max_neighbors=7` operating point as a benchmark target, but the design specifies only the 32-neighbor gate run. Add a recorded seven-neighbor benchmark alongside the existing gates; it need not introduce another performance threshold.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:118-128"
+  }
+ ]
+}

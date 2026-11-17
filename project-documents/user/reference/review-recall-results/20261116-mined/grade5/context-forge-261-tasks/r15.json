@@ -1,0 +1,26 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Performance target lacks a load test and CI gate",
+   "description": "The slice restates a target of adding under one second to a Phase 0 build on local disk. Task 3T tests traversal caps, but those assertions do not measure that target. Add a load test under `tests/load/` covering the stated performance requirement and an explicit CI task that gates on it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes rather than plain lines",
+   "description": "The commit markers are written as checkbox tasks, starting with Task 2C, rather than plain `**Commit**:` lines. Convert them to plain markers while retaining their placement after tested work.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Renderer tests do not cover every outcome",
+   "description": "The slice\u2019s technical requirements call for `renderAdoptionFacts` tests for every outcome. Task 8T specifies brownfield, adoption-in-progress and the explicit-instruction outcome, but omits adoption-closed, already-planned and greenfield. Add cases for those outcomes to meet the stated criterion.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+  }
+ ]
+}

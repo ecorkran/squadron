@@ -1,0 +1,26 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Direction-classification steps contradict the required floor asymmetry",
+   "description": "T7 first says to return `INSUFFICIENT_EVIDENCE` whenever `n < floor`, which would prevent a low-match-rate cell from reaching `TIGHTEN`. It later says that `TIGHTEN` must remain available below the floor, and T8 expects that behavior. Clarify the precedence so implementation has one consistent rule: the evidence floor gates `GRADUATE`, not `TIGHTEN`.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-124"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Every task has its own commit marker",
+   "description": "Markers follow all 17 tasks, including implementation tasks whose tests are only in the next task. This conflicts with the requirement that markers sit at working, tested points, not after every task. Group markers at tested milestones\u2014for example, after each implementation-and-test pair\u2014rather than committing implementation before its associated tests.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:40-273"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model limitation is not specified for recommendations",
+   "description": "The design requires the per-recommendation model note to explain when a step draws a model at runtime and the threshold therefore cannot track that model. T9 only requires a generic template/model pairing note. Specify the runtime-drawn-model limitation in the generated note and add a test for that case; otherwise the stated limitation may be omitted from the actual recommendation output.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-151"
+  }
+ ]
+}

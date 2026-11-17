@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Environment input is described but absent from the tick contract",
+      "description": "\"Envisioned State\" step 1 says each tick receives \"environmental context,\" and \"Architectural Principles\" defines \"Environment as input surface\" with a read-only query interface. But the only tick signature specified in this initiative is `tick(state, profiles, spatial, dt, forces, active_indices=None)` (slices 100/303), which has no environment parameter, and no environment-query signature appears anywhere in the document. Slice 303 explicitly excludes environment-driven forces as future work and gives no migration path that avoids changing the signature. Three of the five archetypes (swarm/stigmergy, seasonal migration, territory/resource effects) require this input. The \"clean boundaries\" goal is undermined because the boundary is named but never defined.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Read-only environment principle cannot support stigmergy",
+      "description": "The same principles section says the engine queries environment \"through a read-only interface\" and \"does not own or manage environmental data,\" yet the document lists swarm agents that \"respond to environmental stigmergy (reinforced paths).\" Reinforcing a path requires depositing/updating marker state \u2014 a write. The stated extension point cannot support the stated capability without inverting the dependency direction. Since swarm is deferred to slice 106 \"after the Environment Layer initiative exists,\" the read-only contract should be revised now to include a narrow deposit channel, or the archetype should be explicitly descoped.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregate interaction cannot be presented \"through the same neighbor query interface\"",
+      "description": "The multi-resolution bullet claims the engine \"may need to evaluate forces between individually-simulated agents and nearby aggregates, which the world server would present through the same neighbor query interface.\" That interface is `query_radius(position, radius) -> NDArray[np.intp]` \u2014 integer indices into `state.positions`/`state.velocities` \u2014 and `BulkForce` consumes `neighbor_lists: list[NDArray[np.intp]]`. An aggregate is defined here as center of mass, heading, dispersion radius, and *count*: it has no single per-agent index, and its force contribution must be weighted by count/dispersion, which `profile_indices` cannot express. Slice 108 (\"Aggregation Interface Support\") is predicated on this composition; it will require rearchitecting the spatial and force interfaces, not a drop-in provider.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Vectorization and GPU-offload claims contradict the specified force/spatial interfaces",
+      "description": "Design Goals require the hot loop be \"structured for vectorized computation over arrays of agent state, not object-by-object iteration,\" and Technical Considerations requires GPU compatibility with \"no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop.\" The actual contracts contradict this: `SpatialQuery.query_radius(position, radius)` takes one position, forcing one call per active agent; `BulkForce` receives `neighbor_lists: list[NDArray[np.intp]]`, a Python list of variable-length arrays that must be built and consumed per agent (slice 101 explicitly adopts a \"Python-level loop over active agents\"). That is per-agent Python branching plus per-agent allocation in the hot path. The GPU path as described needs a batched fixed-shape representation (padded neighbor matrix or flat arrays with offsets); the current interface cannot provide it.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Forces, not decisions\" and profile-as-flat-data cannot express required archetypes",
+      "description": "The principles state behavior is \"Forces, not decisions\" \u2014 \"rather than implementing behavioral state machines or decision trees\" \u2014 and that a profile is \"a plain data structure\" of named weights. Required archetypes need decisions and per-agent state: herding needs designated \"experienced individuals\" influencing heading; pack hunting needs \"target selection logic\" and \"convergence-on-target\"; predator-prey needs \"inter-profile force interactions\" where \"an elk herd member's separation force from a nearby wolf is qualitatively different\" from another elk. Technical Considerations concedes this \"adds a combinatorial dimension to the parameter space,\" but no pairwise-rule representation, no per-agent role/target state, and no target ownership is defined. A flat scalar-weight profile cannot express \"flee profile X, ignore profile Y.\" This load-bearing decision is deferred to slice 103 with no supporting data model.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Returns the updated state\" and statelessness contradict the in-place, caller-owned-spatial design",
+      "description": "Step 5 says the engine \"Returns the updated state array,\" and the Overview says \"feed in state, get back state. No setup, no teardown, no mocks.\" The implemented contract is `tick(...) -> None` mutating `state` in place, and the caller-owned `SpatialQuery` instance is rebuilt and retained across ticks (slice 303 creates one `BruteForceQuery` at startup). \"The engine is stateless between ticks\" is therefore true of the arrays but not of the collaborator. The exact mutation and aliasing semantics need to be part of the interface contract \u2014 this matters for the replay, distribution, and thread-offload stories the document leans on.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Performance target is unreachable with the planned initial spatial strategy and unvalidated by cited prototypes",
+      "description": "Design Goals promise \"tens of thousands of agents at full behavioral fidelity on a single CPU process,\" and the scaling tiers cited here begin at 10K. The initial brute-force query \"computes all pairwise distances on build()\" \u2014 an N\u00d7N float64 matrix (~800 MB at 10K agents, ~20 GB at 50K) rebuilt every tick \u2014 and its replacement is deferred to slice 105, after all behavior slices. The Current State evidence is a canvas boid prototype (hundreds of agents) and a Three.js *rendering* benchmark (single draw call); neither measures full behavioral simulation at target scale. The performance goal is neither validated nor achievable with the near-term plan.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism claim lacks canonical neighbor ordering",
+      "description": "Determinism is defined as \"Given the same state and inputs, a tick produces the same outputs,\" with cross-region agreement on shared boundary state as a driver. Forces are reductions (means/sums) over `neighbor_lists`, whose order is set by the spatial strategy. Nothing requires canonical ordering, yet slice 105's acceptance criterion is that the spatial-hash swap yield \"behavioral output is identical before and after the swap,\" and slice 100 uses exact `np.array_equal`. Float summation is order-dependent; a different index will produce last-bit differences that break exact equality and any byte-level region agreement. Either mandate sorted neighbor indices or define determinism with a tolerance.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture carries speculative scaling machinery that is unused and partly unimplementable",
+      "description": "For a subsystem where Current State says no engine exists, the document commits to a wide extension surface: a dual `Force`/`BulkForce` protocol pair (one test-only), a subset-evaluable tick, pluggable spatial queries, a read-only environment interface, aggregate-neighbor support, GPU-dispatch constraints, and a zero-copy serialization boundary \u2014 mostly serving the explicitly out-of-scope 1M\u20134M+ and multi-region tiers. Cut or defer: the aggregate-neighbor interface and the \"no Python-level branching / no dynamic allocation\" GPU contract that the current API cannot satisfy (see findings above), and the per-agent `Force` protocol, which can be a test helper. Retain the spatial-query Protocol and subset tick only if the near-term world server actually exercises them.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Integration-stability discussion omits force singularities",
+      "description": "\"Tick rate and integration stability\" discusses Euler energy drift and settles on semi-implicit Euler, but the model is purely accumulative with only a velocity clamp and no force-magnitude limit. The inverse-square separation specified in slice 101 is singular when two agents coincide, producing NaN/Inf that propagates through neighbor reductions to the population; random initialization makes coincident agents possible. This failure mode is unaddressed in the stability reasoning.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Broken cross-reference to the world-server architecture",
+      "description": "\"Related Work\" links `[200-arch.world-server-foundation.md](200-arch.world-server-foundation.md)`, which does not exist; the actual file is `300-arch.worldserver-foundation.md`, matching the Overview's \"300-arch\" reference. This is the primary navigation path to the scaling requirements the document repeatedly invokes.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Related Work"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Environment input is described but absent from the tick contract",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Read-only environment principle cannot support stigmergy",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Aggregate interaction cannot be presented \"through the same neighbor query interface\"",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Vectorization and GPU-offload claims contradict the specified force/spatial interfaces",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Forces, not decisions\" and profile-as-flat-data cannot express required archetypes",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Returns the updated state\" and statelessness contradict the in-place, caller-owned-spatial design",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Performance target is unreachable with the planned initial spatial strategy and unvalidated by cited prototypes",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Determinism claim lacks canonical neighbor ordering",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Architecture carries speculative scaling machinery that is unused and partly unimplementable",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Integration-stability discussion omits force singularities",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Broken cross-reference to the world-server architecture",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Related Work",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-17T08:02:40.768443",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 56653,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 60284,
+  "cached_tokens": 29440,
+  "cache_write_tokens": null,
+  "completion_tokens": 14278,
+  "reasoning_tokens": 11949,
+  "duration_seconds": 94.87367099989206,
+  "cost_usd": 0.0031226200000000004,
+  "cost_basis": "alias_pricing"
+}

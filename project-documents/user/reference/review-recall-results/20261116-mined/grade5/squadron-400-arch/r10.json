@@ -1,0 +1,54 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Limits come from the project\" has no backing config and contradicts the no-config-edit promise",
+   "description": "The principle states file/function length is \"checked against limits the project declares in its own config,\" and Overview/Current State name the motivating gap as \"the project's own size rules (~300-line files, ~50-line functions) are checked by nothing.\" But those rules exist only as prose in `CLAUDE.md` (\"Keep source files to ~300 lines, functions to ~50 lines\"); there is no config key or reader for line/function limits anywhere in `CONFIG_KEYS` (only `review.max_file_size_bytes`, `review.max_total_injection_bytes`, etc.). Meanwhile Design Goals \"Cheap to start measuring\" promises a baseline \"without editing the project's config files or code.\" If the keystone snapshot reads limits only from project config, squadron's own baseline will report \"no limits set\" and will never check the exact rules that motivate the initiative; brownfield projects won't declare squadron config either. The document never says how CLAUDE.md prose becomes a \"declared limit,\" where limits come from for the reference case, or how a project declares them without editing config \u2014 a load-bearing input is undefined and two stated constraints conflict.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Review-category normalization changes a gating input and creates two divergent category representations",
+   "description": "\"Where review categorization happens\" treats prompting review templates to emit the closed `AuditCategory` vocabulary as a simple \"write-path change to review templates and output parsing.\" In this project a judge *is* a review template, and `category` is load-bearing in the 300/305/306 findings-addressed gate: `pipeline/actions/findings_addressed/screens.py::_match_key` keys exact matching on `(location, category)`. Rewriting category strings for all reviews changes that gate's finding identity and prior/fresh matching, which the Non-Goal \"No change to the judging path\" (judges, parsing, gates are 300's) explicitly rules out. The document also proposes keeping the model's raw string \"beside it\" and read-side mapping historical reviews, but normalized findings land in the metrology store while the gate reads the raw review file's `category` \u2014 two category representations with no reconciliation. Downstream consumers (`structured_findings` / `to_dict` JSON, `pr_comment`, the addressed judge) are never mentioned.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Dirty-marked snapshots break the per-commit determinism guarantee and will be silently diffed",
+   "description": "\"A snapshot measures a commit... dirty working tree is either refused or recorded with an explicit dirty marker.\" The deterministic tools (complexity, local lint/type counts) run against the working tree, not a clean checkout of the pinned SHA, so a dirty-marked snapshot carries metrics that are not properties of the commit it is keyed on \u2014 contradicting Design Goal \"Every snapshot metric gives the same value on the same commit with the same tool versions.\" More concretely, the comparability list in \"Tool identity is part of the measurement\" and \"Comparable over time and across projects\" enumerates project/commit/language/tool versions/rule set/exclusions but not dirty-vs-clean, so reports will diff a dirty snapshot against a clean one at the same SHA as if comparable. The 323 audit harness solved the equivalent problem by refusing dirty worktrees for a variance series; this design permits recording dirty snapshots without adding dirty status as a comparability dimension.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The adapter contract defers the hardest problem and \"function length\" is not language-agnostic",
+   "description": "\"Language coverage and tool choice\" concedes \"cyclomatic complexity is computed differently by different analyzers\" yet says \"the adapter contract has to define each metric well enough that adapters agree on what they report.\" Defining a language- and tool-independent complexity metric on which adapters agree is a research-grade problem, is the keystone's most load-bearing artifact, and is deferred entirely to unspecified \"slice design.\" \"Function length\" is likewise not the language-agnostic line count the document groups it with \u2014 it needs per-language function-boundary parsing. Yet reports roll these numbers into one breakdown, with only a \"labelled as such\" caveat for cross-language comparison, so the rollup is only as comparable as a contract that does not yet exist.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The coverage decision is deferred, and the metric will be absent for the brownfield projects that need it",
+   "description": "\"Coverage requires running tests\" defers the pivotal choice \u2014 \"whether the snapshot ever installs or runs project dependencies, or only reads a coverage report the project already produces\" \u2014 to slice design, while merely naming its \"real security and environment cost.\" Arbitrary brownfield repos don't emit a coverage report squadron can read, so real coverage means executing untrusted project code in the user's environment. Combined with \"Absent is not zero,\" most brownfield snapshots will record coverage as absent, undermining the cross-project comparison goal for a headline metric. No slice under \"Anticipated Slices\" owns this decision.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Reports promise a noise floor for review findings, but no component produces one",
+   "description": "Design Goals say \"LLM-derived signals (audit, review) stay separate and carry their own noise floor\"; Envisioned State says \"LLM-sourced numbers are shown against their noise floor\"; the rollup slice promises \"noise-floor display for LLM sources.\" The only defined noise-floor method is 320/323's audit variance (N repeated audits on unchanged code). No mechanism, record type, or slice produces a noise floor for code-review findings \u2014 that would require repeated reviews of the same diff. The rollup slice will therefore either show review counts with no floor, contradicting the promise, or fabricate one \u2014 inconsistent with the document's own \"Absent is not zero\" honesty principle.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The 440 consumption interface for the baseline is assumed rather than defined",
+   "description": "\"CF offers this at handoff through 440's capability probe\" and \"440 reads the baseline\" treat the consumption point as settled, but the cross-repo contract (`reference/capability-probe-contract.md`) exposes only `baseline.available: bool` (\"False until 400 ships\"), the probe \"is not built yet,\" and it states CF reads only the probe. Nothing specifies how baseline *content* is offered at handoff \u2014 whether CF surfaces only that one exists and the operator runs squadron's report separately, or whether a data contract must cross the boundary. Because the paired 440 work \"must work without squadron installed,\" there is no user-level metrology store to read on that path. The extension point this component claims 440 depends on is left to future work without a defined interface.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+  }
+ ]
+}

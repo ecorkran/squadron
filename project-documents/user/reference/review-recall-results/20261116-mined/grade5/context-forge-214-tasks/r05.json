@@ -1,0 +1,12 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox task items instead of plain-line `**Commit**:` markers",
+   "description": "The commit points are written as checklist tasks \u2014 `- [ ] **Task 2C: Commit** \u2014 ...` (lines 71, 94, 117, 126, 134). The marker convention requires commit markers to be plain lines, never checkboxes, so they are not consumed as completable work items. Placement is correct \u2014 2C/3C/4C sit at working, tested points after each implementation+test pair, and 5C/6C are correctly conditional \u2014 and the semantic commit messages follow the git rules, so this is a form fix only: render the five entries as plain `**Commit**: \\`feat(...)\\`` lines rather than checkbox \"Task XC\" items.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  }
+ ]
+}

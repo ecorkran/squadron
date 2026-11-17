@@ -1,0 +1,26 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Audit section misattributes the delta provider and does not match `compute_delta`'s contract",
+   "description": "Line 73 credits **323** with `compute_delta` and `is_within_floor`, and line 326 repeats `compute_delta` under \"323: ... unchanged\". Both belong to slice **324**: 324's design assigns `audit_delta.py`, `compute_delta(baseline: ProjectBaseline, new_run: AuditRun) -> DeltaReport`, `DeltaCell.within_floor` and `is_within_floor` to itself; 323's design lists `baseline_report`, `AuditRun`, `AuditNoiseFloor`, `FloorStat` and `ProjectBaseline`, and never mentions either function. 324 is absent from the frontmatter `dependencies` and from the slice-plan entry for 403, even though 403 now imports its code (the architecture's \"Related Work\" sanctions reusing 320's delta, but the providing slice still has to be named).\n\nMore consequentially, the Data Flow (line 149: `audit: baseline at before_sha, latest run at after_sha, same prompt hash \u2192 compute_delta`) and D8 (line 236: \"The baseline is the latest run at `before_sha` and the new run is the latest at `after_sha`\") describe feeding two `AuditRun`s. `compute_delta` takes a `ProjectBaseline` plus one `AuditRun`, and `baseline_report(store, *, project_filter=...)` returns every `(project_id, commit_sha, audit_prompt_hash)` group with no commit filter. Nothing in the design says how the `before_sha` group is selected, how that group's `FloorStat`/`floor_n_runs` reaches `is_within_floor` and the `AuditSection`, or what happens when several instruments match. Criterion 8 (line 339) restates the two-run framing. This leaves the slice-plan requirement \"LLM-sourced numbers are shown against their noise floor\" and the architecture's \"before/after deltas are reported against [the floor]\" without a specified construction path. Fix: name 324 as the provider, declare the dependency, and specify filtering `baseline_report`'s output to the `before_sha`/prompt-hash `ProjectBaseline` before calling `compute_delta`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:73"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Range resolver converts git failures into a benign unresolved result and exit 0",
+   "description": "The only resolver failure row (line 164) says a reflog read or merge search returning `None` is \"treated as 'this path can't answer'\", tries the next path, and emits an INFO line per unresolved slice; line 275 then says `slice-ranges` \"Exits 0 when every slice either resolved or was unresolved for a stated reason\". But `None` covers two different events: a genuine \"no merges found\" and `run_git` failing to answer (30 s timeout, spawn failure, non-zero return code). The Data Flow (lines 112-114) does `none found \u2192 fast-forward landing`, so a timed-out `git log --merges --first-parent` on a large repository is indistinguishable from a real fast-forward: the command prints `unresolved: reflog_unavailable` and exits 0 instead of erroring. The same collapse affects `merge-base`, the containment/first-parent checks and `git cat-file -e` (a git failure there reads as \"commit <sha> not found\", line 165), and `report history`'s first-parent `git log` ordering (line 298) has no failure row at all. This contradicts the design's own CLI contract (\"Exits 1 on a git or store error\", line 275) and its rule that \"a `None` from `run_git` is never an answer\" (line 327, echoing 400's \"A `None` (git couldn't answer) is a preflight failure, never treated as a clean tree\"). It leaves criterion 1 (\"resolves from topology alone ... including in a fresh clone\") and criterion 11 unmet whenever git cannot answer. Fix: distinguish `run_git` `None`/non-zero from a legitimate empty search, add a distinct git-error path with ERROR + exit 1, and enumerate hang/timeout/refusal for `git log --first-parent`, `merge-base`, the containment checks and `cat-file -e`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "401's snapshot-compatibility rule is not restated, and 403 may have to edit 401's code",
+   "description": "401's design states that snapshot records written by 400 fail its `LanguageSnapshot` every-metric validation and are skipped by the store's tolerant scan, and that \"403 reads only snapshots taken by 401 or later (Compatibility)\". 403's Prerequisites says 401 is \"not a prerequisite\" and commits to a conditional (\"If 401 is implemented after 403, it inherits the `environment_root` rule ... If before, 403 updates whatever of 401's code reads `ctx.repo_root`\"), but 401 is not in `dependencies` and the compatibility rule is never restated. Behavior still works \u2014 `ensure_snapshot` re-measures a skipped boundary snapshot \u2014 so this does not leave a criterion unmet, but the plan's implementation order puts 401 before 403, which makes \"403 updates 401's code\" the expected branch of a hidden ordering dependency. Naming the assumed order and the skipped-snapshot behavior would remove the ambiguity between two unimplemented slices.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+  }
+ ]
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All success criteria trace to tasks; no scope creep",
+      "description": "Cross-referencing the LLD's Success Criteria against the tasks:\n\n- **Functional 1** (slice-branch body cites design, checked/unchecked items, review provenance) \u2192 Tasks 7, 8, 9, 11 (11.2's \"full inputs\" case asserts the deterministic facts verbatim).\n- **Functional 2** (unplanned repository: five sections, three no-input lines, creation succeeds) \u2192 11.2's unplanned-repository case plus 16.2's walkthrough step 4.\n- **Functional 3** (merged ancestor's review excluded) \u2192 8.2's explicitly load-bearing in-range-vs-ancestor case.\n- **Functional 4\u20135** (integration-branch refusal naming the branch / integration-branch base with printed source) \u2192 5.1's D1 table and 5.2's per-row cases, including \"the refusal case asserts the branch name appears in the message and that `default_branch` was never called\"; printing is in 13.1.\n- **Functional 6** (unpushed/behind failures name the push command before any write) \u2192 Task 6, with the before-write ordering asserted in 13.2 (\"a precondition failure means the composer was never called\").\n- **Functional 7** (missing section fails the presence check with zero write calls) \u2192 12.2 and 13.2 (\"a failed presence check exits 1 with no write\").\n- **Functional 8** (title: deterministic on a slice branch with no model call; `--title` overrides; empty/over-72 falls back to the first commit subject) \u2192 Task 10a and 10a.2's eight cases, including the \"composer is never called\" assertion.\n- **Functional 9** (dry-run/real equality) \u2192 13.2's equality case plus 13.1's single-binding requirement (D8).\n- **Functional 10** (identity refusal exits non-zero naming the reason, no write) \u2192 13.2's identity-refusal case; the reason rendering via `render_code_host_error` is pinned in 14.1.\n- **Functional 11** (one recorded live creation) \u2192 16.2 step 5, with the URL recorded as evidence.\n- **Technical 1** (timeout constants at all five call sites) \u2192 14.1, including the `GIT_QUERY_TIMEOUT_SECONDS` vs `HOST_COMMAND_TIMEOUT_SECONDS` assertion from design review F007.\n- **Technical 2** (provider failure: exit non-zero, ERROR log, nothing created) \u2192 10.1's process-boundary handler and 10.2's assertion (F008).\n- **Technical 3** (default path makes exactly one write, after every read) \u2192 13.2's happy-path and ordering assertions.\n- **Technical 4** (`review/` does not import `pr/`) \u2192 15.1.\n- **Technical 5** (checkbox parser with real-task-file fixture) \u2192 2.1/2.2, including the \"this file once it exists\" fixture named in the criterion.\n- **Technical 6** (pyright/ruff clean) \u2192 16.1.\n- **Technical 7** (`summary_oneshot` docstring correction with a routing test) \u2192 15.2.\n- The Verification Walkthrough's six steps \u2192 16.2 verbatim, with the walkthrough rewrite in 16.3.\n\nEvery task traces back to a criterion or a design decision (D1\u2013D8, D4a); nothing is scope creep. Task 15's two corrections are both owed items named in the design and repeated in the technical criteria. The test tasks are exactly those the criteria demand \u2014 no extra test surface. No NFR is restated in the slice, so no `tests/load/` task is required.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern are sound",
+      "description": "Dependencies are respected end to end: the two pure parsers (Tasks 1\u20132) land first and alone; git helpers (Task 3) and the `resolve_locator` extraction (Task 4) precede their consumers; refusal paths (5, 6) precede gathering (7, 8), which precede assembly (9), composition (10, 10a, 11), the check (12), and the wiring (13). This matches the LLD's \"Implementation Notes \u2192 Order\" and the D8 constraint that every model-free refusal precedes the model call. Each implementation task is immediately followed by its test task (1\u21922, 3\u21923.2, 4\u21924.2, 5\u21925.2, 6\u21926.2, 7\u21927.2, 8\u21928.2, 9\u21929.2, 10\u219210.2, 10a\u219210a.2, 11\u219211.2, 12\u219212.2, 13\u219213.2). Task 14 is a test-only task but correctly placed after 13 \u2014 the failure matrix cannot run before the command exists. No circular dependencies.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Local head sha for the pushed-branch precondition is unnamed",
+      "description": "`check_head_pushed` takes `local_sha: str` as an input, but no task says how the command obtains the local head sha. Task 3 adds only `current_branch` (a branch *name*) and `commits_in_range` (which needs a base \u2014 and per Task 13.1's ordering, base selection runs *after* the precondition). The wiring step in Task 13 therefore depends on an acquisition (`git rev-parse HEAD`) that exists in no task's steps. This is completable \u2014 the parameter name makes the requirement clear and the acquisition is idiomatic \u2014 but naming it in Task 3's helpers or Task 13.1's steps would remove the last unspecified input on the path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"No host call is made\" in 12.2 conflates reads with writes",
+      "description": "Task 12.2 asserts \"the failure path creates nothing \u2014 no host call is made\", while the success criterion says \"verified by the fake runner recording zero write calls\". At command level the check runs *after* several legitimate host reads (`identify_operator`, `branch_exists`, possibly `default_branch`), so \"no host call\" would be literally wrong there; 13.2 (line 309) phrases it correctly as \"no write\". In the unit-level `tests/pr/test_body.py` context the assertion is trivially true. Reconciling the phrasing to \"no write\" would keep the two levels consistent.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:287"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All success criteria trace to tasks; no scope creep",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern are sound",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Local head sha for the pushed-branch precondition is unnamed",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "\"No host call is made\" in 12.2 conflates reads with writes",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:287",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-17T05:50:40.463101",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 16489,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 3,
+  "prompt_tokens": 51965,
+  "cached_tokens": 25984,
+  "cache_write_tokens": null,
+  "completion_tokens": 6096,
+  "reasoning_tokens": 4223,
+  "duration_seconds": 110.62727512512356,
+  "cost_usd": 0.016709191,
+  "cost_basis": "alias_pricing"
+}

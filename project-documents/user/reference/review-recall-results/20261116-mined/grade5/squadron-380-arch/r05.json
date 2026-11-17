@@ -1,0 +1,89 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The adapter does not define an immutable review range",
+   "description": "The typed PR record contains a base ref, head ref, and head SHA, but no base SHA. Yet the design promises a merge-base-to-head range and names \u201cbase moved since resolution\u201d as a failure. A base ref may be absent locally, stale, or point to a commit different from the PR\u2019s base at resolution time. Likewise, resolving metadata and then fetching the mutable head ref is racy: a force-push between those operations can make the fetched commit differ from the recorded `head_sha`. The full-URL and `owner/repo#n` forms also leave unresolved how the target repository maps to a local clone and remote. The design must define the local-repository precondition, fetch both base and head by immutable SHA into the same object database, verify the fetched head SHA, retain a `base_sha`, and compute the range from those pinned values. Without this, the feature can review the wrong diff\u2014the same class of trust failure slice 916 was created to prevent.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "PR-controlled instructions enter a trusted review context",
+   "description": "The document treats PR title, body, issues, and threads as untrusted, but the scratch worktree contains the PR head and the reused review engine consumes several PR-controlled instruction sources. `src/squadron/review/review_client.py` injects `CLAUDE.md` from the review working directory as project conventions; `src/squadron/review/rules.py` discovers rules from that working directory\u2019s `.claude/rules`; and `src/squadron/data/templates/code.yaml` sets `setting_sources: [project]`, which `run_review_with_profile` passes to the SDK. A contributor can therefore change the rules and project instructions used to review their own PR, or supply project settings that affect SDK setup. The architecture must specify whether review policy comes from the trusted base revision or the PR head and must constrain or disable PR-controlled settings. If PR-authored rules and instructions are retained, they must be treated as untrusted data rather than authoritative review policy.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The PR persistence contract is incompatible with the current review artifact contract",
+   "description": "The design promises a generic save target and a PR-keyed name \u201cwithout a slice index,\u201d but the existing persistence seam is entirely slice-shaped. `format_review_markdown` and `save_review_result` in `src/squadron/review/persistence.py` require `SliceInfo` with an integer index and emit a `{index}-review.{type}.{name}.md` filename plus `slice` and `project` frontmatter. `locate_review` in `src/squadron/review/resolution_evidence.py` can locate only integer-indexed files. The architecture does not define the target union, PR frontmatter, filename grammar, global-store namespace, collision behavior, or whether PR reviews participate in `sq review resolve`. It also overlooks that `save_review_result` currently stamps `reviewedSha` from the process working directory, not the review working directory; using a scratch worktree can therefore stamp the operator\u2019s HEAD rather than the reviewed PR head. Finally, a review stored under a squadron-owned global directory is not staged, so slice 917\u2019s commit-time verdict gate does not apply \u201cunchanged.\u201d The save-target contract and validation location must be defined before implementing this slice.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned-State"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "PR creation can silently target `main` when the integration branch cannot be read",
+   "description": "The design states that `sq pr create` must target the configured integration branch and \u201cnever `main` in that case.\u201d The current resolver in `src/squadron/review/git_utils.py`, `resolve_diff_base`, catches both an unavailable Context Forge and a configuration-read error and silently returns `main`. Reusing that behavior would create a PR against the wrong branch after a transient `cf` failure, directly violating the stated hard rule and the project\u2019s prohibition on silent fallback values. The PR-creation path needs a strict configuration read that distinguishes \u201cunset\u201d from \u201ccould not be read,\u201d fails closed on the latter, and only then selects `main` when no integration branch is configured.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "PR-description traceability is promised beyond what model composition can guarantee",
+   "description": "The design promises that everything written by `sq pr create` is derived from a named input and that nothing unsupported is asserted. The proposed implementation, however, composes prose in one unconstrained model call and only assembles deterministic provenance separately. Listing the source commit, slice document, and review artifact does not prove that each claim in \u201cwhy\u201d or \u201chow it was verified\u201d is supported by those sources; the model can infer, embellish, or import instructions from attacker-controlled commit messages and PR-branch documents. The architecture must either narrow the guarantee to source-list provenance, or require claim-level source references and validate them before creating the PR. Otherwise the traceability goal is not enforceable.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Stale-head detection is missing from the posting flow",
+   "description": "The document promises that a review posted after the PR head moves \u201cmust say so,\u201d but the described flow never re-resolves the PR immediately before saving or posting. A force-push during a potentially long model run can leave the command preparing to update the current PR with findings for an obsolete SHA. Recording the SHA is useful provenance, but it does not implement the stronger promise to identify the PR as stale. The flow needs an explicit pre-post revalidation step that compares the current head with the reviewed head and either refuses the write or clearly marks the result as stale, including behavior when the head changes again during posting.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned-State"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Idempotent comment updates are absent from the adapter contract",
+   "description": "The adapter protocol is said to cover posting, but the promised behavior\u2014finding Squadron\u2019s prior comment and updating rather than stacking it\u2014requires additional operations such as listing/filtering comments and editing a comment by its host identifier. The marker format, ownership check, and concurrency semantics are also unspecified. Two concurrent `--post` invocations can both observe no prior comment and create duplicates, or one can overwrite a newer review. The protocol should define comment identity, marker format, author/operator ownership validation, and compare-or-update behavior rather than leaving these guarantees inside the GitHub implementation.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Network subprocesses and fetches have no bounded failure policy",
+   "description": "The design treats host unreachable and head-not-fetchable as observable errors, but it does not define process timeouts or interruption behavior. The project\u2019s shared `run_git` helper in `src/squadron/review/git_utils.py` has a fixed 30-second timeout, which is suitable for local git inspection but can be too short for fetching a PR into an enterprise repository. No timeout is specified for `gh` calls at all. The adapter needs separate, configurable bounds for metadata calls and network fetches, with timeout, authentication failure, transport failure, and interrupted-fetch outcomes distinguished and surfaced as the promised non-zero errors.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\u201cLatest saved review\u201d is not a safe selector for verification claims",
+   "description": "The `sq pr create` slice says it uses the latest saved review, but no selection rule identifies the review type, repository, host, branch, or reviewed head SHA. A stale code review, an architecture review, or a review of another repository can therefore become the evidence for the new PR\u2019s \u201chow it was verified\u201d section. Selection should require the intended review type and match the same repository and current head SHA; otherwise the PR body must explicitly label the review as stale and state which commit it covered.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Anticipated-Slices"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The host protocol has no registration or selection mechanism",
+   "description": "A Python protocol alone does not make a second host \u201ca new implementation, not an edit.\u201d Without a registry, entry-point mechanism, or host-to-implementation selection contract, adding GitLab or Gitea still requires editing a central factory, configuration loader, and doctor logic. This is inconsistent with the project\u2019s existing provider registry pattern in `src/squadron/providers/registry.py`. The architecture should define how an adapter is selected from a PR host, how implementations are registered, and what happens when no implementation matches.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\u201cFull parity\u201d leaves PR scope flags contradictory",
+   "description": "The design promises that every existing review flag behaves as today, while the PR target already fixes the diff range. The current code-review command also accepts `--diff` and `--files`. If `sq review pr` accepts `--diff`, the architecture does not say whether it overrides the PR range, must match it, or is rejected. If `--files` is accepted, the existing code template can direct the reviewer toward matching files that are outside the PR diff, broadening a supposedly PR-scoped review. The accepted PR flag set and precedence must be explicit: for example, `--diff` could be prohibited, while `--files` could be defined as an intersection with changed files rather than a broader glob.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design-Goals"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Doctor could turn an optional PR dependency into a failed installation",
+   "description": "No PR is ever required, and setup is not intended to install `gh`. However, `sq doctor` exits nonzero for any `MISSING` check in `src/squadron/cli/commands/doctor.py`; only `WARN` rows are nonfatal. If an absent `gh` is reported as `MISSING`, every installation that does not use PR features would appear broken, violating the requirement that existing flows remain unchanged. The doctor contract must classify `gh` absence as optional, while authentication and reachability failures can be reported per host without making the core installation fail.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+  }
+ ]
+}

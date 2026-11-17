@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Platform selection does not implement the promised hardware fallback",
+   "description": "`_select_arch()` chooses CUDA or Metal based on the operating system, not whether that device is available. On Linux without a CUDA driver, for example, it still selects `qd.cuda`; the Open Notes say `qd.init()` then raises and the server exits. That conflicts with A7 and the slice-plan requirement that a host without Metal or CUDA warn and fall back to `qd.cpu`. Detect device availability and use the fallback, or narrow the stated requirement.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#New File: gpu_driver.py"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Reflect bounds changes are not synchronized back to GPU state",
+   "description": "The design exports positions and velocities, then applies bounds policy to both arrays. But the specified notification and upload mechanism only handles positions (`notify_positions_modified()` and `upload_positions()`). `REFLECT` changes velocity as well as position; without uploading the changed velocities, the next GPU tick retains the pre-reflection velocity. This leaves A4\u2019s reflect behavior unmet. Synchronize the modified velocities too, or handle reflection on the GPU.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The GPU path does not define how SOFT bounds are applied",
+   "description": "The design treats SOFT like WRAP and REFLECT: it describes post-tick bounds enforcement and position sync-back. But slice 314 defines SOFT as a repulsive force in the force pipeline, not a position correction. The proposed GPU setup and fused tick do not specify how that force reaches the kernel. As written, the four-policy success criterion does not establish SOFT behavior. Specify how the GPU path implements the SOFT force, or explicitly defer SOFT and revise the required scope and criterion.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "GPU transfer and synchronization hangs have no handling strategy",
+   "description": "The new path relies on host-device transfers (`from_numpy()` and exports) and `qd.sync()` during ticks. The notes define startup error handling and say post-start GPU failures are fatal, but do not define what happens if a transfer or synchronization hangs, or how a runtime device failure is detected and handled. Specify a bounded timeout or an explicit process-fatal strategy that prevents the server from hanging indefinitely.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Open Notes"
+  }
+ ]
+}

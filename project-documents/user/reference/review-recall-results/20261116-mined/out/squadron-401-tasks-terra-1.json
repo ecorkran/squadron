@@ -1,0 +1,129 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes and occur too frequently",
+      "description": "The `Commit:` entries are checkbox items rather than plain `**Commit**:` lines, and markers appear after most tasks, including documentation and fixture-only tasks. Consolidate them at a smaller number of working, tested milestones.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "TypeScript memory failures have conflicting outcomes",
+      "description": "Task 10 treats exceptions listed in `token_errors` as per-file failures but requires `MemoryError` to fail the entire duplication measurement. Task 14 includes `MemoryError` in TypeScript\u2019s `token_errors`, so a junior implementer could reasonably catch it as a per-file error and return a partial result. Remove it from that list or explicitly give whole-pass handling precedence, and test the TypeScript path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:120-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplication tasks do not explicitly exclude blank lines",
+      "description": "D3 requires `per_file` to count duplicated **non-blank** lines. Task 10 instead says to mark every line under the windows, and the tests do not assert that blank lines within a duplicated block are excluded. Clarify the count and add that assertion to the existing duplication test.",
+      "file_ref": null,
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Repeated-token test conflicts with the non-overlap rule",
+      "description": "The test says a run of one repeated token does not count, but a sufficiently long run contains non-overlapping 100-token windows, which D3 permits as copies. Specify a run shorter than 200 tokens for the overlap-only case, or distinguish overlapping from non-overlapping occurrences in the assertion.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:134"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes and occur too frequently",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "TypeScript memory failures have conflicting outcomes",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:120-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "summary": "Duplication tasks do not explicitly exclude blank lines",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125-126",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Repeated-token test conflicts with the non-overlap rule",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:134",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T13:15:15.686636",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 45142,
+  "cached_tokens": 40192,
+  "cache_write_tokens": null,
+  "completion_tokens": 586,
+  "reasoning_tokens": 136,
+  "duration_seconds": 23.41093433275819,
+  "cost_usd": null,
+  "cost_basis": null
+}

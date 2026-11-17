@@ -1,0 +1,68 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Normalized review-finding records carry no instrument identity",
+   "description": "The doc's own principle \u2014 \"Tool identity is part of the measurement\u2026 the same reasoning 320 applied to judge template versions\" \u2014 is applied to snapshots only. \"An ingest step reads review files into the store as normalized finding records tied to project, commit and slice where known\" names no template, model, or template-version identity on the review-finding record. This is load-bearing, not cosmetic: 420 scores *models* using \"code review findings normalized by 400,\" so findings from different judges and template revisions must not pool into one count \u2014 the exact blending 320's `JudgeConfigId` (template + model + content hash) and 323's `audit_prompt_hash` exist to prevent. `AuditRun` carries `audit_prompt_hash` and `model`; the review-finding record as specified carries neither. The data exists in the artifacts (`aiModel`, `reviewType`, `squadronVersion` frontmatter); the record contract must require carrying it, per the 320 comparability discipline the doc itself invokes.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The write-path category change misses the emission sites that will poison `other`",
+   "description": "\"Where review categorization happens\" scopes the write-path change to \"review templates and output parsing.\" Two code-level emitters are not named. First, `_STRUCTURED_OUTPUT_INSTRUCTIONS` (`src/squadron/review/review_client.py:69-90`) is appended to *every* non-judge review's system prompt by `assemble_system_prompt`, and its example is literally `category: error-handling` \u2014 a near-miss of `error-handling-observability` that is not in the vocabulary. If templates adopt the vocabulary while this shared block keeps its example, every review is simultaneously told to use the vocabulary and shown an out-of-vocabulary value; the misses land in `other` with `raw_category` retained, inflating exactly the bucket 323 defines as the \"vocabulary does not fit\" signal. Second, squadron emits synthetic findings with fixed categories outside the vocabulary into the same findings list the ingest reads (`COVERAGE_CATEGORY = \"review-coverage\"`, `TASK_GATE_CATEGORY = \"merge-step\"`, `\"tooling\"` in `git_utils.py:170`, and the `\"uncategorized\"` substitution for `None` in `structured_findings`). The doc must decide whether system-imposed/meta findings are in scope or excluded, and name the shared instruction constant as a copy to update \u2014 it is a Python constant, so unlike the skill file it can be validated against the enum directly at load rather than only by a CI sync test.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Ingest semantics \u2014 trigger, failure, and eligibility \u2014 are unspecified",
+   "description": "Snapshots get a dedicated \"When snapshots are taken\" consideration; the symmetric treatment for review-finding ingest is missing. Unstated: (a) when ingest runs \u2014 a `sq metrology` command someone must remember, or a hook in the review save path, where a store failure must not fail the review save that gates depend on; (b) what happens on re-review \u2014 the review-and-revise loops (slices 941/943) and `revision_number` mean one slot is overwritten with revisions at different SHAs, so which revision's findings count and how re-ingest avoids double-counting needs a dedup key (320's content-hash `JudgeResultRef` is the established precedent); (c) degraded artifacts \u2014 a provider-failure review (`verdict: UNKNOWN`, `providerFailure: true`) or a degraded parse carries zero findings in frontmatter, and an ingest that trusts the artifact records \"the review found nothing,\" the exact false cleanliness reading `persistence.py` refuses to make elsewhere. The record needs the same absent-with-reason honesty the doc demands of static metrics.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Snapshot record granularity is a load-bearing decision left entirely unnamed",
+   "description": "\"writes one snapshot record per commit\" never says what a snapshot contains: aggregates only, per-file, or per-function values. On squadron (374 files, thousands of functions) a per-function snapshot is hundreds of KB per commit; an aggregate-only record cannot support the trend/top-N reporting the rollup slice implies; precomputed distributions lock the report surface. 320's precedent for its keystone was to fix the load-bearing commitments and name representation as the slice's open question \u2014 the snapshot's equivalent commitments (granularity, record size, what trends remain computable) are not even named as open. The keystone slice lists \"the record type, adapter contract, tool and rule-set identity\" but not this.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Store growth is the known trip-wire, and this initiative adds the highest-volume record types without revisiting it",
+   "description": "\"Extend the 320 store, don't fork it\" is the right call, but the store is one JSON file per record and every query is a full-directory glob scan that reads and validates every file (`MetrologyStore._iter_records`, `src/squadron/metrology/store.py:183`). 323 explicitly recorded the counter-decision (\"Migrating the store to SQLite \u2014 the 321 revisit already declined it and left a measured trip-wire\"). 400 adds per-commit snapshots (potentially captured at every slice boundary) and one record per ingested review \u2014 the highest-churn records the store will hold \u2014 and never mentions the trip-wire, a growth bound, or the scan cost every report pays as months of records accumulate. Cite the trip-wire and state expected record volume, or name re-measurement as a slice consideration; silence here repeats the pattern 321's trip-wire was created to catch.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Recorded as absent\" for a failed attached snapshot conflicts with the store's persist-nothing convention",
+   "description": "\"When snapshots are taken\" requires a failed pipeline-attached snapshot be \"visible as a failure (logged and recorded as absent), not swallowed.\" The sibling convention is the opposite: 323's Decision 9 and `write_audit_run`'s contract persist *nothing* on failure \u2014 a failed run reduces `n_runs` and is never a record. If \"recorded as absent\" means a store record, it is a new record kind the doc does not spec and the store does not have; if it means a log line, reports reading the store cannot distinguish \"attempted and failed\" from \"never taken,\" so nothing is recorded as absent in any queryable way. Pick one and name the visibility surface (323's answer for audits: nothing persisted, WARNING logged, the campaign summary carries the failure).",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Review-finding counts are promised noise floors that nothing measures",
+   "description": "\"LLM-sourced numbers are shown against their noise floor; deterministic numbers need none.\" The only measured floors in the system are audit noise floors (323); no mechanism measures run-to-run spread of review-finding counts, and no slice in Anticipated Slices adds one. 323's own walkthrough measured audit dispersion at 35\u2013111% of the mean and concluded such totals are \"not gate-worthy at any size\"; review-finding counts are the same class of LLM-sourced count, and 420 intends to score on them. Either the reports must mark review findings \"no floor measured\" per the 323 convention (and 420's scoring must not treat an unfloored count as stable), or a review-finding floor measurement belongs in scope. The doc does neither, while its Envisioned State sentence implies floors exist for all LLM sources.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The limits-declaration surface is unspecified, and the keystone's proof target declares its limits only in prose",
+   "description": "\"Limits come from the project\" checks lengths \"against limits the project declares in its own config\" \u2014 but no config surface, format, or precedence is named, and this is keystone scope: the first slice lists \"project-declared limits\" among what it proves. The proof target is squadron itself, where the ~300-line/~50-line rules exist only as prose in AGENTS.md/CLAUDE.md (\"where practical\") \u2014 nothing machine-readable for an adapter to read. The keystone therefore implicitly includes creating the declaration mechanism (a squadron config change nowhere in the doc), or its flagship metric degrades to distributions on the very project the motivation cites. There is also a mild unacknowledged tension with \"Cheap to start measuring\u2026 without editing the project's config files\": fine for brownfield baselines (undeclared \u2192 distributions), but say so rather than leave the reader to reconcile it.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Per-slice before/after silently depends on the deferred capture decision",
+   "description": "The rollup slice delivers \"per-slice\u2026 breakdowns,\" and Envisioned State defines a slice's before/after as fork-point vs. merge snapshots \u2014 but automatic capture at slice boundaries is deferred as a slice decision, and the on-demand CLI baseline means per-slice pairs exist only where an operator remembered to snapshot twice. State what per-slice reports render when the fork/merge snapshots are absent (presumably absent-with-reason per the doc's own principle) rather than letting the rollup slice discover the data is not there.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  }
+ ]
+}

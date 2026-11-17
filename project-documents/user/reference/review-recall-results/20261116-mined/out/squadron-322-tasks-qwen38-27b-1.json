@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T13's \"store-recorded samples only\" fallback makes T14 unpassable and contradicts the design's discovery premise",
+      "description": "The first bullet of T13 says: if no 320 result-discovery surface exists, \"scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk (ask the Project Manager\u2026).\" But there is no 320 surface for enumerating unsampled results by `JudgeConfigId` \u2014 `capture.py` only has `resolve_target` (resolves one target, by index/type) and `read_review_frontmatter`; `store.list_samples` enumerates *sampled* verdicts. So the fallback is what an implementer will actually take. That fallback is mutually exclusive with T14's \"Pruned review file: a matching judge result's review file has been deleted since graduation \u2192 that target is skipped, counted, WARNING logged\" (and the T13 \"non-empty-offers\" guarantee is only meaningful over unsampled *files* not in the store). A \"store-recorded samples only\" implementation cannot know which matching files exist or were deleted, so T14's pruned-file case has nothing to assert against \u2014 T13/T14 are a contradictory, untestable pair. This also undercuts the design's \"residual sampling\" premise, which is explicitly about *unsampled* judge results kept producing data (an offer set over already-sampled data would \"freeze\" agreement, defeating the feature). Fix: drop the store-only fallback, and make T13 explicit that a bounded review-file discovery helper is *required* (scan `project-documents/user/reviews`, reusing 320's `read_review_frontmatter`/`derive_judge_config_id` to match the exact `JudgeConfigId`, then exclude refs already in the store) \u2014 a bounded, DRY reuse of 320's primitives, not a new 320 capability. The success criteria it unblocks: the non-empty-offers guarantee, the pruned-file failure mode, and the lapsed-vs-exhausted distinction.",
+      "file_ref": null,
+      "category": "task-completeness / internal-contradiction",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's `classify_direction` precedence contradicts the floor-asymmetry success criterion",
+      "description": "T7 lists the precedence as: (1) `n < floor \u2192 INSUFFICIENT_EVIDENCE`, (2) `not versioned \u2192 INSUFFICIENT_EVIDENCE`, (3) graduate, (4) `match_rate <= tighten_rate \u2192 TIGHTEN`, (5) HOLD. Step 1 is unconditional, so a below-floor, low-match-rate cell returns `INSUFFICIENT_EVIDENCE` before step 4 is reached \u2014 yet T7's own Success line and T8's \"Tightening is not floor-gated: `n < floor` with a low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\" (and the design's direction-bands table, which the table's `n >= floor` HOLD qualifier confirms) require that cell to be `TIGHTEN`. Implemented literally per the numbered order, T7 fails T8's stated regression. The correct precedence is: unversioned \u2192 `TIGHTEN` (not floor-gated) \u2192 graduate (floor-gated) \u2192 else `INSUFFICIENT_EVIDENCE` if `n < floor` \u2192 else `HOLD`. Fix: rewrite T7's precedence so the `TIGHTEN` test runs before the `n < floor` \u2192 `INSUFFICIENT_EVIDENCE` branch. (I'm not calling this a design FAIL \u2014 the design's prose, success criteria, and failure-modes row all fix the intended behavior; only the T7 enumeration is wrong \u2014 but it is a real defect to correct before implementation.)",
+      "file_ref": null,
+      "category": "correctness-of-spec",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The runtime-drawn-model (180-pool) clause of the `model_dimension_note` has no task",
+      "description": "The design's Technical Decision \"The (template, model) \u2194 (template, step) mismatch is surfaced per recommendation\" requires that where a step draws its model at runtime (a 180 pool), the note states the threshold *cannot* track the drawn model and the recommendation does not apply to that step. T9 specifies only a static per-cell note (\"holds for this template paired with this model\u2026 choose model and threshold together\"), and T16 tests only \"non-empty `model_dimension_note`.\" Nothing instructs detecting a runtime-drawn/pool model (or its absence) and appending that limitation, so that sentence of the success criterion is left unaddressed. Even if the template surface has no model-pool field today, the task should decide and state how the note is worded for pool-drawn steps (e.g., a constant limitation sentence keyed off the config, never fabricated per-cell) so the criterion is demonstrably met rather than silently dropped.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13 presumes a 320 result-discovery surface that does not exist",
+      "description": "Separately from the fallback contradiction: T13 says \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan.\" No such surface exists (verified: `capture.py` exposes only `resolve_target` and frontmatter reading; `store` exposes only `list_samples`). An implementer told to \"reuse\" it has nothing to reuse and, per CLAUDE.md, must not invent a new unbounded file-walk. The task should state plainly that discovering unsampled results *requires* adding a bounded discovery helper to `graduation.py` (reusing `read_review_frontmatter` + `derive_judge_config_id`), so scope is explicit and DRY. This is the same location as the FAIL above but is a distinct, independent defect that remains even after the fallback is removed.",
+      "file_ref": null,
+      "category": "dependency / scope-ambiguity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T2's fixture approach for `_template_content_hash` is underspecified",
+      "description": "T2 says to build \"two `ReviewTemplate` fixtures identical except `judge`,\" but `_template_content_hash(template_name)` resolves via `get_template(name)` against the shipped template registry, so an in-memory `ReviewTemplate` fixture is not directly consumable. T8's threshold-read tests face the same issue. The task should specify the mechanism (monkeypatch `squadron.review.templates.get_template`, or register a temp template) so a junior implementer doesn't build fixtures the function can't see. The `derive_judge_config_id` end-to-end sub-bullet (threshold edit \u2192 same `template_content_hash`; prompt edit \u2192 new) is the one that most needs this clarified.",
+      "file_ref": null,
+      "category": "test-design clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:49"
+    },
+    {
+      "severity": "PASS",
+      "title": "Coverage, sequencing, and test-with discipline are otherwise sound",
+      "description": "Every design success criterion that is *not* flagged above has a tracing task: advisory/no-mutation (T9/T10/T15/T16 byte-identical asserts), floor-gated loosening and stated floor (T7/T8/T15), non-empty-offers and exhausted/pruned/lapsed cases (T13/T14), per-recommendation model-dimension note (T9/T15/T16), version-identity + unversioned refusal (T2/T7/T8), version-scoped graduation with full `JudgeConfigId` (T3/T11/T12/T13), the hash-narrowing regression in both directions (T1/T2/T17 step 5), surface-agnostic core and strict checks (T3/T16/T17), 321 consumed unchanged, and the no-migration `graduated_config` envelope extension (verified compatible with `models.py`). Each implementation task (T1,T3,T5,T7,T9,T11,T13,T15) is immediately followed by its test task, config keys are registered (T5) before the core that reads them (T7/T9), and the hash narrowing lands first as the design requires. The 17 tasks and single file are proportionate to the slice; there is no scope creep and no NFR that would require a load test. No NFR/load-test gap applies.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "task-completeness / internal-contradiction",
+      "raw_category": null,
+      "summary": "T13's \"store-recorded samples only\" fallback makes T14 unpassable and contradicts the design's discovery premise",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness-of-spec",
+      "raw_category": null,
+      "summary": "T7's `classify_direction` precedence contradicts the floor-asymmetry success criterion",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "The runtime-drawn-model (180-pool) clause of the `model_dimension_note` has no task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependency / scope-ambiguity",
+      "raw_category": null,
+      "summary": "T13 presumes a 320 result-discovery surface that does not exist",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-design clarity",
+      "raw_category": null,
+      "summary": "T2's fixture approach for `_template_content_hash` is underspecified",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Coverage, sequencing, and test-with discipline are otherwise sound",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T12:21:01.795556",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 199407,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 325804,
+  "cached_tokens": 270864,
+  "cache_write_tokens": null,
+  "completion_tokens": 51147,
+  "reasoning_tokens": 47531,
+  "duration_seconds": 421.83230700017884,
+  "cost_usd": 0.13925220000000002,
+  "cost_basis": "alias_pricing"
+}

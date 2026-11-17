@@ -1,0 +1,19 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Gate-measurement walkthrough is not reproducible and the A2 baseline reference is ambiguous",
+   "description": "Step 3 presents four labeled runs, but on the 149 branch the early-exit `break` is a permanent kernel change (the slice's whole purpose), so \"counter-gating\" no longer exists in the code and cannot be re-run. This collapses the four labels into only two distinct configurations:\n\n- \"Baseline (S=1, counter-gating \u2014 should reproduce slice 145 ~38 TPS)\" and \"Early exit only (S=1, break enabled)\" are the *same* command (`--subdivision-factor 1`, `--ticks 200`) and both actually run S=1 **with** the break. The \"counter-gating\" baseline is not reproducible on-branch.\n- \"Cell subdivision only (S=3, counter-gating)\" and \"Both interventions (S=3, break enabled)\" are likewise the *same* command (`--subdivision-factor 3`) and both run S=3 **with** the break, not S=3 with counter-gating.\n\nConsequently the walkthrough does not isolate the two interventions as its own labels claim, and the A2 gate (\"`force_total` at N=50k \u2265 5\u00d7 faster than slice 145 CUDA baseline\") has an unclear denominator: the walkthrough implies reproducing ~38 TPS counter-gating on-branch, which is impossible. The design should state explicitly that the counter-gating baseline (38 TPS / `force_total_ns`) is captured on `main` **before** the branch is cut (the sibling task file's T1/T12 already do this \u2014 \"do not attempt to re-run counter-gating on this branch\"), and rewrite Step 3 to show the two genuinely reproducible configurations (S=1+break, S=3+break) against that pre-captured reference. This is a verification-clarity defect, not a core design flaw, so it does not block, but it should be corrected so the A2/A3 gate is unambiguous and reproducible.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#step-3-gate-measurements-on-cuda-host"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Early-exit `break` is placed at the caller, not inside `get_neighbors_first_k`",
+   "description": "The plan's phrasing (\"replace counter-gating in `get_neighbors_first_k` with a `break`\") could be misread as a deviation, because this design puts the `break` in the caller's `for kk` loop rather than inside the seam. This is a faithful refinement, not a conflict: the seam is a `@qd.func` returning a 0/1 flag and cannot issue a loop `break` (confirmed against `quadrants_fused_kernels.py`, where `get_neighbors_first_k` is a pure guard). The design correctly documents this and chooses Option A (keep the seam as the documented A7 swap point for distance-ranked k-nearest; break sits above it and makes the seam unreachable after the cap) over Option B (removing the seam), explicitly to avoid destroying the A7 swap point prematurely. No action required \u2014 flagging only so the placement is not mistaken for a boundary violation.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-1-early-exit-at-neighbor-cap"
+  }
+ ]
+}

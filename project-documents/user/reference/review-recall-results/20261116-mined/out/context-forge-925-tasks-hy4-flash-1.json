@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All slice success criteria trace to at least one task",
+      "description": "Every functional and technical criterion in the slice maps to a task: fresh-clone auto-init (#80) via Tasks 9\u201321; rename/alias + `cf init --strategy` (#81) via Tasks 1\u20138 and 25\u201327; managed-directory statement (#82) via Tasks 28\u201331; silent-catch removal and config-default sourcing via Tasks 5\u20136; malformed-config propagation via Task 6c. No task traces to work outside the slice. Sequencing is sound: rename first, then core primitives, then call sites, then help/docs; test tasks immediately follow their implementation tasks throughout; `Commit:` markers sit at tested points. No load test is expected because the slice explicitly restates no NFR (slice review F006, \"no action\").",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`prompt get` guide read via phase shorthands is not covered and is sequenced after the stated wiring point",
+      "description": "D3 requires covering every guide-content read, and Task 20 says to grep `PROMPT_FILE_RELATIVE_PATH` and wire each non-test hit \"before the read,\" listing `prompt.ts (~lines 60 and 116)`. But in the `get` action, `resolvePhaseInput(phase, opPath)` at line 114 reads the guide (via `getPhaseShorthands` \u2192 `fs.readFile` of the prompt file, `packages/cli/src/utils/phaseShorthand.ts:22`) before the listed line 116. If `ensureGuideReady()` is placed at line 116 as the task directs, the shorthand read at 114 runs against the empty tree and caches an empty shorthand map, so phase shorthands silently break on the fresh-clone case. The grep will also surface `phaseShorthand.ts:22`, which is not in the task's explicit list, leaving a junior unsure whether to wire it there (risking duplicate notices). Task 20 should name line 114 (before the shorthand read) and state that `phaseShorthand.ts` needs no separate wiring because its only callers are in `prompt.ts`, which is covered upstream.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/prompt.ts:114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config-sourced `manual` alias warning has no defined path from core to the CLI/MCP boundary",
+      "description": "Functional criterion 6 requires a shared config with `guide.git_strategy: manual` to \"install as tarball with the same warning.\" Task 5 leaves the return shape as a junior's choice (\"Choose one return shape ... e.g. `{ method, deprecatedAlias?: string }`\"), and Task 7 bullet 2 expects `guidesInstallAction()` to print the warning \"when Task 5's return shape reports an alias.\" But `guidesInstallAction()` only receives `InstallResult` from `manager.install()` (verified at `packages/cli/src/commands/guides.ts`), and no task says to add an `alias`/`deprecatedAlias` field to `InstallResult`. As written, the alias signal cannot reach the CLI (or MCP) for the config path, so the warning requirement is unimplementable without an undocumented change. The task should specify the exact transport \u2014 e.g. extend `InstallResult` with an optional alias field set by `install()` from `resolveStrategy()` \u2014 and add a matching assertion to Task 6b/8.",
+      "file_ref": null,
+      "category": "cross-package-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task defines where MCP notices live for text-result tools",
+      "description": "D4 says MCP tools return auto-init notices in a `notices: string[]` \"on the result rather than mutating the primary payload,\" and Task 22's success criterion requires a single shared notices shape. But the three result helpers here all return `{ content: [...] }` only \u2014 `context_build` and `prompt_get` use `textResult()` (plain text content), and `prompt_list` uses `jsonResult()`. There is no field for `notices`, and adding a top-level key would itself change the shape the task says to preserve. Task 23 compounds the ambiguity by asserting `context_build` \"returns the existing payload plus one notices entry\" without saying where. No task actually specifies creating the shared notices-bearing result type or how text-result tools surface it. A junior cannot satisfy Task 22/23 as written; the breakdown needs a concrete, testable definition (e.g. a shared result helper that appends `notices` to the JSON payload or a defined text format) before implementation.",
+      "file_ref": null,
+      "category": "api-design",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A few single-purpose tasks could be merged without loss of traceability",
+      "description": "Task 10 (add three type/constant declarations) is immediately followed by Task 11 (the only consumer, `detect()`), and Task 28 (add one constant + two print sites) by Task 29 (its tests). These are granular enough to merge into their neighbors. This does not block progress \u2014 the overall 32-task count is proportionate to the three-issue scope, and test-with pairing is otherwise appropriate \u2014 but merging would reduce task-file overhead.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All slice success criteria trace to at least one task",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "`prompt get` guide read via phase shorthands is not covered and is sequenced after the stated wiring point",
+      "location": "packages/cli/src/commands/prompt.ts:114",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "cross-package-contract",
+      "raw_category": null,
+      "summary": "Config-sourced `manual` alias warning has no defined path from core to the CLI/MCP boundary",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "api-design",
+      "raw_category": null,
+      "summary": "No task defines where MCP notices live for text-result tools",
+      "location": "packages/mcp-server/src/tools/contextTools.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "A few single-purpose tasks could be merged without loss of traceability",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-17T08:03:30.758605",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 135083,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 173659,
+  "cached_tokens": 140032,
+  "cache_write_tokens": null,
+  "completion_tokens": 35239,
+  "reasoning_tokens": 33207,
+  "duration_seconds": 200.4366536247544,
+  "cost_usd": 0.006320453,
+  "cost_basis": "alias_pricing"
+}

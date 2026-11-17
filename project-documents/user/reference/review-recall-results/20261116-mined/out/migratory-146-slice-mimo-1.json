@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "f32\u2192f64 contract upcast is asserted but does not exist; wire serializer would emit corrupted output",
+      "description": "The \"f32/f64 contract\" paragraph states: \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore carries f64, preserving the downstream contract.\" Both premises are contradicted by the components the design builds on. The existing `GpuAgentState.export_positions()`/`export_velocities()` explicitly return f32 arrays (`NDArray[np.float32]`, with an explicit `astype(np.float32)`), and `TickResult.from_quadrants_fields()` is documented to wrap pre-downloaded arrays \"without allocation or dtype conversion\" \u2014 \"we pass through whatever the caller gave us so f32 input arrays remain f32.\" No upcast happens at download or at TickResult construction. The downstream consumer named in A3 (`client_manager.broadcast` \u2192 `protocol.serialize_state_update`) writes `result.positions.tobytes()` into a wire layout documented as `positions_f64 | velocities_f64`; the sim logger serializes through the same function. If f32 arrays flow in as designed, the wire and log payloads are silently corrupted (4-byte floats where 8-byte doubles are expected), and A3 (\"same dtype contract as the CPU path\u2026 zero changes\") fails. The design must state where the f32\u2192f64 conversion happens (e.g., in `GpuSimulationDriver.step()` before constructing the `TickResult`, or in a modified export), and note that the Files-Changed table lists only `setup_from_server()` and `upload_positions()` as `agent_state.py` additions \u2014 no export change.",
+      "file_ref": null,
+      "category": "contracts",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#gpuagentstate-changes"
+    },
+    {
+      "severity": "FAIL",
+      "title": "GPU path never writes results back to `EntityManager.state`; snapshots and spawn/despawn sync operate on permanently stale CPU state",
+      "description": "On the CPU path, `tick()` mutates the `AgentState` owned by `EntityManager` in place (the `TickResult` is a view over it \u2014 `from_numpy_state`), so `em.state` is live every tick. The design's GPU data flow (\u00a7Data Flow, \u00a7SimulationManager Changes) exports fresh copies into the `TickResult` and has **no** GPU\u2192CPU write-back; the only state transfer toward the driver is `sync_from_entity_manager()` (CPU\u2192GPU). Consequences the design does not address:\n1. The client snapshot path (`make_snapshot_builder`, which builds `TickResult.from_numpy_state(em.state, em.count)` on every new-client connect) serves **spawn-time** positions forever on the GPU path \u2014 the \"at worst one tick stale\" bound that path documents becomes unbounded staleness. This directly contradicts A3's \"Downstream code (client_manager.broadcast, sim logger) requires zero changes.\"\n2. `sync_from_entity_manager()` \"re-uploads CPU state after spawn/despawn\" wholesale \u2014 but on the GPU path that CPU state is stale, so any spawn/despawn mid-run would teleport all surviving agents back to their last-CPU-state positions and destroy the GPU tick's evolution. This corrupts the very spawn/despawn sync the slice plan assigns to this slice.\n3. `EntityManager.get_position()` and any other runtime reader of `em.state` see stale data.\nThe design needs a per-tick write-back of the downloaded arrays into `em.state` (cheap \u2014 the arrays are already host-side), or an explicit redefinition of what `EntityManager` owns on the GPU path plus corresponding changes to the snapshot builder.",
+      "file_ref": null,
+      "category": "boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#data-flow"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`GpuAgentState.setup_from_server()` signature inverts the dependency direction (engine package \u2192 server package)",
+      "description": "The design moves `GpuAgentState` to `src/migratory/gpu/agent_state.py` \u2014 inside the `migratory` engine package \u2014 and gives it `setup_from_server(self, entity_manager: EntityManager, ..., world_bounds: WorldBoundsConfig, ...)`. `EntityManager` lives in `migratory_server.entities` and `WorldBoundsConfig` in `migratory_server.config`. Today the `migratory` package has zero imports of `migratory_server` (only docstring mentions); this signature would create the first engine\u2192server dependency and a package import cycle (`migratory_server.simulation` \u2192 `migratory.gpu.agent_state` \u2192 `migratory_server.entities`/`config`), violating the layering the move to `src/migratory/gpu/` is supposed to establish. The clean fix: `setup_from_server` (or a renamed `setup_from_state`) takes the engine-type `AgentState` (which `EntityManager.state` already returns, and which carries the `leadership` array the Open Notes reference) plus primitive width/height/dt/subdivision_factor; the driver \u2014 which lives in `migratory_server` and may import both sides \u2014 does the extraction from `EntityManager`/`WorldBoundsConfig`. Note the engine package already has a `WorldBounds` type (`migratory.environment`) that `simulation.py` already knows how to build from `WorldBoundsConfig`.",
+      "file_ref": null,
+      "category": "boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#gpuagentstate-changes"
+    },
+    {
+      "severity": "FAIL",
+      "title": "No-GPU fallback contract is self-contradictory: `_select_arch()` cannot deliver A7, and Open Notes make the same scenario fatal",
+      "description": "Scope and A7 promise: \"falls back to CPU with a logged warning if neither is detected\u2026 The server does not crash.\" But the specified `_select_arch()` checks only `platform.system()` \u2014 it returns `qd.cuda` unconditionally on **any** Linux host, with no GPU-capability probe, so a Linux box without CUDA (exactly A7's scenario, and the most common no-GPU host) reaches `qd.init(arch=qd.cuda)`. Open Notes then state the opposite behavior for that exact case: \"If `qd.init()` raises (e.g. CUDA driver absent\u2026) the server exits at startup.\" Both cannot hold; as written, A7 passes only on platforms that are neither Darwin nor Linux. The warning text (\"No supported GPU detected for platform\") also claims a detection the code does not perform. Additionally, if the intended fix is \"catch the failed `qd.init` and retry with `qd.cpu`,\" that requires a second `qd.init()` in the same process \u2014 which the same Open Notes call undefined behavior. The design must pick one contract (probe capability before `qd.init`, or accept fatal exit and restate A7/Scope accordingly) and specify the detection mechanism.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#success-criteria"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spawn/despawn sync under-specified: count-proxy misses net-zero transitions; buffer growth policy unstated",
+      "description": "The dirty-detection helper `count_changed_since_last_tick()` treats count identity as state identity. The `EntityManager` API allows `spawn_entity`/`spawn_population` and `remove_entity` between ticks; one spawn plus one remove in the same inter-tick window leaves the count unchanged while the state arrays change (and `remove_entity` index-shifts all downstream agents), so the re-upload is silently skipped and GPU state diverges from CPU state. The plan entry requires \"re-upload **changed agent state**,\" not \"changed count\" \u2014 a dirty flag set by the `EntityManager` mutators (spawn/remove) is the robust mechanism and costs no per-tick work. Separately, `GpuAgentState` fields are allocated at `setup()` for the initial `n`; the design never says whether `sync_from_entity_manager()` reallocates GPU fields when the population grows (or caps at `EntityManager._capacity` and tracks a live count), so the \"spawn increases N\" case has no stated handling \u2014 a new host\u2194device path with an unenumerated failure mode.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#simulationmanager-changes"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test plan contradicts the design's own `qd.init()` process-isolation constraint",
+      "description": "Open Notes state: \"the second `qd.init()` in the same process is undefined behavior. Tests that exercise `GpuSimulationDriver.setup()` must either use `finalize()` + process isolation or be marked to run in a subprocess.\" Yet unit tests 5\u20138 each construct a driver and call `setup()` (which calls `qd.init`) inside the same `tests/server/test_gpu_driver.py` module, with no statement that they run in separate subprocesses; test 8 (\"finalize is idempotent\") even chains off test 5's setup. The section is also internally inconsistent about where tests execute: \"All tests are CPU-only\" vs. \"Where Quadrants is available on Metal (CI Mac), tests run on Metal; on CUDA Linux they run on CUDA.\" Specify the isolation mechanism per test (e.g., a subprocess fixture for every setup-exercising test) and reconcile the CPU-only statement.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#testing"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deferred `_positions_dirty` sync-back is a heavier mechanism than the requirement needs",
+      "description": "The sync-back design adds `notify_positions_modified()` storing a retained array reference, an internal `_positions_dirty` flag, and an upload deferred to the start of the next `step()`. The stated requirement is only that the GPU state reflects post-bounds positions before the next kernel use; calling `state.upload_positions(...)` **immediately** inside `notify_positions_modified()` meets it with no cross-tick retained state, no flag, no ordering constraint inside `step()`, and a smaller test surface (and it can piggyback on any write-back added per the `EntityManager.state` finding). The design gives no reason the upload must be deferred (e.g., further in-place mutation by `environment.post_tick()`, which the CPU path's lifecycle says writes agent-originated writes *to the environment*, not to agents). Cut the deferred mechanism unless a concrete consumer of the deferral is named.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#bounds-enforcement-on-the-gpu-path"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Files-Changed table names a non-existent module",
+      "description": "The table lists `src/migratory_server/entity_manager.py` for the `count_changed_since_last_tick()` helper, but `EntityManager` lives in `src/migratory_server/entities.py`; there is no `entity_manager.py` in the tree. Rename the row so implementers edit the right module.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#files-changed"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tier 2 gate does not pin the workload regime the milestone is defined against",
+      "description": "`tests/load/test_gpu_server_tps.py` asserts \"TPS \u2265 60\" at \"50k agents\" but specifies no world size/density, profile mix, or `subdivision_factor`, while the plan's Tier 2 target (and slices 148\u2013149's exit criteria) is \"\u226560 TPS at N=50k **mid-flock-density**,\" and the Open Notes recommend S=3 for N\u226510k two-flock density. The NFR is restated with its numeric target (good), but without a pinned workload the gate evidence is not comparable to the 148/149 measurements that justify it \u2014 state the workload config the gate runs (or reference the slice-141 workload id).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#testing"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "contracts",
+      "raw_category": null,
+      "summary": "f32\u2192f64 contract upcast is asserted but does not exist; wire serializer would emit corrupted output",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#gpuagentstate-changes",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "boundaries",
+      "raw_category": null,
+      "summary": "GPU path never writes results back to `EntityManager.state`; snapshots and spawn/despawn sync operate on permanently stale CPU state",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "boundaries",
+      "raw_category": null,
+      "summary": "`GpuAgentState.setup_from_server()` signature inverts the dependency direction (engine package \u2192 server package)",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#gpuagentstate-changes",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No-GPU fallback contract is self-contradictory: `_select_arch()` cannot deliver A7, and Open Notes make the same scenario fatal",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Spawn/despawn sync under-specified: count-proxy misses net-zero transitions; buffer growth policy unstated",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#simulationmanager-changes",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Test plan contradicts the design's own `qd.init()` process-isolation constraint",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#testing",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Deferred `_positions_dirty` sync-back is a heavier mechanism than the requirement needs",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#bounds-enforcement-on-the-gpu-path",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Files-Changed table names a non-existent module",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#files-changed",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Tier 2 gate does not pin the workload regime the milestone is defined against",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#testing",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-17T06:48:21.537093",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 17,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 105453,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 270177,
+  "cached_tokens": 216960,
+  "cache_write_tokens": null,
+  "completion_tokens": 28348,
+  "reasoning_tokens": 24520,
+  "duration_seconds": 605.8702051248401,
+  "cost_usd": 0.048679995000000004,
+  "cost_basis": "alias_pricing"
+}

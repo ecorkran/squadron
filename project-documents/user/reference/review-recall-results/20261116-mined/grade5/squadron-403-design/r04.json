@@ -1,0 +1,26 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Review counts are explicitly left without the noise floor the plan requires",
+   "description": "The design excludes a review noise floor and proposes labeling review figures \u201cno floor measured.\u201d But the architecture says LLM-derived review signals carry their own noise floor, and the 403 slice-plan success criteria require LLM-sourced numbers to be shown against their noise floor. Labeling the missing floor is transparent, but does not meet that requirement; the design needs to provide the floor or resolve the scope mismatch with the architecture and plan.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#D8 \u2014 Each figure carries its source, sample size and noise floor state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Fast-forward boundaries can include changes already on the target",
+   "description": "The claim that a fast-forward is possible only if the target has not moved past the fork is not generally true. A slice branch can merge newer target work into itself, then be fast-forwarded into the target because the target commit is now an ancestor of the slice tip. In that case, using the original reflog fork as `before_sha` includes changes that were already on the target before the landing. This can misattribute unrelated work to the slice and undermine the architecture\u2019s before/after measurement goal. Define how the resolver identifies the actual target state before landing, or explicitly refuse the case it cannot resolve accurately; add a test for a sync-merged branch that is subsequently fast-forwarded.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#D3 \u2014 Before and after are the target just before and just after the landing"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`report history` does not specify handling for its Git history lookup failures",
+   "description": "`report history` orders snapshots by the target\u2019s first-parent history, which requires a Git history lookup. The failure-mode table covers archive/revision failures and range-resolver failures, but does not state what happens if this history lookup hangs, returns non-zero, or otherwise cannot provide an answer. Specify an explicit handling strategy and observable signal, consistent with the requirement that a failed Git query is never treated as a valid empty result.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#API Contracts"
+  }
+ ]
+}

@@ -1,0 +1,170 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The keystone's join target \u2014 \"the specific persisted judge result\" \u2014 is pruned, overwritable, or thin \u2014 never all three properties the design needs",
+      "description": "The \"Sampling capture ergonomics\" bullet commits that capture must \"attach unambiguously to the specific persisted judge result being checked,\" and \"Where metrology data lives\" assumes results accumulate (\"From that accumulating sample\u2026 trend over time,\" Envisioned State). Verified against the code, no record in 300's persistence is simultaneously durable, per-call, and self-describing:\n\n- The rich record is run state (`src/squadron/pipeline/state.py`): `StepState.action_results` retains full `ActionResult` dicts including `score`, `provenance`, and `metadata={model, profile, template}`. But `StateManager.init_run` calls `self.prune(pipeline_name)` with `keep=10`, deleting all but the 10 most recent terminal runs **per pipeline, on every new run**. Calibration data joined to run state is silently destroyed \u2014 a direct contradiction of \"accumulating sample\" and trend reporting. `RunState` also carries no project/cwd field, so the cross-project aggregation the doc calls \"a new requirement\" has no attribution source in this record.\n- The durable record is the review markdown (`src/squadron/review/persistence.py`): `format_review_markdown` never emits `provenance` (verified \u2014 frontmatter has score/criteria/aiModel/reviewType but no provenance line), so the discriminator 300-arch says gives 320 \"the discriminator it needs\" is absent from the durable artifact. Worse, `save_review_result`/`save_review_file` write a fixed filename (`{index}-review.{review_type}.{slice_name}.md`) with `path.write_text` \u2014 a judge-gated re-review cycle (300 slice 303) or multi-sample `fan_out` branches run the same judge on the same slice and **overwrite each call's file**, erasing exactly the repeated-measurement records the dispersion slice needs.\n\nThe doc's storage consideration debates where the *new* store lives but never questions whether the join target accumulates or is addressable. Fixing this requires either 300-side retention/identity changes (colliding with the \"No change to the judging path\" non-goal) or a capture-at-judge-time hook (colliding with the \"Read-side over 300's write path\" principle) \u2014 a scope item neither the principles nor the Anticipated Slices contain.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Measurements are keyed by judge configuration\" has no data source for template *version*, contradicting the read-side principle",
+      "description": "\"Comparability across template and model versions\" fixes: metrology records must identify \"the judge configuration (template identity/version, model)\" and \"reports must not blend measurements across incompatible configurations\u2026 that measurements are keyed by judge configuration is fixed here.\" Verified: `ReviewResult` (`src/squadron/review/models.py`) persists `template_name` (emitted as `reviewType`) and `model` (`aiModel`) \u2014 identity exists. **Version does not exist anywhere**: templates are disk-loaded YAML resolved by bare name (`get_template`, `src/squadron/review/template_inputs.py`/`templates` usage in `actions/review.py`); no `template_version`, `template_hash`, or equivalent exists in `src/` (grep-verified). Editing a judge template file silently changes judge behavior with zero identity change \u2014 precisely the invalidation the bullet forbids blending across, but undetectable with name+model alone.\n\nCapturing template revision (e.g. content hash) at judge time is a write-path addition to the judging path/result record \u2014 which the \"Read-side over 300's write path\" principle and the \"No change to the judging path\" non-goal forbid. The document fixes both sides of this contradiction without reconciling them; one must yield, or \"template identity/version\" must be downgraded to what actually exists (name+model) with the residual drift risk stated.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-emption prompt \u2014 the second oracle's only customer \u2014 is undefined jargon with no integration mechanism",
+      "description": "The Overview, Design Goals, Envisioned State, and the \"Pre-emption prompt & delta measurement\" slice all lean on \"the dispatch-side **prompt-chaining pre-emption prompt**.\" \"Prompt-chaining\" is defined nowhere \u2014 not in this document, not in the initiative plan (which repeats the same phrase as its only gloss), and not in the codebase (grep-verified; the only \"chain\" near dispatch is the unrelated model-resolution \"cascade chain\" in `src/squadron/pipeline/actions/dispatch.py`). The only dispatch prompt surface is the optional `prompt` string on `DispatchStepType` (`src/squadron/pipeline/steps/dispatch.py`).\n\nThe document never states where the pre-emption text lives (pipeline YAML? config? a prepended dispatch template?), how a pipeline run records *which version of the prompt was in force* \u2014 which the \"Attribution of the pre-emption delta\" before/after comparison silently depends on \u2014 or how the prompt \"front-loads avoidance\" in a dispatch that just spawns an agent. The delta-attribution consideration enumerates external confounders (projects, models, slice difficulty) while the intervention's own mechanics are \"step 3: magic happens.\" For the slice whose whole purpose is \"proving the metrology can detect an intervention's effect,\" the intervention is the least specified thing in the document.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Comparability discipline is applied to judge configurations but not to the audit-skill oracle, whose identity is already ambiguous",
+      "description": "The \"Comparability across template and model versions\" rule \u2014 never blend measurements across incompatible instrument configurations \u2014 has the identical failure mode for the tech-debt-audit skill: a forked, prose-emitting markdown skill (acknowledged as \"non-deterministic run-to-run\") that will be edited and re-adapted during the baseline period. \"Attribution of the pre-emption delta\" lists confounders (different projects, models, slice difficulty) but not audit-skill revision or normalization-schema change \u2014 a mid-baseline edit to the skill or to the (category, location, severity) normalization would move audit-findings-per-project with zero intervention, exactly the false delta the doc's \"honest measurement\" value exists to prevent.\n\nCompounding this, the instrument's identity is already inconsistent across the project's documents: 340-arch and 340-slices slice 342 call the skill `tech-debt-analyze` (criteria: `tech-debt-analyze.md`), while 340-slices slice 344 and this document call it `tech-debt-audit` (criteria: `tech-debt-audit.md`). The code-quality oracle's identity and version-pinning need the same treatment the doc fixes for judge templates.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependency declarations don't match the design: 280 elevated in the keystone, 340 undeclared, \"300's multi-sample option\" doesn't exist yet",
+      "description": "Three mismatches between the declared dependency set (`dependencies: [100, 140, 300]`; initiative plan: \"Independent of 180, 200, 260, 280\") and the design as written:\n\n1. Technical Considerations calls the metrology store's \"relation to the anticipated shared artifact store, 280\" a \"**leading** slice-design decision\" for the keystone slice, and Related Work repeats it \u2014 while 280 is `not_started`. If slice design picks extending 280, the keystone blocks on unbuilt work the plan declares independence from. The doc hedges (\"not assumed\") but never states the default: a standalone metrology store, with 280 adopted only if it lands first and fits.\n2. The code-quality oracle runs a skill **shipped by 340** (\"shipped in the 340 analysis pack\") \u2014 a de facto dependency absent from the frontmatter. Low schedule risk (340 is complete), but the baseline harness is unbuildable without it and the declaration should say so.\n3. \"Dispersion needs repeated measurements\" states \"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`.\" Verified: 300-slices \"Future Work 1 (Multi-Sample Judging)\" is an **unchecked Future Work item** ([ ]), not built; only the generic `fan_out`/fan-in reducer machinery (140) exists. Consequently the \"dispersion data opportunistically (when multi-sample ran anyway)\" source will never appear until that deferred item is built \u2014 dedicated calibration runs are the only source today, enlarging the dispersion slice's scope from \"opportunistic\" to \"runs its own token-expensive judging,\" which the doc presents as the cheap path.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#related-work"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"320 populates or reads\" the reserved `criteria` map conflates two meanings and blurs the write-path boundary",
+      "description": "The \"Read-side over 300's write path\" principle says of the reserved `criteria` map: \"320 populates or reads it.\" Per 300-arch, `criteria` is reserved as *judge-emitted* per-criterion sub-scores (`dict[str, float]` in `ReviewResult`). If 320 populates it on human-sample records, the field carries both judge sub-scores and human verdicts with one name; if 320 populates it on judge result records, that is a write-path change the same principle forbids (\"it does not modify the judging path\u2026 or the result models' write semantics\"). The sentence should say which records, which meaning, and how that stays read-side.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The keystone's join target \u2014 \"the specific persisted judge result\" \u2014 is pruned, overwritable, or thin \u2014 never all three properties the design needs",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Measurements are keyed by judge configuration\" has no data source for template *version*, contradicting the read-side principle",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The pre-emption prompt \u2014 the second oracle's only customer \u2014 is undefined jargon with no integration mechanism",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Comparability discipline is applied to judge configurations but not to the audit-skill oracle, whose identity is already ambiguous",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency declarations don't match the design: 280 elevated in the keystone, 340 undeclared, \"300's multi-sample option\" doesn't exist yet",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#related-work",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "\"320 populates or reads\" the reserved `criteria` map conflates two meanings and blurs the write-path boundary",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-320-arch"
+  },
+  "timestamp": "2026-11-17T05:37:49.013379",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 87255,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 380185,
+  "cached_tokens": 321664,
+  "cache_write_tokens": null,
+  "completion_tokens": 24068,
+  "reasoning_tokens": 20249,
+  "duration_seconds": 557.6277927076444,
+  "cost_usd": 0.047682451,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success criterion 6's live non-SDK model demo has no task, yet the slice is marked complete",
+   "description": "SC 6 (slice design:229-231) requires two things: a materialized `cf_workflow_status` returning actual project status, **and** a dispatch with a tool-capable non-SDK model calling `cf_build_context` and receiving assembled context (walkthrough \u00a74). The first half is covered by Task 8.2 and Task 9.1 step 2. The second half has no task: 9.1 runs only walkthrough steps 1\u20133, and 9.3 merely notes that step 4 \"runs from a standard terminal\" and \"remains open alongside 263's demo\" \u2014 while the same bullet instructs the implementer to mark both this task file and the slice design `status: complete`. That closes the slice with a success criterion unmet and nothing tracked to perform it. Add an explicit task for walkthrough \u00a74 (the `sq run <pipeline> <slice> -v` demonstration from the design, to be executed from a standard terminal), leave it visibly open/deferred until run, and do not silently set `status: complete`. Even the 263 precedent carried the demo as checkboxes 11.2/11.3 with a deferral note (`263-tasks...md:295`); here it is only a parenthetical. This is a plan-shape fix, not a request to wait on approval.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two Result mapping rules and the protocol-error WARNING row are implemented but never asserted in a test",
+   "description": "The design's Result mapping section (slice design:130-137) specifies four rules and its failure-mode table states \"Each row above has a test asserting the observable signal\". Task 4.2 implements all four, but Task 5's test list plus Task 3's fixture tools verify only part: `echo` returns a single `TextContent` block, so joining multiple blocks with `\\n` is never exercised; no fixture tool returns a non-text block, so \"noted by type in the content\" is untested; and Task 5.4's caplog parenthetical names only timeout, server `isError`, and spawn failure, leaving the `McpError`/closed-stream WARNING that Task 4.3 implements without a named assertion (`test_unknown_tool_name` checks only that no exception escapes). SC 2's \"maps results per the Result mapping rules\" and the design's observability floor are therefore partly unverified. This is small to close: one fixture tool returning two text blocks plus a non-text block, and one or two assertions in the existing Task 5 \u2014 not a new test file.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-181"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The `get_default_environment()` instruction is assigned to both the bridge and its caller",
+   "description": "Task 4.1 tells the bridge to \"Use the SDK's `get_default_environment()` as the spawned process env\", yet the same bullet says callers construct `StdioServerParameters` and `call_mcp_tool` receives an already-built params object \u2014 the bridge cannot own that field. Task 6.3 (:205-207) already builds `StdioServerParameters(..., env=get_default_environment())`. A junior following both bullets literally could duplicate or mutate `env` inside the bridge (DRY violation and potential conflict with the caller's `cwd`). Consider stating plainly in Task 4.1 that env belongs solely to the caller and the bridge relies on the SDK default.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 3's sequencing rationale names the wrong task",
+   "description": "\"Test infrastructure first: tasks 5, 6 both need a real stdio peer.\" Task 5 does (bridge tests against the fake server). Task 6 is descriptor implementation whose tests (Task 7.2) patch `call_mcp_tool`, and whose success criteria require only `list_tools()` and pyright; it never spawns a peer. Task 8 uses the real CF server, not the fake one. The claim could mislead a junior into wiring Task 6 to the fixture instead of mocking the transport. The actual task order itself is correct and cycle-free; only this rationale sentence is inaccurate.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+  }
+ ]
+}

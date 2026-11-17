@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Exit gate substituted for the parent plan's assigned criteria; \"no regression on k-first path\" dropped",
+      "description": "The parent plan entry (`project-documents/user/architecture/140-slices.simulation-scaling.md:56`) assigns: \"k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N; parity \u2026 preserved; **no regression on k-first path**.\" The design's criterion 4 (line 358) redefines the gate baseline to `radius_only`, and scope item 7 (line 67) removes `k_first` entirely \u2014 converting the plan's non-regression requirement into deletion of the path, plus config-error handling, a default flip, and test updates. The rationale (early exit masks the cost being fixed; biased selection) is coherent, but the plan entry is not revised, and development step 4 (line 444) plans to mark the entry `[x]` as if the original criteria were met. The baseline swap is also uncalibrated: `radius_only` performs full-radius scans with no early exit, so it may be *slower* than `k_first`, silently changing the gate's difficulty in either direction. Either the plan entry's exit criteria must be updated to match the design, or the design must retain `k_first` and gate against it.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"No file outside the GPU compute path is touched\" contradicted by the design's own config/workload scope",
+      "description": "Component Structure (line 93) asserts no file outside the GPU compute path is touched, but in-scope item 7 (line 67) removes `k_first` from `ComputeConfig` and `Workload`, and Implementation Details (line 349) specifies edits in `migratory_server.config` \u2014 the world-server config surface \u2014 and `migratory.bench.workload`, with verification step 7 running `tests/migratory_server`. The `Interfaces Required` section (line 84) lists only field allocation and kernel binding; the `neighbor_mode` config contract change (accepted values, default flip, `ConfigurationError` for legacy configs) is an integration point consumed by the production server and bench harness and is under-declared there. The edits may well be one-liners, but the document must state the true blast radius so the server-side consumer of this change isn't surprised by a claim that explicitly excludes it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture throughput NFR not restated; Tier 3 target misquoted as 200k",
+      "description": "The architecture states the throughput NFR \u2014 sustaining **60 TPS at the tier targets** (`project-documents/user/architecture/140-arch.simulation-scaling.md:28`) \u2014 and defines Tier 3 at **250k** (line 74; the plan's tier table agrees). The design's Overview (line 17) attributes \"the architecture's Tier 3 target (N=200k)\" to the architecture, and line 44 repeats \"our current Tier 3 milestone of 200k\"; 200k is this slice's gate N, not the architecture's Tier 3. More substantively, every gate in the design is *relative* (within 20% of `radius_only`; beat 213.9 TPS at 10k) \u2014 the absolute 60 TPS target is never restated anywhere in the document. All gates can therefore pass at throughput far below the tier NFR (e.g., `radius_only`=10 TPS, `k_nearest`=8 TPS at 200k) with no criterion tying the slice to the architecture target. Restate \"60 TPS at 250k on production-class CUDA (Tier 3)\" \u2014 or explicitly label the dev-class relative gate as a checkpoint toward it \u2014 and correct the Tier 3 N.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load-bearing gate can fail for a reason whose prescribed fix is out of slice scope",
+      "description": "Verification step 4 (line 395) states that if the gate fails because heap eviction/selection cost dominates at 200k density, \"the FRNN follow-up slice is the correct response, not a fix to this slice\" \u2014 while FRNN-style collect-then-sort is explicitly out of scope (line 75), even though the parent plan entry names FRNN as the mechanism that makes \"k-nearest \u2026 viable at scale\" (plan line 56). The slice's stated value \u2014 `k_nearest` as the production murmuration default at N=200k \u2014 therefore hinges on a measurement outcome whose documented failure mode routes outside the slice, leaving the default flip (step 7 requires four passes) undelivered and the plan entry uncheckable. Either bundle a minimal FRNN fallback so the slice can meet its own gate when selection cost dominates, or restate the gate/plan so a within-scope success path exists under that failure mode.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:395"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reference-ceiling analysis and headroom probes exceed what this slice's gate needs",
+      "description": "The \"Reference points\" section, the 16M/80\u00d7 gap analysis (line 44), criterion 3's three-point `radius_only` baselines, and verification step 5's 500k/1M headroom probes (line 397) build a comparison against the published Babylon.js/M1 Max reference rather than against the slice's assigned decision: does the coherent grid make `k_nearest` viable at 200k. The architecture's actual target is 2M at 60 TPS, not 16M at 60 FPS on Apple Silicon. The measurements are cheap and the FRNN trigger condition uses them, but the framing inflates the document; the reference-ceiling discussion and repeated \"16M-class\" reframing can be trimmed to a short future-work note without losing anything the gate or parity checks consume.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:44"
+    },
+    {
+      "severity": "PASS",
+      "title": "Core mechanism, state ownership, and failure handling align with the architecture",
+      "description": "The reindex stays inside `build_spatial_hash` (no new public phase), originals remain the canonical state so the tick-return contract and position download are untouched, no wire-protocol change is made (explicitly out of scope), behavioral parity is gated at 5% per the plan, the 5.6 MB field cost is checked against the architecture's 320 MB working-set budget, `graph=True` constraints and kernel-boundary sync hazards are analyzed rather than assumed, and the `k_first` config break fails explicitly instead of silently migrating \u2014 consistent with both the architecture's incremental-migration principle and project conventions.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Exit gate substituted for the parent plan's assigned criteria; \"no regression on k-first path\" dropped",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"No file outside the GPU compute path is touched\" contradicted by the design's own config/workload scope",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Architecture throughput NFR not restated; Tier 3 target misquoted as 200k",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Load-bearing gate can fail for a reason whose prescribed fix is out of slice scope",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:395",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Reference-ceiling analysis and headroom probes exceed what this slice's gate needs",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:44",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core mechanism, state ownership, and failure handling align with the architecture",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-17T07:49:19.245522",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 67263,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 323066,
+  "cached_tokens": 263552,
+  "cache_write_tokens": null,
+  "completion_tokens": 18969,
+  "reasoning_tokens": 16543,
+  "duration_seconds": 661.9976860419847,
+  "cost_usd": 0.008666504,
+  "cost_basis": "alias_pricing"
+}

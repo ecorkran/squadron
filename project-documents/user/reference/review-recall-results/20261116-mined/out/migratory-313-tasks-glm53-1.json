@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All success criteria traced to tasks",
+      "description": "Cross-reference: SC1\u20132 (enum + field) \u2192 Tasks 1.1\u20131.2; SC3\u20134 (loader, case-insensitive, missing-key default, ConfigError) \u2192 Task 1.3 with matching tests in 1.4; SC5 (round-trip) \u2192 `test_bounds_policy_yaml_round_trip` in 1.4; SC6 (OPEN no-op) \u2192 Task 2.3 OPEN tests + Task 3.4 `test_open_policy_does_not_call_enforcement` (the mock/spy option SC10 allows); SC7\u20138 (wrap semantics incl. multi-width and negative overshoot, velocities unchanged) \u2192 Task 2.3 wrap tests including `test_wrap_large_overshoot`, `test_wrap_negative_large_overshoot`, `test_wrap_edge_exact_upper`, `test_wrap_velocities_unchanged`; SC9 (reflect clamp + sign flip) \u2192 Task 2.3 reflect tests incl. idempotent-bounce case; SC10\u201311 (step wiring + 50-tick integration) \u2192 Tasks 3.2/3.4 with the exact three policy assertions; SC12 (both YAMLs use wrap) \u2192 Tasks 4.1\u20134.2; SC13 (full pytest) \u2192 Tasks 3.5/5.1; SC14 (manual viewer verification, all three modes) \u2192 Task 5.2 walkthrough steps 4\u20137 mirroring the slice's Verification Walkthrough. Out-of-scope items (SOFT policy, axis-mixed policies, engine changes) correctly absent.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and commit placement correct",
+      "description": "Each section is self-contained and independently completable: config enum/loader land and are tested before the enforcement module (which imports `BoundsPolicy`); enforcement module is tested before `SimulationManager` consumes it; the required `world_bounds` constructor parameter (Task 3.1) correctly includes Task 3.5 to sweep other call sites (`test_force_builder.py`, `test_clients.py`) rather than leaving that to chance. Commits at Tasks 1.5, 2.4, 3.6, 4.3, 5.5 each follow a green test run. Config-defaults tasks (Section 4) are placed after integration so the shipped YAMLs load with a fully tested code path.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 2.2 pins implementation detail consistent with the slice design",
+      "description": "Task 2.2 dictates the exact numpy idiom (`np.mod(..., out=...)`, boolean-mask `np.abs`/`-np.abs` flips) rather than just the behavioral contract. This is acceptable here because the slice design's \"Policy Semantics\" section itself specifies these exact semantics (modulo handling of negative/multi-width overshoot, idempotent abs-based velocity flips) \u2014 the task is faithful to the parent, not adding unspecified detail. No action needed; flagged only so reviewers know this level of step detail is inherited, not invented.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load-test or CI task needed",
+      "description": "The slice design restates no NFR and no performance requirement beyond \"negligible cost for the default path,\" which the OPEN-path gating and the mock test in Task 3.4 cover functionally. No `tests/load/` task is required, and none is missing.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/313-slice.world-bounds-policy.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All success criteria traced to tasks",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing and commit placement correct",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 2.2 pins implementation detail consistent with the slice design",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No load-test or CI task needed",
+      "location": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-17T12:44:29.437566",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 657,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 16261,
+  "cached_tokens": 553,
+  "cache_write_tokens": null,
+  "completion_tokens": 1088,
+  "reasoning_tokens": 165,
+  "duration_seconds": 8.488677749875933,
+  "cost_usd": 0.026922179999999997,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Synthetic coverage finding must carry `location: unverified`",
+   "description": "Slice 904 requires every finding to carry `location:`, using `unverified` when no file citation applies. D4 instead explicitly gives the synthetic finding no location, and the frontmatter example likewise omits it. This is not merely presentational: the findings-addressed consumer treats a frontmatter finding without a location as malformed residue, so every imposed coverage CONCERN can become an unnecessary unresolved gate item. Construct the finding with `location: unverified` while retaining `location_verified = None`, and show that value in the artifact examples and rendering tests.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152"
+  }
+ ]
+}

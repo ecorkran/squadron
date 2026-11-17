@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The stated performance NFR has no load-test task or CI gate",
+      "description": "The slice sets a target of adding under one second to a Phase 0 build, but the task breakdown explicitly rules out a load test and relies on cap tests instead. Add a load test under `tests/load/` that covers this target, plus a CI task that gates on it; the target and cap tests do not establish the timing requirement.",
+      "file_ref": null,
+      "category": "nfr-testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11 lacks an immediately following test task for MCP behavior",
+      "description": "Task 11 mixes pipeline implementation with `contextTools.test.ts` assertions instead of placing tests in a separate task immediately afterward. The required `context_build` response when the resolver throws `AdoptionError` is also not covered: the stated assertions check option values, while the parity and integration scenarios cover successful builds. Add a Task 11 test task directly after the implementation, covering both option forwarding and the D9 MCP error result.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-225"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The integration-fixture task is too broad for one task",
+      "description": "Task 12 bundles a fixture harness and 13 integration scenarios spanning detection, state transitions, guide errors, non-concept phases, and read-only preview. Split it into focused integration tasks\u2014for example, detection/state behavior and build/MCP integration\u2014so each has a manageable, independently verifiable scope.",
+      "file_ref": null,
+      "category": "task-sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are formatted as checkboxes",
+      "description": "Every listed commit point uses a checkbox such as `- [ ] **Task 2C: Commit**`; none is a standalone plain `**Commit**:` line. Convert these to plain commit-marker lines at the existing tested checkpoints, rather than checkbox items.",
+      "file_ref": null,
+      "category": "workflow",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78-269"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "nfr-testing",
+      "raw_category": null,
+      "summary": "The stated performance NFR has no load-test task or CI gate",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 11 lacks an immediately following test task for MCP behavior",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-225",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-sizing",
+      "raw_category": null,
+      "summary": "The integration-fixture task is too broad for one task",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "workflow",
+      "raw_category": null,
+      "summary": "Commit markers are formatted as checkboxes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78-269",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T12:39:25.337768",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 16331,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 149544,
+  "cached_tokens": 125324,
+  "cache_write_tokens": null,
+  "completion_tokens": 13175,
+  "reasoning_tokens": 12141,
+  "duration_seconds": 144.5203741248697,
+  "cost_usd": 0.01026274,
+  "cost_basis": "alias_pricing"
+}

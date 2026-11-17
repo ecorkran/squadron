@@ -1,0 +1,47 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "SC5 round-trip has a test task but no implementing task",
+   "description": "Success criterion 5 requires `config_to_yaml` to emit `policy` as a plain string. Task 1.4 adds `test_bounds_policy_yaml_round_trip`, but no task touches `config_to_yaml`: Task 1.1\u20131.3 scope `config.py` work to the enum, the field, and `_validate_world_bounds` only, and the plan repeats the slice design's claim that \"`StrEnum` subclasses `str` so `yaml.dump` will serialize it as a plain string automatically.\" That claim does not hold \u2014 `config_to_yaml` goes through `dataclasses.asdict` plus `_serialize_for_yaml`, a dedicated StrEnum\u2192`obj.value` recursion that no task file in the project instructs anyone to write (grep for `_serialize_for_yaml` across `project-documents/` returns nothing). A junior AI following this plan hits a red round-trip test at Task 1.4 with no named step to fix it, at a commit boundary (Task 1.5) that expects green. Add an explicit step in Section 1: extend `config_to_yaml` (or its dict-preparation helper) to convert enum values to strings, and correct the design's serialization assumption.",
+   "location": "src/migratory_server/config.py:655-668"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Overweight for a 2/5 slice: duplicated verification and near-identical config tasks",
+   "description": "22 tasks across 5 sections for 10 touched files and a slice the design itself rates 2/5. Three steps should be cut or merged: (a) Task 4.1 and Task 4.2 are the same one-line YAML edit plus the same `python -c` load check applied to two files \u2014 merge into one task; (b) Task 5.1 re-runs full `pytest` immediately after Task 3.5 already ran and gated on it, with only the manual walkthrough in between \u2014 fold 5.1's checkbox into 5.2 step 2, which already says \"full test suite passes\"; (c) Task 2.3's parametrized `test_all_policies_accept_arrays` asserts only \"does not raise\", which the per-policy tests already establish, and traces to no success criterion. Everything else in 2.3 (overshoot, negative, multi-width, edge-exact, velocity-unchanged, idempotent flip) maps directly to SC6\u2013SC9 and should stay.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`status: complete` while all 22 task checkboxes remain unchecked",
+   "description": "The frontmatter declares the slice complete and the implementation demonstrably exists in the tree (`src/migratory_server/bounds_enforcement.py`, `BoundsPolicy` and `policy` in `config.py`, `policy: wrap` in both shipped YAML files, `tests/test_bounds_enforcement.py`), yet every step in the file is still `[ ]`. CLAUDE.md's document conventions require checking off each completed item, and an all-open breakdown on a closed slice makes it impossible to tell which of these steps were actually performed versus silently dropped (which matters here \u2014 see the required-vs-optional `world_bounds` divergence below). Either check the completed boxes or revert `status` to in-progress.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 3.1's \"required keyword argument\" diverged from what shipped",
+   "description": "Task 3.1 and Tasks 3.4/3.5 plan a required `world_bounds` kwarg, which forces edits at every `SimulationManager(...)` site (22 in `tests/test_simulation.py` alone, plus `tests/test_force_builder.py:201`). The code instead declares `world_bounds: WorldBoundsConfig | None = None` and, when absent, silently falls back to `entity_manager.world_bounds` \u2014 an implicit divergence from both this plan and the slice design (\"`world_bounds` parameter is added as a required keyword argument\"), and a silent fallback value, which CLAUDE.md prohibits. Note it here rather than as a gap: the fallback is defensible for test ergonomics, but the plan and the code should agree, and if the fallback is kept, one success-criteria-adjacent test should pin the fallback's policy resolution.",
+   "location": "src/migratory_server/simulation.py#SimulationManager.__init__"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Commit markers are formatted as checkboxes; 4.3 commits ahead of its suite gate",
+   "description": "Commit placement is otherwise correct \u2014 one per working, tested point (1.5 after 1.4, 2.4 after 2.3, 3.6 after 3.5, plus a final docs commit at 5.5), not after every task and not only at the end. Two small deviations: each `**Commit:**` line is wrapped in a `- [ ]` checkbox rather than written as a plain line under its task, and Task 4.3 commits the `policy: wrap` change to `default.yaml`/`test.yaml` gated only on an inline `python -c` load check, with the full suite run deferred to Task 5.1.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "SC12 (shipped configs opt into `wrap`) is verified only by ad-hoc commands",
+   "description": "Success criterion 12 asserts the contents of `config/default.yaml` and `config/test.yaml`, and the only checks named are the two inline `python -c` prints in Tasks 4.1/4.2, which a junior AI can satisfy or skip without leaving evidence. The existing `test_default_config_file_loads` (`tests/test_config.py:43-48`) loads `default.yaml` but asserts nothing about policy. One added assertion there (or a small sibling test) would make SC12 machine-gated; the manual walkthrough step 3 already depends on the same fact.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

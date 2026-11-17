@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria 1, 3, 4, 5 and 7 are fully traced with sound sequencing and proportionate scope",
+      "description": "SC 1 maps to Task 6.4 (unconditional registration), 7.1 (`test_all_five_registered`) and 7.4 (`validate_allowed_tools` accepts `cf_workflow_status`, rejects `cf_bogus`, zero schema changes). SC 3 maps to Task 3's fake stdio server plus Task 5.1/5.2 round-trip, `isError` and timeout tests; SC 4 to 5.3/5.4 caplog assertions; SC 5 to Task 8's availability-gated contract test; SC 7 to Task 9.2's quality gates. The test-with pattern holds (1\u21922, 4\u21925, 6\u21927), the dependency chain is linear with no cycles, Task 3's fixture correctly precedes its consumer Task 5, and every task has scoped checks plus a commit at a tested point. No tasks implement out-of-scope items (dynamic discovery, other MCP servers, session pooling, `integrations/context_forge.py`, slice 265 review activation). The design restates no NFR, so neither a `tests/load/` task nor a CI-gating task is required \u2014 Task 8 is a schema-drift contract test, not a load test. One task file of nine tasks for a 2/5-effort, eight-file slice is proportionate, and Task 2's small size matches the project's per-implementation-task test convention.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success criterion 6's live non-SDK model demo has no task, yet the slice is marked complete",
+      "description": "SC 6 (slice design:229-231) requires two things: a materialized `cf_workflow_status` returning actual project status, **and** a dispatch with a tool-capable non-SDK model calling `cf_build_context` and receiving assembled context (walkthrough \u00a74). The first half is covered by Task 8.2 and Task 9.1 step 2. The second half has no task: 9.1 runs only walkthrough steps 1\u20133, and 9.3 merely notes that step 4 \"runs from a standard terminal\" and \"remains open alongside 263's demo\" \u2014 while the same bullet instructs the implementer to mark both this task file and the slice design `status: complete`. That closes the slice with a success criterion unmet and nothing tracked to perform it. Add an explicit task for walkthrough \u00a74 (the `sq run <pipeline> <slice> -v` demonstration from the design, to be executed from a standard terminal), leave it visibly open/deferred until run, and do not silently set `status: complete`. Even the 263 precedent carried the demo as checkboxes 11.2/11.3 with a deferral note (`263-tasks...md:295`); here it is only a parenthetical. This is a plan-shape fix, not a request to wait on approval.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two Result mapping rules and the protocol-error WARNING row are implemented but never asserted in a test",
+      "description": "The design's Result mapping section (slice design:130-137) specifies four rules and its failure-mode table states \"Each row above has a test asserting the observable signal\". Task 4.2 implements all four, but Task 5's test list plus Task 3's fixture tools verify only part: `echo` returns a single `TextContent` block, so joining multiple blocks with `\\n` is never exercised; no fixture tool returns a non-text block, so \"noted by type in the content\" is untested; and Task 5.4's caplog parenthetical names only timeout, server `isError`, and spawn failure, leaving the `McpError`/closed-stream WARNING that Task 4.3 implements without a named assertion (`test_unknown_tool_name` checks only that no exception escapes). SC 2's \"maps results per the Result mapping rules\" and the design's observability floor are therefore partly unverified. This is small to close: one fixture tool returning two text blocks plus a non-text block, and one or two assertions in the existing Task 5 \u2014 not a new test file.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-181"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `get_default_environment()` instruction is assigned to both the bridge and its caller",
+      "description": "Task 4.1 tells the bridge to \"Use the SDK's `get_default_environment()` as the spawned process env\", yet the same bullet says callers construct `StdioServerParameters` and `call_mcp_tool` receives an already-built params object \u2014 the bridge cannot own that field. Task 6.3 (:205-207) already builds `StdioServerParameters(..., env=get_default_environment())`. A junior following both bullets literally could duplicate or mutate `env` inside the bridge (DRY violation and potential conflict with the caller's `cwd`). Consider stating plainly in Task 4.1 that env belongs solely to the caller and the bridge relies on the SDK default.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3's sequencing rationale names the wrong task",
+      "description": "\"Test infrastructure first: tasks 5, 6 both need a real stdio peer.\" Task 5 does (bridge tests against the fake server). Task 6 is descriptor implementation whose tests (Task 7.2) patch `call_mcp_tool`, and whose success criteria require only `list_tools()` and pyright; it never spawns a peer. Task 8 uses the real CF server, not the fake one. The claim could mislead a junior into wiring Task 6 to the fixture instead of mocking the transport. The actual task order itself is correct and cycle-free; only this rationale sentence is inaccurate.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria 1, 3, 4, 5 and 7 are fully traced with sound sequencing and proportionate scope",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criterion 6's live non-SDK model demo has no task, yet the slice is marked complete",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Two Result mapping rules and the protocol-error WARNING row are implemented but never asserted in a test",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-181",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "The `get_default_environment()` instruction is assigned to both the bridge and its caller",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 3's sequencing rationale names the wrong task",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-17T08:37:29.954105",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 228294,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 240733,
+  "cached_tokens": 174336,
+  "cache_write_tokens": null,
+  "completion_tokens": 56566,
+  "reasoning_tokens": 54229,
+  "duration_seconds": 607.5423389161006,
+  "cost_usd": 0.102056105,
+  "cost_basis": "alias_pricing"
+}

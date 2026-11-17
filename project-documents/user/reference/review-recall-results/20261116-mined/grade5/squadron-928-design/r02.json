@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Migration Plan understates the 925 contracts D4/D5 break",
+   "description": "\"Existing tests for those commands pass without edits other than the moved fixture paths\" is not true, and the two affected contracts are 925 integration points, not fixtures. (1) 925 \"Provides to Other Slices\" hands this slice the `commands/agents/` tree **and its drift test**, which asserts a bijection between Claude `analysis/*.md` twins and `<commands>/agents/analysis-*/SKILL.md` (plus `agents/openai.yaml` for the two `disable-model-invocation` twins). D4 moves both directories to `commands/analysis/agents/`, so the forward bijection and policy-file assertions fail; `test_agents_install_writes_every_skill_directory` also derives its expected set from the old single root and would no longer prove criterion 7. (2) D5 changes `receipt_name(target, *, local)` to `receipt_name(base, target, *, local)` and renames `TargetDelivery.receipt_base` to `receipt_suffix`; 925 lists both in \"Provides\"/prerequisites, and its tests assert the four names and that the two `receipt_base` values differ. Yet \"Consumes from Other Slices\" (line 215) says these are consumed \"unchanged in meaning\", and the Migration Plan names only \"fixtures in `tests/cli/test_install_commands.py` and `tests/skills/test_targets.py`\". Name both contracts explicitly, state that the drift guard is re-based onto `DELIVERIES[AGENTS].bundle_subdirs`, and state that `receipt_name` callers/tests are rewritten \u2014 or reconsider the bundle move, which is what creates this whole class of churn.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:180-184"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D8 adds unassigned doctor scope that crosses the pure-check boundary",
+   "description": "The plan entry assigns `skills install/uninstall --ide` (Part A) and the rule documentation (Part B); its doctor question is only whether doctor should detect a **missing rule**, answered by D11. Per-target skill-pack rows plus \"WARN \u2014 pack ships no Codex content\" are design-added scope, and they are the heaviest item in the design. To decide \"ships no Codex content\", `check_skill_packs` must resolve every pack source \u2014 including `github:` sources, which the installer resolves by cloning \u2014 while slice 343 defines `check_skill_packs` as \"a pure, testable function \u2014 no subprocess, no network, filesystem reads only\" and 925's doctor check deliberately reads only installed roots. The design never says how doctor obtains the source or that this is a new network path in a read-only diagnostic. This is the scope to cut or defer: keep `sq skills list --ide codex` (issue #125's status surface) and install/uninstall parity, and defer per-target doctor rows to a follow-up. If retained, the check needs an explicit source-resolution contract that does not clone on every `sq doctor` run.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`installed_path` status inference contradicts the design's own receipts principle",
+   "description": "Status for `skills list` and doctor is defined as a glob over the shared agents root (`first root/p-*/SKILL.md`, `root/sq-d/SKILL.md`), while \"Patterns and Conventions\" (line 174) states \"Receipts remain the only authority for what squadron owns in a shared directory (#65)\" and D3 itself says the directory name is the only tie between a skill and its pack. 925 hit exactly this: its `_count_installed` counts only bundled skill names because \"counting whatever is there reports a confident OK on a machine that has five unrelated skills and none of ours\". A prefix glob can report a pack as Installed when another tool owns a matching skill directory, and reports \"not installed\" when the pack was installed via `--commands-dir` into a root doctor does not resolve. The design already creates per-target, per-scope receipts (D5); use them as the status authority, or state why a glob is sufficient in a shared root and accept the false-positive case explicitly.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:104-109"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "D10 defers the plan-required command enumeration to implementation",
+   "description": "The plan requires: \"Enumerate every `sq` command that reaches a provider or the network (at least `sq review`, `sq run`, `sq pr`)\". The Technical Scope claims \"the command enumeration behind it\" is included, but D10's table has three \"confirm by probe\" rows, a \"probe with `sq serve` running\" row, and an \"unprobed | probe\" row; the rule snippet at D9 still reads `pattern = [\"sq\", [<subcommands from D10>]]` and `match = [<one example per subcommand>]`. The authoritative list is assigned to \"the DEVLOG entry for the implementation\", so success criterion 8 (\"README and QUICKSTART ... carry the D9 rule with the D10 subcommand list\") cannot be evaluated from this design and the documented rule is still a placeholder. Probing is a sound way to establish ground truth, but the design must name the complete candidate set to classify, the decision rule for \"yes\", and the fallback when a probe cannot be run \u2014 otherwise the slice's only user-facing deliverable is unspecified at design time.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "New source-inspection/clone I/O has no failure-mode handling",
+   "description": "The new `--ide codex` install path and D8's \"ships no Codex content\" inspection both resolve pack sources; for `github:` entries that is a network clone, which the Data Flow marks \"unchanged\" at line 92. The design specifies no handling for a stalled/never-returning clone (no timeout target), an unavailable or unauthenticated remote, or a peer disconnect mid-fetch \u2014 and no strategy for a copy that fails after D3 validation passes, which would leave files in the shared root with no receipt and therefore nothing for `skills uninstall` to remove. The project's own tech-debt analysis records the clone-without-timeout hang on this exact path. Enumerate these outcomes with explicit handling (timeout value, `SkillSourceError` message, receipt/rollback rule), or scope the agents layout to sources that need no new network I/O.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:83-98"
+  }
+ ]
+}

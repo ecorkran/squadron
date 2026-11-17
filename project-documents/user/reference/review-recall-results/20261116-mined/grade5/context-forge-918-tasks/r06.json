@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The unindexed fixture example does not use a parseable format",
+   "description": "Task 1 specifies `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` without the required bold name. `PLAN_UNINDEXED_RE` requires the `**Name**` form, so this line will still be silently dropped and Task 5 cannot produce two deprecated entries. Use a fixture such as `7. [~] **Feature Epsilon without explicit index** \u2014 cut for scope.` and state the expected sequential fallback index explicitly.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Extending the shared fixture invalidates tests that Task 5 does not update",
+   "description": "Adding an unindexed entry to `sample-slice-plan.md` also changes the sort order: the first fallback entry receives index `1` and sorts before the existing explicit entries. Consequently, the current positional assertions for `entries[0]` and `entries[2]`, the \u201cevery entry indexSource: explicit\u201d assertion at lines 126-128, and the total-count assertion in `packages/core/tests/introspection/ArtifactIntrospector.test.ts:49-52` will fail. Task 5 updates only the parser test's total/completed count. Use separate indexed and unindexed deprecated fixtures, or enumerate and update every affected assertion; the final regression should preserve the complete pre-existing entry objects, not only `status` and `isChecked`.",
+   "location": "packages/core/tests/introspection/slicePlanParser.test.ts:8-128"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Task 8 does not account for the safe-wrapper type signature",
+   "description": "There are two relevant `Pick<SlicePlanEntry, ...>` signatures: `resolveEntryStatus` and `resolveEntryStatusSafe`. If only the first is widened to include `status`, `resolveEntryStatusSafe` still accepts an entry without `status` and passes it to the widened function, causing a TypeScript build error. The task's statement that the only caller passes a full `SlicePlanEntry` is therefore inaccurate. Task 8 must direct the implementer to widen both signatures or otherwise preserve the status field through the safe wrapper.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:692-740"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `arch-status-vs-plans` success criterion has no corresponding task",
+   "description": "The slice design explicitly requires both `plan-status-vs-entries` and `arch-status-vs-plans` not to false-positive for a complete plan whose remaining entry is `[~]`. Task 12 covers only `plan-status-vs-entries`. Add the corresponding architecture-status case: an architecture frontmatter marked complete paired with a plan whose entries are all checked or deprecated must produce no `arch-status-vs-plans` finding.",
+   "location": "packages/core/src/introspection/ConsistencyChecker.ts:716-855"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Worktree-filtered MCP results still omit deprecated entries from `completedSlices`",
+   "description": "After parsing, the MCP `introspection_slice_plan` tool recalculates `completedSlices` from `isChecked` alone when a worktree index range is applied. A deprecated entry is therefore included in `totalSlices` but not `completedSlices`, violating the success criterion that checked-or-deprecated plans have equal counts. The task breakdown needs an implementation task to count deprecated entries in this filtered path and a corresponding MCP test.",
+   "location": "packages/mcp-server/src/tools/introspectionTools.ts:106-122"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The parser implementation is split into over-granular, non-green intermediate tasks",
+   "description": "Tasks 2-4 are three small edits to one parser, while the fixture and all tests are deferred until Task 5. Completing Task 1 alone already invalidates existing assertions, and Tasks 2-4 do not independently leave the suite green. Merge Tasks 1-5 into one parser implementation-and-test task, or place focused tests immediately after each implementation step. This would reduce the 13-task breakdown without reducing required coverage.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 9 adds an ineffective fallback initializer",
+   "description": "The proposed deprecated initializer is overwritten on every successful path by the `deriveEntryStatus` assignment, while the catch path explicitly assigns `degraded`. Consequently, the initializer does not serve as the claimed fallback when `detectDocuments` throws. Cut this substep, or define and test a distinct degraded/fallback behavior if that is actually required.",
+   "location": "packages/cli/src/commands/slice.ts:91-127"
+  }
+ ]
+}

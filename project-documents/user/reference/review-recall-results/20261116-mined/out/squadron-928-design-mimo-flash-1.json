@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Migration plan omits the agents-tree drift guard as a consumer of the analysis-skill move",
+      "description": "Line 182 lists the move's consumers as `DELIVERIES[AGENTS].bundle_subdirs`, `bundled_skill_names`, and \"the fixtures in `tests/cli/test_install_commands.py` and `tests/skills/test_targets.py`,\" and line 184 claims existing tests for those commands \"pass without edits other than the moved fixture paths.\" That is not true for the most load-bearing test on this path: `tests/cli/test_install_commands.py::_claude_twins()` pairs every file under the Claude `bundle_subdirs` (`sq/`, `analysis/`) with `commands/agents/<sub>-<stem>/SKILL.md` via `_agents_root() = get_commands_source()/\"agents\"`, and `test_every_claude_command_has_an_agents_twin` / `test_openai_yaml_mirrors_disable_model_invocation` read the analysis skills from exactly that location \u2014 not from fixtures. Moving `analysis-understand/` and `analysis-tech-debt-audit/` to `commands/analysis/agents/` breaks both tests, and the fix requires teaching the 925 drift guard (whose docstring calls the two trees \"a bijection\") to search a second root \u2014 an edit the design never schedules, in step 2 (\"D4 move \u2026 confirm criterion 7\") or anywhere else. D4 (line 132) similarly asserts \"Nothing else reads `commands/analysis/` recursively\" and enumerates runtime readers, but does not acknowledge the test-side resolver whose whole job is finding these skills in the old location. Secondary, same claim: `check_skill_packs`'s signature must change to loop targets, while `tests/cli/test_doctor_checks.py:406-433` call it as `check_skill_packs(commands_dir=\u2026, cwd=\u2026)` \u2014 either those tests change or the design must state that `commands_dir` still overrides the per-target root resolution. Add both to the migration consumer list so the \"behavior preserved\" claim is accurate.",
+      "file_ref": null,
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182-184"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D8's \"like commands\" analogy does not hold at the `run_all_checks` call site",
+      "description": "`check_skill_packs` is to iterate `_command_targets_to_check(None)`, but command rows get their targets from `run_all_checks(ide=\u2026)` (setup passes its selected target; `doctor_checks.py:631` loops `_command_targets_to_check(ide)`). Hardcoding `None` inside the skill-pack check means `sq setup --ide codex` shows only the Claude skill-pack row unless the Codex CLI happens to be on PATH at that moment \u2014 a weaker form of \"per target, like commands\" than the section title claims. The choice is stated, not hidden, and skill-pack rows are indeed not setup-table keys, so this is likely fine; but the design should say explicitly that setup's skill-pack view is deliberately doctor's default view rather than setup's target, so the asymmetry with the command rows is a decision and not an oversight.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"one line each\" understates the `sq model list` fix",
+      "description": "Each named file carries three occurrences of `sq model list`, not one: `commands/sq/review.md` lines 60, 112, 158 and `commands/agents/sq-review/SKILL.md` lines 82, 134, 180. The fix is trivial either way, but \"one line each\" (and success criterion 9's \"both `review` command files say `sq models list`\") invites an implementer to change only the first hit and leave two stale references per file. Correct the count so the sweep is complete.",
+      "file_ref": null,
+      "category": "scope-accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "summary": "Migration plan omits the agents-tree drift guard as a consumer of the analysis-skill move",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182-184",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "D8's \"like commands\" analogy does not hold at the `run_all_checks` call site",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "scope-accuracy",
+      "raw_category": null,
+      "summary": "\"one line each\" understates the `sq model list` fix",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-17T07:13:01.533918",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 107,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 197944,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 1192101,
+  "cached_tokens": 1052032,
+  "cache_write_tokens": null,
+  "completion_tokens": 52383,
+  "reasoning_tokens": 47072,
+  "duration_seconds": 1018.0993244168349,
+  "cost_usd": 0.024502674000000002,
+  "cost_basis": "alias_pricing"
+}

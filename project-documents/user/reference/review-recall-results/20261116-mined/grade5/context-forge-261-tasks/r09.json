@@ -1,0 +1,19 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "NOTE",
+   "title": "Commit markers are coarser than one-per-task",
+   "description": "Tasks 1, 3, 4, 5, 6, 7 and 10 carry no `**Commit**:` of their own; the work of Tasks 4+5 (present-path facts and history fact) sits uncommitted through Task 6 until Task 5C, and Tasks 1+2's work is committed together at 2C. Every marker does sit at a working, tested point (a `*C` task only comes after its paired `*T` tests), so nothing blocks \u2014 but if Task 6 fails midway, Tasks 4\u20135's tested work has no commit boundary. The completed 260 task file uses the same coarser pattern, so this matches house practice rather than deviating from it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md#task-5-history-fact"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "MCP tool inputSchema update for the new required parameter is implicit in Task 11",
+   "description": "Task 11 makes `generateContext` take a required `adoptionStateWrites` argument and adds `contextTools.test.ts` assertions on what `context_build`/`template_preview` pass, but never names the step of adding the parameter to the MCP tool definitions' input schemas (for `context_build` and `template_preview`). A junior AI following the MCP SDK convention used in this file will do it, and an omitted parameter would fail the tests anyway \u2014 so this is a clarification suggestion, not a gap.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57"
+  }
+ ]
+}

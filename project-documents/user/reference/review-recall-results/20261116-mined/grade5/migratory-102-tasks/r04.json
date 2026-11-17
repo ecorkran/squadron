@@ -1,0 +1,26 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Required BehavioralProfile fields break production `build_profiles` with no task to fix it",
+   "description": "Task 2.1 adds `leadership_weight` and `momentum_weight` as required fields with no defaults (per the slice design). Task 2.2 scopes call-site updates to `tests/` only (\"search for `BehavioralProfile(` across `tests/`\"), but production code also constructs the type: `build_profiles()` at `src/migratory_server/simulation.py:18` passes only the six existing fields, and `ProfileConfig` (`src/migratory_server/config.py:60`) has no weights to supply the two new ones. Once 2.1 lands, `build_profiles()` raises `TypeError`, so `tests/test_simulation.py::TestBuildProfiles` (which calls it directly) fails. The 2.2 verification step (\"all existing tests still pass\") therefore cannot succeed, and no task anywhere extends the config schema or updates the production call site. This leaves the \"all tests green\" verification criterion unmet. Fix: add a task to extend `ProfileConfig` (e.g. default 0.0 weights) and thread them through `build_profiles()` before that verification.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:63-71"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "New `leadership` array is not propagated by `EntityManager.spawn_population`",
+   "description": "Task 1.1 adds a `leadership` array to `AgentState` and updates `create()`, `add_agent()`, and `remove_agent()`, but `spawn_population()` bypasses `add_agent()` and manually merges arrays with `np.concatenate` for positions, velocities, accelerations, and `profile_indices` \u2014 with no `leadership` merge. After batch spawns, `state.leadership` stays at its prior length (0 for a fresh manager) while `count` grows, so `LeadershipForce`'s `state.leadership[neighbors]` (task 4.1) can raise `IndexError` for server-driven populations. No task mentions `entities.py`, and existing entity tests don't assert leadership length, so the defect is neither scoped nor caught.",
+   "location": "src/migratory_server/entities.py:124-140"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Vectorization technical requirement has no tracing task",
+   "description": "The slice design's Technical Requirements state \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" Neither implementation task (3.1 MomentumForce, 4.1 LeadershipForce) includes a vectorization step or a verification of it. By contrast, the sibling slice 101 tasks each carried an explicit \"Use vectorized NumPy within each neighborhood \u2014 no `for neighbor in neighbors` inner loop\" step. As written, a junior could satisfy 4.1 with a per-neighbor Python loop and still pass every specified check, leaving this criterion unmet. Add the vectorization constraint and a verification to the force implementation tasks.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  }
+ ]
+}

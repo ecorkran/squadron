@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-force force-total breakdown deferred although the slice plan assigns it to this slice",
+      "description": "The slice plan entry for (141) (`140-slices.simulation-scaling.md:26`) requires per-tick timings \"broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration)\". The design makes `force_total_ns` a single number and defers per-force resolution to slice 142 (\"`force_total` is one number, not per-force, in this slice. Slice 142 introduces per-force timings\"). This is deferral of scope the plan entry assigns to 141. The mitigation is reasonable \u2014 an optional `force_breakdown: dict[str, int] | None` extension point plus a `schema_version` bump path \u2014 but the plan entry must either be amended to move per-force totals to 142, or the breakdown delivered here. As written, the JSON schema promised as \"stable from this slice\" is known to need a version bump in the very next slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Numba backend registration is assigned to slice 144, but slice 142's benchmark scope requires it",
+      "description": "The Technical Decisions section states \"Slice 144 registers `numba` \u2026\". But the plan's slice 142 entry (`140-slices.simulation-scaling.md:30`) defines 142 as benchmarking the Quadrants cohesion force \"against the existing NumPy and **Numba** implementations\", with dependencies (141) and (118) only \u2014 144 depends on 142 and comes later. For the harness to answer 142's go/no-go question (\"under what conditions does Quadrants beat Numba?\"), a `numba` backend row must exist by 142. The document is also internally inconsistent: the Overview says backends land \"in slices 142/144/145\" while Out of Scope hedges \"slice 144 / 118 territory\" and Technical Decisions pins it to 144. Fix by assigning the Numba registration to slice 142 (or landing it in 141 alongside 118, which is already complete per the performance journal). The registry mechanism makes this a documentation-only correction.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-344"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parity-hash definition cannot serve the cross-backend comparisons it exists to support",
+      "description": "Two defects in the parity hash specification:\n1. `sha256(positions.tobytes() + velocities.tobytes())` hashes the full arrays without slicing by `TickResult.count`. Slice 140's contract explicitly anticipates divergence: \"`TickResult` carries `count` explicitly so a future GPU backend can return preallocated max-N buffers with `count <= len`\" (`140-slice.tick-return-type-contract.md:147-149`), and its consumers slice `result.positions[:result.count]`. A capacity-buffer backend hashes uninitialized tail bytes and produces a different-length digest \u2014 incomparable to the NumPy golden, exactly when cross-backend comparison is needed (142/145).\n2. \"for future GPU backends, the harness records the hash and a downstream consumer interprets it within the documented tolerance band\" is not implementable: SHA-256 digests admit no tolerance comparison \u2014 any float difference anywhere in the arrays yields an unrelated digest. Slice 145's plan-required parity is \"within a documented tolerance for non-deterministic GPU reductions\", which demands array-level comparison (the trajectory tool the Open Questions section already identifies as \"the parity oracle\"). Yet Integration Points (line 533) claims \"Slice 145's tick-level parity test consumes the harness's NumPy parity hash as the reference.\"\n\nFix: define the hash over `positions[:count]` / `velocities[:count]`, scope hash comparison to bit-exact regimes (NumPy/Numba CPU), and point GPU tolerance-based parity at array-level comparison via the runner API or the trajectory tool.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes omit the report-write path, the git-SHA probe, and `--all-backends` partial failure",
+      "description": "The Failure modes section enumerates input-side failures (YAML load, unknown backend, `setup` raise with try/finally `finalize`, TPS < 1) but not the new output-side I/O paths this slice introduces:\n- **Report writes:** `bench/results/` is gitignored (line 239), so a fresh clone lacks it. Create-vs-fail semantics and write-failure handling (disk full, unwritable) are unspecified.\n- **`git rev-parse HEAD`** (line 233) is an implicit subprocess dependency. Behavior when git is absent or the tree is not a repo is unspecified \u2014 a silent `\"unknown\"`/`\"\"` value would violate the project's \"never use silent fallback values\" rule the doc invokes elsewhere.\n- **`--all-backends`** (line 481): if one backend errors mid-run, do remaining backends run, which reports get written, and what is the exit code? Only single-backend semantics (\"non-zero on \u2026 backend error\") are defined.\n\nEach is small to specify; the section's \"No silent fallbacks anywhere on these paths\" claim currently covers only the enumerated paths.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Force inventory names five `BulkForce` implementations; the plan enumerates six",
+      "description": "\"The five existing `BulkForce` implementations (cohesion / separation / alignment / momentum / leadership)\" omits `PropulsionForce`, which slice 114 delivers as a `BulkForce` and which the plan's slice 144 entry lists among \"all `BulkForce` implementations (\u2026, PropulsionForce)\". The `mid-flock` workload example's `forces:` list likewise omits `propulsion` while claiming rough equivalence to the live default config. Since force-name resolution is generic (\"resolve to module-level singleton instances in the relevant engine modules\") nothing structurally breaks, but the Interfaces inventory is the vocabulary implementers will build the loader's registry from; a workload naming `propulsion` would then \"fail loudly\" against a five-name registry. Add `propulsion` to the inventory and confirm the mid-flock force set matches the live default's.",
+      "file_ref": null,
+      "category": "spec-accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:138-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and boundary ownership match the architecture",
+      "description": "The harness depends only downward on the engine (`engine.tick.tick`, `AgentState`, `BehavioralProfile`, `KDTreeQuery`, `BulkForce`) via slice 140's `TickResult` as \"the harness's only contact with the engine boundary\", and explicitly excludes `migratory_server` / `SimulationManager` / websockets. This honors the architecture's \"clean ownership boundaries\" goal and \"the tick return type contract is the single shared interface\" key decision. Keeping `tick_instrumented()` in `bench/` (with a bit-equality test against `tick()` as drift mitigation) preserves slice 140's contract verbatim and the engine's clean-room status, matching the plan's \"Standalone against NumPy at first\" framing.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#dependencies"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR context restated with specific targets; scope is proportionate",
+      "description": "The slice touches the tick path that carries the architecture's per-tick budget, and verification step 9 restates the reference profile with specific targets (spatial_build \u2248 0.35 ms, spatial_query \u2248 5.67 ms, csr_assembly \u2248 0.21 ms, force_total \u2248 3.14 ms, integrate \u2248 0.06 ms) with host-variance rationale for not asserting them \u2014 appropriate for a measurement instrument, whose own role is to produce these numbers rather than meet them. Proportionality holds: deferred mechanisms (profiler hook parameter, adaptive warmup, subprocess isolation, charting, regression gating, memory measurement) are each named with a justification and a trigger condition, and the deferrals the plan itself sanctions (Numba/Quadrants runners, CUDA CI, wire benchmarks to plan 300) are correctly out of scope.",
+      "file_ref": null,
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#verification-walkthrough"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-force force-total breakdown deferred although the slice plan assigns it to this slice",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Numba backend registration is assigned to slice 144, but slice 142's benchmark scope requires it",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-344",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Parity-hash definition cannot serve the cross-backend comparisons it exists to support",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes omit the report-write path, the git-SHA probe, and `--all-backends` partial failure",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "spec-accuracy",
+      "raw_category": null,
+      "summary": "Force inventory names five `BulkForce` implementations; the plan enumerates six",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:138-140",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Dependency direction and boundary ownership match the architecture",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "summary": "NFR context restated with specific targets; scope is proportionate",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#verification-walkthrough",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-17T06:40:49.775437",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 72183,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 292182,
+  "cached_tokens": 237184,
+  "cache_write_tokens": null,
+  "completion_tokens": 20334,
+  "reasoning_tokens": 17310,
+  "duration_seconds": 415.78885379061103,
+  "cost_usd": 0.042563446,
+  "cost_basis": "alias_pricing"
+}

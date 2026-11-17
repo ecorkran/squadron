@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`report history`'s history-ordering git call has no enumerated failure mode",
+      "description": "`report history` orders \"snapshots ordered by the target's first-parent history\" and counts snapshots \"off that line\" \u2014 a new `git log`-class call introduced by this slice (line 298). The Failure modes table (lines 153\u2013173) enumerates the export calls, the resolver's reflog/merge searches, boundary-snapshot failure, concurrent writes and store-write failure, but nothing covers this ordering read. The nearest row (\"A reflog read or merge search returns `None`\", line 164) is scoped to the resolver paths, and the exit-code statement \"Exits 1 on a git or store error\" (line 275) is scoped to `slice-ranges`; neither `report history` nor `report project` states what a `run_git` `None` (timeout or failure) does there \u2014 hard error, unsorted fallback, or an empty history that reads as \"0 snapshots\". The global rule \"a `None` from `run_git` is never an answer\" (Integration Points) implies it must not be treated as empty, but the handling is implicit, and criterion 11 makes the table the normative list of failure behavior. Add one table row (or extend line 164's row) stating the handling and signal for this call, and the report commands' exit behavior on a git read failure.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`compute_delta` and `is_within_floor` are 324's interfaces, attributed to 323",
+      "description": "Line 73 (also 236 and 326) credits \"323 (complete)\" with `baseline_report`, `compute_delta` and `is_within_floor`. `baseline_report` is 323's, but 323's own spec explicitly defers the delta (\"does not report a before/after delta \u2014 all of that is 324\"), and `compute_delta`/`is_within_floor` ship with 324 (pre-emption prompt delta measurement, status complete). The frontmatter `dependencies` lists only 400 and 402, omitting the 323/324 consumption entirely, while sibling slice 402 lists its cross-initiative prerequisites (320, 323) in frontmatter. Nothing blocks \u2014 324 is complete and the functions exist with the exact three-state semantics D8 requires \u2014 but the dependency record should name 324 so the audit-section contract points at its real provider.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:73"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq metrology slice-ranges` is a command beyond the slice plan's named deliverables",
+      "description": "The plan's entry 403 provides \"the slice-range record type, commit export, and report commands\". The standalone `slice-ranges` persistence command (D4) is a fifth CLI surface not named there. The rationale at line 206 is sound and traceable to the plan's durability criterion \u2014 persisting a fast-forward range before `git gc` expires the reflog, without paying boundary-snapshot (pyright) cost \u2014 and the command is thin over the resolver, so it is proportionate. If CLI surface must be minimized, batch range resolution could fold into `report slice`; otherwise record it in the plan's interface list so the added surface is deliberate.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:205"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural principles are honored throughout",
+      "description": "Every load-bearing principle in 400-arch is carried through: \"Measure, never gate\" (no composite score, gate or pipeline hook, in the Excluded list and asserted by the no-`score`-key test in D8); \"Extend the 320 store\" (`slice_ranges` and `code_snapshot` as optional sibling payloads on `MetrologyRecord`, `schema_version` stays 1, existing records load unchanged); \"Coarse records\" (one `slice_ranges` record per project, one write per command, matching the `AuditRun` precedent the architecture names); \"Absent is not zero\" (`RangeUnresolvedReason` as data, absence reasons with detail, `no floor measured` for review figures); \"Breakdown, not a score\" and \"Normalize categories, not severities\" (D8 keeps review severity on the review scale). D3's before/after refinement is pre-authorized by the architecture's own Envisioned State (\"refined in slice 403, D3\"), and the scope cuts (no review noise floor, no dependency install, no slice table in `report project`) each name the plan criterion they serve.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Consumed and provided integration points match the provider slices' contracts",
+      "description": "The 402 contract is consumed exactly as 402 provides it (D9: `None` category = missing, `read_side_mapped` labeled, no-`slice_index` records project-level only), including 402 D6's slice-index resolution rule. 400's items (`list_snapshots`, `take_snapshot`, `preflight`, `default_registry`, `resolve_files`, the `environment_root` extension applied to both 400 adapters) match 400's design, which explicitly assigned 403 the limits/exclusions comparison D7 implements. The `git_utils` surface is real as named (`run_git`, `resolve_diff_base`, `_find_slice_branch`, `_resolve_fork_point`, `_search_merge_commit`, `_find_merge_commit`'s main fallback D2 declines, `GIT_COMMAND_TIMEOUT_SECONDS` = 30 as the failure table states). The D8 audit flow composes correctly with `baseline_report`'s per-(project, commit, prompt-hash) grouping and `compute_delta(ProjectBaseline, AuditRun)`. The 401 interplay is handled in both implementation orders, and 401's export-absence expectations (`report_missing`/`coverage_not_configured`) are consistent with D6.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#dependencies"
+    },
+    {
+      "severity": "PASS",
+      "title": "Export and resolver failure handling is explicit, with one gap noted above",
+      "description": "The Failure modes table gives each new write-capable I/O path a handling strategy and a signal with no \"TBD\": `git archive`/`rev-parse` failure and hang (bounded by `run_git`'s timeout, message names it), extraction and symlink `OSError`, tar `data`-filter refusal, unknown revision, tool hang inside the export (inherited from 400 with its timeout), boundary-snapshot failure (\"a report never shows half a before and after\"), rewritten-history commits (checked with `git cat-file -e`, other landings still reported, stored landing never deleted), concurrent `slice_ranges` writes (accepted last-write-wins with the re-resolution argument), and store-write failure. The unbounded extraction is stated with its linear-cost rationale rather than left implicit, and the editable-self-install risk is named with a concrete mitigation and a defined degraded outcome (absent `environment_unresolved`, never wrong numbers).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`report history`'s history-ordering git call has no enumerated failure mode",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "`compute_delta` and `is_within_floor` are 324's interfaces, attributed to 323",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:73",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`sq metrology slice-ranges` is a command beyond the slice plan's named deliverables",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:205",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Architectural principles are honored throughout",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Consumed and provided integration points match the provider slices' contracts",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Export and resolver failure handling is explicit, with one gap noted above",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-17T05:37:39.694501",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 121740,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 662594,
+  "cached_tokens": 567808,
+  "cache_write_tokens": null,
+  "completion_tokens": 32896,
+  "reasoning_tokens": 29834,
+  "duration_seconds": 695.1177134169266,
+  "cost_usd": 0.072122662,
+  "cost_basis": "alias_pricing"
+}

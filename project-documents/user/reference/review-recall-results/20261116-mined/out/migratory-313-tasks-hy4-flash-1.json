@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All 14 slice success criteria trace to at least one task",
+      "description": "Cross-referencing the slice's Success Criteria against the breakdown: SC1\u2013SC5 (enum, field, loader validation/default/case-insensitivity, round-trip) map to Tasks 1.1\u20131.4; SC6\u2013SC9 (OPEN no-op, WRAP half-open + large overshoot, velocities unchanged, REFLECT clamp + flip) map to Tasks 2.1\u20132.3; SC10\u2013SC11 (conditional call in `step`, 50-tick integration test) map to Tasks 3.2 and 3.4; SC12 (both YAML configs `wrap`) to Tasks 4.1\u20134.2; SC13 (full suite) to Tasks 3.5/5.1; SC14 (manual viewer walkthrough) to Task 5.2. No success criterion is left without a task, and no task is pure scope creep \u2014 each traces to a criterion or to verification/commit bookkeeping. Implementation tests are immediately followed by their test tasks (1.3\u21921.4, 2.1/2.2\u21922.3, 3.1\u20133.3\u21923.4), and the five `Commit:` markers sit at tested points rather than after every task or only at the end. Dependencies are linear with no cycles.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One-step REFLECT velocity-flip test cannot pass with the stated setup",
+      "description": "Task 3.4 specifies `test_reflect_policy_flips_velocities_at_edges`: place an agent at `(99, 50)` with velocity `(10, 0)`, step once, assert `vx < 0`. Verified against `src/migratory/engine/tick.py` \u2192 `integrate()` (`positions += velocities * dt`), velocity is first clamped to the profile's `max_speed` and the position advances by only `v * dt`. With the `dt=0.05` used throughout `tests/test_simulation.py` (and a typical `max_speed` of 5), one step moves x from 99 to ~99.25 \u2014 it never crosses `width=100`, so `_apply_reflect` does not fire and `vx` stays positive. The task omits `dt` and hard-codes the 99 start, so a junior following it literally with the file's normal `dt` writes a test that fails with no obvious cause. The task must specify a `dt` large enough that `v*dt > 1` (and a `max_speed` that does not clamp it away), or start the agent closer to the edge.",
+      "file_ref": null,
+      "category": "test-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:231"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Call-site file list in Task 3.5 is inaccurate",
+      "description": "Task 3.5 names `tests/test_clients.py` as a file that may construct `SimulationManager` and need `world_bounds=...`, but a grep of `tests/` shows no `SimulationManager(` in that file. The actual direct-construction sites outside `test_simulation.py` are `tests/test_force_builder.py:201` and `tests/test_repulsor_integration.py:53`; the latter is not named in the explicit list (the \"or any other file\" catch-all does cover it). Task 3.4 likewise warns only about `test_simulation.py`, where ~20 constructor sites exist. Correcting the enumeration would keep a junior from scanning the wrong file.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`**Commit:**` markers use checkbox format",
+      "description": "All five markers are written as `- [ ] **Commit:** ...`. The review convention treats commit markers as plain lines, never checkboxes. This does match the repository's own CLAUDE.md (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\"), so this is a convention conflict rather than an authoring defect; noting it for awareness only. Placement is otherwise correct.",
+      "file_ref": null,
+      "category": "formatting",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Full-suite run is specified three times",
+      "description": "`pytest` (whole suite) is invoked in Task 3.5, again in Task 5.1, and again as Step 2 of the Task 5.2 walkthrough. Success criterion SC13 needs one full regression run; the repetition is mild over-testing for an Effort 2/5 slice and could be collapsed into the Section 5 verification.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:239"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All 14 slice success criteria trace to at least one task",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-correctness",
+      "raw_category": null,
+      "summary": "One-step REFLECT velocity-flip test cannot pass with the stated setup",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:231",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Call-site file list in Task 3.5 is inaccurate",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:241",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "formatting",
+      "raw_category": null,
+      "summary": "`**Commit:**` markers use checkbox format",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Full-suite run is specified three times",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:239",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-17T08:11:54.171067",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 248321,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 373698,
+  "cached_tokens": 323072,
+  "cache_write_tokens": null,
+  "completion_tokens": 62938,
+  "reasoning_tokens": 60936,
+  "duration_seconds": 367.8043049168773,
+  "cost_usd": 0.011067838,
+  "cost_basis": "alias_pricing"
+}

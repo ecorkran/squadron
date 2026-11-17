@@ -1,0 +1,10 @@
+{
+ "case": "squadron-360-arch",
+ "kind": "arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Output Conventions: \"Both capabilities write to the existing `project-documents/user/analysis/` directory\" (line 243) and the settled list (lines 332-333), while Capability 1 Outputs writes the concept to `project-documents/user/project-guides/000-concept.{project}.md` (line 148). **VALID**: self-contradiction. Needs: doc alone. Raised by the original review (F001; the response calls it \"a factual error\")."
+  }
+ ]
+}

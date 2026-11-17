@@ -1,0 +1,68 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 12's expectations name \"the concept prompt\" and \"the brownfield prompt\" without a checkable assertion target",
+   "description": "Task 12's 13 expectations say \"the concept prompt\", \"the brownfield prompt and facts\", \"the Phase 2 prompt\" without naming any string a test can assert on. The only guide fixture in play is the one Task 9T creates from `packages/core/tests/fixtures/test-project/.../prompt.ai-project.system.md`, and that fixture has no Phase 0 section \u2014 its `#####` headings are Context Initialization, Context Initialization Monorepo, Tool Usage, implementation, design, review, Task Breakdown (Phase 5). With `instruction: 'Phase 0: Concept'`, `SectionBuilder.buildInstructionSection` finds no matching prompt and falls back to the `custom-instruction-statement` (\"Custom instruction provided: Phase 0: Concept\"), so \"the concept prompt\" is ambiguous while the brownfield marker is whatever short text Task 9T invents. As written, Task 12's expectations (1, 2, 7, 10 in particular) are not independently completable and the implementer must guess what to assert, which risks pinning the wrong string or weakening an assertion to something always true. Task 9T should pin the fixture's brownfield prompt text and add a distinct concept section, and Task 12 should assert on those concrete markers (e.g. \"the instruction section contains the fixture's brownfield text\" vs. \"does not contain it\", plus \"no `### Adoption Facts`\" for the concept cases).",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 9T's guide fixture must contain a fenced `context_profiles:` block with an indented profile entry, or the D9 guide check misfires",
+   "description": "Task 9T describes the fixture only as \"a copy of the `test-project` fixture's `prompt.ai-project.system.md` with a `brownfield-adoption: [fileConcept, fileArch, fileSlicePlan, fileComprehension]` profile line\". `ContextProfileParser.parseProfiles` (packages/core/src/services/ContextProfileParser.ts:36-80) requires the literal key `context_profiles:` inside a ```` ``` ```` fence, and `parseProfilesYaml` matches profile keys with `/^\\s+([\\w-]+):/`, which requires leading whitespace; when either condition fails the parser silently returns `{}`. The `test-project` fixture contains no `context_profiles` block at all, so the implementer must add a whole fenced block. A fixture written as a bare, unindented line makes `parseProfiles` return `{}` and the resolver's D9 check then reports \"no brownfield-adoption profile\" \u2014 the fixture fails for the wrong reason, and the tempting \"fix\" is to weaken the check. Task 9T should state the fence-and-indent requirement (and that the same fixture shape is what the real guide v0.22.2 ships), since Task 12 depends on it too.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"context_build returns the AdoptionError as an error\" has no task",
+   "description": "The Functional Requirements state: \"A guide without the profile or prompt: `cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error. The concept prompt is never produced.\" The CLI half is covered (Task 9T at resolver level, Task 12 item 12 at pipeline level, and Task 15 walkthrough step 4 for the non-zero exit), but no task asserts the MCP half. Task 11's additions to `packages/mcp-server/tests/contextTools.test.ts` only assert that `context_build` passes `persist` and `template_preview` passes `read-only`; Task 13 is a parity test over successful builds. The requirement that `context_build` surfaces the AdoptionError (rather than an error stub or a concept prompt) is therefore never checked at the MCP surface, even though the sibling permissiveness slice established the exact pattern for it in `packages/mcp-server/tests/integration/mcpIntegration.test.ts` (\"returns an MCP error, naming the fragment, when it is missing\"). One case in the MCP integration file, driving a brownfield fixture whose guide lacks the profile and asserting `isError` plus the message, would close it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 11 does not say where the required `adoptionStateWrites` parameter goes, and the obvious placement does not compile",
+   "description": "`generateContext` is currently `(projectId, overrides?, additionalInstructions?, worktreeId?)`. Appending a required fifth parameter is TypeScript error TS1016 (\"A required parameter cannot follow an optional parameter\"), so Task 11 as written cannot be executed literally. The natural workaround \u2014 making the parameter optional with a default \u2014 would silently weaken D7's stated rule that \"the option is required, so every caller states whether its build may write\", and would leave a caller able to build without declaring whether it may persist the state. Task 11 should specify the placement (e.g. second, before the optional overrides) and repeat that the parameter has no default, mirroring the required `options: { adoptionStateWrites }` on `createContextPipeline`.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 12 is too large for one task and should be split",
+   "description": "Task 12 carries 13 distinct fixtures (empty, scaffold-only, brownfield, shallow clone, monorepo in two variants, concept-only, planned, resume, three override/re-detect variants, non-concept phase, explicit instruction, guide-without-profile, read-only preview) in one task with effort 3 \u2014 the same effort budget as Task 3, which builds a single file. Each fixture needs its own temp tree, source files, guide copy, git repo and planning documents, and a failure in fixture 11 does not localize cleanly. Splitting it after the design's own Technical Requirements grouping is natural: one task for the detection fixtures (empty, scaffold, brownfield, shallow clone, monorepo, concept-only, planned) and one for the state/override/error fixtures (resume, declined/in_progress/\"\" re-detect, non-concept phase, explicit instruction, missing profile, read-only preview). Task 9T is similarly dense (guide fixture construction plus ~10 selection-table cases) and would benefit from splitting the fixture creation into its own step.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The sub-second detection target is bounded but never measured, and the load-test tier does not apply to this slice",
+   "description": "D2 restates a performance NFR (\"detection adds under one second to a Phase 0 build on a local disk\"). Task 3T asserts the caps only, and the task file's Context Summary explicitly declines a timing or load test. That reasoning checks out for the `tests/load/` tier: the rule lives only in `project-documents/ai-project-guide/project-guides/rules/python.md:57`, scoped to Python simulation/network/concurrency paths, so no `tests/load/` file and no CI gating task is needed for this TypeScript slice. The residual point is that the \"under one second\" target itself is never verified by anything \u2014 the caps bound the worst case but no assertion ties the bound to latency. Worth stating explicitly in the task file that the cap assertions are the accepted proxy, so a later reader does not read Task 3T as having covered the NFR.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 1's change has no commit of its own and first lands inside Task 2C",
+   "description": "The `**Commit**` markers otherwise sit at tested points as required. Task 1 (the `CONCEPT_PHASE` export and the `adoption.state` key) has its own test task (1T) but no marker of its own, so that change is first committed by Task 2C under the message `feat(core): add adoption.state config key and state helpers`, which does not mention it. The `CONCEPT_PHASE` export is a new public symbol from `packages/core/src/index.ts` and would read better as its own commit. This is a small, optional improvement, not a defect.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The detection \u2192 adoption import inversion is design-imposed but easy to \"fix\" wrongly",
+   "description": "Task 3 has `packages/core/src/detection/sourceVolume.ts` import `BROWNFIELD_MIN_SOURCE_LINES` from `packages/core/src/adoption/adoptionOutcome.ts` as its stop threshold, so a facts-only module depends on a policy module \u2014 the opposite of the design's stated layering (\"`detection/` keeps 260's rule: facts only, no policy. Thresholds, outcome order and state live in `adoption/`\"). This is faithful to the design (D1 fixes the constant's home in `adoptionOutcome.ts`, and the API contract for `measureSourceVolume(root)` takes no threshold argument), and Task 7 correctly avoids a runtime cycle by importing `SourceVolume` with `import type`. The risk is that an implementer reads \"facts only\" and moves the threshold into `detection/`, violating D1's \"the only place the threshold is written\" and leaving `decideOutcome` reading a second copy. A one-line note in Task 3 stating that the dependency direction is intentional (and that the threshold must not move) would remove the trap.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The guide version the walkthrough depends on is not present in this repo's guide checkout",
+   "description": "Task 15 requires \"guide v0.22.2+ installed by `cfl init`\" for walkthrough steps 2\u20134. This repo's guide checkout tops out at v0.21.9 (`project-documents/ai-project-guide/CHANGELOG.md:15`), with an empty `[Unreleased]` section, and `grep` finds no `brownfield-adoption` or `Brownfield Adoption` anywhere under `project-documents/ai-project-guide/`. Whether v0.22.2 is published upstream is unverified from here \u2014 slice 260 already set `MIN_GUIDE_VERSION = '0.22.2'` (packages/core/src/guides/guideMinimum.ts:8), which implies the release exists \u2014 so this is not a defect, but the walkthrough is the only place the real guide is exercised (every test uses a hand-built fixture), so a `BLOCKED:` line there would be the expected outcome if the release cannot be installed.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

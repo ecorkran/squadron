@@ -1,0 +1,134 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Existing project size limits have no machine-readable source",
+      "description": "The architecture says file and function limits come from project config, and that without configured limits the snapshot reports distributions but no violations. Yet the document\u2019s Current State says Squadron\u2019s ~300-line and ~50-line rules exist only in prose, and the project conventions confirm those limits are not a configuration contract. As written, Squadron\u2019s own snapshots will not check the limits that motivate this capability. Specify how the existing rules become machine-readable and how the adapter resolves them; otherwise this part of the stated scope produces distributions, not limit checks.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prompting review templates does not enforce the shared category vocabulary",
+      "description": "The preferred design relies on review templates asking the model to emit one of the audit\u2019s ten categories, while describing categorization as deterministic at ingest. That is not deterministic: the current `ReviewFinding.category` is `str | None`, and the review parser accepts free-form values. A model can still emit an unknown category or omit one, leaving the ingest path unable to produce the promised shared buckets unless it validates and normalizes the value. Define that deterministic normalization contract\u2014including retention of the raw value and handling of `None`\u2014rather than relying on prompt compliance.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The audit taxonomy may collapse meaningful review categories into `other`",
+      "description": "The design makes the audit\u2019s closed vocabulary the only vocabulary for code-review findings, but those taxonomies describe different things. Existing review findings use categories such as `design`, `project-conventions`, and `completeness`, while the audit vocabulary has no direct counterparts for them. Mapping these to broad debt categories risks obscuring what review findings actually concern; routing them to `other` weakens the promised cross-source rollup. The document acknowledges that the vocabulary might not fit, but leaves that risk unresolved while making the shared vocabulary a core capability. Define the intended mapping or revise the contract so the shared rollup does not force semantically unrelated findings into the same bucket.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Snapshot execution policy leaves the read-only promise unresolved",
+      "description": "The document promises that taking a snapshot does not modify the measured repository, but leaves open whether coverage runs tests and installs or runs project dependencies, or merely reads an existing report. Running tests, plugins, or project-specific tooling can execute arbitrary code and create or change files in the worktree. This matters especially because the design targets brownfield repositories and presents the baseline as a low-friction command. Specify whether tools must consume pre-existing reports or run in an isolated disposable environment, and how the read-only guarantee is maintained.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Existing project size limits have no machine-readable source",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Prompting review templates does not enforce the shared category vocabulary",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The audit taxonomy may collapse meaningful review categories into `other`",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Snapshot execution policy leaves the read-only promise unresolved",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-17T12:36:00.610671",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 23631,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 467253,
+  "cached_tokens": 390782,
+  "cache_write_tokens": null,
+  "completion_tokens": 13007,
+  "reasoning_tokens": 11256,
+  "duration_seconds": 141.29999279184267,
+  "cost_usd": 0.01805842,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Managed-file safety does not cover all generated Copilot files",
+      "description": "The design checks the managed marker only in `.github/copilot-instructions.md` and `AGENTS.md`, but the backend also generates files under `.github/instructions/` and `.github/prompts/`. A rerun could therefore overwrite unmanaged files in those directories without prompting or backing them up. The slice plan requires warning before overwriting unmanaged Copilot files; specify how safety checks and backups apply to every generated file, or how unmanaged files are preserved.",
+      "file_ref": null,
+      "category": "data-safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Sequence: `cf setup-ide copilot`"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New script and worktree I/O paths lack explicit failure strategies",
+      "description": "The sequence invokes the guide script with `execFileSync` and then propagates files to worktrees, but does not specify handling for a hung script, script failure after partial output, or errors/partial copies during propagation. Define explicit handling for these failure cases, including whether execution is bounded by a timeout and what the user is told if propagation is incomplete.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Sequence: `cf setup-ide copilot`"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The parent onboarding time target is not carried into this design",
+      "description": "The parent architecture sets a target of getting from `npm install` to useful context output in under two minutes. This slice changes the `cf init --ide` path, but does not restate that target or say how the Copilot setup path fits within it. Include the target as a constraint for the end-to-end setup flow.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prompt-file frontmatter translation is underspecified",
+      "description": "The slice assigns conversion of skills to `.github/prompts/*.prompt.md`, but defines frontmatter translation only for rule files (`paths` to `applyTo`). The slice plan identifies prompt-file fields such as `name`, `description`, `argument-hint`, `agent`, `model`, and `tools`. Specify how source skill metadata maps to those fields and what happens when metadata is absent or unsupported, so generated prompts meet the expected Copilot format.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Technical Scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "data-safety",
+      "raw_category": null,
+      "summary": "Managed-file safety does not cover all generated Copilot files",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Sequence: `cf setup-ide copilot`",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New script and worktree I/O paths lack explicit failure strategies",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Sequence: `cf setup-ide copilot`",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The parent onboarding time target is not carried into this design",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Prompt-file frontmatter translation is underspecified",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Technical Scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T12:37:09.860166",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 8804,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 84102,
+  "cached_tokens": 54610,
+  "cache_write_tokens": null,
+  "completion_tokens": 5901,
+  "reasoning_tokens": 4938,
+  "duration_seconds": 71.29064641566947,
+  "cost_usd": 0.0064458,
+  "cost_basis": "alias_pricing"
+}

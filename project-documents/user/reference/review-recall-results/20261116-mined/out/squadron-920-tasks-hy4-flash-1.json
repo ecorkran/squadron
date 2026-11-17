@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Informational-event handling in _skip_unparseable is self-contradictory",
+      "description": "The bullet says to \"continue the loop without yielding it to the caller as a raw SDK type \u2014 let it flow to translation as normal.\" Those two clauses are mutually exclusive given the code shape: `_skip_unparseable` is the only producer for `_handle_query_mode`/`_handle_client_mode`, so an informational `RateLimitEvent` either is yielded (and reaches `translate_sdk_message`) or is skipped (and never does). This also conflicts with LLD D4, which says informational events \"must not reach translation,\" while D6 and the LLD Data Flow diagram say \"the informational path continues to translation.\" A junior implementer cannot determine the required behavior from the task text, and the two readings produce observably different output (a system Message emitted to callers or not). Recommend the task state one behavior explicitly and make it consistent with the translation branch in Task 4 and the design's D4/D6 resolution.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production-change commits land before the test rewrites that keep them green",
+      "description": "Task 9 commits deletion of `install_rate_limit_parser_shim`, but the four shim tests that import it (`test_agent.py:701,720,743,758`) are only deleted in Task 10 \u2014 so Task 9's commit point has four import-error failures. Likewise Task 6 commits removal of the `is_rate_limit_event(exc.data)` special case, which makes `test_a_rejected_rate_limit_event_reaches_the_backoff` (still fabricating a `MessageParseError` until Task 10) fail, since a generic parse failure is now logged-and-skipped rather than backing off. These commits therefore do not sit at working, tested points. Recommend moving the test rewrites/deletions (Tasks 10/11) ahead of the production re-keying/removal (Tasks 6/7/9), or deferring those commit markers until the paired test change lands, so each commit is independently green.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Substring-path backoff loses loop-level integration coverage after the rewrites",
+      "description": "Task 10 rewrites every loop-level test that fed a plain `ClaudeSDKError(\"rate_limit_event: \u2026\")` into the retry loop, leaving the retained substring path (SC7) covered only by the isolated `_is_throttle` unit test in Task 3. The wiring in Tasks 6/7 does call `_is_throttle` in all three gates, so SC7 is logically met, but no end-to-end test would catch a future regression that drops plain-429 errors from the backoff path. Consider retaining one loop-level test that raises a plain `ClaudeSDKError` containing `rate_limit`.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:98"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Informational-event handling in _skip_unparseable is self-contradictory",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Production-change commits land before the test rewrites that keep them green",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Substring-path backoff loses loop-level integration coverage after the rewrites",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:98",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-17T07:48:42.443991",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 196688,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 428325,
+  "cached_tokens": 380160,
+  "cache_write_tokens": null,
+  "completion_tokens": 48657,
+  "reasoning_tokens": 46766,
+  "duration_seconds": 291.81067033298314,
+  "cost_usd": 0.009067995,
+  "cost_basis": "alias_pricing"
+}

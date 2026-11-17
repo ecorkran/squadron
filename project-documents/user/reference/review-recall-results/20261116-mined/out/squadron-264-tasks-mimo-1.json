@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Non-text content-block mapping has no test and the fake server cannot produce it",
+      "description": "The slice design's Result mapping rules (slice design line 137) require that \"Non-text blocks are noted by type in the content, not dropped silently\" \u2014 part of the same slice-909 silent-no-op family as the empty-result rule. Task 4.2 implements this, but Task 3.1's fake server enumerates only four tools (`echo`, `fail`, `sleep`, `empty`), all of which emit text or zero blocks, so Task 5's bridge tests can never exercise a non-text block. Success criterion 2 (\"maps results per the Result mapping rules\") therefore leaves this rule unverified. Fix is small: add one fixture tool returning a non-text block (e.g. an `ImageContent` or mixed-content tool) and one assertion in `tests/tools/test_mcp_bridge.py` that the type is named in `ToolResult.content`.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:109"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success criterion 6's non-SDK model dispatch demo (walkthrough \u00a74) is deferred by design",
+      "description": "SC6 requires both a live `cf_workflow_status` smoke (covered by Task 8.2 and Task 9.1 step 2) and a dispatch with a tool-capable non-SDK model calling `cf_build_context` (walkthrough \u00a74). Task 9.3 explicitly records that step 4 runs from a standard terminal (the `sq run` CLAUDECODE guard refuses inside Claude Code) and \"remains open alongside 263's demo\". This is a documented, justified deferral of a manual acceptance step rather than an untracked gap \u2014 recorded here so the open item is visible at review time. No task change required.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:292"
+    },
+    {
+      "severity": "PASS",
+      "title": "Coverage, sequencing, and proportionality otherwise check out",
+      "description": "All remaining success criteria trace to tasks with clear, junior-completable steps: registration/pipeline validation (SC1 \u2192 7.4 explicitly exercises 263's `validate_allowed_tools`), mocked argument mapping (SC2 \u2192 7.2 with exact CF call assertions per tool), real stdio round-trip with failure modes and WARNING observability (SC3/SC4 \u2192 5.1\u20135.4, matching the design's failure-mode table row for row), schema-drift live contract test with an availability gate (SC5 \u2192 8.1, reading argument names from `cf_tools` constants per the single-source rule), and quality gates (SC7 \u2192 9.2). No NFR is restated in the slice, so no `tests/load/` task is required. The design's key facts (one-way layering, errors-are-values, no project identity in schemas, D4 unconditional registration, no custom process-kill code) are each carried into task text. Commit protocol is per-task via the shared commit protocol block, consistent with CLAUDE.md's \"commit at least once per task\"; no `**Commit**:` markers are present, which is acceptable.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Non-text content-block mapping has no test and the fake server cannot produce it",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:109",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criterion 6's non-SDK model dispatch demo (walkthrough \u00a74) is deferred by design",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:292",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Coverage, sequencing, and proportionality otherwise check out",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-17T05:43:30.227625",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 13368,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 3,
+  "prompt_tokens": 33610,
+  "cached_tokens": 17920,
+  "cache_write_tokens": null,
+  "completion_tokens": 4447,
+  "reasoning_tokens": 3314,
+  "duration_seconds": 92.08826887514442,
+  "cost_usd": 0.01076572,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "TypeScript coverage counts are missing fixture-level verification",
+      "description": "Task 20 checks that the Istanbul fixture parses and has version `0.1`, but not that its per-file `coverable_lines` and `covered_lines` match the report. Task 24 checks coverage-measurement behavior and the provider-limit text, but does not assert the Istanbul report\u2019s line counts. This leaves Success Criterion 7\u2019s present TypeScript coverage insufficiently verified; add a line-count assertion using the real fixture.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two tasks exceed the slice\u2019s proportional scope",
+      "description": "The 30-task plan is unusually prescriptive for this slice. Tasks 18 and 29 require creating and removing a scratch Vitest project, capturing real reports, and running a ten-step live walkthrough across multiple repositories, then recording results in the design. Keep real-report fixtures as required by the technical criteria, but trim the walkthrough to the checks not already covered by focused tests; avoid requiring extensive implementation mechanics such as the specific capture project setup unless needed to exercise the parser.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Core implementation and tests are generally sequenced together",
+      "description": "The plan pairs complexity, duplication, coverage parsing/freshness/measurement, and rendering with follow-up tests, and includes commit markers at working points. The later walkthrough and final validation follow implementation. No circular dependency is apparent.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "TypeScript coverage counts are missing fixture-level verification",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:20",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Two tasks exceed the slice\u2019s proportional scope",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Core implementation and tests are generally sequenced together",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T05:30:34.718076",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 43782,
+  "cached_tokens": 40832,
+  "cache_write_tokens": null,
+  "completion_tokens": 368,
+  "reasoning_tokens": 0,
+  "duration_seconds": 24.09134912537411,
+  "cost_usd": 0.00088732,
+  "cost_basis": "alias_pricing"
+}

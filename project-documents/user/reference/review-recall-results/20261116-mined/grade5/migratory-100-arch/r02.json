@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Define whether a tick mutates state or commits a new state",
+   "description": "The tick description says the engine returns updated state, but does not say whether that is a new array or the input arrays mutated in place. That distinction matters because the related world-server design treats a tick as an atomic read/compute/commit operation. The current `src/migratory/engine/tick.py` mutates state through `integrate()` and returns `None`; a failed or interrupted integration can therefore leave the server without the previous state to commit or restore. Specify the ownership and failure semantics, including whether the server must copy state before calling the engine.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Environmental behavior has no defined input path",
+   "description": "The document says the engine receives environmental context and queries a read-only environment interface, and later relies on resources, terrain, threats, seasons, and stigmergic trails. But it defines no query contract or data passed to force evaluation. The current `BulkForce` interface in `src/migratory/engine/forces.py` accepts state, neighbors, profiles, and active indices only. Without an explicit environment input, environmental forces must depend on hidden state or the force API must change when those features arrive.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Aggregate entities cannot be represented by the neighbor-query contract",
+   "description": "The aggregation section expects aggregate neighbors to carry center of mass, heading, dispersion, and count, but the spatial-query contract returns neighboring agents. The current `SpatialQuery.query_radius()` returns agent indices, and force evaluation reads per-agent state arrays; neither can represent an aggregate descriptor or define how forces should use its statistics. Supporting aggregates through the same interface will require changing the query result and force contracts, not just supplying aggregates to the existing query implementation.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The CPU scale target is not supported by the described hot path",
+   "description": "The tens-of-thousands target depends on a vectorized hot loop, but the current implementation in `src/migratory/engine/tick.py` queries neighbors in a Python loop and builds a list of per-agent arrays; the flocking forces also loop over agents in Python and allocate full-population result arrays. Replacing brute force with a spatial hash may reduce neighbor-search work, but does not remove those per-agent loops. The cited prototype evidence is a 2,000-agent renderer test, not a simulation benchmark. Validate the full tick at the stated population and density before treating this target as established.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design-Goals"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The proposed GPU path is not a drop-in backend for this NumPy API",
+   "description": "The GPU compatibility claim does not follow from the current interface. It is built around NumPy arrays, Python profile objects, and ragged `list[NDArray]` neighbor results. A CuPy or custom CUDA force implementation cannot consume those host-side structures as a GPU dispatch without conversion, data movement, and a different neighbor representation; repeated conversions would undermine the offload. The document needs to distinguish a replaceable CPU spatial-query strategy from a GPU execution backend, which would require an explicit device-resident data and dispatch boundary.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Defer GPU-specific hot-loop constraints until a measured need exists",
+   "description": "The requirement for no Python-level branching, dynamic allocation, or Python callbacks is imposed to preserve a future 1M+ GPU path, while the initial operating range is tens of thousands on CPU and no simulation benchmark establishes a bottleneck. These restrictions add design constraints now without making the existing API GPU-ready. Cut or defer the GPU-specific force constraints until CPU measurements show where the crossover lies; keep the initial contract focused on a correct, measured CPU simulation.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The stated current state contradicts the repository",
+   "description": "The document says \u201cNo engine exists,\u201d but the repository contains `src/migratory/engine/` with state, tick, force, integration, flocking, and spatial-query implementations. The linked slice plan also marks the foundational and flocking slices complete. Update this section to distinguish implemented behavior from remaining architectural work; as written, it misleads readers about what already exists.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Current-State"
+  }
+ ]
+}

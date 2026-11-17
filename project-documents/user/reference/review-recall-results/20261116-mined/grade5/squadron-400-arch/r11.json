@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Existing project size limits have no machine-readable source",
+   "description": "The architecture says file and function limits come from project config, and that without configured limits the snapshot reports distributions but no violations. Yet the document\u2019s Current State says Squadron\u2019s ~300-line and ~50-line rules exist only in prose, and the project conventions confirm those limits are not a configuration contract. As written, Squadron\u2019s own snapshots will not check the limits that motivate this capability. Specify how the existing rules become machine-readable and how the adapter resolves them; otherwise this part of the stated scope produces distributions, not limit checks.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Prompting review templates does not enforce the shared category vocabulary",
+   "description": "The preferred design relies on review templates asking the model to emit one of the audit\u2019s ten categories, while describing categorization as deterministic at ingest. That is not deterministic: the current `ReviewFinding.category` is `str | None`, and the review parser accepts free-form values. A model can still emit an unknown category or omit one, leaving the ingest path unable to produce the promised shared buckets unless it validates and normalizes the value. Define that deterministic normalization contract\u2014including retention of the raw value and handling of `None`\u2014rather than relying on prompt compliance.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The audit taxonomy may collapse meaningful review categories into `other`",
+   "description": "The design makes the audit\u2019s closed vocabulary the only vocabulary for code-review findings, but those taxonomies describe different things. Existing review findings use categories such as `design`, `project-conventions`, and `completeness`, while the audit vocabulary has no direct counterparts for them. Mapping these to broad debt categories risks obscuring what review findings actually concern; routing them to `other` weakens the promised cross-source rollup. The document acknowledges that the vocabulary might not fit, but leaves that risk unresolved while making the shared vocabulary a core capability. Define the intended mapping or revise the contract so the shared rollup does not force semantically unrelated findings into the same bucket.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Snapshot execution policy leaves the read-only promise unresolved",
+   "description": "The document promises that taking a snapshot does not modify the measured repository, but leaves open whether coverage runs tests and installs or runs project dependencies, or merely reads an existing report. Running tests, plugins, or project-specific tooling can execute arbitrary code and create or change files in the worktree. This matters especially because the design targets brownfield repositories and presents the baseline as a low-friction command. Specify whether tools must consume pre-existing reports or run in an isolated disposable environment, and how the read-only guarantee is maintained.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  }
+ ]
+}

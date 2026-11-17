@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Two git reads on the create path have no owning task, no helper, and no named timeout constant",
+      "description": "Task 6.1's `check_head_pushed(..., local_sha: str, ...)` needs the local branch tip, but nothing in the breakdown reads it. Task 3 adds only `current_branch` and `commits_in_range`; `commits_in_range(base, head)` cannot supply it because the precondition runs *before* base selection (Task 13.1's order), so the sha must come from a `git rev-parse HEAD` read that no task owns, places in no module, and gives no timeout constant. The same class of gap exists in Task 8.1, which prescribes `git rev-list <base>..<head>` membership while Task 3 adds no helper that produces it (Task 3.1's `commits_in_range` already yields the range's shas, so the two tasks also duplicate the same range computation). The consequence is concrete against a named requirement: Task 14.1 asserts timeouts on exactly five call sites (four `gh` plus `ls-remote`), so both git reads sit outside the bounded set the design's timeout criterion enumerates (\"Every `gh` call on the path carries `HOST_COMMAND_TIMEOUT_SECONDS` and the `ls-remote` call carries `GIT_QUERY_TIMEOUT_SECONDS`\"), and their timeout/failure behavior is unspecified. Assign each read to a module and name its constant.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`current_branch` cannot raise the code-host error type the task tells it to match",
+      "description": "Task 3.1 places `current_branch` in `src/squadron/review/git_utils.py` and says a detached HEAD \"raises, naming the condition ... Match `github_cli._branch_for`'s existing behavior for the same situation (D2)\". `_branch_for` (src/squadron/codehost/github_cli.py:170) raises `TargetUnresolvableError`, which lives in `squadron.codehost.errors` \u2014 and `tests/codehost/test_import_boundaries.py` forbids any module under `squadron/review/` from importing `squadron.codehost` (the only carve-out is `pr_comment.py` importing `squadron.codehost.models`). The new helper therefore cannot raise that type from its stated home. The task does not say which exception type to raise or where it is defined, so the implementer either invents a review-local error and diverges from the code-host taxonomy, or reaches into `codehost` and breaks the very boundary test this slice amends in Task 15.1. Design D2's \"behaves the same way\" needs disambiguating into \"raises, of which type, defined where\".",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/review/git_utils.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The title's slice-name term depends on a fact no task produces",
+      "description": "Task 10a resolves the title's middle term from the design file's H1, and Task 10a.2 tests \"a design with a non-matching H1 falls through to the model\" \u2014 so the H1 must be read from the file on disk. But Task 7.1 gathers only the design file's *path*, and Task 9.1 enumerates PrFacts' fields explicitly: commit list, slice design path, checked and unchecked items, review artifact path, verdict, reviewed sha. No human-name field, and no task reads the H1. Task 10a consequently depends on a fact nothing upstream produces. Related ambiguity worth settling in one place: `resolve_slice_info` already returns `SliceInfo[\"name\"]` \u2014 a human-readable name from `cf` (src/squadron/review/persistence.py:83) \u2014 which competes with D4a's insistence on the H1; the tasks currently leave both available with no rule for which wins.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The composer's failure has no CLI-level exit path and no CLI-level test",
+      "description": "Task 10.1 puts the provider-failure catch at the composer's boundary inside `pr/body.py` and says it \"become[s] a non-zero exit that creates nothing\". `pr/body.py` is a library module in the CLI's dependency tier; nothing in the breakdown says it raises `typer.Exit` (a CLI-layer dependency) or defines a domain exception the command converts, and Task 13.1's orchestration list contains no step for it. Task 10.2 asserts \"exits non-zero, logs at ERROR, and creates nothing\" at the composer, but a library-level unit test has no exit code to observe and no host write to count; Task 13.2's CLI cases do not include a raising composer either. The design's technical criterion \u2014 \"A provider failure during composition exits non-zero, logs at ERROR, and creates nothing\" \u2014 is therefore asserted only one layer below where it is observable, leaving the exit code and the \"no write\" half unclaimed.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Only the first task file is read, which can silently under-report a slice's own tasks",
+      "description": "Task 7.1 says to \"read the first task file and `parse_task_items` it\", and Task 7.2's \"task file absent\" case presumes a single file. `resolve_slice_info` returns `task_files` as a list, and split task files already exist in the tree (e.g. `161-tasks.summary-step-with-emit-destinations-1.md` and `-2.md`). On such a slice the body would list only part of the checked items under \"how it was verified\" and part of the unchecked under \"known gaps\", with nothing marking the list as partial \u2014 the silent omission that the architecture's \"never a guess and never a silent omission\" rule and the slice's own traceability rule both forbid. Parsing all task files composes trivially on top of Task 2's per-file parser, or the body must say which files it read.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4.2 duplicates existing `sq pr show` coverage",
+      "description": "Task 4.2 asks to \"assert `resolve_locator` returns the locator for each target form that `show` supports, against the fake runner\". The design requires only that `sq pr show` be unchanged (D6: \"the extraction is small and both callers land in this slice's diff\"), and `tests/cli/test_pr_show.py` already exercises show's target forms through the same `FakeProcessRunner`. Re-asserting them under a new helper's name adds coverage the slice does not need and cannot distinguish \"resolve_locator works\" from \"show still works\" \u2014 the latter being the criterion that actually matters, and already stated in Task 4.1 (\"its existing tests pass unchanged, with no edits to them\"). Keep the unchanged-tests assertion and drop the per-form restatement.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Identity precondition has no implementation owner",
+      "description": "The design's data flow puts `identify_operator` inside the precondition block, but Task 6.1 builds only `check_head_pushed`; identity appears solely as an ordering word in Task 13.1 (\"preconditions (identity, then pushed)\") and as a failure-matrix row in Task 14.1. Its behavior is covered by Task 13.2 (\"identity refusal exits 1 with no write\"), so no requirement is unmet \u2014 but no task states where the call lives or that it must follow the `except CodeHostError \u2192 render_code_host_error \u2192 typer.Exit(code=1)` pattern Task 14.1 requires of all five sites. Naming it in Task 6 or as an explicit step in Task 13.1 removes the ambiguity.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New test package scaffolding and an already-large test file",
+      "description": "Two small housekeeping points for Task 3.2 and the new `tests/pr/` files. `tests/review/test_git_utils.py` is already ~470 lines, so adding two helpers' coverage there pushes it further past the ~300-line file guideline the project applies; Task 3.2's \"or a new file if that one is near its size limit\" is a decision better made now than left to the implementer. Separately, the new `tests/pr/` package has no `__init__.py` step, while the sibling test packages `tests/review/`, `tests/codehost/`, and `tests/cli/` each have one.",
+      "file_ref": null,
+      "category": "maintainability",
+      "raw_category": null,
+      "location": "tests/review/test_git_utils.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Two git reads on the create path have no owning task, no helper, and no named timeout constant",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`current_branch` cannot raise the code-host error type the task tells it to match",
+      "location": "src/squadron/review/git_utils.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The title's slice-name term depends on a fact no task produces",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The composer's failure has no CLI-level exit path and no CLI-level test",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Only the first task file is read, which can silently under-report a slice's own tasks",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 4.2 duplicates existing `sq pr show` coverage",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Identity precondition has no implementation owner",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "maintainability",
+      "raw_category": null,
+      "summary": "New test package scaffolding and an already-large test file",
+      "location": "tests/review/test_git_utils.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-17T10:36:09.857438",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 207028,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1235527,
+  "cached_tokens": 1044917,
+  "cache_write_tokens": null,
+  "completion_tokens": 53240,
+  "reasoning_tokens": 49994,
+  "duration_seconds": 326.99757625022903,
+  "cost_usd": 0.037582169,
+  "cost_basis": "alias_pricing"
+}

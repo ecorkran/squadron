@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Platform selection does not implement the promised hardware fallback",
+      "description": "`_select_arch()` chooses CUDA or Metal based on the operating system, not whether that device is available. On Linux without a CUDA driver, for example, it still selects `qd.cuda`; the Open Notes say `qd.init()` then raises and the server exits. That conflicts with A7 and the slice-plan requirement that a host without Metal or CUDA warn and fall back to `qd.cpu`. Detect device availability and use the fallback, or narrow the stated requirement.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#New File: gpu_driver.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reflect bounds changes are not synchronized back to GPU state",
+      "description": "The design exports positions and velocities, then applies bounds policy to both arrays. But the specified notification and upload mechanism only handles positions (`notify_positions_modified()` and `upload_positions()`). `REFLECT` changes velocity as well as position; without uploading the changed velocities, the next GPU tick retains the pre-reflection velocity. This leaves A4\u2019s reflect behavior unmet. Synchronize the modified velocities too, or handle reflection on the GPU.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The GPU path does not define how SOFT bounds are applied",
+      "description": "The design treats SOFT like WRAP and REFLECT: it describes post-tick bounds enforcement and position sync-back. But slice 314 defines SOFT as a repulsive force in the force pipeline, not a position correction. The proposed GPU setup and fused tick do not specify how that force reaches the kernel. As written, the four-policy success criterion does not establish SOFT behavior. Specify how the GPU path implements the SOFT force, or explicitly defer SOFT and revise the required scope and criterion.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU transfer and synchronization hangs have no handling strategy",
+      "description": "The new path relies on host-device transfers (`from_numpy()` and exports) and `qd.sync()` during ticks. The notes define startup error handling and say post-start GPU failures are fatal, but do not define what happens if a transfer or synchronization hangs, or how a runtime device failure is detected and handled. Specify a bounded timeout or an explicit process-fatal strategy that prevents the server from hanging indefinitely.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Open Notes"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Platform selection does not implement the promised hardware fallback",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#New File: gpu_driver.py",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reflect bounds changes are not synchronized back to GPU state",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The GPU path does not define how SOFT bounds are applied",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "GPU transfer and synchronization hangs have no handling strategy",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Open Notes",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-17T12:42:39.173778",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 6350,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 243225,
+  "cached_tokens": 182038,
+  "cache_write_tokens": null,
+  "completion_tokens": 12395,
+  "reasoning_tokens": 11035,
+  "duration_seconds": 149.1775997923687,
+  "cost_usd": 0.014136580000000001,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "T7's band precedence contradicts the slice's Direction Bands table and its own Success item",
+   "description": "T7 instructs the implementer to check conditions in this order: (1) `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`, (2) unversioned \u2192 `INSUFFICIENT_EVIDENCE`, (3) `GRADUATE`, (4) `TIGHTEN`. With short-circuit evaluation, a cell with `n < floor` and a low match rate returns `INSUFFICIENT_EVIDENCE` at rule 1 and never reaches rule 4. But both T7's own Success item and T8's test demand the opposite: \"a below-floor cell with low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`.\" The slice design's Direction Bands table is equally explicit: `TIGHTEN` is \"**no**\" floor-gated while `INSUFFICIENT_EVIDENCE` applies to the loosening path. The task even contains a parenthetical (\"only cases 1/2 above are... checked first only for the loosening path\") that is internally incoherent as written \u2014 it says rules 1/2 gate the loosening path while listing them before the tightening check, which makes them gate everything. A junior AI following the numbered precedence literally will produce code that fails T8's own test. Fix: reorder the rules so `match_rate <= tighten_rate` \u2192 `TIGHTEN` is checked before the `n < floor` / unversioned checks (or state that rules 1/2 only suppress the `GRADUATE` outcome), and mirror the corrected order into T8's boundary expectations.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T13 depends on a result-discovery surface that does not exist in 320",
+   "description": "T13 says to \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan,\" falling back to \"scope this task to the store-recorded samples only... if no such surface exists yet.\" I verified there is no such surface: `capture.resolve_target` (capture.py:68) resolves one target given an explicit index or path; nothing in `src/squadron` enumerates review files (the only review glob is the single-index `reviews_dir.glob(f\"{index}-review.*\")` at capture.py:95). Meanwhile T14's non-empty guarantee, pruned-file case, and lapsed-detection all require enumerating on-disk judge results matching a `JudgeConfigId` and computing `derive_judge_config_id` per file. The named fallback (\"store-recorded samples only\") cannot satisfy those tests, since sampled records are exactly what must be *excluded* and unsampled results are by definition not in the store. The task should either (a) acknowledge that a bounded review-file walk (mirroring `resolve_target`'s directory convention) is part of T13's scope, or (b) raise the missing-capability question to the Project Manager *before* implementation starts, not as a branch discovered mid-task.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Coverage claim that the malformed-judge-block failure mode is exercised in T8 is unsubstantiated",
+   "description": "The Coverage Check asserts \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8).\" T8's actual checklist has no malformed-judge-block case \u2014 it covers band boundaries, floor asymmetry, unversioned refusal, and `read_current_thresholds` registered/unregistered. The design's Failure Modes row (\"malformed `judge:` block (non-numeric floor) \u2192 flagged, not silently defaulted\") therefore has no test backing it in this breakdown. Additionally, `resolve_thresholds` as written (judge.py:49-57) does not gracefully handle a non-numeric floor \u2014 `float(pass_floor)` would raise, so \"inherited\" handling is an assumption, not a verified fact. Either add a T8 checklist item for the malformed-block case (or state explicitly what `read_current_thresholds` does when `resolve_thresholds` raises), or correct the coverage claim so the gap is visible.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Idempotent re-graduate path appears unreachable with exact-identity matching",
+   "description": "T15 requires that if \"a `GraduatedConfig` for this exact identity already exists, update its evidence snapshot in place,\" and T16 tests that re-graduating keeps the record count at 1. But `find_graduation` (T11, line 177) matches on the **exact** `JudgeConfigId`, which includes `template_content_hash` derived from the *current* template, while the stored `GraduatedConfig.judge_config` carries the hash *at graduation time*. T1's whole point is that a threshold edit leaves the hash unchanged, so after the operator edits `pass_floor` and re-graduates, the current hash differs from the stored one, `find_graduation` finds nothing, and the code writes a second record \u2014 making T16's idempotence test fail. The design's Data Flow step 2 places the config edit *before* `graduate`, so this is the normal path. The lookup for the update case needs to match on `(template_name, model, artifact_level)` with hash-compatible semantics (or T15 must state how the stored record is located), otherwise the \"one record, not two\" commitment is untestable as specified.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Surface-agnostic (no-Typer) assertion lives in the CLI test task",
+   "description": "The \"core imports no Typer\" parity test is a bullet inside T16 (\"CLI tests\"). The technical requirement it verifies (\"Core is surface-agnostic \u2014 verified by test, matching 320/321\") is about `calibration`/`graduation`/`calibration_models`, which land in T3/T7/T11. As placed, the property goes untested until the final test task. This matches 320/321's reported pattern and T16 still immediately follows the last core change (T15), so it's acceptable \u2014 but noting it since the criterion is a core property, not a CLI property.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:250"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "No-mutation assertion is duplicated at unit and CLI layers",
+   "description": "T16 re-asserts byte-identical template/config/store after a `recommend` run at the CLI layer, duplicating T10's unit-level snapshot. The slice design's walkthrough step 4 already requires this check end-to-end at T17, so the CLI-layer copy is arguably redundant. I'm flagging it only as a NOTE because the design explicitly frames no-mutation as \"enforced by test, not convention\" and the CLI shell is the real entry point; keeping it is defensible, but it could be dropped in favor of the T17 walkthrough if the file is trimmed.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:246-247"
+  }
+ ]
+}

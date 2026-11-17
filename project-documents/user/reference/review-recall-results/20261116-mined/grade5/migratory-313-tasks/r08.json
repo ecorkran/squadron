@@ -1,0 +1,33 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "YAML serialization requirement is not fully assigned",
+   "description": "The round-trip test checks only the reloaded policy. The design requires `config_to_yaml` to emit a **plain string** and reload an equal `ServerConfig`. The tasks do not direct an implementation change to `config_to_yaml` if needed, nor do they assert either requirement. Extend the task to verify the emitted YAML and full config equality, and update serialization as necessary.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:78-91"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Manual verification can undo the required shipped default",
+   "description": "Task 5.2 allows restoring `config/test.yaml` to any policy, while the design requires it to ship with `wrap`. Require restoration to `wrap` and verify it before closeout.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:306"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes rather than plain lines",
+   "description": "All five `**Commit**:` markers are nested in checkbox items. Make them plain lines at their existing tested checkpoints, rather than checkboxes.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Breakdown is overly granular for the slice",
+   "description": "The enum, its single config field, and loader are separate implementation tasks with low-level instructions; the plan also repeats full-suite execution and specifies a large number of individually named tests. Merge the config implementation tasks, consolidate related policy cases with parametrization where appropriate, and remove redundant full-suite runs while retaining the required coverage and final verification.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42-96"
+  }
+ ]
+}

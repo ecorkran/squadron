@@ -1,0 +1,33 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The stated performance NFR has no load-test task or CI gate",
+   "description": "The slice sets a target of adding under one second to a Phase 0 build, but the task breakdown explicitly rules out a load test and relies on cap tests instead. Add a load test under `tests/load/` that covers this target, plus a CI task that gates on it; the target and cap tests do not establish the timing requirement.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 11 lacks an immediately following test task for MCP behavior",
+   "description": "Task 11 mixes pipeline implementation with `contextTools.test.ts` assertions instead of placing tests in a separate task immediately afterward. The required `context_build` response when the resolver throws `AdoptionError` is also not covered: the stated assertions check option values, while the parity and integration scenarios cover successful builds. Add a Task 11 test task directly after the implementation, covering both option forwarding and the D9 MCP error result.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-225"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The integration-fixture task is too broad for one task",
+   "description": "Task 12 bundles a fixture harness and 13 integration scenarios spanning detection, state transitions, guide errors, non-concept phases, and read-only preview. Split it into focused integration tasks\u2014for example, detection/state behavior and build/MCP integration\u2014so each has a manageable, independently verifiable scope.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are formatted as checkboxes",
+   "description": "Every listed commit point uses a checkbox such as `- [ ] **Task 2C: Commit**`; none is a standalone plain `**Commit**:` line. Convert these to plain commit-marker lines at the existing tested checkpoints, rather than checkbox items.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78-269"
+  }
+ ]
+}

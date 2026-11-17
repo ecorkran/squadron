@@ -1,0 +1,33 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Load test and CI gate are missing",
+   "description": "The slice restates a target of under one second of detection overhead on a local disk. Task 3T tests the walk caps, but the breakdown explicitly omits a load test. Add a load test in `tests/load/` covering the target and a CI task that gates on it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes",
+   "description": "Task 2C and the other commit markers are checkbox tasks. Convert them to plain `**Commit**:` lines, retaining them at the existing tested checkpoints.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Renderer tests omit required outcomes",
+   "description": "The slice requires `renderAdoptionFacts` tests for every outcome. Task 8T covers brownfield, adoption-in-progress and not-evaluated, but does not specify adoption-closed, already-planned or greenfield. Add cases for those outcomes.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "State tests depend on the user's configuration",
+   "description": "Task 2T expects a missing project config to yield an empty state, but `ConfigManager.get` falls back to user configuration. Isolate the user config in these tests and the integration fixtures so a developer\u2019s `adoption.state` cannot change their results.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:72-76"
+  }
+ ]
+}

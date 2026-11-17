@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force timing is deferred despite being assigned to this slice",
+   "description": "The slice plan assigns the harness phase timings \u201cforce totals per force.\u201d This design records only an aggregate `force_total_ns` and explicitly defers per-force timings to slice 142. That leaves slice 141 short of its assigned measurement scope; include the per-force breakdown here or revise the plan assignment.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Per-phase timings shape"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A parity hash cannot verify tolerance-based GPU parity",
+   "description": "The design says future GPU hashes can be interpreted within a documented tolerance band and that downstream slices will compare against a NumPy reference hash. A cryptographic hash only indicates exact byte equality; it cannot express whether numerical differences fall within tolerance. Keep the hash for exact deterministic checks, but provide a numeric comparison path or state representation for the tolerance-based parity required by the Quadrants work.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Parity hash"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The instrumented benchmark can diverge from the production tick",
+   "description": "`tick_instrumented()` duplicates the tick logic rather than measuring the production `tick()` execution. The documented output-equivalence test can catch changed results, but not changes to phase boundaries or performance work that leave results unchanged; the risk section acknowledges this drift is not mechanically detectable. Since these measurements guide optimization decisions, use a shared tick implementation for both paths or otherwise ensure the benchmark times the production operations and their actual phase boundaries.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Phase timer: instrument `tick()` without modifying it"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure handling is incomplete for benchmark I/O",
+   "description": "The harness reads workload files, obtains the Git SHA, and writes JSON and Markdown reports, but the enumerated failure modes do not specify handling for malformed or unreadable workload files, Git metadata lookup failure or hang, or report-write failures such as permission errors or a full disk. Define explicit behavior for these paths\u2014such as failing with a clear error and nonzero exit status, without silently substituting metadata or leaving ambiguous partial reports.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Failure modes"
+  }
+ ]
+}

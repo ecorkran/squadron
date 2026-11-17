@@ -1,0 +1,75 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The retroactive marker can bypass the review gate the document claims it cannot",
+   "description": "The \"Retroactive marker\" bullet claims: \"Real new work always produces those files, so the marker can't be used to bypass the gate.\" That invariant is false as specified, and the mechanism is already shipped (slice 263). `WorkflowNavigator.deriveSliceStatus` returns `Complete` for any checked retroactive entry *before any gate is evaluated* (`packages/core/src/introspection/WorkflowNavigator.ts:781-782`), and `evaluateEntryGate` skips retroactive entries outright (`reviewGate.ts:376`). The only policing is `ruleRetroactiveEntries` (`retroactiveRules.ts`): no design/task files, checked, and indexed before `lowestNewWorkIndex`. But `lowestNewWorkIndex` is computed over the *current* plan state and excludes the marked entry itself \u2014 so in exactly the scenario this initiative creates (an adopted project: all-retroactive plan plus one new slice in flight), an agent that adds the `` `retroactive` `` token to its in-flight entry instead of writing a design gets `complete` status, a skipped code-review gate, and a silent checker (`firstNewWork` is null, so the ordering rule never fires). \"Set only by the adoption flow\" is unenforceable: the marker is plain text any agent can write, with no provenance or registration tying it to an adoption run \u2014 the same agent class that set `review: none` twice in real incidents (guide changelog 0.17.4). The checker error doesn't prevent the bypass either, because navigation and squadron's pipeline gates act on derived *status*, not on check output. The amendment needs an enforcement mechanism (e.g., the checker accepting the marker only in a registered adoption context, or provenance on the marker analogous to the architecture's `provenance: derived`) or it should not claim the loophole is closed.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The initiative's outcome now hangs entirely on unbuilt squadron work, with the verified CF-only path deleted and no fallback trigger",
+   "description": "Post-amendment, cf's contribution (268\u2013272) is removal plus two read-only primitives; no adoption can happen until `sq onboard` (squadron 440), which the document itself records as unbuilt \u2014 366 (dispatcher) is not built, 364 is partial, and the probe ships only after 366, meaning cf's shipped 262 integration never had its dependency in the first place. Until then, an unadopted brownfield repo gets one line pointing at `sq onboard` or opts out and is \"treated as new\" \u2014 which recreates the exact Phase 0-ignores-the-codebase failure the Motivation section exists to fix, indefinitely, for every non-squadron user. Note also that the one live-verified path is being deleted: 265's \"one with squadron\" run could not have exercised a real probe (it does not exist), and the rework preamble itself concedes the shipped 264 navigation was \"never exercised live.\" The PM decision is recorded, but the architecture carries no decision point for the failure mode that matters \u2014 what happens if `sq onboard` slips. State the trigger (re-enable the CF-only path, or revisit the opt-out UX) instead of leaving \"parked\" as the terminal state.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#overview"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The amended guide-prompt contract contradicts itself about who fails fast on a missing profile",
+   "description": "The amendment parenthetical at line 136 says the fail-fast rule \"applied to `cf build` selecting the profile, which no longer happens; it moves to the prompt-delivery primitive\" \u2014 and then the same bullet retains, unedited, \"If cf selects the brownfield profile and the installed guide lacks it, `cf build` fails with a named error.\" That sentence describes an implementation the bullet itself says was removed (268 deletes the profile swap). Line 137's entire rationale (\"If cf selects the brownfield profile\u2026\") is likewise orphaned. Meanwhile slice 271 defers \"how the guide's `brownfield-adoption` context profile is delivered\" to slice design, so the fail-fast behavior this section promises is currently asserted by no surviving mechanism. Decide at this layer whether the 271 primitive validates the profile and fails with a named error, and delete the dead sentences.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:136-137"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The Dependencies section marks shipped guide work as pending and names the wrong minimum version",
+   "description": "Three factual errors, all checkable against the installed guide (v0.22.7) and cf's own code: (1) \"Still pending \u2026 the retroactive-marker rule\" \u2014 it shipped in guide v0.22.3 (2026-10-21), whose note \"not yet implemented in cf\" is *also* stale, since slice 263 shipped the marker (`slicePlanParser.ts` `RETROACTIVE_MARKER_RE`, `retroactiveRules.ts`); (2) \"the naming-conventions entry for the docs map file (`050-docs-map.{project}.md`)\" \u2014 shipped in v0.22.6, dated the same day as this revision's `dateUpdated`; (3) \"cf releases that select the brownfield profile require at least **v0.22.2**\" \u2014 cf's `MIN_GUIDE_VERSION` is `0.22.6` (`packages/core/src/guides/guideMinimum.ts`). The \"Later in the initiative\" section has the same vintage problem, framing 266 and 267 as future while the slice plan marks both shipped. Anyone planning against this section will redo shipped guide work or ship against the wrong floor.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:159"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Detection's cost and hard-failure mode are unaddressed for its new `cf next` and `cf init` consumers",
+   "description": "The design makes `cf next` a consumer of the detection report (amendment bullet \"`cf next` carries no adoption guidance: one line for an unadopted brownfield repo\"; slice 270's trigger is \"code, no planning artifacts and no opt-out\" \u2014 which, after 269 removes stored state, can only be established by *running detection*). The shipped detection walk (`measureSourceVolume`, `packages/core/src/detection/sourceVolume.ts`) reads every source file up to the 2,000-line threshold and **throws** `AdoptionError` once it has visited 20,000 directory entries without reaching it \u2014 i.e., a large non-source tree (assets, generated docs) makes detection throw, not report. The navigator's established convention (#62, TD-2a) is that `cf next` must keep working and degrade to warnings; nothing in the document says whether the navigator catches the throw (a catch-and-warn would need to be stated, since it brushes against the doc's own fail-explicit stance) or whether large repos now break navigation and `cf init`. Also scope \"consumes the report\": the report includes git history (two subprocesses with 5s timeouts), which `cf next` does not need \u2014 the navigator needs the outcome only, and the per-call cost of the walk on unplanned repos (where agents call `cf next` repeatedly) needs a stated bound or a cheaper signal.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Shipped detection error remediation tells users to set an `adoption.state` value slice 269 renders inert",
+   "description": "The Technical Considerations bullet makes \"the override \u2026 the safety valve,\" and the shipped implementation of that idea (`OVERRIDE_REMEDY` in `sourceVolume.ts` and `planningArtifacts.ts`) instructs: \"To skip detection run `cf config set adoption.state in_progress` (treat as an existing codebase).\" Slice 269 makes `in_progress` an ignored value with a one-time notice \u2014 so after the rework, every detection failure or misfire tells the user to set a key that no longer changes the outcome. No rework slice owns fixing these strings: 268 keeps only `MIN_GUIDE_VERSION`, 272 is docs/guide alignment, and the strings live in detection code that 271 keeps. The arch should assign the remediation-text rewrite to the slice that changes the override's semantics (269), or the safety valve breaks exactly when it is needed.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:133"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The slice-271 prompt delivery \u2014 the post-amendment core interaction \u2014 has no shape, and the handoff's provenance check exists in neither repo",
+   "description": "Amendment flow step 4 says only: \"Fetch the adoption prompt from cf (slice 271), with the comprehension doc's path filled in.\" But the guide's `brownfield-adoption` profile needs four variables (`fileConcept`, `fileArch`, `fileSlicePlan`, `fileComprehension`) plus resume-from-existing-artifacts semantics, `cf build` resolves none of them after 268, and slice 271 defers \"how the \u2026 context profile is delivered\" entirely to slice design. So the central interaction of the amended architecture \u2014 what `sq onboard` actually receives, and how a resumed adoption re-reads a partially written baseline \u2014 is unspecified at the layer where cross-repo contracts are supposed to be settled, while the profile itself is frozen in the guide (v0.22.0). Separately, responsibility row (b) says cf finds the comprehension doc \"by filename and `docType` (plus squadron 361's provenance block),\" but the shipped resolver (`comprehensionAnalysis.ts`) matches filename and docType only \u2014 the provenance check exists in neither repo. Either drop it from row (b) or assign it to a slice.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#overview"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The cited review artifact does not exist in the repository",
+   "description": "Related Work links `../reviews/260-review.arch.brownfield-adoption.md`, but `project-documents/user/reviews/` does not exist, so \"(CONCERNS, 11 findings). All findings are addressed in this revision\" cannot be checked against the artifact it cites \u2014 and the slice-plan notes record that no re-review of this revision has run, despite it rewriting the core flow. Commit the review artifact or state the resolution of each finding inline so the claim is checkable.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:169"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "cf and the guide define \"brownfield\" differently at the concept-only boundary",
+   "description": "cf's outcome order says \"A concept on its own does not count,\" so a repo with only a concept is brownfield. The guide's `guide.ai-project.brownfield-adoption` \"When This Applies\" says brownfield means \"no concept, architecture, or slice plan\" \u2014 a repo with a concept is \"not brownfield: register it and continue from where it left off,\" which is impossible when there is no plan to continue from. cf's choice is defensible (the adoption prompt handles an existing concept), but `sq onboard` branches on cf's report while the agent follows the guide's definition; align the two wordings.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:76"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The document is majority superseded text, which is the root cause of the contradictions above",
+   "description": "Three superseded blocks remain inline (\"for history\" probe contract, original guide contract, original slice list) plus the amendment blockquote, and sections describing shipped work (Dependencies, \"Later in the initiative\") were not synced with it. That density already produced the self-contradiction at lines 136\u2013137 and the staleness at line 159. Move or delete the superseded contracts (the amendment header already summarizes what changed), and note that the 240 gate amendment lives only here \u2014 `240-arch.review-aware-workflow-gating.md` still describes the unamended gate.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md"
+  }
+ ]
+}

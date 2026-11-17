@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Residual discovery fallback cannot deliver unsampled offers",
+   "description": "T13 permits restricting discovery to store-recorded samples if no discovery API exists. Those results are already sampled, so excluding sampled references leaves no offers. Current `MetrologyStore` lists samples; capture resolves a supplied target rather than enumerating unsampled results. Explicitly task candidate discovery instead of allowing this fallback. Otherwise the non-empty residual-offer guarantee and continued evidence accumulation cannot be delivered.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-204"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Direction precedence contradicts its required outcome",
+   "description": "T7 says to implement the listed precedence exactly, starting with unconditional below-floor refusal, then requires below-floor low-agreement cells to reach `TIGHTEN`. Both cannot hold. Replace the contradictory sequence with an unambiguous decision table preserving floor-gated loosening and non-floor-gated tightening.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model warning is missing",
+   "description": "T9 requires the config-time model/threshold pairing note but omits the explicit warning that runtime-drawn models cannot have model-specific thresholds. T10/T16 check only note presence. Add the required warning to every recommendation and assert its content in text and JSON output, satisfying the slice\u2019s fourth functional criterion.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-147"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Malformed threshold handling is claimed but not tasked",
+   "description": "The coverage check claims malformed `judge:` blocks are exercised in T8, but T8 covers only registered and missing templates. Moreover, current `resolve_thresholds` directly converts values with `float()`; non-numeric values raise rather than provide the claimed inherited handling. Add an explicit handling decision and regression test providing the design\u2019s warning and flagged target without modifying 300\u2019s judging path.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Lapse diagnostics lack a settled interface",
+   "description": "T13 fixes the return type as `list[OfferTarget]` while requiring distinguishable lapse information through an unspecified alternative mechanism. An empty list cannot distinguish exhaustion from lapse, and `find_graduation` alone does not establish current configuration state. Define the diagnostic contract before T13/T14 so T15 can consume it without redesigning earlier work.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Commit placement and task splitting are excessive",
+   "description": "The pattern continues throughout: every implementation and test task receives its own commit marker, placing implementation commits before their regression tests. Merge small implementation/test pairs\u2014particularly models and config keys\u2014and retain markers only after tested working increments. Tests already immediately follow implementations; preserve that sequencing.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:31-108"
+  }
+ ]
+}

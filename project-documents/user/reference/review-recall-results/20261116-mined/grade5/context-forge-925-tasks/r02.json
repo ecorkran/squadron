@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 20's enumerated call-site list misses a guide-file read in `phaseShorthand.ts`, and the `prompt.ts` wiring point is ordered after an earlier guide read",
+   "description": "Task 20 instructs grepping for `PROMPT_FILE_RELATIVE_PATH` and then presents an exhaustive-looking list: `build.ts` (~78), `prompt.ts` (~60 and ~116), `setup-ide.ts`. The grep actually hits `packages/cli/src/utils/phaseShorthand.ts:3` and `:22`, which reads `path.join(projectPath, PROMPT_FILE_RELATIVE_PATH)` \u2014 and that constant (`packages/core/src/services/constants.ts:7`) resolves to `project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md`, i.e. a read of guide content. Two concrete consequences on the #80 state (fresh clone, empty guide dir):\n- `cf prompt get P1` calls `resolvePhaseInput()` at `packages/cli/src/commands/prompt.ts:114` (which reads the guide file via `getPhaseShorthands()` for shorthand input) **before** the task's stated wiring point at line 116. If `ensureGuideReady` is inserted at \"~line 116\" as specified, the shorthand path throws ENOENT before auto-init can run.\n- `cf prompt list` reads the guide file at line 62 via `getAllPrompts()` and again at line 65; a junior AI placing the call exactly at the enumerated \"line 60\" works only by luck of proximity.\n\nThis leaves unmeasured the design's D3/Scope requirement that `ensureCheckout()` be \"called from every CLI command and MCP tool that reads guide content,\" and the success criterion that a freshly cloned project's commands succeed. Fix: name `phaseShorthand.ts` explicitly (or state the wiring must precede `resolvePhaseInput()` and `getPhaseShorthands()` in `prompt.ts`), and phrase the enumeration as \"all hits, including but not limited to\" since Task 20 already mandates the grep.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:294-301"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 22 specifies a wiring point that cannot deliver the `notices` array it requires",
+   "description": "Task 22 says to call `ensureCheckout()` \"before `createContextPipeline` (~line 57)\" and \"before `resolvePromptFilePath` (~line 98)\" and append `message` to a `notices: string[]` on the tool result. But line 57 sits inside the shared helper `generateContext()` (`packages/mcp-server/src/tools/contextTools.ts:26`), whose signature is `Promise<string>` \u2014 there is no tool result in scope there, and changing its return type ripples into `context_build` **and** `template_preview` (line 220), which the task never mentions. Meanwhile lines 98/249/282 are inside `resolvePromptFileForTools()`/the `prompt_list`/`prompt_get` handlers, which return `jsonResult()`/`textResult()` objects \u2014 a different shape each. The success criterion (\"`grep -rn \"notices\"` shows one shared shape, not per-tool ad hoc fields\") is unachievable without a decision the task does not make: where notices are captured, whether `generateContext` returns `{ context, notices }`, and whether `template_preview` emits a notice. State these in Task 22 (or split the plumbing sub-step out) so the task is independently completable.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-325"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are inline in checkbox items rather than plain `**Commit**:` lines",
+   "description": "The required format is `**Commit**:` on a plain line, never a checkbox item. This file embeds \"Commit: `\u2026`\" at the end of the final success-criteria bullet of each commit-bearing task (lines 100, 127, 153, 204, 224, 246, 276, 312, 333, 342, 373, 389, 412, and the final one in Task 32). Placement itself is good \u2014 markers sit after tested points and are distributed across all five parts, not bunched at the end \u2014 but the markers are neither bolded nor on their own plain lines, so any tooling or reviewer scanning for `**Commit**:` lines will find none. Restate each as a plain `**Commit**: <message>` line immediately after (not inside) its task's checkbox list.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 10's success criterion cannot be verified until Task 11 completes",
+   "description": "\"Success criteria: typecheck passes once Task 11 populates the field\" makes Task 10 independently un-completable as written \u2014 its own green bar is defined in terms of a later task. (If `GuideInfo.checkout` is added as a required non-optional field, typecheck genuinely breaks between Task 10 and Task 11.) Either make the criterion self-contained (\"typecheck passes; `checkout` is optional/null-initialized until Task 11\") or merge Tasks 10 and 11 into one task.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:186"
+  }
+ ]
+}

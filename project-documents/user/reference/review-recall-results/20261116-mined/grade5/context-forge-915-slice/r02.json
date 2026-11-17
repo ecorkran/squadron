@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Existing projects can write personal settings without ignore protection",
+   "description": "The ignore rule is added only by `cf init`, but existing projects can use `set` or `migrate-personal` without re-running init. Their new personal file may therefore be committed, contrary to slice 915\u2019s goal. The proposed substring check can also mistake a comment or negated rule for effective coverage.\n\nSpecify how existing projects receive or are warned about effective ignore protection before personal writes, and test existing and negated `.gitignore` entries.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Collision remediation deletes the wrong copy",
+   "description": "For differing values, migration leaves both copies and instructs users to run `cf config unset <key> --project` to remove the shared copy. But the design says project deletion routes to the personal file (line 89). The instruction instead removes the preferred value and exposes the stale shared value.\n\nProvide an explicit, safe way to remove the shared copy while retaining the personal value, and cover that outcome in tests.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:144-146"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "MCP write confirmation can report the wrong file",
+   "description": "The design updates MCP path reporting for `config_get`, but slice 162\u2019s `config_set` contract also returns a `configFile` identifying the write target. Routing personal keys to the new file requires that confirmation to identify the personal path. Specify and test the affected MCP write response as well as read responses.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193-201"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Migration failure recovery assumes writes cannot damage a file",
+   "description": "Writing personal before deleting shared protects against an interruption *between* successful writes, but does not establish the stated recovery guarantee if a read-modify-write fails partway through writing either TOML file. A partial shared-file write could damage unrelated configuration too.\n\nSpecify a safe replacement strategy for migration writes and explicit handling for unreadable or malformed files and partial failures, including a non-success result when keys fail.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough cannot exercise the promised fallback",
+   "description": "Step 1 creates a personal value; step 4 leaves it in place but expects the shared legacy value to win. The declared precedence instead selects the personal value, and migration then skips the differing collision. This walkthrough cannot verify compatibility or the happy-path migration.\n\nRemove the personal value before setting up the fallback case, and retain a separate collision test with the corrected remediation.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-259"
+  }
+ ]
+}

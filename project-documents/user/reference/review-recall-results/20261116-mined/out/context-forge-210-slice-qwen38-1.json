@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Faithful to architectural principles and plan scope",
+      "description": "The design embodies the architecture's \"Composability preserved\" principle (init/setup-ide remain independently callable; copilot is a new backend behind the same `setupIdeAction` interface) and the slice plan's composition-over-new-infrastructure note. Scope maps 1:1 to plan item 210: `VALID_TARGETS` extension, guides-submodule `copilot` backend, managed-marker detection, worktree propagation, `cf init --ide copilot` routing, and `paths`\u2192`applyTo` translation. Deferred items (Cursor, bidirectional sync, custom agents) match the plan's explicit non-goals, so no scope is silently dropped.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#design-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Correct dependency direction and boundary placement",
+      "description": "Compilation logic stays in the ai-project-guide submodule's `scripts/setup-ide` backend, exactly mirroring how the existing claude target works (verified against `setup-ide.ts`, which delegates via `execFileSync('bash', [scriptPath, target])`). No changes to `packages/core/` or `packages/mcp-server/` \u2014 the CLI depends downward on core only, and the guide script is invoked, not imported. The frontmatter `interfaces: [202-smart-cf-init-composition]` is legitimate: slice 202 is complete and `init.ts` already passes `--ide <target>` through to `setupIdeAction` with `yes: true`, so `cf init --ide copilot` needs no init.ts changes as claimed.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:67-69"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new I/O path are enumerated",
+      "description": "The script-execution path has explicit handling: missing/old guides submodule without a `copilot` case fails at the script step with a clear error (named as the highest-risk coupling, not TBD); unmanaged existing files prompt before overwrite with `.bak` backup, `--yes` bypass matches the claude path; managed files re-run silently (idempotence criterion from the plan). The marker-degradation risk (VS Code stripping the comment marker) is explicitly analyzed with a stated acceptable outcome (verbose re-run, no data loss).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test specified for the paths\u2192applyTo translation",
+      "description": "The plan's success criteria include \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files,\" and the design devotes a full Design Decisions subsection to this translation (`paths: string[]` \u2192 `applyTo: \"glob1,glob2\"`, default handling). Yet the Test Coverage list covers only target validation, managed/unmanaged re-runs, worktree propagation, and the init integration \u2014 none of which exercises translation correctness. Since the translation lives in a bash script in the guides submodule, the design should state where and how it is verified (e.g., a fixture-based test in the guides script, or a CLI-level test asserting emitted `.instructions.md` frontmatter from a real `.claude/rules/*.md` input). This also aligns with the project convention that parsers/translators must be tested against the actual format they consume.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skill\u2192prompt-file frontmatter mapping is unspecified",
+      "description": "The design specifies the frontmatter translation for rule files in detail (`applyTo` subsection) but for skills only says \"translate skills \u2192 `.github/prompts/*.prompt.md`.\" The plan's file-mapping table names the prompt-file frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`), and the referenced tool guide confirms this is the Copilot format. The guides-script implementer needs to know which source-skill frontmatter fields map to which prompt-file fields, what defaults apply when a source field is absent, and whether the managed marker is emitted in prompt files (the design's marker check only covers `copilot-instructions.md` and `AGENTS.md`). One short mapping table closes this without adding mechanism.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plan success criterion about the tool guide is not addressed",
+      "description": "The plan's success criteria for slice 210 state: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed.\" The file exists at that path (currently research notes from an external Q&A), but the slice design neither references it nor says whether it will be promoted/cleaned up as part of this slice. The design clearly draws on the guide's content (file mapping, `applyTo` semantics, ordering caveat), so acknowledging the reference is cheap; the promotion decision should be stated explicitly, even if the answer is \"leave as-is.\"",
+      "file_ref": null,
+      "category": "missing-item",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "AGENTS.md ownership is ambiguous once a second non-Claude target lands",
+      "description": "`AGENTS.md` is a cross-tool file, and the managed marker identifies \"CF-managed\" but not which target generated it. When a future target (Cursor, named in the Value section as the pattern's next consumer) also writes `AGENTS.md`, its safety check would see the copilot-generated marker and silently overwrite. Nothing is needed now \u2014 copilot is the only writer \u2014 but since the design explicitly claims to establish the multi-target pattern, a sentence noting that per-target ownership of `AGENTS.md` must be resolved when the second writer arrives would prevent the pattern from being copied blindly.",
+      "file_ref": null,
+      "category": "future-proofing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Faithful to architectural principles and plan scope",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#design-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Correct dependency direction and boundary placement",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:67-69",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes for the new I/O path are enumerated",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-135",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No test specified for the paths\u2192applyTo translation",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Skill\u2192prompt-file frontmatter mapping is unspecified",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "missing-item",
+      "raw_category": null,
+      "summary": "Plan success criterion about the tool guide is not addressed",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "future-proofing",
+      "raw_category": null,
+      "summary": "AGENTS.md ownership is ambiguous once a second non-Claude target lands",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T13:02:08.649320",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 48842,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 120368,
+  "cached_tokens": 93824,
+  "cache_write_tokens": null,
+  "completion_tokens": 12959,
+  "reasoning_tokens": 10797,
+  "duration_seconds": 335.8803023751825,
+  "cost_usd": 0.1496068,
+  "cost_basis": "alias_pricing"
+}

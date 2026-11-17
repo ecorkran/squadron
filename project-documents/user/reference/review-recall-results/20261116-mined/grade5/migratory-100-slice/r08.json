@@ -1,0 +1,124 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "NOTE",
+   "title": "Architecture input is the slice plan; reviewed against its parent",
+   "description": "The file given as the architecture has `docType: slice-plan`. Its parent is `100-arch.behavior-engine.md`, which I used as the architecture baseline. The plan (lines 17, 47, 49) was used for slice scope and dependencies. The slice's `parent:` field pointing at the plan is correct under the review rules.",
+   "location": "project-documents/user/architecture/100-slices.behavior-engine.md:2"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "tick() return contract contradicts the architecture and the slice's own scope",
+   "description": "The signature returns `None` and state is mutated in place (`:91`). Technical Scope says tick will \"return updated state\" (`:39`). The architecture says \"feed in state, get back state\" and \"Returns the updated state array\" (arch :68, :70). The concept says \"keep the tick function pure\" (concept :79). In-place mutation is defensible because it avoids per-tick allocation, which arch :99 asks for. Keep it, fix `:39` to match, and record the deviation from arch :68 and :70 with its reason.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:187"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Scale NFR is not restated; the slice narrows it silently",
+   "description": "The architecture's NFR is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (arch :33). The slice targets \"hundreds\" (`:173`). The concept supports naive O(n\u00b2) for hundreds (concept :77), and arch :45 allows a naive initial implementation, so the choice is permitted. The slice must still restate the NFR and say this slice meets hundreds only. Brute-force `build()` stores all pairwise distances: about 800 MB of float64 per tick at 10,000 agents and about 3.2 GB at 20,000, reallocated every tick. Name slice 105 as the item that meets the NFR.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Hot path is Python-object based, not the array-in/array-out contract the architecture requires",
+   "description": "Data flow step 3 calls `query_radius` once per active agent, a Python-level per-agent loop. That conflicts with the slice's own requirement of no per-agent loops in the hot path (`:247`) and with arch :99 (bulk array-in/array-out, no Python callbacks, no dynamic allocation). `BulkForce` takes `neighbor_lists: list[NDArray]` and `profiles: list[BehavioralProfile]` (`:145-146`). The integration clamp (`:209`) needs a per-agent `max_speed` array, but the doc does not say how it is gathered from the profile list. A per-point query is also the wrong shape for the batched strategies arch :87 names (KD-tree, GPU). Specify a batch neighbor query that returns index and offset arrays, and a profile parameter array that forces receive.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:88"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Integration step is specified two ways; inactive agents can change",
+   "description": "The BulkForce section says integration adds force to velocity \"for all\", with zeros for inactive agents (`:152`). The Integration section and success criteria say only active agents change, via fancy indexing (`:215`, `:241`). Read literally, `:152` lets the position update and the clamp move inactive agents. That breaks `:241` and the caller's selection (arch :49). It also leaves unassigned who enforces the zeros-for-inactive contract. Delete the \"for all\" rationale and state that integration writes only active indices and that inactive rows of a force result are ignored. Also specify the clamp: `:209` does not say whether it clamps speed magnitude or each component. Specify a magnitude clamp and its zero-velocity case.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Two force protocols; one is required by a criterion but unused by tick",
+   "description": "The success criteria require placeholder forces to exercise both `Force` and `BulkForce` (`:248`). But `tick()` accepts only `list[BulkForce]` (`:185`), and no adapter is specified. The per-agent `Force` protocol (`:122-136`) has no consumer in the tick path. The plan (line 17) does not assign it. Cut the per-agent `Force` protocol and its criterion, and keep `BulkForce`. If you keep it, specify the adapter. Also drop \"the tick loop prefers the bulk variant when available\" (`:152`), which implies a union type the signature does not have.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:248"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`accelerations` array is outside the plan and unused",
+   "description": "Technical Scope and State Management add an `accelerations` N\u00d72 array (`:35`, `:96`). The plan lists only positions, velocities and profile indices (plan line 17), and so does the architecture (arch :39). Tick never writes or reads it; integration applies `force * dt` directly (`:208`). Drop it. If it stays, specify that force is acceleration (unit mass) and that tick writes it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:35"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No input validation; a duplicate in `active_indices` silently drops work",
+   "description": "`state.velocities[active_indices] += ...` applies one increment per unique index, so duplicates produce wrong integration with no error. Negative indices wrap silently. Out-of-range indices, `dt <= 0`, profile indices outside `profiles`, non-finite positions and invalid profile values (such as `max_speed <= 0`) are not addressed. Only missing profile fields are covered (`:237`). This is not an I/O path, so the failure-mode enumeration rule does not apply, but CLAUDE.md's fail-explicitly rule does. Specify checks at `tick()` entry (unique, in range, non-negative, finite, `dt > 0`), their error type, and one test per check.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:215"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Lifecycle under-specified: creation, initial values, add/remove index semantics",
+   "description": "`AgentState.create(n=..., profiles=...)` is used in the determinism check (`:275`), but no signature is defined. Initial positions and velocities are not specified, so the determinism test passes only if they are deterministic. Remove says arrays \"resize\" but not how indices move. Swap-remove and shift-remove give different indices, which invalidates the `active_indices` and profile index arrays a caller holds. Specify the `create` signature and initial values (zeros, or a seeded RNG passed explicitly), and the remove semantics.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "SpatialQuery is stateful with an undefined temporal contract",
+   "description": "`query_radius` answers from the index built by the last `build()` call. The doc does not say what happens if `query_radius` runs before `build()`, or after positions change without a rebuild. The architecture says the engine is \"stateless between ticks \u2014 all state lives in the arrays passed to it\" (arch :70). The index is a per-tick derived cache and can stay that way, but the doc must say so. Query-before-build should raise. Silent empty results would look like a valid \"no neighbors\" answer.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-171"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Environment input to the tick is neither included nor excluded",
+   "description": "The architecture's tick input includes \"environmental context\" (arch :64), and \"environment as input surface\" is a principle (arch :47). The `tick()` signature has no environment argument, and Excluded (`:43-49`) does not mention it. The doc also calls `tick()` the loop \"slices use as-is\" (`:225`), so adding environment later changes the signature every behavior slice calls. Add environment to Excluded, name the slice that owns it, and state the planned signature change.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:180-187"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Float32 conversion path is deferred entirely, against the architecture",
+   "description": "The architecture says the engine \"should define its internal precision and provide an efficient conversion path at the serialization boundary\" (arch :95). The slice defines float64, but excludes the conversion path and assigns it to the world server (`:49`, `:100`). Either add a small conversion helper here, or record the architecture change and name where the conversion path now lives.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:49"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Raw SoA arrays are the public contract, against \"layout hidden behind interfaces\"",
+   "description": "Slices 101\u2013104 and the world server read and write `positions`, `velocities` and the other arrays directly (`:96`, `:221`). The architecture says array layout is \"hidden behind these interfaces and replaceable without affecting consumers\" (arch :35). The design can satisfy only one. Either document the arrays as a stable SoA contract and amend arch :35, or expose accessors so consumers do not depend on layout. Record the choice.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:221"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Integration frontmatter and neighbor return type miss slices 106 and 108",
+   "description": "`interfaces` lists 101\u2013105 only. The plan lists 106 and 108 as dependents of (100) (plan lines 47, 49). Slice 108 needs aggregate neighbors \"through the same neighbor query interface\" (arch :97, :115). `query_radius` returns `NDArray[np.intp]` indices into the agent arrays (`:165-167`), which cannot represent an aggregate. Add 106 and 108 to `interfaces`, and either shape the return type to allow aggregates later or state that 108 will extend it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:7"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough cannot run as written",
+   "description": "Step 3 passes `forces=[...]`, which is not a valid argument, and uses `np` without importing NumPy (`:268-283`). Step 4 expects motion \"proportional to t\u00b2\" (`:287`). Semi-implicit Euler under constant force from zero initial velocity gives x_n = a\u00b7dt\u00b2\u00b7n(n+1)/2, so the test needs that closed form, not t\u00b2. Step 5 needs agent 50 inside the query radius, but no positions are given. Name the placeholder forces, add the import, and state the expected values.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:280"
+  },
+  {
+   "i": 18,
+   "severity": "NOTE",
+   "title": "Value section restates the architecture and can be cut",
+   "description": "The Value section restates the architecture's principles (SoA layout, profile-as-data, force model, subset tick, pluggable queries), and \"Scaling foundation\" restates arch :97. Cut these to one sentence that links the architecture.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:23-29"
+  },
+  {
+   "i": 19,
+   "severity": "NOTE",
+   "title": "Cross-referenced world-server architecture is missing from this tree",
+   "description": "The architecture links `200-arch.world-server-foundation.md` (`:122`), and the plan does too (line 43). No such file exists under `project-documents/user/`. The scaling tiers the architecture cites (10K, 4M+) could not be verified, so the NFR finding above relies only on the architecture's own \"tens of thousands\" statement.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+  }
+ ]
+}

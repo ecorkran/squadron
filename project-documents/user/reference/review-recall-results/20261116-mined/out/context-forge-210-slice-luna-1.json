@@ -1,0 +1,93 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Specify failure handling for setup and propagation I/O",
+      "description": "The sequence adds a guide-script invocation and worktree file propagation, but does not specify handling for failures or hangs on either path. Define what happens if the script times out or exits unsuccessfully, or if a worktree disconnects or a copy fails partway through. These operations can leave generated files or worktrees partially updated; an implicit \u201cclear error\u201d for a missing backend does not cover those cases.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:95-103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Restate the onboarding time target",
+      "description": "The parent architecture sets the goal of reaching useful context output in under two minutes. This slice changes the IDE setup path used during onboarding, but does not restate that target or explain how Copilot setup stays within it. Include the relevant target for this path so its performance can be assessed.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:15-19"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Specify failure handling for setup and propagation I/O",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:95-103",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Restate the onboarding time target",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:15-19",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T05:31:25.056562",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 40997,
+  "cached_tokens": 37760,
+  "cache_write_tokens": null,
+  "completion_tokens": 250,
+  "reasoning_tokens": 0,
+  "duration_seconds": 20.65964649990201,
+  "cost_usd": 0.0008263,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Slice-plan deliverables dropped: tool-guide reference/promotion, custom-agent mapping, agent-reads-conventions verification",
+      "description": "The parent plan (`200-slices.developer-onboarding.md`, item 10) opens with `Reference: project-documents/user/tool-guides/copilot-vscode/setup-ide.md`, and lists as a success criterion that the tool guide be \"referenced in slice design, promoted to a proper published tool guide if needed\". The design contains no occurrence of that path anywhere, and `Files Changed` lists no tool-guide artifact. I read the referenced file: it is a raw Q&A transcript (leading HTML `<img>` tag, no YAML frontmatter, trailing \"Would you like a concrete mapping spec\u2026?\"), which does not satisfy the project convention \"All markdown files must include YAML frontmatter\" \u2014 so promotion is needed, not optional. The plan's file-mapping table also asks to \"document mapping\" for `.claude/agents/*.md` \u2192 Copilot custom agents; the design only says \"document the mapping but defer implementation\" (line 54) without supplying any mapping. Finally, the plan's manual-verification criterion (\"an AI agent in VS Code Copilot can read `.github/copilot-instructions.md` + `AGENTS.md` and follow project conventions as well as Claude does\") is absent from `Test Coverage` (lines 122-129), whose only manual check is for `cf init --ide copilot`. Name each of these as in-scope deliverables or explicitly move them to a follow-up with plan agreement; dropping assigned scope is a concern.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:105-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Onboarding path NFR (\"under two minutes\") not restated with its specific target",
+      "description": "The parent architecture HLD states the quantified goal: \"from `npm install` to useful context output in under two minutes, regardless of whether the user starts from an empty directory or an existing repository\" (`200-arch.developer-onboarding.md:21`), and separately requires detection/first-run logic to \"remain lightweight and not slow the hot path\" (`200-arch.developer-onboarding.md:87`). This slice adds a second IDE backend and a new compilation run to that exact path (`cf init --ide copilot`, line 33; sequence steps 5-6, lines 101-102), yet the design never restates the two-minute target nor gives the new backend any time bound. Add one sentence restating the target and committing that the Copilot backend fits within it \u2014 a cheap fix, but the criterion requires the NFR be present in this slice doc.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Managed-file safety contract covers only two of four write targets",
+      "description": "The design declares four exclusive outputs (lines 17, 40-48): `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `.github/prompts/*.prompt.md`. The marker check at line 99 and the helper at line 109 (`isManagedCopilotFiles(projectPath)`) inspect only `.github/copilot-instructions.md` and `AGENTS.md`. User-authored `.github/instructions/*.instructions.md` or `.github/prompts/*.prompt.md` with colliding names are overwritten by the guide script with no prompt and no `.bak`, and stale generated files from removed rules/skills are never reconciled on re-run. That leaves the plan's criterion \"Re-running on a project with existing unmanaged files prompts before overwriting (same safety as Claude path)\" unmet for half the outputs, and conflicts with the HLD's \"Never destructive \u2014 if unsure, ask or skip\" (`200-arch.developer-onboarding.md:84`). Related under-specification: the helper is named `isManagedCopilot(filePath)` at line 29 but `isManagedCopilotFiles(projectPath)` at line 109 \u2014 two signatures for one helper, which matters precisely because the outputs are plural. Specify the safety contract (and stale-file handling) for the directory outputs too.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New subprocess argument and multi-file I/O have no enumerated failure modes or handling strategy",
+      "description": "Step 5 introduces a new message type \u2014 the `'copilot'` argument to the guide script \u2014 via `execFileSync('bash', [scriptPath, 'copilot'], { cwd: projectPath })`, and step 6 (line 102) adds new worktree copy I/O. The design enumerates no failure handling for either: no hang/timeout strategy (no timeout option, no stdio/exit specification), no non-zero-exit behavior (slice 177's design had an explicit `Error Cases` table with \"setup-ide exited with code {N}\"; here it is only implicit in \"same as claude path\" at line 98), no partial-write/rollback strategy if the script dies after emitting some of the four outputs, and no handling for a worktree copy failing mid-propagation. Line 133 asserts a stale submodule \"will fail at the script step with a clear error\", but with no version/feature preflight that is an assumption, not a strategy: a stale script could hit a default branch (a silent fallback, forbidden by the project core principles) or write nothing while step 7 unconditionally prints success. Add an explicit failure-mode table for the new argument value and each new I/O path (hang/timeout, non-zero exit, stale backend, partial write, worktree copy failure) with a handling strategy per row.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter translator is under-specified and has no test against a required success criterion",
+      "description": "The plan requires \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files\" and says the translator \"must handle both forms\" (the `paths` array and comma-separated `applyTo`) and default to `applyTo: \"**\"` when paths is absent. The `applyTo` translation section (lines 71-83) shows only one direction, never states what happens if a source rule already carries `applyTo`, and says nothing about YAML layout variants (compact vs multi-line lists, indentation, quoting, trailing whitespace) \u2014 relevant given a real heterogeneous `.claude/rules/` set and the project convention \"Prefer lenient parsing over strict matching\u2026 the test fixture must include the actual format that parser will consume in production\". `Test Coverage` (lines 122-129) has no translation test at all, so the correctness criterion is unverified and a silent empty `applyTo` on real rule files is undetectable. There is also an internal no-op: line 32 promises a default of `applyTo: \"**\"` when `paths` is absent, while line 83 says such files are not split instruction files at all, so the default is never used. Specify both input forms, reconcile the default, and add a fixture-based test using actual rule files.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:71-83"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layer boundaries, dependency direction, and proportionality align with the architecture",
+      "description": "Compilation stays in the guides-side `scripts/setup-ide` (line 114), matching slice 177's documented \"Shell out vs. reimplement\" decision and the HLD's \"Composability preserved\" (`200-arch.developer-onboarding.md:54`); `packages/core/` and `packages/mcp-server/` are explicitly unchanged (line 118), so no new package boundary or protocol is introduced, consistent with the plan's \"Composition over new infrastructure\". Both `setupIdeAction(projectPath, target, opts)` and `propagateToWorktrees(project, target)` keep their signatures (lines 87-89), and slice 202's step flow already routes `--ide <value>` straight into `setupIdeAction`, so \"no interface change in `init.ts`\" is correct. `interfaces: [202-smart-cf-init-composition]` correctly declares the consumer contract while `dependencies: []` matches the plan's \"Dependencies: None\". Cursor support, bidirectional sync, and custom-agent implementation are explicitly excluded (lines 52-55), matching the plan's non-goals \u2014 no scope creep, and the document's size and mechanism count are proportionate to a 3/5 slice.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:87-91"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice-plan deliverables dropped: tool-guide reference/promotion, custom-agent mapping, agent-reads-conventions verification",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:105-118",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Onboarding path NFR (\"under two minutes\") not restated with its specific target",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:33",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "Managed-file safety contract covers only two of four write targets",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New subprocess argument and multi-file I/O have no enumerated failure modes or handling strategy",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Frontmatter translator is under-specified and has no test against a required success criterion",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:71-83",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "Layer boundaries, dependency direction, and proportionality align with the architecture",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:87-91",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T08:41:51.911509",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 95276,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 103263,
+  "cached_tokens": 76736,
+  "cache_write_tokens": null,
+  "completion_tokens": 24328,
+  "reasoning_tokens": 21728,
+  "duration_seconds": 264.0111972503364,
+  "cost_usd": 0.043083215,
+  "cost_basis": "alias_pricing"
+}

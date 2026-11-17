@@ -1,0 +1,40 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The prescribed remedy for the collision case is unreachable under the design's own delete-routing rule",
+   "description": "The Migration Plan states that when a personal key exists in both files with different values, `migrate-personal` \"skips the move, leaves both files untouched,\" and that \"clearing it is a separate, explicit `cf config unset <key> --project` the user can run.\" But the same document specifies \"Delete: mirrors write \u2014 deletes from whichever project file the key's scope maps to,\" with `migrate-personal` as \"the one exception that touches the *other* project file.\" For `git.integration_branch` (a personal key) that routes `unset --project` to `.context-forge.local.toml`, leaving the stale shared-file copy in place \u2014 so the `personal-config-in-shared-file` warning can never be cleared except by hand-editing TOML, which contradicts the slice's own Value statement (no ad hoc per-key gitignore/edit decisions). Verification Walkthrough step 9 asserts behavior that cannot occur as designed. The requirement left unmet is the plan's \"defined migration/compat story.\" Fix options: have `migrate-personal` delete the redundant shared-file copy on the \"already present, different value\" path (the personal value already wins at read time, so nothing is at risk), or make `unset --project` remove the key from both project files for personal-scope keys, or add an explicit escape-hatch flag \u2014 but the design must name one.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#migration-plan"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New ConsistencyChecker read path is under-specified: no exported file-read mechanism, and no failure mode for a missing/unparseable shared file",
+   "description": "The Detection rule must \"scan the shared project file for any key whose `CONFIG_KEYS[key].scope === 'personal'\" \u2014 i.e. enumerate which keys are *present in a specific file*. That capability does not exist: `readToml`/`resolveKey` are module-private in `packages/core/src/config/ConfigManager.ts` (not exported, contrary to the State Management section's claim that helpers are \"reused as-is\" \u2014 they are reusable only *inside* `ConfigManager`), and `ConfigManager.get()` resolves precedence and cannot answer \"which keys sit in the shared file.\" `ConsistencyChecker` holds `config?: ConfigManager` (optional, undefined in several call paths), so the design must state either a new exported helper/`ConfigManager` accessor (e.g. a method returning a named file's present-key list) or a checker-local TOML read, and which `projectPath` it uses (note `cf check` constructs `ConfigManager` from the registered `project.projectPath`, so worktree-local copies are not covered). The failure modes section enumerates `migrate-personal`, `set`, and `cf init` writes but not this new read: it does not say what happens when the shared file is absent (likely fine \u2014 empty) versus malformed (currently `readToml` rethrows parse errors). Silently skipping the rule on parse failure would violate CLAUDE.md's no-silent-fallback rule, and propagating it would change `cf check` behavior for projects whose shared file is already corrupt. Either way, the strategy must be written down rather than left for implementation.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#migration-plan"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "MCP `config_get`/`config_set` tool description strings become factually wrong and are not in scope",
+   "description": "The Technical Scope lists the `packages/mcp-server/src/tools/configTools.ts` change as only \"surface both project config paths.\" But that file's published tool descriptions \u2014 `config_get`: \"Resolution order: project config \u2192 user config \u2192 built-in default\" and `config_set`: `\"project\" writes to project-level config` \u2014 document the 3-tier order and the one-file meaning of \"project,\" both of which this slice changes. Agent callers act on those strings, so the slice's own routing change silently invalidates them; the same accuracy concern initiative 900 already carries as a theme (\"audit tool descriptions for accuracy\"). Small, but a named integration point that must be added to the scope list and to Success Criteria (assert the description text reflects personal \u2192 shared \u2192 user \u2192 default and that \"project\" may resolve to either file).",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Slice frontmatter declares 914 as a prerequisite while the plan entry says \"Dependencies: none\"",
+   "description": "`dependencies: [914]` and the Prerequisites section are more accurate than the plan's \"Dependencies: none\" (the canonical personal key name comes from 914's rename), and 914 is already complete, so there is no scheduling impact. Worth a one-line reconciliation in the plan or the slice so the two documents don't disagree about this slice's gating.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#dependencies"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Two paragraphs restate the 916 prerequisite fix; a link would do",
+   "description": "The Overview/Value/Prerequisites/Migration-Plan text re-explains the `cf config set` default-scope bug that `916-slice.guide-update-branch-guard.md` already documents. The slice only needs to distinguish \"scope resolution\" (916, fixed) from \"scope classification\" (915, this slice) \u2014 one sentence plus a reference. Cutting the restatement trims the doc without losing any decision.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#overview"
+  }
+ ]
+}

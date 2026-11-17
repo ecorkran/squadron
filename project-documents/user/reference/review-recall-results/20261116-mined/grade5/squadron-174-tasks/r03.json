@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The load test has no explicit CI gate",
+   "description": "Task 22a says no CI wiring is needed because `testpaths` collects `tests/load/`, but collection alone does not establish that CI runs and gates on this test. Add an explicit CI wiring task so a regression in the listing NFR can fail CI.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:318"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The load test does not measure the specified command",
+   "description": "The slice\u2019s success criterion sets the under-one-second target for `sq runs list --all`, but Task 22a times `list_run_summaries(..., include_all=True)`. That omits the command and rendering path, so it does not verify the stated end-to-end target.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:314-316"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers use checkbox formatting",
+   "description": "The commit lines are written as `- [ ] Commit: ...` rather than standalone plain-line commit markers. This formatting is repeated throughout the file; change those lines to standalone `**Commit**:` markers.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  }
+ ]
+}

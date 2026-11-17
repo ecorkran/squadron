@@ -1,0 +1,26 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`recommendation` values conflict with the stable vocabulary Amoeba routes on",
+   "description": "TD-7 proposes placing verbose prose in the `recommendation` field \u2014 `review: 'Review required before advancing'` and `'Blocked: review verdict does not clear threshold'` \u2014 and defers the final strings (\"Exact strings finalized in implementation\"). This contradicts both the architecture (`240-arch` \u00a7Gate insertion point uses `{ recommendation: \"review\" }` / `{ recommendation: \"blocked\" }`, and Related Work states Amoeba \"Routes to a review agent when the gate fires. Depends on CF returning structured `recommendation` values with a stable vocabulary\") and this doc's own Integration Points claim that `review`/`blocked` are \"the stable strings runners route on.\" The architecture requires the `NextAction` *shape* stay stable and only new `recommendation` string values be added; those values are the exact tokens `review` and `blocked`. Leaving the field values open to implementation risks the human-readable prose being shipped in `recommendation`, breaking the downstream routing contract. The doc should pin `recommendation` to the exact tokens `review`/`blocked` and put the verbose text in `rationale`/`summary`.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:255-268"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Parse-failure rationale requirement cannot be met with the chosen parser contract",
+   "description": "The architecture explicitly requires: \"The rationale returned to the caller names the parse failure explicitly\" for a file that exists but cannot be parsed (`240-arch` \u00a7Technical Considerations). The design collapses unreadable/unparseable verdicts into plain `UNKNOWN` (lines 216, 310, 392) and its rationale spec (line 268) only requires naming review type, verdict, and threshold \u2014 not a parse failure. More fundamentally, the design relies on `parseFrontmatter()`, which I confirmed returns the identical `{ found: false, data: {} }` for a malformed/unreadable file as for a file with no frontmatter at all (and it is a line-based key:value extractor, so malformed YAML never signals an error). With that interface the navigator cannot distinguish \"parse failure\" from \"verdict simply absent,\" so the arch requirement is structurally unachievable as designed. The core safety property (no silent pass) is preserved, but the design should either surface a parse-error signal, or explicitly record this deviation from the architecture and what the rationale will say for the unparseable case.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:216"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New config-read I/O path has no failure-mode handling, endangering the gating-off no-change guarantee",
+   "description": "`resolveGateConfig()` reads three keys via `ConfigManager.get()`, and 241 newly constructs a `ConfigManager` at all four surfaces (CLI `next`/`status`, MCP \u00d72) that previously never read config. I confirmed `ConfigManager.get()` re-throws non-ENOENT read/parse errors, so a malformed `.context-forge.toml` now makes `cf next` / `workflow_next` throw where they previously succeeded. The design carefully enumerates failure modes for the frontmatter and artifact reads (absent artifact \u2192 pending; unreadable/unparseable \u2192 UNKNOWN) but is silent on this new config I/O path. A project with gating off but a malformed config file would violate the headline success criterion \"`workflow.review_enabled = false` \u2026 output is identical to pre-241 for every project.\" The arch's \"fail-fast on config errors\" principle makes throwing defensible, but the design should state the chosen behavior explicitly (fail-fast vs. skip gate) rather than leave it implicit.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:191"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Subdivision does not define the radius for mixed profiles",
+   "description": "Slice 145 defines `query_radius` per profile and sizes the shared grid using the **maximum** query radius. This design uses an unqualified `query_radius` to derive one shared `cell_size` and scan extent. If a smaller profile radius is used, agents with larger radii can miss valid neighbors, violating behavioral fidelity. Define the shared grid size from the maximum configured profile radius and retain each agent\u2019s own radius for filtering.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-67"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Benchmark matrix cannot distinguish the interventions",
+   "description": "The baseline and early-exit-only commands are identical, as are the subdivision-only and combined commands. The design provides no switch or version-selection procedure to run counter-gating after replacing it with a break. Consequently, the walkthrough cannot reproduce the slice 145 baseline or establish the required 5\u00d7 `force_total` speedup. Specify how to capture a comparable pre-change baseline and, if the four-way comparison is retained, how each variant is selected.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The seven-neighbor benchmark target is omitted",
+   "description": "The slice plan explicitly assigns a seven-neighbor operating point as a benchmark target, but the design specifies only `max_neighbors=32` for gate runs and no seven-neighbor measurement. Add that benchmark without replacing the required 32-neighbor stress gates.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The external break undermines the future neighbor-selection seam",
+   "description": "The proposed break prevents the selection function from seeing candidates after the first `k` accepted neighbors. A future distance-ranked selector must inspect later candidates to replace farther selections, so retaining the function alone does not preserve the promised swap point. Specify that the cap termination policy must change with the selector, or place that policy behind the seam.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+  }
+ ]
+}

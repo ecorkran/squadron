@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All slice success criteria are traced to specific tasks",
+      "description": "Every success criterion in the design has a corresponding task, and no task is untraceable. Functional: \"no build path reads/writes `adoption.state`, runs detection or spawns `sq`\" \u2192 3.3/3.5/3.6/4.x/5.1; \"Phase 0 brownfield returns the concept prompt and writes nothing\" \u2192 5.1 (CLI run with and without `adoption.state = \"in_progress\"`, snapshot + `sq`-marker assertions); \"greenfield, already-planned and later-phase byte-identical\" \u2192 2.1/2.2 (golden capture) + 3.7/6.1; \"CLI and MCP `context_build` outputs match\" \u2192 5.1 parity check; \"`MIN_GUIDE_VERSION` warning still beside the output\" \u2192 3.5/3.6 (assertions kept) + 6.1 (both named tests must still exist and pass \u2014 verified present at `packages/cli/tests/commands/build.test.ts:91` and `packages/mcp-server/tests/contextTools.test.ts:162`). Technical: \"services/ imports nothing from adoption/ or detection/\" \u2192 3.3 and 6.2; \"no exported symbol remains that only deleted code used\" \u2192 6.2 export audit; \"format, lint, typecheck and full test suite pass\" \u2192 3.7/6.1 (the root `package.json` has no `format` script, so ESLint correctly serves as the formatter gate). Integration requirement \"269 can start with no build-path code to change\" is an emergent property of 3.x/4.x. The design's Migration Plan table maps item-for-item onto 3.1\u20133.6 and 4.1\u20134.4, and the deletion/edit test lists match the files actually present in the repo. Sequencing is sound: 3.1/3.2/3.3 precede 3.4 (the type-field deletion cannot compile before the renderers and the integrator assignment are gone), 4.1 precedes 4.2\u20134.4, and 2.2 precedes 3.3 (the golden test is updated to the one-argument call without touching the golden files). No circular dependency exists; 5.1's `git show {target}:...adoptionParity.test.ts` correctly depends on 3.6's deletion.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.3's success grep will fail on a surviving comment that the instruction does not ask to remove",
+      "description": "Task 3.3's success criterion is `grep -rn \"adoption/\\|detection/\" packages/core/src/services` prints nothing, and 6.2 repeats the same check. But `ContextIntegrator.ts:8` holds the comment `// contracts.ts only (never adoption/index.ts): keeps services/ and adoption/ from importing each other's internals.` directly above the import that 3.3 removes. The instruction only says \"Remove every import from `adoption/` and `detection/`\" \u2014 it does not say to remove the now-orphaned comment, and the comment is the only remaining match. The technical requirement (\"services/ imports nothing from adoption/ or detection/\") is met either way, but the stated gate fails. Fix by making the instruction explicit (\"delete the orphaned `contracts.ts only (never adoption/index.ts)` comment too\") or by narrowing the grep to import statements.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 3's header misstates which package's typecheck breaks in the 3.4\u20133.5 window",
+      "description": "The header states \"Between 3.4 and 3.6, only `mcp-server` typecheck is expected to fail. `cli` passes once 3.5 is done.\" Those two sentences contradict each other, and the first is wrong: `packages/cli/src/commands/build.ts:84` still calls `createContextPipeline(workingCopy.projectPath!, { adoptionStateWrites: 'persist' })` until 3.5, so as soon as 3.4 rebuilds core's `dist/` with the one-argument signature (3.3), `pnpm --filter @context-forge/cli typecheck` also fails until 3.5 runs. A junior AI following the header may treat the CLI failure as unexpected and work around it, or skip the CLI gate. State the window precisely: after the 3.4 core build, both `cli` and `mcp-server` typecheck fail until 3.5 and 3.6 respectively.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/build.ts:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.6 under-specifies the `integrationSetup.ts` cleanup, leaving a dangling `ContextToolOptions` import",
+      "description": "3.6 says to delete the `ContextToolOptions` type from `contextTools.ts`, but for the helper it only says \"drop the `squadronProbe` option and its doc comment\". The helper also carries `import { registerContextTools, type ContextToolOptions } from '../../src/tools/contextTools.js';` (line 9), the parameter `createIntegrationClient(options?: ContextToolOptions)` and the call `registerContextTools(server, options)`. With the type deleted from `contextTools.ts`, all three become compile errors, and \"update its caller in the server setup\" only points at `packages/mcp-server/src/index.ts` (which already passes no options). The MCP typecheck gate will catch it, but the instruction should name the import, the `options` parameter, and the `registerContextTools(server, options)` call to be removed.",
+      "file_ref": null,
+      "category": "task-specification",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.1 is too large for one checklist item and should be split",
+      "description": "5.1 (effort 3) bundles four separable concerns in one item: (a) scaffolding \u2014 the temp-bin fake `sq`, `PATH` prepend/restore, and the file-tree + `.context-forge.toml` byte snapshot helper; (b) the three-surface purity runs (CLI \u00d72, MCP `context_build`, MCP `template_preview`) with the three per-run assertions; (c) the two extra once-only checks (CLI/MCP parity, explicit `brownfield-adoption`); and (d) the mutation-based negative control (inject a `writeFileSync`, confirm the snapshot assertion fails, revert). That is ~6 builds across two packages plus two helper mechanisms in one commit. Split it into at least three independently completable tasks \u2014 scaffolding, the per-surface purity runs, and the parity/explicit-key checks \u2014 so each can be run, verified and committed on its own. The negative-control step can move into the final validation section, since it is a verification of the test rather than a behaviour to ship.",
+      "file_ref": null,
+      "category": "task-sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5.1 does not say the MCP calls must pass the Phase 0 instruction",
+      "description": "The pattern 5.1 mines from the deleted test called `context_build` with `arguments: { projectId: FIXTURE_PROJECT_ID, instruction: CONCEPT_PHASE }` \u2014 the stored fixture project's instruction is not Phase 0, so that argument is what makes the MCP output the concept prompt. Task 5.1's MCP bullet says only \"run `context_build` once and `template_preview` once, on the `in_progress` state\" and never states the instruction argument, while the per-run assertions require the concept prompt text and the parity check requires equality with the CLI output. Spell out `instruction: CONCEPT_PHASE` for both MCP calls (and the matching instruction on the CLI runs) so the assertions are satisfiable as written.",
+      "file_ref": null,
+      "category": "task-specification",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit points sit at tested checkpoints",
+      "description": "The file contains no `**Commit**:` markers, which is acceptable. The commits it does specify are well placed: 2.3 after the golden test passes twice on unmodified source, 3.2a after `pnpm typecheck` and the core suite pass, 3.7 after `pnpm -r build`/`typecheck`/`lint`/`test`, 4.1\u20134.4 each after their own typecheck and core-test gates, and 5.1 after the purity test passes. The 3.3\u20133.6 grouping into a single 3.7 commit is justified by the shared signature change and is explicitly explained in the section header. The test-with pattern also holds, with the one deliberate exception of the D6 golden capture, which the design requires to run before any source edit and which the task documents as such.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All slice success criteria are traced to specific tasks",
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 3.3's success grep will fail on a surviving comment that the instruction does not ask to remove",
+      "location": "packages/core/src/services/ContextIntegrator.ts:8",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Section 3's header misstates which package's typecheck breaks in the 3.4\u20133.5 window",
+      "location": "packages/cli/src/commands/build.ts:84",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "task-specification",
+      "raw_category": null,
+      "summary": "Task 3.6 under-specifies the `integrationSetup.ts` cleanup, leaving a dangling `ContextToolOptions` import",
+      "location": "packages/mcp-server/tests/helpers/integrationSetup.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "task-sizing",
+      "raw_category": null,
+      "summary": "Task 5.1 is too large for one checklist item and should be split",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "task-specification",
+      "raw_category": null,
+      "summary": "Task 5.1 does not say the MCP calls must pass the Phase 0 instruction",
+      "location": "packages/mcp-server/tests/integration/adoptionParity.test.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Commit points sit at tested checkpoints",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-17T10:40:01.623490",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 49,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 421700,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 860973,
+  "cached_tokens": 718080,
+  "cache_write_tokens": null,
+  "completion_tokens": 108719,
+  "reasoning_tokens": 104312,
+  "duration_seconds": 299.9340452090837,
+  "cost_usd": 0.048359235,
+  "cost_basis": "alias_pricing"
+}

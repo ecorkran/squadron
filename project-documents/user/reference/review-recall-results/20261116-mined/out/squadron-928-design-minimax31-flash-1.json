@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The single prefix rule cannot represent the mixed-depth command set",
+      "description": "D9 specifies one rule with `pattern = [\"sq\", [<subcommands>]]`, while D10 includes commands of different argv depths: `sq review`, `sq auth login`, `sq skills install`, and `sq metrology ...`. Under the stated semantics, selecting `auth` or `skills` as the second token also matches `sq auth status` and `sq skills list`, both of which D10 classifies as not needing authorization. `match` examples validate the rule but do not narrow runtime matching. Because `decision = \"allow\"` grants unsandboxed filesystem and network access, this overmatch violates D9\u2019s promise that the alternatives are exactly the authorized commands. Specify separate depth-specific rules or a proven DSL shape, and require negative checks for unauthorized sibling commands such as `sq auth status` and `sq skills list`.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D9 \u2014 The rule lives in its own file, `~/.codex/rules/squadron.rules`"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The shared removal routine has contradictory destination semantics",
+      "description": "D7 says `remove_receipt_files` must \u201cnever remove[] the destination itself,\u201d but the same decision says a Claude prefix pack\u2019s now-empty prefix directory must still be removed. Existing prefix-pack receipts record that prefix directory as `receipt.destination`, whereas bundled-command receipts record the shared install root, which must not be removed. A routine receiving only the receipt therefore cannot apply both rules unless the design explicitly distinguishes the protected install root from removable content directories, perhaps through a surface-specific rule or an additional parameter. This destructive boundary must be settled before implementation because success criteria 2 and 6 require both exact cleanup and preservation of the shared root.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D7 \u2014 One removal routine"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The required provider/network command enumeration remains unresolved",
+      "description": "The parent slice explicitly requires enumeration of every `sq` command that reaches a provider or the network, not merely `sq review`. This design leaves `sq auth login` unprobed, marks `sq review`, `sq run`, and `sq metrology` as \u201cconfirm by probe,\u201d and makes daemon commands conditional on a separately running daemon. It therefore does not yet define the alternatives promised by D9 or the rule that success criterion 8 will verify. The design needs a canonical command list, with runtime probes used only to validate it. The list must also account for hidden command paths exposed by shipped agent skills, rather than only visible top-level commands.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D10 \u2014 The subcommand list comes from a sandbox probe, not from reading code"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor cannot classify remote packs without crossing its read-only boundary",
+      "description": "D2 declares Codex support through an `agents/` directory in the pack source, but the manifest contains only a source string. D8 nevertheless requires doctor to distinguish \u201cpack ships no Codex content\u201d from \u201cnot installed.\u201d That classification is unavailable for a `github:` pack unless doctor clones or fetches the repository, while the established `check_skill_packs` boundary is manifest-and-filesystem inspection only. Specify behavior for remote sources\u2014such as reporting status as unknown or relying on a local receipt\u2014or introduce an explicit, non-network metadata contract. Otherwise doctor cannot consistently satisfy the target-specific status promised by this slice.",
+      "file_ref": null,
+      "category": "layer-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D8 \u2014 Doctor reports skill packs per target, like commands"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Moving the analysis assets leaves slice 925\u2019s drift guard unspecified",
+      "description": "Slice 925 established a drift guard between Claude command files and their agent-skill counterparts. Moving the analysis twins from `commands/agents/analysis-*` to `commands/analysis/agents/analysis-*` changes that relationship. The design updates `bundle_subdirs`, `bundled_skill_names`, and some fixtures, but does not state how the existing drift guard is adapted, leaving a risk that the tree will silently lose one-to-one coverage. Define the replacement mappings explicitly: `commands/sq/*.md` to `commands/agents/sq-*/SKILL.md`, and `commands/analysis/*.md` to `commands/analysis/agents/analysis-*/SKILL.md`.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D4 \u2014 The bundled `analysis` pack follows the same rule; no bundled special case"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new agents-install path has no partial-write failure strategy",
+      "description": "D3 guarantees that validation failures write nothing, but it does not cover failure during the subsequent `write_skill_dirs` copy. A disk-full, permission, or interrupted-copy failure can leave some skill files installed before the exception; because the receipt is written only after a successful install, those files become unowned and cannot be removed through the normal receipt-driven uninstall path. Specify either staged installation with atomic promotion or cleanup of exactly the files created by the failed attempt, together with the explicit CLI error behavior. The required Codex sandbox/exec-policy verification commands also need bounded execution and explicit handling for timeout, nonzero exit, and malformed output.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "The single prefix rule cannot represent the mixed-depth command set",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D9 \u2014 The rule lives in its own file, `~/.codex/rules/squadron.rules`",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "The shared removal routine has contradictory destination semantics",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D7 \u2014 One removal routine",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The required provider/network command enumeration remains unresolved",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D10 \u2014 The subcommand list comes from a sandbox probe, not from reading code",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "layer-boundary",
+      "raw_category": null,
+      "summary": "Doctor cannot classify remote packs without crossing its read-only boundary",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D8 \u2014 Doctor reports skill packs per target, like commands",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Moving the analysis assets leaves slice 925\u2019s drift guard unspecified",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D4 \u2014 The bundled `analysis` pack follows the same rule; no bundled special case",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The new agents-install path has no partial-write failure strategy",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-17T10:30:48.569718",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 321888,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1200210,
+  "cached_tokens": 1008852,
+  "cache_write_tokens": null,
+  "completion_tokens": 75598,
+  "reasoning_tokens": 72901,
+  "duration_seconds": 559.4161452921107,
+  "cost_usd": 0.044093214,
+  "cost_basis": "alias_pricing"
+}

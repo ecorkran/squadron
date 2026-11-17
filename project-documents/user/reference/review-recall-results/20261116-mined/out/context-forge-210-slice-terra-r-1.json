@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Overwrite protection excludes generated files and worktrees",
+      "description": "The sequence checks only the two root files, then generates instruction and prompt files and copies all four targets into worktrees. It does not protect unmanaged files that collide in those directories or at worktree destinations. The slice plan requires unmanaged content to be protected on re-runs. Define per-file conflict, backup and refusal behavior for both generation and propagation, including an existing `.bak` and `--yes`.",
+      "file_ref": null,
+      "category": "data-safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Translation inputs are unclear for a fresh Copilot setup",
+      "description": "The examples identify `.claude/rules/` and `.claude/skills/` as sources, while this target must not create or modify `.claude/`. The design does not identify the guide-side source locations or explain how the required rules and skills are available on a fresh `cf init --ide copilot`. Define the authoritative inputs, discovery and missing-input behavior, including how task workflows become usable Copilot prompts.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New setup and propagation failure modes lack handling",
+      "description": "The sequence specifies synchronous script execution and worktree copies but not a timeout or termination policy for a hung script, handling of script failure after partial writes, or reporting and recovery when a worktree copy fails. Define these outcomes so the command does not report success for incomplete setup and users can safely retry.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Translation and Copilot behavior lack required verification",
+      "description": "The test plan does not verify `paths`-to-`applyTo` conversion or the generated prompt content. It also omits the slice plan\u2019s manual verification that a VS Code Copilot agent reads the generated guidance and follows project conventions. Add translation cases for multiple paths and omitted paths, plus the planned Copilot verification.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Onboarding time target is not carried into the design",
+      "description": "The parent architecture targets **under two minutes from npm installation to useful context output**, for both fresh and existing repositories. This slice changes the onboarding path through `cf init --ide copilot` but does not restate that target or address its impact. Include the target and how the Copilot path will be assessed against it.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:31-33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Required tool-guide reference is omitted",
+      "description": "The slice plan explicitly requires the design to reference `user/tool-guides/copilot-vscode/setup-ide.md` and to promote it to a published guide if needed. The design mentions documenting custom-agent mapping but neither references the guide nor identifies where that mapping will be documented. Add the reference and documentation destination.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:51-54"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "data-safety",
+      "raw_category": null,
+      "summary": "Overwrite protection excludes generated files and worktrees",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Translation inputs are unclear for a fresh Copilot setup",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-48",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New setup and propagation failure modes lack handling",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-103",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Translation and Copilot behavior lack required verification",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Onboarding time target is not carried into the design",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:31-33",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Required tool-guide reference is omitted",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:51-54",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T13:50:34.574091",
+  "model": "openai/gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 415,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6.1-terra",
+  "answering_models": [
+    "openai/gpt-6.1-terra"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 83640,
+  "cached_tokens": 57751,
+  "cache_write_tokens": null,
+  "completion_tokens": 1527,
+  "reasoning_tokens": 445,
+  "duration_seconds": 32.27217358304188,
+  "cost_usd": 0.03641155,
+  "cost_basis": "alias_pricing"
+}

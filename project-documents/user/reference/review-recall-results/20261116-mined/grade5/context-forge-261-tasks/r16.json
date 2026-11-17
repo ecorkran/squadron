@@ -1,0 +1,19 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Missing MCP error-result coverage",
+   "description": "Task 9T and Task 12 verify that a missing guide profile raises or rejects with `AdoptionError`, but no task verifies the slice criterion that `context_build` returns that error as an error result. Add an MCP-path assertion for the missing-profile or missing-prompt case, including that the concept prompt is not produced.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:193-200"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verification task requires unscoped defect fixes",
+   "description": "Task 15 says to fix any defect found during verification in its own commit, without limiting fixes to this slice. That could pull unrelated work into the task breakdown. Limit fixes to defects in Slice 261; route unrelated defects outside this slice.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-267"
+  }
+ ]
+}

@@ -1,0 +1,147 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Residual-offer task permits a fallback that cannot discover unsampled results",
+      "description": "T13 says to use a discovery surface if one exists, but otherwise restrict selection to store-recorded samples. Those records identify results that have **already** been sampled, so that fallback cannot meet the design\u2019s requirement to offer unsampled results and keep agreement data accumulating. The current metrology code has target-specific review lookup, but no general unsampled-result discovery surface. Add an actionable discovery task rather than permitting the incomplete fallback.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Direction precedence contradicts the required low-evidence warning",
+      "description": "T7 calls its numbered list a precedence order, but places the below-floor return before `TIGHTEN`; following it makes the required below-floor `TIGHTEN` result unreachable. Replace the contradictory sequence with explicit precedence that permits tightening on thin evidence while preventing graduation below the floor or without a version key.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Recommendation note omits the runtime-selected model limitation",
+      "description": "T9 requires the model-pairing note but does not require it to state that a threshold cannot track a model drawn at runtime and that the recommendation does not apply to that step. The design requires this warning in recommendation output. Add it to the implementation and test criteria.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Required failure signals are not assigned implementation and test coverage",
+      "description": "The design requires a malformed `judge:` block to be flagged with a warning and tested, but T8 only tests registered and unregistered templates; the coverage check incorrectly claims the malformed case is exercised. Likewise, T15 requires an explanatory empty-offers line only for a lapse, not for the exhausted \u201cnothing due\u201d case required by the design. Add those behaviors and corresponding tests.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:129-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers precede tests and appear after every task",
+      "description": "This pattern repeats throughout the file: an implementation commit is marked before its immediately following test task, and another marker follows the test. Consolidate markers after coherent implementation-and-test pairs, at working, tested points, rather than after every task.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39-52"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Residual-offer task permits a fallback that cannot discover unsampled results",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-204",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Direction precedence contradicts the required low-evidence warning",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Recommendation note omits the runtime-selected model limitation",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145-147",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Required failure signals are not assigned implementation and test coverage",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:129-136",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit markers precede tests and appear after every task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39-52",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T13:15:42.646277",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 46968,
+  "cached_tokens": 42624,
+  "cache_write_tokens": null,
+  "completion_tokens": 597,
+  "reasoning_tokens": 32,
+  "duration_seconds": 24.03972849994898,
+  "cost_usd": null,
+  "cost_basis": null
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The failed-diff-fetch path is unspecified \u2014 a silent total loss of the diff can still produce a clean PASS",
+   "description": "Description: D2 establishes the invariant \"`diff_injection` is `None` when `inputs` has no `diff` key \u2026 When a diff was part of the review, the key is always written\", and D3 defines the recording for the one silent-loss path it found (`_add_injection` returning `False`). But the other silent-loss path is not specified: `_run_git_diff` returns `None` on git failure (`_logger.warning` + `return None`), which means `_add_injection` is never called. D2 forces the implementer to produce a `DiffInjection` anyway (the key exists), and the design does not say what values it carries. The natural implementation \u2014 `DiffInjection(total_chars=0, injected_chars=0)` \u2014 records `truncated == False`, so Part B never fires and the artifact reads as \"saw it all\". This is reachable in practice: `_run_git_diff_filenames` (`--name-only`) and `_run_git_diff` (full diff) are separate invocations, and a repository with a misconfigured external diff driver or textconv filter fails the body fetch while the name-only call succeeds \u2014 so `EmptyDiffError`'s pre-flight guard does not cover it. The requirement this leaves unmet is the slice's own Value claim: \"After this slice a PASS means the model either saw the whole diff or read files with its tools.\" The fix is one sentence in D3: a `None` return from the body fetch records the same truncation-to-zero shape D3 already defines for the budget-skip case (which then makes Part B fire correctly on it).",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d3-a-diff-dropped-by-the-total-injection-limit-is-a-truncation-to-zero"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`aiModel`'s meaning change is disclosed but carries a cross-repo consequence the design handles by disclosure rather than a coordination step",
+   "description": "Description: Changing the value domain of an existing externally-read frontmatter key is a stronger contract change than adding one; slice 919's precedent required a context-forge coordination step for its `verdictSource` addition. Here the design's argument is defensible \u2014 in-repo the only reader is `metrology/identity.py` (verified), the change makes `aiModel` mean what consumers assumed, and the one visible consequence (metrology identity shift for dated snapshots) is stated explicitly. Worth confirming CF/Amoeba consumers of `aiModel` accept dated ids, but nothing gates on it today per the design's grep.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d10-aimodel-is-the-answering-model-requestedmodel-appears-only-on-substitution"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Density-signal sketch passes capped `filtered_counts`, contradicting the pre-cap requirement",
+   "description": "The design states three times that the dispatch signal must be pre-cap: line 27 (\"the density signal for dispatch reads the CSR's raw `counts` output \u2014 not anything capped\"), line 116 (\"recorded from the CSR `filtered_counts` (post-`exclude_self`, pre-cap)\"), and line 409. But both implementation sketches \u2014 the Tick Integration step 8 (lines 158\u2013159) and the Data Flow (line 251) \u2014 call `spatial.record_density(filtered_counts)` at the *end* of the tick. In the current pipeline (`src/migratory/engine/tick.py:66-75`), `apply_neighbor_cap` **rebinds** `filtered_flat, filtered_counts` whenever any profile sets `max_neighbors`, so at end-of-tick that name holds capped counts. The design's flagship verification scenario (walkthrough step 5: `test.yaml`, `max_neighbors=1`) is exactly cap-active \u2014 the signal would collapse to \u22481.0, the dispatcher would lock onto grid after tick 1, and the stated behavior (\"brute_selected dominates\" in steady state) would never occur. An implementer following the sketch implements the wrong signal. Fix: capture the post-`exclude_self` counts *before* the cap step (or pass the raw `counts`), and name the variable so it cannot be confused with the rebound name.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:154-159"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Bit-exact parity criterion contradicts set-level parity and is unachievable as written",
+   "description": "The design correctly asserts order-insensitive parity at unit level \u2014 line 431 (\"order within a row may differ for grid, so compare as sets\") and line 329 (\"same CSR neighbor sets\") \u2014 but step 5 of the Development Approach demands an integration test that \"confirms **bit-exact position equality** against brute-force-only over N ticks\" while \"exercis[ing] both backends in one run.\" Verified in source: `BruteForceQuery.query_radius_batch` emits each row in ascending agent-index order (`np.nonzero` column order), while `HashGridQuery.query_radius_batch` emits rows in 3\u00d73 cell-gather order. Downstream, `np.add.reduceat` sums in edge order (`src/migratory/engine/flocking.py` `_csr_reduceat`), so different row orders give different floating-point rounding; `apply_neighbor_cap`'s `np.argpartition` selection is also input-order dependent at distance ties (its own docstring admits ties are \"not stable\"). Positions therefore diverge bitwise from a brute-force-only baseline shortly after the first grid tick \u2014 the test as specified cannot pass (or would only pass vacuously with no switch). The same contradiction invalidates walkthrough step 1's claim that \"any divergence indicates a dispatcher correctness bug\" for multi-tick tests that trigger a switch. Related gap: the slice never restates what the architecture's *tick determinism* goal means under dispatch, and walkthrough step 2 defers to \"documented determinism caveats in the hash grid\" that exist nowhere (slice 105, `hash_grid.py`, and the perf journal document no such caveats). The design must either specify a canonical per-row ordering in the dispatcher (noting its cost) or relax parity to tolerance/statistical equivalence and state the determinism contract explicitly (identical output across repeated runs given identical dispatch decisions; not bit-identical across backends).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`record_density` failure modes unenumerated \u2014 division by zero on empty evaluation",
+   "description": "The tick\u2192dispatcher density feedback is the only new message type this slice introduces, but its degenerate inputs are not enumerated. The specified computation `float(counts.sum()) / len(counts)` divides by zero when the tick runs with an empty active subset \u2014 a legal input under the architecture's subset-evaluable tick contract (the tick function early-returns only when `n == 0`, not when `eval_indices` is empty; `exclude_self` then returns empty arrays). The result is either a `ZeroDivisionError` or a NaN that silently poisons the threshold comparison and backend selection \u2014 the latter violates the project rule \"never use silent fallback values; fail explicitly.\" The first-tick case is handled; the empty-evaluation case is not. Specify explicit handling (e.g., skip recording and retain the previous signal, or raise) and add it to the edge-case list alongside \"first tick\" and \"hysteresis at exactly t \u00b1 h.\"",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:25"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Concrete backend types in `AdaptiveSpatial.__init__` weaken the stated extensibility claim",
+   "description": "The constructor is typed `grid: HashGridQuery, brute: BruteForceQuery`, while the doc sells the pattern as \"future spatial backends (KD-tree, GPU-accelerated) slot into `AdaptiveSpatial` ... with no protocol change\" and the architecture principle (and CLAUDE.md) is to program to interfaces. Typing the slots as `SpatialQuery` with role-neutral names costs nothing and makes the extensibility claim honest; today a third backend requires editing `adaptive.py`'s signature as well as its wiring.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:85"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "\"Moves from `server.py`\" misstates the current state of the cell-size derivation",
+   "description": "Slice 105's outcome note records \"Server wiring reverted to `BruteForceQuery()`\", and the construction site is still `server.py:127` (`spatial=BruteForceQuery()`) with no `cell_size` derivation anywhere in `src/migratory_server/` (verified by grep). The derivation logic will be *added* to `server.py`, not moved out of it; an implementer looking for existing logic to extract will find none. The described behavior itself (fallback to `max(world.width, world.height)` for the empty-profile edge case) accurately carries over slice 105's proven caveat, so this is a wording correction only.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:219"
+  }
+ ]
+}

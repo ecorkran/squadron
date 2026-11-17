@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Full traceability of success criteria and migration plan to tasks",
+      "description": "Description: I mapped each success criterion and each Migration Plan row to a task and found full coverage with no orphaned or missing items.\n- \"No build path reads/writes `adoption.state`, runs detection, or spawns `sq`\" \u2192 seam removal (3.3), `writeAdoptionState` deletion (4.3), probe deletion (4.4), grep gates (3.3, 4.x, 6.2), and the fake-`sq` marker assertion in 5.1.\n- \"Phase 0 brownfield build returns the concept prompt and writes nothing, whatever `adoption.state` holds\" \u2192 5.1 (runs the no-toml and `in_progress` states, asserts tree/bytes unchanged + concept prompt + no `### Adoption Facts` + no `sq` marker) and 6.3 walkthrough.\n- \"Greenfield, already-planned, later-phase builds byte-identical\" \u2192 2.1/2.2 (captured pre-cut) + 3.7/6.1 re-guards.\n- \"CLI and MCP `context_build` outputs match\" \u2192 5.1 parity check + 6.3.\n- \"`MIN_GUIDE_VERSION` warning still on stderr (CLI) / separate from context (MCP)\" \u2192 preserved in 3.5/3.6, re-asserted in 6.1 with the exact, verified test titles.\n- \"services/ imports nothing from adoption/ or detection/\" \u2192 3.3 grep + 6.2 grep (both verified achievable: the only `services/` importers are `ContextIntegrator.ts:10` and `CoreServiceFactory.ts:12-14`, all removed in 3.3).\n- \"No exported symbol remains that only deleted code used (except history/comprehensionAnalysis/adoptionOutcome)\" \u2192 6.2 export audit keyed to the design's Interfaces Required.\n- \"Format, lint, typecheck, full test pass\" \u2192 6.1.\nEvery Migration Plan row (resolver/facts/completion, `contracts.ts`, `adoptionState.ts`, `adoptionOutcome.ts`, both `index.ts`, probe + exports, `CoreServiceFactory`, `ContextIntegrator`, `ContextTemplateEngine`, `SectionBuilder`/`context.ts`, `node.ts`, `build.ts`, `contextTools.ts`, `integrationSetup.ts`) and every delete/edit test file is covered. No task traces to work outside the design.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing is acyclic and the pre-cut golden capture is enforced",
+      "description": "Description: Section 2 (golden capture, D6) explicitly runs \"before any source edit\" and commits at 2.3, so the byte-identity test is anchored to the old code as D6 requires; it is then re-run after the cut (3.7, 6.1) with the invariant \"a golden file that must change is a defect.\" The seam removal is split so each commit compiles: 3.1\u20133.2 stop rendering fields that still exist and commit at 3.2a; 3.3\u20133.6 change the `createContextPipeline` signature and both callers and commit together at 3.7. The file correctly notes the cross-package compile constraint (`cli`/`mcp-server` typecheck against core's built `dist/`) and instructs `pnpm --filter @context-forge/core build` at 3.4 before 3.5, and that between 3.4 and 3.6 only `mcp-server` typecheck fails. Deletions in section 4 each leave the workspace compiling and commit individually. No circular dependencies.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Deletion-commit grep gates silently depend on earlier deletions",
+      "description": "Description: The per-task `grep` success criteria in section 4 (e.g. 4.3's `grep -rn \"writeAdoptionState|adoption-completed\"` over `packages/*/src packages/*/tests`) only return empty because section 4.1 has already deleted the test files that still referenced those names (e.g. `adoptionCompletion.test.ts:22` and `adoptionBuild.integration.test.ts:185-214` call `writeAdoptionState`; `adoptionFacts.test.ts:60` references `adoption-completed`). I traced every current reference to the grepped symbols and confirmed all are either in files deleted by 4.1/4.4 or explicitly removed by the named task, so each gate is satisfiable in the prescribed order. This is correct behavior for an ordered deletion, not a defect \u2014 recorded only so the ordering is not accidentally \"fixed\" by re-running a later grep standalone (it would appear to fail out of order).",
+      "file_ref": null,
+      "category": "test-strategy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:243"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Purity test reuses a fixture helper that is deleted mid-file via `git show`",
+      "description": "Description: Task 5.1 recreates `createBrownfieldCheckout` by reading it back with `git show {target}:.../adoptionParity.test.ts`, since 3.6 deletes that file. I confirmed `createBrownfieldCheckout` exists at `packages/mcp-server/tests/integration/adoptionParity.test.ts:67` and that the steps it performs (copy `fixtures/integration-project`, install the `brownfield-guide` prompt, write \u22652000 source lines, add a comprehension document, no planning artifacts) match both the design's D5 fixture and the task's step list. This is a reasonable, non-circular way to port the setup to the new in-process purity test and is consistent with the design's \"Special Considerations\" (fake `sq` on `PATH` for the test process only; MCP runs in-process). No action needed.",
+      "file_ref": null,
+      "category": "test-strategy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:266"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Full traceability of success criteria and migration plan to tasks",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing is acyclic and the pre-cut golden capture is enforced",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-strategy",
+      "raw_category": null,
+      "summary": "Deletion-commit grep gates silently depend on earlier deletions",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:243",
+      "location_verified": false
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-strategy",
+      "raw_category": null,
+      "summary": "Purity test reuses a fixture helper that is deleted mid-file via `git show`",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:266",
+      "location_verified": false
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-17T12:28:11.897712",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 53,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 194036,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 349015,
+  "cached_tokens": 305128,
+  "cache_write_tokens": null,
+  "completion_tokens": 53323,
+  "reasoning_tokens": 48720,
+  "duration_seconds": 441.55700204195455,
+  "cost_usd": 0.14309988,
+  "cost_basis": "alias_pricing"
+}

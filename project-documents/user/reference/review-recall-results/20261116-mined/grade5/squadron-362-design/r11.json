@@ -1,0 +1,26 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Verified graph facts\" and 943 references are not verifiable against the project state",
+   "description": "The design states the facts were \"Probed against this repo's real graph \u2026 while writing this design\" and that \"These are measurements, not assumptions.\" The repository contradicts that premise: slice 361's own design and task files carry `status: not_started`; the 361 entry in the slice plan is unchecked; `361-tasks.graph-contract-and-provenance.md` (frontmatter `projectState`) says \"No graph exists in this repo yet\"; there is no `.understand-anything/` directory in the repo, no `user/analysis/943-analysis.codebase-comprehension.md` (only 940\u2013942 exist), no `commands/analysis/understand.md` (the 361 deliverable), and no 361 branch (only `main` exists). Consequently: (a) the specific numbers in the table (925 nodes / 2184 edges / hash `1bfbca1`, the 238 reconciliation) cannot be confirmed as measurements; (b) the claims \"The generated `943` sample carries both wrong counts\" (line 136), \"943 exists, so expect **944**\" (line 368), and \"The 943 document generated during slice 361 carries the two wrong layer counts\" (line 468) reference an artifact that does not exist; (c) Verification Walkthrough step 1 is worded as re-verification (\"re-run them, because the graph may have been refreshed\"), not as a first-time measurement gate \u2014 if the graph does not yet exist, the jq commands fail rather than \"not agreeing.\" The requirement left unmet: design decisions that rest on measurements (both corrections, the 238-node coverage arithmetic) must be verifiable. Fix: restate the premise \u2014 mark 361 completion as a hard precondition of this slice, present the facts as pending verification (or reword as \"expected values to confirm\"), make step 1 an explicit gate that stops if `.understand-anything/` is absent, and correct the 943/944 index expectation (the corrected run would produce 943, not 944, if 361's proving run happens under 361's own walkthrough).",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:90-110"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"361 explicitly deferred\" traces to the 361 tasks file, not the 361 design",
+   "description": "The claim that 361 \"explicitly deferred\" `config.json`, `.understandignore`, and `meta.json`'s `analyzedFiles` is accurate but is documented in `project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md:72-76` (F011/F012 dispositions of review notes), not in the 361 slice design, which never mentions deferring these fields. A reader verifying the premise against the 361 design alone will not find it. Consider naming the F011/F012 dispositions in the 362 design so the deferral chain is auditable without the (not present in the repo) 361 review document.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:54-55"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "File-level definition now diverges from the architecture's nine-type enumeration",
+   "description": "Correction 2 deliberately replaces the architecture's nine-type allow-list (`file`, `config`, \u2026, `resource`) with an exclusion rule (`type != \"function\" and .type != \"class\"`), with a stated rationale (a tenth upstream file-level type is included automatically rather than silently dropped) and a drift check (filter survivor without `filePath` is reported). The deviation is well-reasoned and stays within the architecture's intent (function/class nodes never read), so it is not a violation \u2014 but the architecture's Read-discipline paragraph still presents the nine types as the operative definition, and slices 363/364 will reuse 362's \"file-level\" definition. A one-line update to the architecture's read-discipline text (operating definition: \"all node types except function and class, each must carry `filePath`\") would give the initiative a single source of truth.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-160"
+  }
+ ]
+}

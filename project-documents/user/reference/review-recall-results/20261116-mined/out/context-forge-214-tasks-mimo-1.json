@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkbox task items instead of plain-line `**Commit**:` markers",
+      "description": "The commit points are written as checklist tasks \u2014 `- [ ] **Task 2C: Commit** \u2014 ...` (lines 71, 94, 117, 126, 134). The marker convention requires commit markers to be plain lines, never checkboxes, so they are not consumed as completable work items. Placement is correct \u2014 2C/3C/4C sit at working, tested points after each implementation+test pair, and 5C/6C are correctly conditional \u2014 and the semantic commit messages follow the git rules, so this is a form fix only: render the five entries as plain `**Commit**: \\`feat(...)\\`` lines rather than checkbox \"Task XC\" items.",
+      "file_ref": null,
+      "category": "process-conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+    },
+    {
+      "severity": "PASS",
+      "title": "All slice-design success criteria trace to tasks",
+      "description": "Cross-reference confirmed with no gaps and no scope creep: FR \"PASS/exit 0 for designs the script passes\" \u2192 Task 4T + Task 5 parity sweep; \"FAIL + one `missing:` line per section, exit 1\" \u2192 Task 4T; doctype message \u2192 Tasks 3/3T/4T; multi-file order and continue-on-fail \u2192 Tasks 3T/4T; the full exit-2 matrix (empty stdout in both modes, valid-file-before-missing test, `cf guides update` message, template with no required headings) \u2192 Tasks 3/3T/4T; `--json` contract \u2192 Task 4/4T; worktree-local template \u2192 Task 4/4T. Technical requirements map to Task 2T (all normalization cases incl. CRLF and fence handling), Task 3T (real-template assertion \u2014 the template does mark `## Overview` and `### Verification Walkthrough` required at template lines 33\u201334 and 140\u2013141, so the assertion is viable), Task 4T (real designs from `project-documents/user/slices/`, which exist), and Task 6 (build/lint/suite, ~300-line limits). The Integration Requirement and Verification Walkthrough steps 1\u20136 are covered by Task 5. No NFR is restated, so no load-test or CI-wiring task is required. Referenced symbols and patterns were verified to exist as described: `GUIDE_RELATIVE_PATH` (packages/core/src/guides/types.ts:313), the explicit `guides/index.ts` barrel (line 24, so Task 1's conditional step is grounded), `frontmatterSchema`/`frontmatterFileValidator` export locations (packages/core/src/index.ts:39, packages/core/src/node.ts:29), `parseFrontmatter` (node.ts:34), and the `frontmatter` subcommand's `resolveProjectWorktree`/`resolveOperationPath`/`handleError(err, 2)` pattern (packages/cli/src/commands/validate.ts:11-14,154,165,255). Test tasks immediately follow their implementation tasks, dependencies flow one way (2 \u2192 3 \u2192 4 \u2192 5 \u2192 6), and the bash parity script exists at the path Task 5 names.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:29"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "process-conventions",
+      "raw_category": null,
+      "summary": "Commit points are checkbox task items instead of plain-line `**Commit**:` markers",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All slice-design success criteria trace to tasks",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:29",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-17T06:07:40.445788",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 80345,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 272434,
+  "cached_tokens": 202272,
+  "cache_write_tokens": null,
+  "completion_tokens": 21650,
+  "reasoning_tokens": 19505,
+  "duration_seconds": 659.1447375407442,
+  "cost_usd": 0.050165058,
+  "cost_basis": "alias_pricing"
+}

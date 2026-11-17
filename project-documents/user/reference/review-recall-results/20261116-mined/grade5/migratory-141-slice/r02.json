@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force breakdown deferred although the plan entry assigns it to this slice",
+   "description": "The plan entry for (141) requires timings \"broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration)\" (140-slices.simulation-scaling.md:26). The design states \"`force_total` is one number, not per-force, in this slice,\" deferring `force_breakdown` to a later `PhaseTimings` extension. Deferring explicitly assigned scope is a concern in itself; it also creates an internal contradiction: the design says slice 142 \"will need finer breakdown\" (line 292, and risk section line 697), yet the Integration Requirements claim slice 142 lands with \"zero changes elsewhere in the harness\" (lines 585-588) \u2014 adding `force_breakdown` to `PhaseTimings` in `runner.py` *is* a change elsewhere in the harness. Either bring per-force timing into this slice (the plan's requirement, and the harness already times the whole force loop) or amend the plan entry and the integration claim so the contradiction is resolved on paper.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Parity-hash integration point cannot satisfy the tolerance-based parity the consuming slices require",
+   "description": "The design offers SHA-256 of positions+velocities as the cross-backend parity artifact and states that \"for future GPU backends, the harness records the hash and a downstream consumer interprets it within the documented tolerance band\" (lines 470-473), with the Provides section adding \"Slice 145's tick-level parity test consumes the harness's NumPy parity hash as the reference\" (lines 530-531). A cryptographic hash is all-or-nothing: any ULP-level GPU reduction difference changes it wholesale, so there is nothing to \"interpret within a tolerance band.\" This directly conflicts with plan entry (145), which requires \"full-tick parity against the NumPy reference \u2026 within a documented tolerance for non-deterministic GPU reductions,\" and with the architecture's open question that GPU reduction order is non-deterministic. As specified, the stated integration contract is unachievable for its main consumers (142, 145). The harness should emit a tolerance-comparable artifact (e.g., max abs/rel deviation, or the reference arrays themselves \u2014 `tools/run_deterministic_trajectory.py` already produces them) or the design must state that consumers do array-level comparison themselves and the hash is only a same-backend determinism check.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New I/O paths (result-file write, git subprocess) have no enumerated failure handling",
+   "description": "The Failure modes section covers workload loading, registry lookup, backend setup, and low-TPS output, but not the two I/O paths this slice introduces:\n1. **Writing result files** (lines 229-236): `bench/results/` is gitignored, so a fresh clone has no such directory; the design never says whether the harness creates it, nor what happens on write failure (full disk, permissions). No handling strategy is stated.\n2. **`git rev-parse HEAD`** (line 233): a subprocess dependency that is not listed under Prerequisites (lines 116-125), with no stated behavior when git is absent or the checkout fails. An empty/placeholder `git_sha` would be a silent fallback, violating the project's \"never use silent fallback values\" principle; crashing after measurement completes would also need an explicit decision.\n\nBoth need an explicit handling strategy in the Failure modes section.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Force-set claim misstates the integration surface and breaks workload fidelity",
+   "description": "The design asserts \"The five existing `BulkForce` implementations (cohesion / separation / alignment / momentum / leadership)\" as an interface it consumes (repeated at lines 543-544). This is wrong on both counts:\n- The parent plan enumerates **six** forces for (144): \"CohesionForce, SeparationForce, AlignmentForce, MomentumForce, LeadershipForce, **PropulsionForce**\" (140-slices.simulation-scaling.md:44), and `PropulsionForce` exists in `src/migratory/engine/herding.py`.\n- The live default config engages **propulsion** (`propulsion_weight: 0.1` in `config/default.yaml`) while leadership and momentum are disabled (commented out, default 0) \u2014 so the server's default force set is cohesion/separation/alignment/propulsion, not the five listed.\n\nConsequently the `mid-flock` example workload's force list (lines 379-384) cannot be \"Roughly equivalent to the live-server default config\" (lines 357-359), and verification step 9's sanity check against `force_total \u2248 3.14 ms` (line 651) compares a run with a different force set against the architecture's \"force_total (4 forces over CSR)\" budget. For a slice whose whole value is apples-to-apples comparability, the design must state the correct force set (or state that the workload force list is deliberately configurable and name the default-equivalent list).",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:138-140"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Example workload YAML is 3D against a 2D engine",
+   "description": "The schema example uses `world_size: [200.0, 200.0, 200.0]` and three-element `cluster_centers`. The engine is 2D (`DIMS = 2` in `src/migratory/__init__.py`; all force kernels allocate `(n, 2)` arrays), so the documented example \u2014 which the design declares the stable schema future slices copy \u2014 cannot initialize state as written. Correct the example to 2D coordinates.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:366-369"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Force-name resolution cites engine objects that do not exist",
+   "description": "The design says force names \"resolve to module-level singleton instances in the relevant engine modules (e.g. `flocking.cohesion_force`).\" No module-level force singletons exist anywhere under `src/migratory/` (verified by grep; engine modules define classes only). The mechanism as specified points at a non-existent integration point. Specify a harness-owned registry like the profile registry described two paragraphs earlier (which is specified correctly).",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:398-400"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Numba runner ownership conflicts with slice 142's sequencing",
+   "description": "The out-of-scope list assigns the Numba backend runner to \"slice 144 / 118 territory,\" but plan entry (142) \u2014 which depends on (141) and (118), and precedes (144) \u2014 requires the force \"benchmarked against the existing NumPy **and Numba** implementations.\" The Numba runner must therefore land in 142, not 144. The registry makes this cheap either way, but the design's ownership statement misleads the consuming slice about where the work falls.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:92"
+  }
+ ]
+}

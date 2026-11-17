@@ -1,0 +1,19 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Vectorization technical requirement has no corresponding task or verification step",
+   "description": "The slice design's Technical Requirements state: *\"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\"* No task in the breakdown asserts or verifies this. Tasks 3.1 and 4.1 prescribe the per-algorithm math in scalar-looking notation (e.g., 4.1's `sum(velocity[i] * leadership[i]) / sum(leadership)` with per-neighbor indexing), which a junior implementer could easily translate into a Python loop over neighbors \u2014 exactly what the requirement forbids. The test tasks (3.2, 4.2) check numerical results only, not implementation shape. Add a step to 3.1/4.1 (e.g., \"aggregate neighbors with fancy indexing / `np` vectorized ops, no Python loop over neighbors\") and a verification line in 6.1 or the relevant test task confirming the neighborhood aggregation is vectorized.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:sections-3-4"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "No task creates or verifies the slice branch",
+   "description": "CLAUDE.md requires verifying/creating the slice branch (`102-herding-and-leadership`) from `main` before starting slice work, and the frontmatter's `projectState` says \"Branch to be created from main\" \u2014 but no task step covers branch setup or verification before the first commit in task 1.3. Adding one checklist line under Section 1 (or as a Section 0) would close this.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:frontmatter"
+  }
+ ]
+}

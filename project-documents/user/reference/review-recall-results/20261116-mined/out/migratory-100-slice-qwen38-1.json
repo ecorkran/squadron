@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Contradictory descriptions of how integration treats inactive agents",
+      "description": "Line 152 explains the full-population `BulkForce` return shape as keeping integration simple: \"add force to velocity for all, but only active agents have non-zero forces.\" This contradicts the rest of the design: data flow step 6 (line 91) says \"`AgentState` mutated in place for active agents only. Inactive agents' state is untouched,\" and line 215 says integration \"applies only to those agents. Implemented via NumPy fancy indexing.\"\n\nThis is not just a wording difference. If integration literally runs over the full population (velocity update, `max_speed` clamp, then `position += velocity * dt` for all agents), inactive agents would still have their positions advanced by their existing velocities \u2014 violating the functional requirement that \"`tick()` with `active_indices` updates only the specified agents; all others are unchanged\" (line 242) and the multi-resolution contract the architecture relies on. The doc should state one mechanism (fancy-indexed integration over `active_indices` only) and remove the \"for all\" phrasing.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"No per-agent loops in the hot path\" criterion conflicts with the per-agent neighbor query design",
+      "description": "The technical requirement at line 247 states \"No Python-level per-agent loops in the hot path \u2014 force accumulation and integration use NumPy vectorized operations.\" However, the `SpatialQuery` protocol only offers a single-position `query_radius` (lines 165\u2013168), and data flow step 3 (line 88) says \"For each *active* agent\" a query is issued. Building the `neighbor_lists: list[NDArray[np.intp]]` consumed by `BulkForce` therefore requires a Python-level loop over active agents inside `tick()` \u2014 and the parent architecture explicitly notes that \"neighbor finding typically dominates tick cost.\"\n\nEither the criterion should be narrowed to say neighbor lookup is intentionally per-agent at this stage (hundreds of agents, brute force), or the design should describe how queries are batched. As written, the slice's own design does not satisfy its own stated technical requirement. This also matters for slice 105, which swaps the implementation \"behind the existing query interface\" \u2014 the interface as specified cannot remove the per-agent call loop.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:247"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No contract for invalid `active_indices` input",
+      "description": "The subset-evaluable tick is this slice's headline interface and is consumed by five downstream slices and eventually the world server, but the doc specifies no behavior for malformed `active_indices`: out-of-range indices, negative indices, or duplicates. With NumPy fancy indexing, out-of-range values raise `IndexError` (explicit, good), but duplicates in `active_indices` have implementation-defined effects on `+=` updates and could silently double-count or drop force contributions depending on how integration is written.\n\nProject conventions require failing explicitly rather than silently. One sentence \u2014 e.g. \"indices must be unique and in range; violations raise `ValueError`/`IndexError` before any state mutation\" \u2014 would close the gap. Similarly unspecified: behavior when `state.profile_indices` references a profile index beyond `len(profiles)`, and whether `dt <= 0` is rejected.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick Function Signature"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`accelerations` array is declared but unused by any path in this slice",
+      "description": "`AgentState` includes `accelerations` (N\u00d72 float64) at lines 35 and 96, but the data flow, integration math (semi-implicit Euler updates velocity directly from force), force protocols, and tests never read or write it. The parent architecture's state list is \"positions, velocities, profile indices\" \u2014 no accelerations. Either name what writes/reads this array or drop it; carrying an unwritten N\u00d72 array in the foundation state container invites later slices to assume semantics that were never defined.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Integration section is mis-indented and renders as code, not a heading",
+      "description": "From line 205 (\"    ### Integration: Semi-Implicit Euler\") through line 215, the entire integration subsection is indented four spaces, which Markdown renders as an indented code block attached to the preceding paragraph rather than an `H3` heading with body text. The content is fine; dedent the block so the section heading, math, and fancy-indexing note render as intended.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205"
+    },
+    {
+      "severity": "PASS",
+      "title": "Design faithfully implements the architecture's core principles and the slice plan entry",
+      "description": "The slice maps cleanly onto the architecture: data-oriented SoA state (architecture principle \"Data-oriented agent state\"), \"Forces, not decisions\" via the `Force`/`BulkForce` protocols with the bulk variant explicitly kept GPU-compatible (array-in/array-out, full-population shape), \"Profile as data\" via a no-defaults dataclass matching the project's fail-explicitly rule, \"Pluggable spatial queries\" via a `Protocol` with a brute-force reference and slice 105 owning optimization, and \"Subset-evaluable tick\" with the architecturally required semantics that the spatial index is built from the full population so inactive agents remain visible as neighbors. Boundaries are respected: no persistence, networking, rendering, or environment ownership; the float64-vs-Float32 precision question from the architecture is resolved with an explicit decision (float64 internal, conversion at the world-server serialization boundary). Frontmatter dependencies `[]` and `interfaces` to 101\u2013105 match the slice plan's dependency graph, and the design's size (placeholder forces only, brute-force spatial, 2D-only with a `DIMS` constant) is proportional to a 3/5 foundation slice.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Contradictory descriptions of how integration treats inactive agents",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "\"No per-agent loops in the hot path\" criterion conflicts with the per-agent neighbor query design",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:247",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No contract for invalid `active_indices` input",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick Function Signature",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`accelerations` array is declared but unused by any path in this slice",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Integration section is mis-indented and renders as code, not a heading",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Design faithfully implements the architecture's core principles and the slice plan entry",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-17T13:15:49.127271",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 95698,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 84242,
+  "cached_tokens": 65664,
+  "cache_write_tokens": null,
+  "completion_tokens": 22657,
+  "reasoning_tokens": 20371,
+  "duration_seconds": 607.3672987916507,
+  "cost_usd": 0.1862308,
+  "cost_basis": "alias_pricing"
+}

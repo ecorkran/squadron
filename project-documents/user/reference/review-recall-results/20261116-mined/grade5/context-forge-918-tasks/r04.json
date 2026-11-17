@@ -1,0 +1,61 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 1's unindexed `[~]` fixture example is not in a format the parser can match",
+   "description": "Success criterion 2 requires the unindexed form `N. [~] **Name** \u2014 rationale` using the sequential-counter fallback. `PLAN_UNINDEXED_RE` in `packages/core/src/introspection/parsers/slicePlanParser.ts:9` requires `**([^(].*?)**` bold-wrap. The example given is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` \u2014 no `**` markers at all \u2014 so even after Task 2 widens the checkbox class, that line still fails the match and is silently dropped. Task 5's assertion that \"the unindexed `[~]` entry parses with ... `indexSource: 'fallback'`\" would then fail. Task 1's success criterion compounds the error by requiring bold-wrap only \"for the indexed form\". The example should be `7. [~] **Feature Epsilon without explicit index** \u2014 cut for scope.` (matching `unindexed-slice-plan.md` style). As written, SC2 is left unmet.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:41"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Sharing the expanded `sample-slice-plan.md` breaks existing tests no task updates",
+   "description": "Adding an unindexed `[~]` line to the shared fixture gives it `unindexedCounter` index 1, and `parseSlicePlan()` sorts by index ascending \u2014 so the new entry sorts *before* 101\u2013105. That breaks `packages/core/tests/introspection/slicePlanParser.test.ts:10` (`toHaveLength(5)`), `:12` (`entries[0]` == 101), `:22` (`entries[2]` == 103), `:126-129` (`every(... indexSource === 'explicit')`), `:164-168` (description of `entries[0]`/`entries[1]`), and `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` (`expect(result.totalSlices).toBe(5)`). Task 5 only names the `totalSlices`/`completedSlices` update and a new regression test; `ArtifactIntrospector.test.ts` is not mentioned anywhere in the breakdown, so Task 13's \"full test suite green\" cannot pass. SC7 also explicitly asks for the existing `sample-slice-plan.md` fixture tests to pass *unchanged*, which this approach makes impossible. Use a sibling fixture for the unindexed form (permitted by the design's Scope), or enumerate every affected assertion update.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:38-50"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 8 omits the second `Pick` signature, so \"builds clean\" is unachievable",
+   "description": "Task 8 says to widen `resolveEntryStatus`'s `Pick<SlicePlanEntry, 'index' | 'isChecked'>` to include `'status'` and claims \"its only caller passes a full `SlicePlanEntry`, so widening the `Pick` is a compatible narrowing-relaxation\". That reasoning is inverted: adding a required property to a parameter type narrows what callers may pass. `resolveEntryStatusSafe` (`WorkflowNavigator.ts:736`) still types `entry` as `Pick<..., 'index' | 'isChecked'>` and forwards it at `:740` to `resolveEntryStatus`. With the widened signature this is a TS2345 error. Both signatures must be widened for Task 8's success criterion to hold, and the task should say so.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:736"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "SC6's `arch-status-vs-plans` half has no corresponding test task",
+   "description": "SC6 names both `plan-status-vs-entries` **and** `arch-status-vs-plans`. Task 12 covers only `plan-status-vs-entries`, and the walkthrough step 5 that Task 13 replays also names only that rule. `ConsistencyChecker.ts:828-850` independently computes `allComplete = completedSlices === totalSlices` and would false-positive on a plan whose only non-checked entry is `[~]` \u2014 the exact failure mode Decision 3 exists to prevent \u2014 yet no task asserts it. Add an `arch-status-vs-plans` case to Task 12 (or explicitly name it in Task 13's walkthrough execution).",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 12's mocked-introspector test cannot verify Decision 3's parser arithmetic",
+   "description": "Task 12 directs the junior to `ConsistencyChecker.test.ts`, whose `makeMockIntrospector` stubs `parseSlicePlan` with hand-built `SlicePlanResult` objects (`:72`). A test written that way asserts the rule's behavior given a synthetic `completedSlices` value; it never proves a real `[~]` plan line flows through `parseSlicePlan()` to make `completedSlices === totalSlices`. SC3 and SC6's end-to-end guarantee is therefore unverified \u2014 a regression in Task 4 could still leave Task 12 green. CLAUDE.md's parser rule requires the real production format in the test fixture. Add one case that parses a real `[~]` plan (real `ArtifactIntrospector`, as `ConsistencyChecker.reviewGate.test.ts:44-66` does) and feeds the result into `checkAll()`.",
+   "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:70-80"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 9 adds a behaviorally inert change with an incorrect justification",
+   "description": "Design Decision 4 and the Scope section specify exactly one change in `packages/cli/src/commands/slice.ts`: the one-line `planLineStatus` addition to the inline `deriveEntryStatus({...})` call. Task 9 additionally rewrites the `derivedStatus` initializer at `slice.ts:91`, claiming it is \"the fallback used if `detectDocuments` throws\". It is not: `slice.ts:122-124` always assigns `derivedStatus` on the normal path, and the `catch` at `slice.ts:126` unconditionally sets `'degraded'` \u2014 so the initialized value is never observable. No success criterion or decision requires this edit; drop the second bullet rather than adding untested churn.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:157-163"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Overweight breakdown for a six-edit slice",
+   "description": "Thirteen top-level tasks, ~65 checkbox subitems, six commit items, and a manual walkthrough for a slice whose production work is ~6 one-line edits across 4 files. Tasks 2, 3, and 4 are three separate tasks all editing the same branches of `parseSlicePlan()` in the same file, with no test or commit checkpoint between them \u2014 merge them into one parser task (or fold Task 4 into Task 3). Tasks 8 and 9 are each single-line wiring changes to parallel call sites and can be one task followed by Task 10's tests. Task 12's complementary \"in-progress fires\" case and Task 13's manual replay of all six walkthrough steps are more than the success criteria need. Merge/remove those first, then use the freed scope for the missing `arch-status-vs-plans` case and the untested shared-fixture fallout above.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox subitems, not plain lines, but sit at tested checkpoints",
+   "description": "The six `- [ ] Commit:` entries are checkboxes rather than plain `**Commit**:` lines (CLAUDE.md requires a checkbox on every item and subitem, and sibling task files 145/146/161/162 use the same form, so this follows local convention). They are not after every task and not only at the end: they follow tested points after Tasks 5, 7, 10, 11, 12, with a conditional one after Task 13. One caveat worth noting: the checkpoint after Task 10 commits Task 8's core wiring before Task 11 verifies it.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  }
+ ]
+}

@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "WorkflowNavigator's three `'complete'` literals are `SliceStatus.status` values the design itself excludes from the sweep",
+      "description": "The site inventory (line 36), component table (line 75), and Migration Plan step 4 (line 90) all instruct sweeping \"3 bare-string comparisons\" in `WorkflowNavigator.ts` to `STATUS.Complete`. In the source those three literals are `WorkflowNavigator.ts:312` (`slice.status === 'complete'`), `:345` (`slice.status === 'complete'`), and `:588` (`return { ...base, status: 'complete', taskProgress }`) \u2014 all of type `SliceStatus['status']`, the lifecycle-position union. That is precisely the union that TD-3 (lines 104\u2013106) and the Success Criteria (line 136, \"SliceStatus.status remain untouched \u2026 not accidentally swept\") say must be left alone, and the Verification Walkthrough's \"After\" tally (line 151) still counts these as remaining `SliceStatus.status` sites. WorkflowNavigator has no bare `NormalizedStatus` literals left \u2014 241 already converted its three real `NormalizedStatus` comparisons to `STATUS.*` (`:319`, `:577`, `:695`). The design therefore gives contradictory instructions: following the sweep table/task 9 conflates the two status vocabularies TD-3 deliberately separates; following TD-3 means WorkflowNavigator contributes 0 sites and the \"3 sites / 6 files / ~65 sites\" inventory (and task 9) is wrong. Resolve before implementation \u2014 most cleanly by dropping WorkflowNavigator from the sweep and correcting the counts, or by explicitly revising TD-3 and line 136.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The claim that \"zero `.test.ts` files assert against these literals\" is factually false",
+      "description": "The design states that \"grep confirms zero `.test.ts` files assert against these literals,\" using this to justify excluding tests from scope and to justify relying on them as the regression guard. An actual grep of `packages/core` finds many, e.g. `tests/introspection/ArtifactIntrospector.test.ts:79` (`expect(result.data.status).toBe('in-progress')`), `ConsistencyChecker.test.ts:313/369/545/625` (`expect(...).toEqual({ key: 'status', value: 'in-progress' })`, `expect(...).toContain('not-started')`), and `ConsistencyChecker.reviewGate.test.ts:48` / `reviewGateWidened.test.ts:49` (`status: 'complete'`). The conclusion \"no test changes are needed\" still holds \u2014 swept values are byte-identical (`STATUS.X === 'x'`), tests live under `packages/core/tests` (outside the swept `src`), and retyping `inferredStatus` to the `NormalizedStatus` superset is backward-compatible \u2014 so scope is unaffected. But the stated premise is wrong; the design should correct it and state the real assumption explicitly (tests stay green because values are unchanged) rather than resting a scope decision on an incorrect \"grep confirms\" claim.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+    },
+    {
+      "severity": "PASS",
+      "title": "Design aligns with the parent maintenance architecture and introduces no new boundaries or I/O paths",
+      "description": "The slice fits the parent architecture's stated scope (\"Hard-coded values \u2192 configuration or constants,\" \"Pattern consolidation\") and its \"opportunistic but intentional / no behavior changes without tests\" principles: it has explicit success criteria and leans on the existing suite as the regression guard. Dependency direction is correct and minimal (consumes `STATUS`/`NormalizedStatus` from completed slice 241; \"Provides to Other Slices: None\"), the integration points match what 241's TD-6 and the 910 slice-plan entry promise, and out-of-scope vocabularies (`frontmatterSchema.ts`, `SliceStatus.status`) are deliberately identified. The parent architecture states no NFRs on this path and the slice adds no new I/O path or message type, so no NFR restatement or failure-mode enumeration is required. The design is proportionate \u2014 no new components, abstractions, or configuration for a mechanical sweep.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "WorkflowNavigator's three `'complete'` literals are `SliceStatus.status` values the design itself excludes from the sweep",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The claim that \"zero `.test.ts` files assert against these literals\" is factually false",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Design aligns with the parent maintenance architecture and introduces no new boundaries or I/O paths",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-17T08:04:57.145286",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 247792,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 554490,
+  "cached_tokens": 481792,
+  "cache_write_tokens": null,
+  "completion_tokens": 62451,
+  "reasoning_tokens": 60511,
+  "duration_seconds": 348.7977842502296,
+  "cost_usd": 0.012010258,
+  "cost_basis": "alias_pricing"
+}

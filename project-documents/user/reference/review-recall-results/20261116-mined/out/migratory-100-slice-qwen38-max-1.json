@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice-plan entry with no creep into later slices",
+      "description": "Every item the slice plan assigns to (100) is present: Python project structure, NumPy SoA agent state (positions/velocities/profile indices), behavioral profile data structure, subset-evaluable tick signature, semi-implicit Euler integration, fixed timestep, deterministic output, and the spatial query interface with a brute-force implementation (`100-slices.behavior-engine.md:14`). The Excluded list correctly pushes cohesion/separation/alignment to 101, inter-profile rules to 103, spatial hash to 105, and serialization/persistence/networking to the world-server initiative \u2014 matching the plan's \"no integration slices needed at this level\" note. No dropped scope.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:31-49"
+    },
+    {
+      "severity": "PASS",
+      "title": "Subset-evaluable tick honors the architecture's multi-resolution contract exactly",
+      "description": "The two properties the architecture demands (`100-arch.behavior-engine.md:49`, `:97`) \u2014 the caller supplies the subset, and the full population stays visible to neighbor queries \u2014 are both designed in and both made testable: `build()` always receives the full population (`:159-163`, `:175`), integration applies only to `active_indices` (`:215`), and success criteria at `:241-242` plus verification step 5 at `:290` assert both halves, including that an active agent's query finds an inactive neighbor. The doc also correctly declines to implement scaling itself, keeping to the architecture's \"interface-level contribution\" framing.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:86-92"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tick determinism is restated as a concrete, testable requirement",
+      "description": "The architecture's \"Tick determinism\" goal (`100-arch.behavior-engine.md:31`) is turned into a functional requirement plus a verification walkthrough (`:270-281`) that runs two identical populations and asserts `np.array_equal`. Slice 105's regression obligation (\"behavioral output identical before and after the swap\") therefore has an established baseline pattern to inherit.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:239-240"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The neighbor-query interface is per-agent only, contradicting the vectorized hot-loop requirement and this doc's own success criterion",
+      "description": "`query_radius(position, radius)` accepts a single position, and data-flow step 3 (`:88`) says \"For each *active* agent\" \u2014 i.e. one Python-level call per active agent per tick, returning a ragged variable-length array. That is the dominant tick cost per the architecture (\"neighbor finding typically dominates tick cost\", `100-arch.behavior-engine.md:87`), which also requires the hot loop to be \"structured for vectorized computation over arrays of agent state, not object-by-object iteration\" (`:33`) and the force interface to stay GPU-compatible with \"no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop\" (`:99`). The slice's own technical requirement at `:247` (\"No Python-level per-agent loops in the hot path\") is unachievable for neighbor gathering as specified \u2014 it is silently narrowed to force accumulation and integration only.\n\nThis matters beyond style because the doc declares the protocol final for consumers: `:224` states slice 105 \"provides an optimized implementation\" behind this interface, and the slice plan says 105 swaps the strategy \"behind the existing query interface\" with identical output (`100-slices.behavior-engine.md:26`). A spatial hash cannot remove the per-agent Python loop or the ragged `neighbor_lists` hand-off, so 105 will either have to extend the protocol or leave the hot loop per-agent. Add a bulk query method now (e.g. `query_radius_bulk(positions, radii) -> (indices, offsets)` in CSR/padded form) and make it the path `tick()` uses, or state explicitly that the protocol is expected to gain a bulk method in 105 and that 105's \"identical output\" regression is against the per-agent method.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two force protocols are defined but only one is consumed, and the dispatch rule is self-contradictory",
+      "description": "`tick()` takes `forces: list[BulkForce]` (`:185`), so nothing in this slice calls the per-agent `Force` protocol. Yet `:152` says \"The tick loop prefers the bulk variant when available\", which implies a mixed list and a per-call capability check the signature does not permit, and success criterion `:248` requires placeholder forces to \"exercise both the `Force` and `BulkForce` protocol paths\" \u2014 a path exercised only by a test, never by the engine. A per-agent force path in the hot loop is precisely what `100-arch.behavior-engine.md:99` rules out.\n\nCut the per-agent `Force` protocol (and its `ConstantDriftSingle` placeholder, tasks \u00a76.2/\u00a76.3) from this slice, or, if it is genuinely wanted as a reference/testing seam, say so explicitly: it is a test-only adapter, it is never accepted by `tick()`, and delete the \"prefers the bulk variant when available\" sentence. As written, slices 101\u2013104 cannot tell which protocol they are supposed to implement.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BulkForce` parameter semantics are under-specified for the four slices that must implement it",
+      "description": "`BulkForce` is the interface 101\u2013104 conform to (`:223`), but three things a consumer needs are unstated:\n- `neighbor_lists: list[NDArray[np.intp]]` \u2014 is it aligned to `active_indices` order or to full-population index order? What is the entry for an inactive agent (`None`, empty array)? Is it ragged or padded/CSR?\n- `profiles: list[BehavioralProfile]` \u2014 the profile registry indexed by `state.profile_indices` (as `tick()`'s own docstring at `:192` describes), or a per-agent expansion parallel to `neighbor_lists`? The two readings produce different implementations.\n- Whether the force array returned must be zero-initialized for inactive agents by the implementation or whether `tick()` zeroes it (relevant once several forces are summed).\n\nAlso, `list[NDArray]` is a ragged Python container, which weakens the doc's claim that this is the \"future GPU boundary\" (`:139`) against `100-arch.behavior-engine.md:99` (\"bulk array-in/array-out\"). Pin the ordering convention, the inactive-agent representation, and whether neighbor data is padded or offset-based before 101 starts; this is the cheapest moment to fix it.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:141-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No NFR target restated for the tick/spatial path this slice creates",
+      "description": "The slice builds the two paths carrying the architecture's stated NFRs: \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (`100-arch.behavior-engine.md:33`) and a tick rate \"slow enough that the server can complete a full tick within the budget\" (`:93`). The Technical Requirements list has no performance item at all \u2014 only \"no Python-level per-agent loops\". The single scale statement in the doc is qualitative and about the reference implementation: \"acceptable for the hundreds-of-agents scale this slice targets\" (`:173`).\n\nTwo concrete gaps follow. First, `BruteForceQuery.build()` stores the full N\u00d7N pairwise-distance matrix every tick (`:173`), which is ~800 MB of float64 at the architecture's 10K-agent target; the doc sets no agent-count ceiling and no guard, so the failure is an out-of-memory crash discovered at runtime rather than a documented limit. Second, with no per-tick target, \"don't optimize in this slice\" (`:309`) has no measurable boundary. Restate the NFR with the numbers this slice is accountable for \u2014 e.g. \"N \u2264 1,000 agents, full tick (build + query + forces + integrate) \u2264 X ms at dt=1/60; the O(n\u00b2) build is bounded by that N and is replaced in 105\" \u2014 and state the memory consequence of the N\u00d7N matrix explicitly. Note that `200-arch.world-server-foundation.md`, which the parent docs cite for scaling tiers and tick budget, is not present in `project-documents/user/architecture/`, so no numeric budget exists upstream to inherit; this slice has to state its own.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:244-248"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The architecture's \"Environment as input surface\" principle has no entry point, yet `tick()` is declared final for later slices",
+      "description": "The word \"environment\" does not appear in the slice design. The architecture lists environmental queries as one of the three interfaces the engine exposes under \"Clean boundaries\" (`100-arch.behavior-engine.md:35`) and devotes a principle to it: the engine \"queries environmental state (terrain elevation, resource locations, threat zones, seasonal parameters) through a read-only interface\" (`:47`). Meanwhile this doc promises consumers that `tick()` is \"the integration loop that slices use as-is. Behavioral slices add forces; they don't modify the tick loop\" (`:225`).\n\nThose two statements cannot both hold unless the environment entry path is named. It is defensible to defer the interface itself (no slice in the plan before 106/107 needs it, and 104's home-range center can live in `AgentState`), but the deferral should be explicit and should say *how* environment will arrive \u2014 e.g. forces are constructed as closures over an environment handle supplied by the caller, so `tick()` never gains an environment parameter \u2014 because that choice is what keeps `:225` true. Add it to Excluded with the mechanism, or drop the \"used as-is / don't modify the tick loop\" claim.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:217-230"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for index inputs are unspecified, and the fancy-indexing accumulation described is wrong for duplicate indices",
+      "description": "`state.velocities[active_indices] += ...` does not accumulate for repeated indices \u2014 NumPy buffers the read and writes once \u2014 so a caller passing duplicates (a plausible world-server bug when merging per-region active sets) silently loses force contributions instead of failing. Negative indices silently wrap; out-of-range indices raise a bare `IndexError` from deep inside integration with no context. The same is true of `state.profile_indices` values that exceed `len(profiles)`, which the design relies on for per-agent `query_radius` and `max_speed` (`:88`, `:213`) but never validates.\n\nCLAUDE.md forbids silent fallbacks and requires failing explicitly, and the architecture requires the force/spatial interfaces to \"function correctly when only a subset of the population is being evaluated\" (`100-arch.behavior-engine.md:97`) \u2014 correctness of the subset path is this slice's headline deliverable. Specify the contract: duplicate/negative/out-of-range `active_indices` raise a validation error (or are documented as caller-undefined and asserted in debug), out-of-range `profile_indices` raise rather than index garbage, and use an accumulation form that is correct for the chosen contract (`np.add.at` if duplicates are legal). The n=0 and empty-`active_indices` cases should also be named; tasks \u00a73.3 covers n=0 for state but nothing covers an empty subset in `tick()`.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:215"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`accelerations` is dead state and the force\u2192acceleration semantics (unit mass) are never stated",
+      "description": "`accelerations` (N\u00d72 float64) is listed in scope (`:35`) and in the `AgentState` contents (`:96`), but nothing in the design reads or writes it: integration is `velocity += force * dt` (`:207-211`), the tick data flow never mentions it (`:89-92`), and the integrator described in tasks \u00a74.1 takes positions, velocities, forces, dt, max_speeds \u2014 no accelerations. It is allocated-and-forgotten state, which CLAUDE.md's \"resist adding complexity\" argues against; cut it, or say which step populates it.\n\nThe deeper issue it hides: `force * dt` added to velocity treats the force array as an acceleration, i.e. unit mass for every agent. That assumption is never stated, and `BehavioralProfile` has no mass field (`:237`, `:299`). Slices 101\u2013104 will be writing cohesion/pursuit/flight \"forces\" against this contract, and predator-prey in particular is where a mass difference would naturally be wanted. State the convention explicitly (\"force arrays are accelerations; mass is 1.0 and is not a profile parameter in this slice\") so later slices do not discover it mid-implementation.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:93-102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The Integration section is indented four spaces and renders as a code block, not a heading",
+      "description": "`### Integration: Semi-Implicit Euler` and its three following paragraphs are indented, so in rendered markdown they become part of the preceding code block under \"Tick Function Signature\" instead of a sibling `###` heading. The content (semi-implicit Euler, `max_speed` clamp source, subset integration) is correct and matches `100-arch.behavior-engine.md:93`; only the indentation needs removing so the section is navigable.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Overview says the tick returns updated state; the design mutates in place and returns None",
+      "description": "Included-scope bullet: \"integrate (semi-implicit Euler), return updated state\", versus `def tick(...) -> None` with \"state: Agent state arrays, mutated in place\" (`:177-192`) and data-flow step 6 \"mutated in place\" (`:92`). In-place mutation is the right call and is consistent with the architecture's \"engine is stateless between ticks\" (`100-arch.behavior-engine.md:69`), even though the architecture's step 5 says \"Returns the updated state array\" (`:68`) \u2014 the deviation is an improvement, not a violation. Just fix `:39` so the deliverable's contract is stated once, unambiguously; a consumer reading only the scope list would write `state = tick(...)`.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`DIMS`-based 3D parameterization is speculative scope",
+      "description": "No slice in the plan, and nothing in the architecture or concept, calls for 3D simulation state \u2014 the 3D work in the concept is client-side rendering and terrain mesh. The `DIMS = 2` constant plus shape assertions keyed to it (tasks \u00a71.1, \u00a73.3) is small, but it is abstraction nothing uses yet, and the \"single-point change\" claim is optimistic: force math, the spatial query, and the profile's radius/speed semantics would all need review regardless. Keeping it is defensible as a one-line constant; if anything in this slice is trimmed for effort, this and the per-agent `Force` protocol are the first candidates.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:102"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Scope matches the slice-plan entry with no creep into later slices",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:31-49",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Subset-evaluable tick honors the architecture's multi-resolution contract exactly",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:86-92",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Tick determinism is restated as a concrete, testable requirement",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:239-240",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The neighbor-query interface is per-agent only, contradicting the vectorized hot-loop requirement and this doc's own success criterion",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Two force protocols are defined but only one is consumed, and the dispatch rule is self-contradictory",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-154",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`BulkForce` parameter semantics are under-specified for the four slices that must implement it",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:141-152",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No NFR target restated for the tick/spatial path this slice creates",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:244-248",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The architecture's \"Environment as input surface\" principle has no entry point, yet `tick()` is declared final for later slices",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:217-230",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes for index inputs are unspecified, and the fancy-indexing accumulation described is wrong for duplicate indices",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:215",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`accelerations` is dead state and the force\u2192acceleration semantics (unit mass) are never stated",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:93-102",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The Integration section is indented four spaces and renders as a code block, not a heading",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Overview says the tick returns updated state; the design mutates in place and returns None",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`DIMS`-based 3D parameterization is speculative scope",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:102",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-17T13:41:37.956329",
+  "model": "qwen/qwen3.8-max-0902",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 77042,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-max-0902",
+  "answering_models": [
+    "qwen/qwen3.8-max-0902"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 139502,
+  "cached_tokens": 109952,
+  "cache_write_tokens": null,
+  "completion_tokens": 22027,
+  "reasoning_tokens": 17605,
+  "duration_seconds": 501.5517593342811,
+  "cost_usd": 0.21875,
+  "cost_basis": "alias_pricing"
+}

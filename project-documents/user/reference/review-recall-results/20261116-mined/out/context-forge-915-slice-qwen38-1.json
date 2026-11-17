@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Design faithfully and proportionally implements slice-plan entry 915",
+      "description": "Every element the slice plan assigns is present and bounded: `scope: 'shared' | 'personal'` on `CONFIG_KEYS` with a required field (no silent default, consistent with project conventions), file routing absorbed inside `ConfigManager` with unchanged public signatures, the minimal one-line `cf init` gitignore addition (with the broader template explicitly deferred to the plan's Future Work item, which matches the plan verbatim), and the plan-mandated migration/compat story (read-time fallback, `ConsistencyChecker` detection, `migrate-personal` command). The design reuses the existing `readToml`/`resolveKey` merge machinery rather than inventing a new precedence mechanism, as the plan instructs. Nothing in the plan is dropped; no scope creep beyond it (the auto-fix exclusion is justified against the real `fixAction` type union). Effort matches the plan's 3/5, and the design explicitly resists extras (no dry-run flag, no interactive prompt).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes and verification coverage are explicit for every new I/O path",
+      "description": "The migration path enumerates crash-between-steps handling (write-personal-then-delete-shared ordering, so failure leaves the key in both files, recoverable and idempotent), per-key failure continuation with `failed: <error>` reporting, collision semantics (absent/different/identical), write-failure semantics for the personal file (same helper, throws as today), and the `cf init` gitignore append failure (surfaced via existing `handleError`). None are \"TBD\". The verification walkthrough exercises the pre-migration fallback, detection, migration, and collision cases end to end, satisfying the parent architecture's \"no behavior changes without tests\" principle via the \"existing tests pass unmodified in behavior\" technical requirement.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#migration-plan"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delete routing spec contradicts the prescribed cleanup path for stale shared-file copies",
+      "description": "The Data Flow section specifies \"**Delete:** mirrors write \u2014 deletes from whichever project file the key's scope maps to\", and states `migrate-personal` is \"the one exception that touches the *other* project file\". For a personal key this means `cf config unset git.integration_branch --project` only touches `.context-forge.local.toml`. But the Collision semantics section (line 146) directs the user to clear a stale shared-file copy via \"a separate, explicit `cf config unset <key> --project`\", and Verification Walkthrough step 9 (line 259) asserts that this exact command clears the stale copy from `.context-forge.toml` and leaves `cf check` clean. Under the stated delete routing, step 9 is unreachable: `unset` would delete the *personal* copy (the developer's preferred value) while the stale shared copy survives the read fallback \u2014 inverting the intended outcome and leaving the `personal-config-in-shared-file` finding permanently unfixable by any documented command except hand-editing. The requirement left unmet is the design's own promised explicit cleanup path for the collision case. Fix: specify that project-scope delete for a personal key also removes any pre-existing copy in the shared file (read-side fallback mirrored on the delete side), or otherwise reconcile the two sections.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Reusing the pattern already used for personal ignores\" has no referent",
+      "description": "Technical Scope says the `cf init` change works by \"reusing the pattern already used for personal ignores\", but the design's own `.gitignore handling in cf init` section (line 159) confirms \"no gitignore-writing logic exists anywhere in `packages/cli`/`packages/core` today\" \u2014 so there is no existing pattern to reuse. The normative section is self-contained and correct (create-if-absent, append-if-missing line check), so this is a wording issue only, but the phrase could send an implementer looking for scaffolding that does not exist.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Design faithfully and proportionally implements slice-plan entry 915",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes and verification coverage are explicit for every new I/O path",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#migration-plan",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Delete routing spec contradicts the prescribed cleanup path for stale shared-file copies",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "\"Reusing the pattern already used for personal ignores\" has no referent",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T13:11:03.117758",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 78293,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 181506,
+  "cached_tokens": 147968,
+  "cache_write_tokens": null,
+  "completion_tokens": 19839,
+  "reasoning_tokens": 17807,
+  "duration_seconds": 532.9936140412465,
+  "cost_usd": 0.2157036,
+  "cost_basis": "alias_pricing"
+}

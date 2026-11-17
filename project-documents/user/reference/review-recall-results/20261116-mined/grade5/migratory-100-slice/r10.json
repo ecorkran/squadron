@@ -1,0 +1,96 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-agent profile parameters cannot be gathered without a Python-level per-agent loop, contradicting the slice's own hot-path requirement",
+   "description": "`BehavioralProfile` is a list of dataclasses addressed through `state.profile_indices`, but per-agent values (`max_speed` for clamping, `query_radius` for neighbor radius) are required per agent inside the hot loop. Collecting them requires either `np.array([profiles[i].max_speed for i in state.profile_indices])` \u2014 a Python-level per-agent loop \u2014 or a columnar profile table (e.g. `max_speed[N]`, `query_radius[N]`) that does not exist anywhere in the design. This directly conflicts with the Technical Requirement \"No Python-level per-agent loops in the hot path\" and with the parent architecture's \"hot loop must be structured for vectorized computation over arrays of agent state\". The design needs either a columnar/vectorized profile view (or `ProfileTable`) or an explicit statement that profile-parameter gathers are the one permitted per-agent pass, with the cost noted.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:247"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The tick's force contract is contradictory: `list[BulkForce]` vs. per-agent `Force`, and \"prefers the bulk variant when available\"",
+   "description": "The signature fixes `forces: list[BulkForce]` (line 186) and the Data Flow describes per-agent accumulation \u2014 \"Each registered force function receives the active agent's state, its neighbors' state, and its profile, and returns a force vector. Forces are summed per active agent\" (line 89) \u2014 while line 152 says \"The tick loop prefers the bulk variant when available\". With a fixed `list[BulkForce]` parameter there is no \"when available\" variant to prefer, and the per-agent `Force` protocol has no consumer anywhere in `tick()`. Downstream slices (101\u2013104) will implement forces against whichever of these two contracts is chosen, so the ambiguity must be resolved in the design, not left to the implementer.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Per-agent spatial query API and per-agent neighbor lists preclude the batched/GPU spatial path the architecture names as a goal",
+   "description": "`SpatialQuery.query_radius(position, radius)` is a single-position API, and `BulkForce` receives `neighbor_lists: list[NDArray[np.intp]]` \u2014 a Python list with one array per agent. Producing that list requires a Python-level loop over active agents calling `query_radius` per agent, plus a per-tick dynamic allocation per agent. That satisfies the grid/KD-tree replacement (slice 105) but is structurally incompatible with the parent's stated goal that the interface \"must support replacement with grid, KD-tree, or GPU-accelerated alternatives\" and with the GPU-compute requirement of \"bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation\". Consider adding a batched query (e.g. `query_radius_batch(positions, radii)`) or a flat index+offset neighbor representation to the protocol now, while it is cheap to define.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The architecture's scale/throughput NFR is not restated with a concrete target for this slice",
+   "description": "The parent architecture sets the goal \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" with a vectorized hot loop. This slice \u2014 which owns the hot loop and the neighbor-query path \u2014 states only that brute force is \"acceptable for the hundreds-of-agents scale this slice targets\", with no agent-count target, no per-tick latency/throughput target, and no stated ceiling or trigger point at which brute force is considered insufficient (slice 105 is the upgrade path). The slice should restate the target (e.g. \"the tick must scale to N agents with per-tick cost under X ms\") so the foundation can be measured against the parent's NFR and so the hand-off to slice 105 has a defined criterion.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`BruteForceQuery.build()` precomputes a pairwise matrix the query API cannot use, and the stated complexity is wrong",
+   "description": "`query_radius(position, radius)` accepts an arbitrary position, so the N\u00d7N pairwise distance matrix computed in `build()` cannot be indexed by the query point unless the query point is exactly an agent's position. The claim that building the matrix \"makes individual queries O(n)\" is therefore misleading \u2014 computing distances from an arbitrary point is O(n) regardless of what `build()` precomputed. `build()` is thus wasted per-tick work plus an N\u00d7N allocation (800 MB at 10k agents), which materially worsens the scale ceiling already flagged above. Since this is the reference implementation, the simplest coherent choice is for `build()` to only store the positions array and compute distances on demand.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Neighbor-set semantics (self-inclusion, radius boundary) are unspecified",
+   "description": "The design says `query_radius` \"Return indices of all agents within radius of position\" without deciding whether the query point's own agent is included or whether the boundary is `<` or `<=`. This is not cosmetic: separation, alignment and territorial avoidance (slices 101, 104) all consume the neighbor set, and an agent counted as its own neighbor produces a different force than one that is not. The slice's own task breakdown acknowledges this as an open decision (\"an agent is not its own neighbor (or is, depending on design decision \u2014 document which)\"), but the design document \u2014 the artifact later slices are written against \u2014 does not record the decision.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:156-175"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Input validation and failure behavior for `tick()` are unspecified",
+   "description": "The project guidelines require explicit failure and forbid silent fallbacks, but the tick contract says nothing about `dt <= 0` (which silently stalls the simulation with no error), an empty population, `active_indices` containing out-of-range or duplicate indices, `state.profile_indices` referencing a missing entry in `profiles`, or non-finite positions/velocities. NumPy will raise `IndexError` for some of these and silently produce garbage for others (e.g. `NaN` propagation, `dt = 0`). Each of these is a caller-visible contract that the world server will hit; the design should state which are rejected, which are programmer errors, and which are impossible by construction.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick-Function-Signature"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The tick signature has no environment-context slot, contradicting the parent architecture's tick contract",
+   "description": "The architecture states that each tick \"Receives the current agent state array, environmental context, and an optional active-agent subset\", and lists \"Environment as input surface\" as an architectural principle. This slice's `tick()` accepts state, profiles, spatial, dt, forces and `active_indices` only, and the slice explicitly promises that later slices \"use it as-is\" and that the signature \"doesn't need to be retrofitted\". Slices 104 (territory boundaries), 107 (seasonal/migration) and 106 (stigmergy) all need environmental input, so the signature will have to change later \u2014 the opposite of the claim made here. Either define a context parameter now, or state explicitly in the design that environment context enters in the environment-layer slice and that `tick()`'s signature is versioned at that point.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick-Function-Signature"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Vestigial `accelerations` array in `AgentState` has no producer or consumer",
+   "description": "`AgentState` exposes `accelerations` (N\u00d72 float64), but no step of the Data Flow writes it \u2014 integration goes straight from `force` to `velocity += force * dt` \u2014 and the slice plan's state description lists only \"positions, velocities, profile indices\". An unused array in the public state surface is a decision every consumer inherits and will later have to interpret (is it force, force/dt, or last tick's acceleration?). Either define its role (e.g. the accumulated-force buffer written by the tick) or drop it from this slice.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The per-agent `Force` protocol and `ConstantDriftSingle` placeholder have no consumer and exceed the slice plan's scope",
+   "description": "The slice plan assigns this slice \"basic force integration (semi-implicit Euler)\"; it does not ask for two force protocol variants. The per-agent `Force` protocol is never consumed by `tick()` (which accepts `list[BulkForce]`), so `ConstantDriftSingle` and the \"exercise both the `Force` and `BulkForce` protocol paths\" requirement exist only to satisfy a protocol nothing calls. This is the clearest cut candidate in the document: drop the per-agent `Force` protocol and its placeholder, or make `tick()` genuinely accept both and specify the selection rule. Keeping both protocols with no selection rule also creates the contradiction noted above.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-134"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Tick return-value contract is stated three different ways",
+   "description": "The Technical Scope says the tick function should \"return updated state\", the signature returns `None` and mutates state in place (Data Flow step 6, line 92), and the parent architecture's Envisioned State says the tick \"Returns the updated state array\". In-place mutation of a caller-owned `AgentState` is the cleaner choice for the stateless-engine model, but the wording should be made consistent across the slice and the parent's contract so the world server's integration does not depend on the wrong one.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:39"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The \"Integration: Semi-Implicit Euler\" section is indented as a code block and will not render as a heading",
+   "description": "The heading and its body (including the clamped-velocity formula and the `active_indices` integration rule) are indented by four spaces inside the preceding fence, so they render as literal code. This hides the section that states the integration semantics and the clamping rule from anyone reading the rendered document.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Profile field-growth strategy will break every construction site on each new slice",
+   "description": "`BehavioralProfile` is a flat dataclass with no defaults, and the design states it \"will gain new fields in every subsequent slice\". Adding one required field invalidates every existing construction site (tests, and later the world server loading profiles from configuration, which the architecture says must be possible: \"Profiles ... can be serialized, loaded from configuration\"). Grouping per-archetype parameters into nested parameter dataclasses (e.g. `BehavioralProfile(base, flock=..., herding=...)`) would make field growth additive without reintroducing silent defaults.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Special-Considerations"
+  }
+ ]
+}

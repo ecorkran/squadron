@@ -1,0 +1,26 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Fixture-attribute assumption in Task 20 is unverified and unprepared",
+   "description": "Task 20 asserts, per Success Criterion 6, that the coverage.py fixture's per-file totals \"equal the root `lines-valid` and `lines-covered`\". Nothing in Task 18 (fixture capture) or Task 19 (reader) verifies that the captured coverage.py Cobertura report actually carries those root attributes. coverage.py's Cobertura output is known to omit line-total attributes in some versions (Istanbul emits them; coverage.py historically does not). Task 18's README records only the root `version` and how each writer emits `<source>`/`filename` \u2014 not the line totals \u2014 so an implementer hitting a fixture without the attributes has no recorded guidance and will either stall or be tempted to hand-edit the fixture, which defeats the real-report rule the slice cites. Fix: add one line to Task 18 to record whether each fixture's root has `lines-valid`/`lines-covered` (and their values), and if the coverage.py fixture lacks them, state in the slice design how Success Criterion 6's totals are instead recomputed from the parsed classes (the arithmetic is identical) so Task 20 has a testable, fixture-honest form.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md#Task 20"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Slice-design edits during implementation are `docs:` changes",
+   "description": "Tasks 5, 12 and 14 direct the implementer to update the slice design (D2 node-type names; module table when a tokenizer exceeds ~300 lines). This matches the design's own \"record any difference\" instruction and is legitimate `docs:` work, but the task file never says these design edits get committed. Folding them into the nearest `feat(metrology):` commit mixes document types; a brief \"commit design updates as `docs:`\" line (or folding them into Task 28) would keep commits semantic per the project's commit rules.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md#Task 5"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 30's catch-all commit marker sits after no new tested point",
+   "description": "Commit markers elsewhere sit at working, tested points (Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29), which is correct. Task 30's final item \u2014 \"Commit any remaining changes on the slice branch\" \u2014 is a vague catch-all that follows only verification steps; if verification finds nothing, there is nothing to commit, and if it finds something, that something should have been fixed and committed under its own message earlier. Consider rewording it to \"commit nothing here unless a fix above produced one; commit that fix with its own semantic message\" so the marker doesn't invite a meaningless trailing commit.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md#Task 30"
+  }
+ ]
+}

@@ -1,0 +1,68 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The keystone keys human samples to \"persisted judge results\" that have no stable identity and don't durably persist",
+   "description": "The keystone slice commits to \"human sample verdicts **keyed to persisted judge results**\" and Technical Considerations requires capture to \"attach unambiguously to the specific persisted judge result being checked.\" Neither join target supports this in the current stack. (a) The durable review/judge artifact path is derived, not unique: `save_review_result` builds `project-documents/user/reviews/{slice_index}-review.{review_type}.{slice_name}.md` (`src/squadron/review/persistence.py:280`), and a test pins that a second run **overwrites** the same file (`testsave_review_result_overwrites_existing`) \u2014 a judge re-scoring the same artifact silently destroys the record a human verdict might already reference, and the pipeline `ReviewAction` never passes `name_suffix` to disambiguate. (b) The other candidate, run-state JSON in `~/.config/squadron/runs/`, is pruned to `keep=10` per pipeline on every `init_run` (`src/squadron/pipeline/state.py:219,480`), so \"trend over time\" joins against a rolling window of ~10 runs. (c) The review-file frontmatter does not emit `provenance` at all (`persistence.py:147` \u2014 \"provenance is never emitted here\"), so the file record doesn't self-describe as judge-derived, contradicting the Overview's \"records human sample verdicts ... alongside 300's persisted judge results.\" The document asserts unambiguous attachment as an achieved property of 300's persistence rather than naming result identity and record lifecycle (overwrite, pruning, provenance emission) as constraints this initiative must resolve. Until that's stated, the keystone slice has no valid key.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated-Slices"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"The execution machinery exists\" is false on both counts it names, and the available machinery drops the score",
+   "description": "\"Dispersion needs repeated measurements\" states: *\"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`.\"* Multi-sample judging is **unbuilt**: it is Future Work item 1 in `300-slices.eval-actions-llm-as-judge-scoring.md`, checkbox unchecked `[ ]`, and no median reducer exists \u2014 `_REDUCER_REGISTRY` registers only `collect` and `first_pass` (`src/squadron/pipeline/intelligence/fan_in/reducers.py:139-140`). Worse, even the opportunistic path the document says the metrology \"must accept\" (`fan_out` running anyway) cannot deliver scores today: `CollectReducer.reduce` serializes branch action results as `{action_type, success, outputs, verdict}` only \u2014 `score`, `criteria`, and `provenance` are dropped from the branch payload. Dispersion over 0\u2013100 scores is therefore impossible with shipped code. The document should say dispersion depends on a median reducer and on `collect` carrying `score` (or 300 FW1 landing), not that the machinery exists.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:81"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Dependency attribution is wrong: `fan_out` is slice 182 (180-band), and the analysis pack (340) is a real dependency missing from frontmatter",
+   "description": "Related Work credits \"Initiative 140 (Pipeline Foundation) \u2014 the executor, `fan_out`, and checkpoint machinery.\" `fan_out` appears nowhere in `140-arch.pipeline-foundation.md`; it is slice **182**, listed in `180-slices.pipeline-intelligence.md` (\"Relocated from 140 future work item 10\"), and `001-initiative-plan.squadron.md:44` explicitly declares 320 \"Independent of 180, 200, 260, 280.\" The document both misattributes the mechanism and depends on machinery from an initiative whose architecture is still `status: draft`. Separately, frontmatter `dependencies: [100, 140, 300]` omits **340**, yet the Overview and code-quality oracle require \"the tech-debt-audit analysis skill ... shipped in the 340 analysis pack\" (installed via `sq skills install analysis`); the initiative plan itself notes 320 is a consumer of 340. Fix the frontmatter and the Related Work entry, or the slice plan will sequence work against the wrong prerequisites.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Related-Work"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Judge-configuration identity requires a template version that does not exist, colliding with the \"read-side over 300's write path\" principle",
+   "description": "\"Comparability across template and model versions\" fixes as architectural that \"measurements are keyed by judge configuration (template identity/version, model).\" Model is available (`ActionResult.metadata[\"model\"]`, `review.py:297`), and template name is too \u2014 but `ReviewTemplate` (`src/squadron/review/templates/__init__.py:26`) has **no version field**, no template carries one (`src/squadron/data/templates/judge-*.yaml`), and nothing hashes template content at run time. So \"template version\" cannot be recorded without either (a) adding versioning to 300/100's template system \u2014 i.e., changing the write path, which the Architectural Principle \"Read-side over 300's write path ... it does not re-thread plumbing\" forbids \u2014 or (b) 320 reconstructing identity post hoc by content-hashing template files at read time, which is fragile across template edits and re-installs. The document pins the requirement while leaving its only two implementations in tension with its own principles; this needs an explicit decision (e.g., \"320 records a content digest of the template file at capture time\"), not \"granularity is a slice-design question.\"",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical-Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The human oracle's response scale is never specified, so verdict-level spot-checks cannot calibrate numeric threshold bands",
+   "description": "The document says the operator records \"their verdict\" and that reports \"inform threshold configuration\" \u2014 \"a judge with demonstrated agreement at an artifact level is configured toward auto-gate.\" But 300's thresholds are **numeric bands** (`pass_floor: 82`, `concerns_floor` in `judge-slice-vs-arch.yaml`), and a human PASS/CONCERNS/FAIL call on a judge's 0\u2013100 score yields at most an ordinal comparison. Nothing states what the human records (their own verdict? their own score? \"judge was too harsh/too lenient\"?) nor the method mapping sampled calls to a recommended floor \u2014 e.g., \"human PASS at judge score 75 implies `pass_floor` \u2264 75\" is an assumption, not a given, and human bands would themselves need a rubric. This is the load-bearing input to the calibration-to-threshold slice and is left implicit while far smaller decisions (every number carries its n) are pinned.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:67"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The tech-debt-audit \"harness\" has no defined execution mechanism, and the skill's own repeat-run mode entangles baseline and delta",
+   "description": "Slice 4 (\"run the audit across squadron-managed projects, normalize and persist findings\") never says *how* the audit runs. `commands/analysis/tech-debt-audit.md` is a Claude Code slash-command skill with `disable-model-invocation: true` (\"Does not auto-invoke\"), instructing an interactive session to read git history, run `ast-grep`/`pip-audit`, optionally spawn subagents, and take 5\u201320 minutes \u2014 none of which is reachable from squadron's `review`/`dispatch` actions, which invoke `run_review_with_profile`, not slash commands. Driving it \"across projects\" repeatably requires either a headless Claude Code driver or a re-implementation as a judge/review template; neither is named, and without a fixed invocation the before/after delta compares runs that differ in scope, model, and tooling \u2014 undercutting the delta's credibility the document elsewhere insists on. Additionally, the skill's \"Repeat-run mode\" **mutates the same audit file in place** (`RESOLVED`/`NEW` tagging), so a naive baseline\u2192intervention sequence doesn't produce two independent measurements; the normalization plan must define how baseline findings are snapshotted before the skill rewrites them. Only the output-shape variance is discussed (\"normalizing an LLM-authored audit\"); the execution and snapshot problems are not.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated-Slices"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Prompt-chaining pre-emption prompt\" names a mechanism that doesn't exist and is never defined",
+   "description": "The dispatch side has no prompt chaining: `DispatchAction` assembles a single prompt from context/params and calls `session.dispatch(prompt)` once (`src/squadron/pipeline/actions/dispatch.py:193`); grepping the source for chain/chaining finds nothing relevant. The document scopes this as in-initiative work (slice 5: \"the dispatch-side prompt-chaining prompt\") but never defines what \"chaining\" means (a second pre-flight LLM call that rewrites the prompt? a static instruction block?), where it inserts into prompt assembly, or how its presence is recorded so the delta report can distinguish pre-emption-on from pre-emption-off runs \u2014 the last being essential to the before/after measurement the design goal claims. As written, the heaviest unmeasured intervention in the initiative is a phrase.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:22"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Cross-project aggregation requirement conflicts with 280's per-project store default, which the document doesn't note",
+   "description": "\"Where metrology data lives\" correctly identifies cross-project aggregation as a new requirement, then offers 280 as a candidate relationship \"to be evaluated.\" But 280's specified default is `{project_root}/.squadron/artifacts.db` \u2014 a **per-project** SQLite file (`280-arch.shared-agent-artifact-store.md:75`), with no cross-project index and a schema keyed to `run_id`/`step_name` rather than judge results. Adopting 280 as-is would fail the stated requirement by construction. The document defers the decision (acceptable at this level) while presenting an option that is already known-incompatible; it should at least record the constraint that any store chosen \u2014 280 or new \u2014 must be a single cross-project location, and that 280's location default would need changing.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical-Considerations"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "\"The reporting layer is built once\" overstates the shared shape between the two oracles",
+   "description": "Envisioned State claims the two oracles \"share one metrology shape ... so the reporting layer is built once.\" Judge calibration computes agreement/dispersion statistics with sample sizes and an evidence floor over per-artifact-level grains; the code-quality oracle computes audit-findings-per-project trends over time across projects. These share at most \"persist rows with timestamps\" \u2014 the actual computations, grains, and honesty constraints differ. The unification is rhetorical; presenting it as a reason to build one reporting layer risks forcing two unrelated report paths through a shared abstraction they don't share.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:69"
+  }
+ ]
+}

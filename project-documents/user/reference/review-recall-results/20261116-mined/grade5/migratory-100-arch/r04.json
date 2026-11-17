@@ -1,0 +1,61 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Tick output and state ownership are contradictory",
+   "description": "The engine is described as stateless, receiving arrays and returning updated state, but it also exposes state queries and agent registration/removal. The world server architecture assigns array ownership and entity lifecycle to the server and requires an atomic read-compute-commit tick. The document does not say whether `tick()` mutates its input, returns a separate state, or who implements registration and removal. In-place integration also leaves the server without an atomic commit or rollback if a force calculation fails. Define a single owner and an explicit input/output and failure contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:60-81"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The spatial interface does not support the promised bulk execution path",
+   "description": "The described flow queries neighbors **for each active agent**, while the design requires NumPy bulk execution and eventually GPU execution without Python callbacks or per-agent branching. A scalar radius-query interface does not specify how variable-length neighborhoods, profile-specific radii, or neighbor attributes reach a bulk force calculation without a Python loop and intermediate allocations. The current `SpatialQuery.query_radius` and `tick()` implementation demonstrate that gap: they issue one Python query per agent and build a list of arrays. Define a batched query/result contract and establish a feasible CPU path; otherwise the stated scale and replaceable GPU query strategy are unsupported.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:64-68"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Subset ticking does not define elapsed time or neighbor positions",
+   "description": "Selecting an active subset alone does not specify how a 1/16-rate agent advances through the sixteen base timesteps, or which position full-rate neighbors observe between its evaluations. Using one base `dt` makes reduced-rate agents move too slowly; using a larger `dt` changes integration stability and interaction timing. The world server's proposed interpolation adds another state representation that must agree with spatial queries. Specify elapsed-time ownership, interpolation/extrapolation, and what state is indexed before claiming this interface supports variable-rate simulation.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Determinism lacks an ordering and precision contract",
+   "description": "A fixed timestep does not make force reductions reproducible when different spatial indexes return neighbors in different orders, or when CPU and GPU reductions use different floating-point arithmetic. Precision is also left undecided. These differences can alter trajectories and undermine the stated replay and cross-region agreement goals. Define the required reproducibility scope, neighbor ordering and reduction rules, numeric precision, and what must be recorded as tick input; do not imply cross-backend agreement unless the design can enforce it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The state model omits data required by several promised behaviors",
+   "description": "Positions, velocities, and profile indices do not specify where individual home-range centers, leadership attributes, travel corridors, or selected prey targets reside. Profile-wide weights alone cannot distinguish individual territories or establish a shared target for a pack. Define the required per-agent and environmental inputs, their ownership and lifecycle, and whether target selection is transient or persistent. Otherwise the proposed archetypes cannot be implemented from the stated inputs without expanding the state contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:70-79"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Stigmergy has no mechanism for agents to modify the environment",
+   "description": "Swarm behavior is described as responding to reinforced paths, but the environment interface is read-only and the tick returns only agent state. No output communicates marker deposition or path reinforcement to the environment owner. Reading a pre-existing field is possible, but agent-created stigmergy is not. Define an output/event boundary and its tick ordering, or narrow the stated swarm capability.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45-47"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The aggregation extension point lacks a usable force contract",
+   "description": "The document proposes presenting aggregates through the same neighbor interface as individuals, but does not define their identity, count, spatial extent, profile composition, or how cohesion, separation, and predator-prey forces interpret them. Treating a thousand-agent aggregate as one ordinary neighbor produces materially different forces; expanding it defeats aggregation. Specify a distinct aggregate representation and interaction semantics, or defer the compatibility claim until those decisions are made.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Future GPU constraints are imposed before a concrete backend exists",
+   "description": "The design requires no dynamic allocation or Python callbacks in the hot loop for a hypothetical GPU tier, despite the initial implementation being NumPy on one CPU and the neighborhood representation still being unresolved. Enforcing GPU-kernel constraints throughout the initial engine risks complicating the CPU design without demonstrating that it can meet the actual workload. Keep a bulk boundary where useful, but defer kernel-level allocation and dispatch restrictions until a measured GPU implementation needs them.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "\"Current State\" wire description contradicts the shipped binary protocol, and the planned wire slices duplicate/conflict with already-written slices 311/319",
+   "description": "The doc states \"The wire protocol is currently uncompressed JSON over WebSocket\u2026 approximately 84 KB/tick (24 bytes \u00d7 3,500 agents)\" and Tier 2 lists \"Binary WebSocket replaces JSON\" as a deliverable. This is wrong on the facts and on the plan:\n\n- The wire is already binary. `src/migratory_server/protocol.py` implements `struct`-packed SNAPSHOT/STATE_UPDATE/TERRAIN messages (v2 framing), shipped as slice 306 (\"State Serialization and Protocol\", complete) after the JSON prototype in 305 explicitly declared \"the JSON format is not a compatibility contract.\" Actual STATE_UPDATE size is 9 + 32 bytes/entity (f64 positions + velocities), i.e. ~112 KB/tick at N=3,500 \u2014 not 84 KB, not JSON, and the \"24 bytes\" factor matches no format in the codebase. The 240 KB/tick projection for 10k is therefore also wrong.\n- \"Binary WebSocket replaces JSON\" duplicates completed work (306).\n- The \"Delta compression \u2014 int16 delta encoding with large-delta fallback\" slice in Anticipated Slices conflicts with slice 319 (\"STATE_UPDATE Delta Encoding\") already written into `300-slices.worldserver-foundation.md`, which specifies a materially different design: dead-band omission + keyframe flag + new DELTA (0x06) message type, not int16 quantization with client-side delta accumulation. Two slice definitions for one feature with incompatible on-wire semantics.\n- \"Server-side frustum culling\" likewise restates slice 311 (\"Client Spatial Culling\", already in the 300 plan) without referencing it \u2014 including its aggregate-descriptor path, which the 140 doc omits.\n\nThe wire track's baseline data, its scoping, and its slice definitions all need to be reconciled with `300-slices.worldserver-foundation.md` and `src/migratory_server/protocol.py` before any wire work proceeds.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The central \"tick return type contract\" is defined against an interface that does not exist",
+   "description": "The document's stated core deliverable is \"the shared boundary \u2014 the tick return type contract,\" and it opens the decision with: \"Currently `tick()` returns NumPy arrays (positions, velocities).\" In the actual code (`src/migratory/engine/tick.py:14-23`) `tick(...) -> None` mutates a caller-owned `AgentState` in place \u2014 `EntityManager` owns that state (`302-slice.entity-management.md`), `SimulationManager.step` reads it after the call for bounds enforcement (slice 313), and `spatial.build(state.positions)` happens *inside* `tick()`. Consequently the three options (a) `field.to_numpy()` return, (b) return Quadrants fields, (c) return DLPack handles are all inexpressible against the real signature \u2014 there is no return value to type. The real decision at the GPU tier is where device-resident buffers live across ticks, when they sync back into the server-owned `AgentState`, and who owns the spatial index and per-tick neighbor cache \u2014 and that is left completely unstated. It also collides with `100-arch.behavior-engine.md`'s \"engine is stateless between ticks\u2026 the caller owns the spatial index,\" which the code (build inside tick) and slice 119 (\"the tick engine gains a `NeighborCache`\") already violate. The boundary is only half-specified: the doc covers the return path but says nothing about the input path (environment/terrain data consumed by forces must also become device-resident at Tier 2's \"all forces\u2026 run as compiled GPU kernels\"). This must be re-grounded in the actual `tick()`/`AgentState`/`SimulationManager` shape before the Quadrants slices can be designed.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Quadrants behind the existing `SpatialQuery` and `BulkForce` interfaces\" is not achievable with the interfaces as typed",
+   "description": "The doc asserts three times that the substrate hides behind \"the existing `SpatialQuery` and `BulkForce` interfaces\" and that Related Work 100-arch \"this initiative optimizes but does not change.\" But the real protocols are NumPy-typed end to end: `BulkForce.__call__(state: AgentState, neighbors: CSRNeighborData, profiles: list[BehavioralProfile], active_indices) -> NDArray[np.float64]` (`src/migratory/engine/forces.py:29-53`) and `SpatialQuery.build(positions: NDArray)`. A `@ti.kernel` cannot implement `BulkForce` without marshaling host arrays in and copying an N\u00d72 float64 out per force per tick \u2014 exactly the transfers Tier 2 exists to eliminate \u2014 and Taichi kernels cannot accept `list[BehavioralProfile]` at all. Anticipated Slices (\"port all BulkForce implementations to `@ti.kernel`\") therefore implies changing the force and spatial signatures (device buffers in, device accumulation out), contradicting both the \"does not change\" claim and the \"incremental migration with no big-bang transitions\" principle as written. State the actual interface change and its migration path instead of claiming the existing protocols absorb it.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#architectural-principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tier 2's \"sim 60 / stream 30\" violates the 300-arch NFR it inherits, with no acknowledged amendment",
+   "description": "`300-arch.worldserver-foundation.md` Non-Functional Requirements fix \"p99 STATE_UPDATE inter-arrival: < 1.5 \u00d7 tick budget under steady state\" and state that \"any slice that touches the simulation loop, network layer\u2026 is responsible for not regressing these,\" with verification via load tests in CI. At sim 60 Hz the tick budget is ~16.7 ms; a 30 Hz stream has ~33 ms inter-arrival \u2014 2\u00d7 the budget, failing the NFR as written. The 140 doc schedules \"Decoupled stream rate\" as a world-server slice without citing or amending the NFR. Additionally, that slice pairs \"server-side frame decimation\" with \"client interpolation,\" but the doc's Scope excludes viewer/client work \u2014 the client half of decoupling has no owner here.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Slice 119 (staggered neighbors) contradicts the doc's own mandatory-verification goal, and no equivalence criterion is defined anywhere",
+   "description": "Design Goal 1 states \"Every optimization must produce outputs verifiable against the current NumPy implementation\u2026 Regression testing against the existing force implementations is mandatory at each tier transition.\" Yet Anticipated Slices 119 caches neighbor lists across ticks, which the Technical Considerations section admits \"will produce different trajectories\" from the reference \u2014 the outputs are *not* the same and cannot be regression-compared tick-for-tick. The doc notes the divergence but never reconciles it with the goal or says what \"verifiable\" means: bit-exact, tolerance-bounded, statistical, or parity only at `stagger_period=1`. The same gap applies to NumPy\u2192Numba\u2192Quadrants transitions, where floating-point reduction order alone defeats bit-exactness. Since \"performance without correctness is worthless\" is the stated premise and each tier gates on this test, the equivalence criterion is a load-bearing decision left implicit.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Three-variant per-platform return abstraction is speculative generality over one viable option",
+   "description": "\"The architecture should support all three behind an abstraction, with the choice made per-platform\" builds an abstraction over options (a), (b), (c) when the doc itself argues (b) \"leaks the compute substrate into the server\" (i.e. is disqualified by the stated boundary goal) and (a) is \"nearly free\" on the development platform. Building a polymorphic return-type layer for three encodings \u2014 one of which the doc rejects on its own principles \u2014 before any platform measurement exists is over-engineering. Pick (a) for Tier 1/2, name the measurement (PCIe transfer cost at Tier 3) that would trigger a (c) migration, and drop the abstraction until that trigger fires. Related: the \"Biome terrain shading is viewer-only\" bullet schedules viewer deliverables (\"should ship before or alongside the 50k milestone\") in a doc whose Scope explicitly excludes viewer work \u2014 move it to the viewer initiative.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "GPU substrate vs. the asyncio execution contract is unaddressed",
+   "description": "`300-arch.worldserver-foundation.md`'s Asyncio Execution Model mandates that `sim.step` run on a single dedicated `ThreadPoolExecutor(max_workers=1, thread_name_prefix=\"sim\")` worker thread, with `max_workers=1` load-bearing for tick serialization. The 140 doc never addresses whether the Quadrants/Taichi runtime (`ti.init()`, Metal/CUDA context creation, kernel launch) and Numba compilation/execution are safe and effective from that non-main worker thread \u2014 Taichi runtime initialization and some backends have main-thread or startup-ordering constraints, and this is precisely the kind of cross-boundary interaction the doc is supposed to define. Before Tier 2 commits to Quadrants, validate kernel launch from the sim worker thread (or specify that GPU runtime init happens at server startup on the main thread and document the resulting constraint). I could not verify the Quadrants runtime's threading rules from the repository \u2014 this point is unverified.",
+   "location": "unverified"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Frontmatter diverges from sibling architecture documents",
+   "description": "`100-arch.behavior-engine.md` and `300-arch.worldserver-foundation.md` both carry `description:` and `dependsOn:` frontmatter fields; this document has neither (it introduces `relatedSlices` and `riskLevel` instead). The governing `file-naming-conventions.md` referenced by CLAUDE.md is not present in this checkout, so I cannot confirm which fields are required \u2014 but the inconsistency with both peer architecture documents is observable and worth reconciling.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:1-12"
+  }
+ ]
+}

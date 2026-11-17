@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Core alignment: boundaries, determinism, and the 50ms target are preserved",
+      "description": "The design matches slice plan entry 7 of `100-slices.behavior-engine.md:37` (same five forces, same protocol+caller update-in-one-slice requirement). It honors 100-arch's \"Pluggable spatial queries\" and \"Clean boundaries\": `SpatialQuery.query_radius` is unchanged, padding lives in a new `engine/neighbors.py` (`:168`), and the spatial layer is explicitly \"unaware of padding\". Centralizing self-exclusion in the builder (`:88`) removes duplicated per-force filtering, which follows CLAUDE.md's DRY principle. Determinism is protected by float64 equivalence tests (`:190`, `:219`). The tick-budget NFR from `300-arch.worldserver-foundation.md:69`/`:81` (20\u201360Hz) is restated with a specific target \u2014 100 agents, `query_radius: 50.0`, 50ms budget, pre-slice 58\u201360ms \u2014 at `:23` and `:211-215`. No new I/O or message paths are introduced, so no network failure-mode spec is required.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23-25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Zero-neighbor rows produce non-zero forces under the documented pattern",
+      "description": "The representative cohesion pattern computes `center_of_mass = sum / max(counts, 1)` then `cohesion = (center_of_mass - self_positions) * weights`. For a `counts[i] == 0` row, the gathered values are zeroed, so `center_of_mass` is `[0,0]`, and the force becomes `-self_positions[i] * weight` \u2014 non-zero for any agent away from the origin. The same holds for AlignmentForce and LeadershipForce (`(0 - agent_velocity) * weight`). This directly contradicts \"Handling Zero-Neighbor Agents\" (`:170-172`: \"The masked reduction produces zero force for that agent, matching current behavior\") and the loop implementations' `if len(neighbors) == 0: continue`, and therefore leaves the primary functional requirement at `:190` (numerically identical output within float64 tolerance) unmet. Since this pattern is declared the template for all five rewrites (`:105`, `:245`), the defect propagates. State the explicit mechanism: multiply the final force by a `counts > 0` mask (or zero those output rows) for every reduction-based force, and add it to the equivalence tests' zero-neighbor cases (`:193`, `:259`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:107-119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Full-population N\u00d72 output scatter is never specified",
+      "description": "`NeighborData` is shaped `(n_active, max_neighbors)` (`:73-79`) and the force pattern produces an `(n_active, 2)` result (`:105`, `:118`), but the design never says how that result is placed into the `BulkForce` return value. Slice 100's protocol contract (`100-slice.agent-state-and-tick-function.md:141-152`) requires a **full-population N\u00d72 array with zeros for non-active agents**; 100-arch's \"Subset-evaluable tick\" principle requires the same. Without an explicit `result = zeros((N,2)); result[eval_indices] = computed` step \u2014 and an explicit statement that `NeighborData` rows are aligned to `eval_indices` order \u2014 the `active_indices` subset success criterion at `:193` has no defined mechanism. Add both to the shared pattern and a test asserting zero forces for inactive agents.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:90-101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`-1` padding is actually dereferenced; masked-gather failure modes are unhandled",
+      "description": "The doc states padded entries are `-1` and \"never dereferenced thanks to `mask`\", but the very next section gathers with `state.positions[neighbor_data.indices]` (`:111`) and only zeroes the result afterwards (`neighbor_pos[~mask] = 0.0`, `:114`). In NumPy `-1` is a valid index (last agent), so it *is* dereferenced; correctness silently depends on every force applying the mask after the gather, before any reduction. That is a hidden invariant and a silent fallback value, contrary to CLAUDE.md's \"Never use silent fallback values\". It also leaves computational failure modes unspecified: SeparationForce's inverse-square division (`:123`) can produce divide-by-zero / NaN / warnings on zero-distance and padded rows before the mask is applied. Define one safe policy \u2014 e.g. pad with `0` (or `np.take` with a valid index) and apply `np.where(mask, ...)` before any arithmetic \u2014 and state explicitly how invalid rows and zero distances are neutralized in the distance/radius computation so NaN cannot reach `np.sum`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scale NFR is not restated, and the design still carries O(n) Python overhead in the hot path",
+      "description": "The parent architecture states a specific NFR: \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" and \"The hot loop must be structured for vectorized computation over arrays of agent state, not object-by-object iteration\" (`100-arch.behavior-engine.md:36`); `:88` additionally warns that per-tick allocation creates GC pressure and requires `out=`/preallocated buffers; `300-arch.worldserver-foundation.md:91` asserts memory is never the bottleneck. This doc restates none of that target and validates only n=100 (~80KB, `:146`), deflecting higher counts with \"For n=100 this is negligible. At higher n, profile weights can be precomputed per tick **if needed**\" (`:136`) and \"a CSR representation may become necessary ... future work\" (`:148`). Meanwhile the layout is O(n \u00d7 max_neighbors) per tick plus five fresh `(n, max_neighbors, 2)` gathers (`:105`) \u2014 quadratic in the clustered case the slice exists to fix, with no buffer reuse. The claim of \"constant Python overhead, regardless of agent count\" (`:19`) is also inaccurate: step 2 remains a per-agent query loop and the new step 3 builder is described only as \"a single pass to pad, mask, and self-exclude\" (`:101`) over jagged lists, i.e. a new per-agent Python loop in the hot path, which slice 100's success criteria prohibit. Restate the concrete scale target (e.g. 10K agents at 20Hz/50ms), bound or chunk `max_neighbors`, specify preallocated buffers for the gathers, and either vectorize the jagged\u2192padded construction or state its measured cost against the 50ms budget.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Breaking protocol change is not reconciled with the declared consumer slices",
+      "description": "Frontmatter declares `interfaces: [103-predator-prey-dynamics, 105-spatial-query-optimization]`, but neither counterpart matches this contract. `103-slice.predator-prey-dynamics.md:398-399` states \"The tick function remains unchanged. Forces receive the same `(state, neighbor_lists, profiles, active_indices)` arguments\", with `FlightForce`/`PursuitForce` iterating `neighbor_lists[list_idx]` in a Python loop (`:444-452`, `:507-515`); `304-slice.environment-layer-integration.md:210` documents the same old signature for future environment-aware forces. 109 says predator-prey forces will \"consume this instead of raw lists\" (`:178`) yet never says 103's design must be revised, nor that 109 becomes a prerequisite \u2014 so \"all `BulkForce` implementations must be updated in this slice\" (`:164`) is undefined if 103 lands first. Conversely, 109 assigns the \"Batch spatial query interface\" to slice 105 (`:44`, `:184`: \"When slice 105 introduces a batch query\"), while plan entry 6 (`100-slices.behavior-engine.md:34`) specifies a spatial hash \"behind the existing query interface\" with no batch-query variant. Also, `WorldBoundsRepulsor`/`ConstantDrift`/`VelocityDrag` appear in \"Excluded\" (`:43`) yet step 8 requires changing their signatures (`:251`) and `:191` says they \"continue to function unchanged\" \u2014 clarify \"unchanged behavior, changed signature\". Name the coordination explicitly: either declare 109 a prerequisite for 103 and note the required design update, or list those force implementations in scope; and remove the batch-query handoff to 105.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:174-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU-readiness is scope creep and its claim contradicts the architecture's GPU constraints",
+      "description": "GPU offload is explicitly future work in the architecture (\"at the 1M+ entity tier\", `100-arch.behavior-engine.md:102`; `300-slices.worldserver-foundation.md` Future Work item 2), yet it is used here as the deciding justification for the padded representation (`:27`, `:146-148`, `:180`). The claim is also unsupported: `100-arch...:102` requires a GPU-compatible force path with \"no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop\", while this design retains a per-force Python list comprehension over n agents (`:132-136`), fresh `(n,k,2)` allocations per force call (`:111`), and a Python builder pass (`:101`). Cut or defer: the \"Enables future GPU offload\" value bullet, the \"GPU-ready data layout \u2014 padded arrays can be transferred to GPU compute buffers directly\" provides bullet (`:180`), and the CSR/COO deliberation about 100K+ entity tiers (`:142-148`) \u2014 choose the padded array on present-requirement merits only. For proportionality, `Implementation Notes > Development Approach` (`:242-254`) largely restates \"Included\" and `Testing Strategy` (`:258-262`) restates \"Success Criteria\"/\"Verification Walkthrough\"; these can be trimmed rather than adding a second specification of the same work for a 3/5-effort slice.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:27"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core alignment: boundaries, determinism, and the 50ms target are preserved",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23-25",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Zero-neighbor rows produce non-zero forces under the documented pattern",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:107-119",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Full-population N\u00d72 output scatter is never specified",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:90-101",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`-1` padding is actually dereferenced; masked-gather failure modes are unhandled",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-80",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Scale NFR is not restated, and the design still carries O(n) Python overhead in the hot path",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Breaking protocol change is not reconciled with the declared consumer slices",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:174-184",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "GPU-readiness is scope creep and its claim contradicts the architecture's GPU constraints",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:27",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-17T10:03:22.202730",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 17,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 233553,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 423644,
+  "cached_tokens": 322752,
+  "cache_write_tokens": null,
+  "completion_tokens": 56822,
+  "reasoning_tokens": 53349,
+  "duration_seconds": 596.2712103337981,
+  "cost_usd": 0.11987725599999999,
+  "cost_basis": "alias_pricing"
+}

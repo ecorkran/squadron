@@ -1,0 +1,19 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Brute-force spatial query defers the large-scale NFR target, per plan",
+   "description": "The architecture's \"tens of thousands of agents at full behavioral fidelity\" goal is not restated as a target in this slice, and the O(n\u00b2) brute-force build is scoped to \"hundreds-of-agents scale.\" This is consistent with the plan (slice 105 replaces the implementation behind the unchanged interface) and the architecture explicitly permits a naive initial strategy, so no action is needed \u2014 but the slice correctly notes it must not be optimized here, and (105)'s determinism-preserved regression test covers the eventual swap.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Spatial-Query-Protocol"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Environment input surface intentionally absent",
+   "description": "The architecture lists \"Environment as input surface\" as a principle, but the slice plan entry for (100) does not include environment queries, and no Environment Layer initiative exists yet. The slice's exclusion is correct proportionality, not a gap \u2014 no requirement in this slice's plan entry is left unmet by its absence.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Technical-Scope"
+  }
+ ]
+}

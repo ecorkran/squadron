@@ -1,0 +1,33 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`WorkflowNavigator.ts`'s three sites are `SliceStatus.status`, not `NormalizedStatus` \u2014 the sweep contradicts the design's own exclusion",
+   "description": "Description: The Component Structure row (`:75`) and Migration Plan step 4 instruct \"Replace 3 bare-string comparisons with `STATUS.*`\" in `WorkflowNavigator.ts`. The three remaining literals in that file are two `slice.status === 'complete'` checks and one `status: 'complete'` assignment in `deriveSliceStatus()` \u2014 all `SliceStatus.status`, the workflow-position union. The file's `NormalizedStatus` comparisons are already swept by 241 (`STATUS.Complete`, `STATUS.InProgress`, `STATUS.Deprecated`). But `:49` and TD-3 (`:104`) explicitly exclude `SliceStatus.status` as \"a distinct, larger workflow-position union ... touching it risks conflating two independent unions ... Left untouched.\" Following the migration plan would therefore implement precisely what the design forbids, making a workflow-position field appear to be a `NormalizedStatus`. Step 4's parenthetical \"likely already imports `STATUS` per 241's TD-6 usage; confirm\" also leaves a dependency unverified rather than resolved. Fix: remove `WorkflowNavigator.ts` from the sweep (0 in-scope sites), correct the site table and the `~65` total (`:41`, `:82`), and drop migration step 4 \u2014 or, if the intent is to sweep it, reverse TD-3 and the `:49` exclusion and justify the conflation.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:75"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Success criteria and verification walkthrough are unsatisfiable against the documented exclusions",
+   "description": "Description: The FR at `:135` requires \"No bare ... literals remain in production code outside `types.ts`'s own `STATUS` definition\" and a grep \"returning zero matches in the six swept files\". That cannot hold by the design's own exclusions: `statusNormalizer.ts` (one of the six) must retain the alias keys `'in-progress'` and `'not-started'` (`:48`), which match the regex; `frontmatterSchema.ts` retains three matching literals; `types.ts` retains `SliceStatus.status`'s `'complete'` and the four `STATUS` definition literals. The command is also mechanically broken: `grep -roE` emits `path:match`, not `path:line:match`, so `grep -v 'introspection/types.ts:[3-6]:'` can never match anything. The walkthrough under `### Verification Walkthrough` (`:145`) computes \"After: 4 ... + frontmatterSchema.ts (3) + SliceStatus.status (4)\" \u2014 `SliceStatus.status` has exactly one matching literal, not four \u2014 and omits the two STATUS_MAP keys, so before/after counts do not reconcile. Fix: make the check explicitly whitelist the enumerated exclusions and assert the real expected count (add `-n` or drop the line-number filter). Related: `:51` claims \"grep confirms zero `.test.ts` files assert against these literals directly\", which is false \u2014 `taskFileParser.test.ts` asserts `.toBe('in-progress')`, `ConsistencyChecker.test.ts` asserts `{ value: 'in-progress' }`, `cli` list tests assert `.toContain('complete')`. \"No test changes needed\" is still correct, but the design should state that these existing literal assertions *are* the transcription-error detector instead of claiming they don't exist.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"No public API signature changes\" and the build-order constraint are incorrect for the `TaskFileResult` retype",
+   "description": "Description: `:43`/TD-1 (`:96`) widens `TaskFileResult.inferredStatus` from a three-member union to `NormalizedStatus` (adding `'deprecated'`). `TaskFileResult` is publicly exported: `packages/core/src/index.ts` re-exports `./introspection/index.js`, which re-exports `./types.js`, where `TaskFileResult` is an `export interface`. So `:84`'s \"No public API signature changes\" is false \u2014 this is an exported-type widening visible to CLI/MCP consumers \u2014 and `:84`'s \"Consumer updates: none required outside `packages/core`\" is justified by \"`NormalizedStatus`'s type ... is unchanged\", which is the wrong type to check. Separately, `:86`'s claim that retyping and sweeping `taskFileParser.ts` \"must land together, or the intermediate state fails to build ... retyping alone would leave ... still-bare-string assignments failing to compile\" is false: all three bare literals are members of `NormalizedStatus` and still compile against the widened field. Fix: acknowledge the exported type change, verify consumer impact (exhaustive switches or `Record`-keyed maps over `inferredStatus` in cli/mcp-server), or keep the original union and sweep assignments to `STATUS.*` anyway, and drop the fabricated build-order constraint. This is the one point where the design exceeds the slice plan's \"pure mechanical refactor\" without a corresponding test.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84-86"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Design is heavier than a mechanical literal sweep needs",
+   "description": "Description: The slice delivers one mechanism (`STATUS.*` references, already defined by 241) plus one optional type retype, yet re-argues the same two decisions three times: the Excluded bullets (`:47`, `:49`) \u2192 TD-2 (`:100`) and TD-3 (`:104`) \u2192 \"Deferred to Other Slices\" (`:128-129`). \"Integration Points > Provides to Other Slices: None\" (`:120`) restates `interfaces: []`, and \"Consumes from Other Slices\" (`:124`) restates Dependencies. The Verification Walkthrough adds a temporary-typo compile experiment and two live CLI smoke commands on top of `pnpm -r build && pnpm -r test` \u2014 for a byte-identical swap, the build plus full-suite baseline (`:141-142`) already covers both, and the typo check is a non-persistent one-off. The per-file site-count table (`:31-41`) is effort that is already inaccurate. Cut/consolidate: fold TD-2/TD-3's rationale into the single Excluded list, delete the \"Deferred to Other Slices\" subsection and the redundant Provides/Consumes lines, drop the typo experiment and live-command spot-checks, and replace the counts table with the enumerable grep rule. Keep TD-1, the migration order, and the baseline pass counts. None of these cuts drop scope the slice-plan entry assigns to this slice.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:100-129"
+  }
+ ]
+}

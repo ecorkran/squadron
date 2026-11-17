@@ -1,0 +1,110 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`init_run(owner=)` may break the Task 12 commit",
+   "description": "Task 11 gives `init_run(..., owner: RunOwner | None)` without saying whether `owner` has a default. `init_run` has 98 call sites across 17 test files (49 in `tests/pipeline/test_state.py`), plus `src/squadron/cli/commands/run.py:227` and `:653`. Task 13 rewires only the `run.py` callers, and it runs after the Task 12 commit (line 187). If the parameter is required, that commit lands with the suite broken. Either state the default, or have Task 11 list every call site it must update (tests included) and make the full suite Task 12's check.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:161"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The load test's CI gate is implicit",
+   "description": "Task 22a (lines 318\u2013319) says no CI wiring is needed because `testpaths = [\"tests\"]` collects `tests/load/`. I checked: CI runs `uv run pytest` (`ci.yml:38`), `pyproject.toml:82` sets `testpaths = [\"tests\"]`, and no marker excludes `load`. So the test gates CI today. But `.claude/rules/python.md:56` says CI must gate load tests, and the task leaves that gate implicit. A later `-m \"not load\"` or a split CI job would drop it silently. Add a checked item to Task 22a that confirms the `uv run pytest` step runs `tests/load/`.",
+   "location": ".github/workflows/ci.yml:38"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The listing load test is sized at the threshold",
+   "description": "\"A few hundred\" files is unpinned, and `MAX_LISTING_S = 1.0` is the design's target, not headroom, although the task calls it \"generous enough for CI jitter.\" The design measured 0.67 s for 188 runs before this slice (design:641), and the new listing adds a `process_alive` call per running run. A test at the target will likely flake on shared runners. Pin N (for example 300), record the measured local time in the DEVLOG, and set the limit with explicit headroom over it.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:312-317"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The heartbeat and interrupt paths have no load test",
+   "description": "The load-tier rule covers code on \"simulation, network, concurrency, or environment-layer paths\" and says unit and integration tests cannot catch event-loop starvation. This slice adds an asyncio heartbeat task that writes state on the loop (Task 13) and an interrupt-and-drain path (Tasks 15\u201316). The only load test is for listing. The design names a blocked event loop as a risk (design:617). Either add a load test that runs heartbeat writes under loop load, or record in the task file why these paths fall outside the tier.",
+   "location": ".claude/rules/python.md:56"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 8 is run in the wrong place",
+   "description": "Task 42 says to run walkthrough steps 1\u20135 and 8 \"in a scratch HOME.\" The design's step 8 is \"Listing cost (read-only, real runs dir)\" (design:608), and it is the only check against the real 188-run baseline. In a scratch HOME it measures only the seeded runs. Run step 8 against the real runs directory, read-only, and keep steps 1\u20135 in the scratch HOME.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The `process_alive` warning cannot name the run",
+   "description": "Task 9 has the non-positive-PID and other-`OSError` WARNING name the PID and leaves the run-id to \"the caller that has it.\" No task names that caller: Tasks 19 (wait), 21 (listing) and 33 (prune) don't mention it. The design requires \"WARNING naming run and PID\" (design:373) and \"the run-id and PID\" (design:175). `assess_liveness` receives the `RunState`, so it can log the run-id itself. Say so in Task 9, and assert the run-id in the Task 10 test.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:142"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 42 combines new code with validation",
+   "description": "Task 42 bundles four checks, a new seed helper under `tests/pipeline/` (new code with no test and no task of its own), the walkthrough (steps 6\u20137 need credentials), the design status change, the slice-plan update and the commit. The slice-plan file is not named; the design's parent is `project-documents/user/architecture/140-slices.pipeline-foundation.md`. Split the seed helper into its own task before validation, and name the slice-plan file.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:517-527"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 25 holds five separable changes",
+   "description": "Task 25 replaces the table with `render_rows` across seven columns, adds the status-to-style dict, the two At formats and the Activity format, adds `list -v`, and adds the summary line with its detail lines. Split it into 25a (columns, status, At, Activity) and 25b (`-v`, summary line, detail lines). The summary template also has no singular form, and the design's walkthrough expects \"1 runs reference 1 unavailable pipelines\" (design:566). Say whether the words pluralize.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:346-358"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Two contract behaviours have no test",
+   "description": "(a) Prompt-only runs must stay `owner=None` and UNOWNED while `--next` and `--step-done` keep working. Task 13 wires them (line 202), but Task 14 tests only the three SDK paths (lines 212\u2013216). The Integration criterion (design:539) is covered only by the Task 42 baseline run.\n(b) \"Exit 1 for any refusal or failed deletion\" (Task 38). Task 39 tests exit 1 only for a live-run refusal (lines 488\u2013491), and Task 37 tests the failed count but not the CLI exit code. Add one parametrized prompt-only test and one CLI test for a failed deletion.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:482-483"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Commit steps are written as checkboxes, not markers",
+   "description": "The 17 commit lines (112, 157, 187, \u2026 527) are checkboxes (`- [ ] Commit: \u2026`). Markers should be plain `**Commit**:` lines. The placement is good: each sits after a tested unit. But as checkboxes, a task-checker would tick them before the commit exists, and a parser looking for `**Commit**:` finds none, so the file falls back to one commit per top-level task (about 43). Change them to plain `**Commit**:` lines.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Design references drift from the code and from the design's own API section",
+   "description": "D7 puts `idle_s=None` at `:217`; the code has it at `sdk_session.py:218`, which Task 15 gets right. Design lines 91 and 255 name `_IdleTimer`, which `sdk_session.py` does not define (it has `_BackgroundIdleTimeout` at line 102). Data Flow (lines 158, 160) gives `plan_prune(scan, selection, now, definitions, liveness)` and `apply_prune(candidates, runs_dir)`, while API Contracts (lines 421\u2013423) gives different signatures. The tasks follow the API section. Line 621 calls the spike \"Phase 6 task 1,\" but the task file numbers it Task 2. Fix the design when it is next edited.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:255"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Issue closure differs from design step 8",
+   "description": "Design step 8 (design:635) says to close #190 and #165 in the docs step. Task 41 defers that to Phase 7, after the merge. Deferring is the right call under the merge rules in CLAUDE.md, but the design should be updated so the two agree.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:514-515"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Baseline failures are pre-labelled without a source",
+   "description": "\"Known: 3 schema-drift failures in squadron-pr are cf issue #88\" does not appear in the design, and I did not verify it. Tasks 7 and 42 then require a match to this baseline, so a wrong label could hide a new regression. Have Task 3 save the failing test IDs to the DEVLOG, and mark as pre-existing only the IDs that reproduce on a clean tree.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:65-66"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Small granularity and commit-scope points",
+   "description": "Task 4 defines `ActiveItem` in `state.py` so `item_started` can import it, which puts a Part B model into the commit at line 112, which is labelled `refactor:`. The placement is needed for the type, so keep it, but say in the commit message that it is a type-only addition. Tasks 1 and 6 are single-step items that could fold into their neighbours without losing checkability.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:76-77"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Some specified behaviours have no assertion",
+   "description": "Three specified behaviours have no test: Task 21's DEBUG record per unavailable pipeline (lines 292\u2013293; Task 22 doesn't assert it); Task 29's rule that a path argument is reported as not found (line 396; Task 31 lists no such case, lines 410\u2013412); and design D4's \"a read never writes\" (design:238), which no task tests for list, wait or prune. Add a line to Tasks 22, 31 and 35.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:292-293"
+  }
+ ]
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Core scope matches the slice plan entry precisely",
+      "description": "The \"Included\" list maps one-to-one to the plan's (109) text: padded 2D array replacing `list[NDArray[np.intp]]`, builder helper, rewrites of `CohesionForce`/`SeparationForce`/`AlignmentForce`/`MomentumForce`/`LeadershipForce`, the `BulkForce` protocol signature change, `tick.py` updates, and caller/test updates. Nothing from the plan is dropped; \"Excluded\" correctly defers the spatial query (105) and already-vectorized forces. Dependency directions are correct: it consumes `AgentState`, `BehavioralProfile`, `SpatialQuery.query_radius` (100/101/102) and the frontmatter `parent` correctly points at the slice-plan document.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Technical-Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Breaking `BulkForce` change is not coordinated with slice 103, which is designed against the old signature",
+      "description": "This slice makes a breaking change to the `BulkForce.__call__` signature (`neighbor_lists: list[NDArray[np.intp]]` \u2192 `neighbors: NeighborData`). But the already-written 103 design (predator-prey, `not_started`) is built on the *old* signature: it states \"No changes to tick()\" and \"Forces receive the same `(state, neighbor_lists, profiles, active_indices)` arguments,\" and its `FlightForce`/`PursuitForce` sketches index into `neighbor_lists`. The slice plan lists 103's only dependency as (101), not 109, and the `parent` field does not make 103 depend on 109. The 109 frontmatter lists `103-predator-prey-dynamics` under `interfaces`, showing awareness, but neither document records a sequencing rule or a plan to re-baseline 103's force sketches to `NeighborData`. If 103 lands before 109, its two new forces will be written against a signature 109 then breaks and must be reworked; if 109 lands first, 103 must be updated to consume `NeighborData`. The gap the requirement leaves unmet: the architecture \"Clean boundaries \u2014 internal representation choices \u2026 are replaceable without affecting consumers\" and the plan's expectation that \"all existing implementations and callers update in the same slice\" are both undermined by an undocumented, out-of-scope consumer (103) that will silently break. Add an explicit note that 103's forces must target the post-109 `NeighborData` signature, or that 109 must also update 103's design/sketch.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#BulkForce-Protocol-Signature-Change"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "World-server-side `BulkForce` implementors (308/314) are affected but only implicitly named",
+      "description": "The \"Technical Decisions\" note that non-neighbor forces (`WorldBoundsRepulsor`, `ConstantDrift`, `VelocityDrag`) \"accept the new parameter but ignore it.\" `WorldBoundsRepulsor` (slice 314, complete, world-server initiative) and the `force_builder` registry (slice 308) are concrete, already-merged `BulkForce` consumers that must be signature-updated when this slice lands, yet they belong to a different initiative. The \"Included\" item \"Update to all callers and tests that construct or consume `BulkForce`\" and the plan's \"all existing implementations and callers update in the same slice\" do cover this, so it is not dropped scope \u2014 but the doc never names the world-server test files and the `force_builder`/`WorldBoundsRepulsor` call sites as in-scope. The requirement left unmet: the plan's \"callers update in the same slice\" cannot be verified complete without an explicit statement that the world-server-side force implementors and their tests are included (or explicitly deferred with a follow-up). Recommend one sentence naming `migratory_server/force_builder.py`, `WorldBoundsRepulsor`, and the server test suite as updated in this slice, to avoid the cross-initiative break being discovered during 109's run.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#BulkForce-Protocol-Signature-Change"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parent \"Tick determinism\" NFR is not restated or verified",
+      "description": "The slice rewrites the hot path and introduces new per-tick array allocation (`NeighborData`, padded arrays, masked gathers). The parent architecture lists **Tick determinism** as a first-class design goal (\"Given the same state and inputs, a tick produces the same outputs\"). This slice doc never mentions determinism \u2014 not in Value, Success Criteria, or the Verification Walkthrough. The behavioral-equivalence test compares old-vs-new on *one* shared input, and \"full test suite passes\" does not assert that repeated identical ticks produce bit-identical output. The specific target the gap leaves unmet: a regression guarantee that the vectorized path is deterministic across repeated ticks (no NaN-from-uninitialized-memory, no ordering sensitivity in the padded/masked reduction). Add a success criterion + a repeated-tick determinism assertion (identical initial state \u2192 `np.array_equal` across two runs) mirroring slice 100's `TestDeterminism`.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Success-Criteria"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`NeighborData.mask` is redundant with `indices`",
+      "description": "The doc defines `mask[i,j] = True iff j < counts[i]` *and* defines `indices[i, counts[i]:] = -1`, and states padding is \"never dereferenced thanks to `mask`.\" The mask is a pure, deterministic function of `indices` (`indices != -1`) and of `counts`, so storing a third `(n_active, max_neighbors)` boolean array duplicates state that a later slice (105 batch query, GPU offload) could recompute. This is minor and the doc already prefers simplicity, but dropping `mask` and deriving it (or relying on `counts`/the `-1` sentinel) would reduce the memory footprint and the number of things that must stay in sync. Not blocking; flag for proportionality.",
+      "file_ref": null,
+      "category": "complexity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor-Data-Representation"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Constant Python overhead regardless of agent count\" is a claim about the plan, not what the padded-array design guarantees at the target scale",
+      "description": "The Overview states \"force computation cost \u2026 with constant Python overhead, regardless of agent count or clustering density.\" The doc's own \"Padded Array vs. Sparse/COO\" decision concedes that at 100K+ a CSR representation \"may become necessary,\" and a padded `(n_active, max_neighbors)` gather scales total work with `n_active \u00d7 max_neighbors`. So the *Python-overhead* is O(1), but total CPU cost is not constant in agent count; at the architecture's \"tens of thousands\" target, memory for the padded arrays (indices, mask, gathered positions/velocities per force) and per-force O(n\u00b7k) NumPy work can approach the 50ms budget. The slice's actual deliverable \u2014 the observed 100-agent overrun fix within the 50ms budget \u2014 is sound, but the headline \"regardless of agent count or clustering density\" overstates what this design guarantees. Recommend anchoring the acceptance criterion to the 50ms budget at the validated 100-agent default (which the doc does in the Value/Verification sections) and explicitly bounding the guarantee, rather than implying unbounded constant time. This is inherited from the plan's own wording, so it is a precision nit, not a scope-creep finding.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:19"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor: verification command uses a non-path `--config` value",
+      "description": "Step 2 of the Verification Walkthrough runs `python -m migratory_server --config default`, whereas every other slice uses `--config config/default.yaml` (300, 301, 305, 313, 314). If `default` is not a resolvable path/alias in the server's config loader, the step will fail. Cosmetic, but it is the doc's primary runtime-verification step for the NFR claim; align it with the established `--config config/default.yaml` form.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:213"
+    },
+    {
+      "severity": "PASS",
+      "title": "Self-exclusion and zero-neighbor handling preserve current force semantics",
+      "description": "Moving self-exclusion from per-force `neighbors[neighbors != agent_idx]` filters into `build_neighbor_data` is behavior-preserving: slice 101 established self-inclusion as the `BruteForceQuery` default that every force filters, so centralizing the filter does not change which neighbors any force sees. The zero-neighbor case (`counts[i]==0`, full-`False` row \u2192 zero force) matches the documented per-force `if len(neighbors)==0: continue` guards, and `np.maximum(counts[:,None],1)` prevents division by zero in the cohesion/alignment masked means. `MomentumForce` is correctly treated as neighbor-independent. This keeps the slice's \"behavioral equivalence\" claim credible and is explicitly covered by success criteria.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Handling-Zero-Neighbor-Agents"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core scope matches the slice plan entry precisely",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Breaking `BulkForce` change is not coordinated with slice 103, which is designed against the old signature",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#BulkForce-Protocol-Signature-Change",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "World-server-side `BulkForce` implementors (308/314) are affected but only implicitly named",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#BulkForce-Protocol-Signature-Change",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Parent \"Tick determinism\" NFR is not restated or verified",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Success-Criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "complexity",
+      "raw_category": null,
+      "summary": "`NeighborData.mask` is redundant with `indices`",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor-Data-Representation",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "\"Constant Python overhead regardless of agent count\" is a claim about the plan, not what the padded-array design guarantees at the target scale",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:19",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Minor: verification command uses a non-path `--config` value",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Self-exclusion and zero-neighbor handling preserve current force semantics",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Handling-Zero-Neighbor-Agents",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-17T12:29:54.322693",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 102736,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 286658,
+  "cached_tokens": 238080,
+  "cache_write_tokens": null,
+  "completion_tokens": 28000,
+  "reasoning_tokens": 24365,
+  "duration_seconds": 201.43882920825854,
+  "cost_usd": 0.08516272000000001,
+  "cost_basis": "alias_pricing"
+}

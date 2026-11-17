@@ -1,0 +1,33 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Managed-file safety does not cover all generated Copilot files",
+   "description": "The design checks the managed marker only in `.github/copilot-instructions.md` and `AGENTS.md`, but the backend also generates files under `.github/instructions/` and `.github/prompts/`. A rerun could therefore overwrite unmanaged files in those directories without prompting or backing them up. The slice plan requires warning before overwriting unmanaged Copilot files; specify how safety checks and backups apply to every generated file, or how unmanaged files are preserved.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Sequence: `cf setup-ide copilot`"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "New script and worktree I/O paths lack explicit failure strategies",
+   "description": "The sequence invokes the guide script with `execFileSync` and then propagates files to worktrees, but does not specify handling for a hung script, script failure after partial output, or errors/partial copies during propagation. Define explicit handling for these failure cases, including whether execution is bounded by a timeout and what the user is told if propagation is incomplete.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Sequence: `cf setup-ide copilot`"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The parent onboarding time target is not carried into this design",
+   "description": "The parent architecture sets a target of getting from `npm install` to useful context output in under two minutes. This slice changes the `cf init --ide` path, but does not restate that target or say how the Copilot setup path fits within it. Include the target as a constraint for the end-to-end setup flow.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Overview"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Prompt-file frontmatter translation is underspecified",
+   "description": "The slice assigns conversion of skills to `.github/prompts/*.prompt.md`, but defines frontmatter translation only for rule files (`paths` to `applyTo`). The slice plan identifies prompt-file fields such as `name`, `description`, `argument-hint`, `agent`, `model`, and `tools`. Specify how source skill metadata maps to those fields and what happens when metadata is absent or unsupported, so generated prompts meet the expected Copilot format.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Technical Scope"
+  }
+ ]
+}

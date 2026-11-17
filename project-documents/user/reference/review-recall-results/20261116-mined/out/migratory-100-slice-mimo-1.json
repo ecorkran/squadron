@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Slice scope matches the (100) plan entry",
+      "description": "Every element the slice plan assigns to (100) \u2014 project structure, NumPy SoA agent state (positions, velocities, profile indices), behavioral profile data structure, subset-evaluable tick signature, semi-implicit Euler integration, spatial query interface with brute-force implementation, fixed-timestep deterministic output \u2014 is present in the Included list, and nothing the plan assigns to (101)\u2013(105) or to other initiatives is pulled in. The `interfaces` frontmatter correctly lists the consuming slices, and the `dependencies: []` / \"Consumes from Other Slices: Nothing\" entries match the plan's foundation-slice designation.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#technical-scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent `Force` protocol has no consumer and contradicts the tick signature",
+      "description": "The `Force` (per-agent) protocol is described as \"used for testing, reference implementations\", but `tick()` accepts only `forces: list[BulkForce]` (see the Tick Function Signature section) \u2014 there is no path by which tick consumes a `Force`. The same section then says \"The tick loop prefers the bulk variant when available\", implying tick accepts both variants, which the signature does not. Finally, the Technical Requirements demand that \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths\" \u2014 unimplementable through the only entry point that exercises the pipeline. This is both an internal contradiction and a proportionality issue: two force protocols where one meets the requirement. Either give `Force` a defined consumer (e.g., an adapter to `BulkForce`, or a `forces: list[Force | BulkForce]` signature with documented dispatch) or cut the per-agent protocol and its placeholder from this slice.",
+      "file_ref": null,
+      "category": "interface-design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#force-protocol"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`query_radius` result ordering is unspecified, but slice 105 requires identical behavioral output after the swap",
+      "description": "The `SpatialQuery.query_radius` contract states only set semantics (\"indices of all agents within radius\"). The slice plan requires slice 105 to \"Validate that behavioral output is identical before and after the swap (determinism preserved)\". Force accumulation sums over neighbor lists; floating-point summation is order-sensitive, and a spatial hash returns neighbors in bucket order while brute force will naturally return index order \u2014 so the same neighbor set in different orders can produce bitwise-different forces, breaking 105's regression criterion. The interface contract should specify deterministic ordering (e.g., ascending index order) or explicitly declare forces order-independent and require implementations to enforce it, plus tie semantics for agents exactly at `radius`. This is a hidden dependency of the (105) integration point on an unstated contract term.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#spatial-query-protocol"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Efficiency NFR is not restated with its target; \"hundreds-of-agents scale\" sits unreconciled against it",
+      "description": "The parent architecture states the NFR: \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\". This slice owns the tick hot loop \u2014 the path that NFR governs \u2014 but never restates the target. Instead the Spatial Query Protocol section asserts \"acceptable for the hundreds-of-agents scale this slice targets\", with no note that the tens-of-thousands target is deferred to slice 105. The vectorization requirement (\"No Python-level per-agent loops in the hot path\") is the right structural constraint but is not a substitute for the stated target. Restate the NFR with the specific target (tens of thousands of agents, single CPU process, full behavioral fidelity) and explicitly record that the brute-force spatial query is the known gap, closed by (105) \u2014 so a future reader doesn't mistake \"hundreds of agents\" for the engine's ceiling.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#technical-requirements"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Serialization-boundary ownership contradicts the parent architecture",
+      "description": "The architecture's \"State serialization boundary\" consideration states the engine \"should define its internal precision **and provide an efficient conversion path at the serialization boundary**\". The slice defines internal precision (float64) but flatly asserts the opposite ownership: \"Float32 serialization conversion \u2014 serialization boundary is a world server concern\" (Excluded) and \"that conversion happens at the serialization boundary owned by the world server, not here.\" Deferring the *work* out of slice 100 is fine \u2014 the plan entry doesn't assign it here \u2014 but the doc should not decree a layer-ownership decision that reverses a stated architectural responsibility. Either the engine provides a zero-copy/efficient float32 export path (per the architecture) or this doc should flag the deviation for resolution when the world-server integration slices are defined, rather than asserting the world server owns it.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#state-management"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Data Flow and Force Protocol sections contradict the \"inactive agents unchanged\" success criterion",
+      "description": "Data Flow step 5 and the Integration section state integration \"applied to active agents only ... via NumPy fancy indexing\", and the success criteria require \"all others are unchanged\". But the Force Protocol section justifies the full-population `BulkForce` return shape with: \"this keeps the integration step simple (add force to velocity for all, but only active agents have non-zero forces)\". Following that parenthetical means the velocity clamp (`clamp(velocity_new, max_speed)`) is also applied to all rows \u2014 which mutates inactive agents whenever an inactive agent's speed exceeds `max_speed` (e.g., at initialization or after a profile edit), silently violating the success criterion. Resolve the contradiction: either state unambiguously that all integration and clamping steps touch only `active_indices` rows (and drop the \"add force for all\" rationale), or document why clamping inactive rows is safe.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#data-flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`accelerations` array is beyond the plan's enumerated state and its lifecycle is undocumented",
+      "description": "The slice plan enumerates agent state as \"positions, velocities, profile indices\"; `AgentState` adds `accelerations` (N\u00d72 float64). The State Management section lists it, but the Data Flow never says where per-tick force sums are accumulated \u2014 `accelerations` is the implied buffer, yet nothing states whether it is zeroed each tick or persists across ticks. If it persists, it is stale state the architecture's \"engine is stateless between ticks\" claim doesn't account for; if it's per-tick scratch, it arguably belongs in the tick loop rather than in the persistent state container. Either document it as the per-tick force accumulator (reset at tick start) or drop the field in favor of a local array.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#state-management"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Slice scope matches the (100) plan entry",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "interface-design",
+      "raw_category": null,
+      "summary": "Per-agent `Force` protocol has no consumer and contradicts the tick signature",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#force-protocol",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "`query_radius` result ordering is unspecified, but slice 105 requires identical behavioral output after the swap",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#spatial-query-protocol",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Efficiency NFR is not restated with its target; \"hundreds-of-agents scale\" sits unreconciled against it",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#technical-requirements",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Serialization-boundary ownership contradicts the parent architecture",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#state-management",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Data Flow and Force Protocol sections contradict the \"inactive agents unchanged\" success criterion",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`accelerations` array is beyond the plan's enumerated state and its lifecycle is undocumented",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#state-management",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-17T06:27:50.910034",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 55220,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 3,
+  "prompt_tokens": 22275,
+  "cached_tokens": 12032,
+  "cache_write_tokens": null,
+  "completion_tokens": 14531,
+  "reasoning_tokens": 12652,
+  "duration_seconds": 295.813405000139,
+  "cost_usd": 0.017145803,
+  "cost_basis": "alias_pricing"
+}

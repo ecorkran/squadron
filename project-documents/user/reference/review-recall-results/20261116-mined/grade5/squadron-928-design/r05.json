@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D4 bundle move breaks slice 925's drift guard and is under-specified in the migration plan",
+   "description": "D4 moves `commands/agents/analysis-understand/` and `commands/agents/analysis-tech-debt-audit/` into `commands/analysis/agents/`. Slice 925 established a drift-guard bijection in `tests/cli/test_install_commands.py` whose `_agents_root()` is hard-coded to `get_commands_source() / \"agents\"` and whose `_claude_twins()` maps `analysis/understand.md` \u2192 `commands/agents/analysis-understand/SKILL.md`. After the move, `test_every_claude_command_has_an_agents_twin` fails outright (the expected twin no longer exists at that path), and `test_agents_skill_name_matches_its_directory`, `test_agents_skill_has_a_nonempty_description`, `test_openai_yaml_mirrors_disable_model_invocation`, and `test_no_agents_skill_uses_claude_argument_substitution` silently stop covering the two `analysis-*` skills because they iterate only `commands/agents/`. The Migration Plan (lines 182\u2013184) lists only \"fixtures in `tests/cli/test_install_commands.py`\" as consumers and asserts \"existing tests pass without edits other than the moved fixture paths\" \u2014 but the drift guard is test *logic*, not fixtures. The design needs to state how the bijection guard is reworked to span both roots (`commands/agents/` and `commands/analysis/agents/`), and correct the \"tests pass with only fixture-path edits\" claim.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:132"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Pack ships no Codex content\" doctor row adds an unacknowledged source-resolution dependency to the pure check layer",
+   "description": "D8 requires `check_skill_packs` to emit `WARN \u2014 pack ships no Codex content` (with no install hint) for a pack lacking an `agents/` source directory, distinct from \"not installed.\" Distinguishing those two states is impossible from the install root alone; it requires inspecting the pack's source. `check_skill_packs` lives in `doctor_checks.py`, whose contract is \"no network, no subprocesses.\" This is fine for `bundled` and local-path sources (a filesystem read), but for `github:` sources (explicitly supported by the resolver via `clone_github`) the source is a remote repo with no cached copy \u2014 producing the required output would mean a network clone/subprocess from doctor, violating its contract and making a fast offline diagnostic slow; otherwise doctor falls back to \"not installed\" with a hint that D8 itself says would fail. The design does not specify how `installed_path`/`check_skill_packs` determine \"no Codex content,\" nor address github-sourced packs. This should be resolved (e.g., scope the no-content row to locally-resolvable sources, or state the network trade-off explicitly).",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  }
+ ]
+}

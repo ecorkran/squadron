@@ -1,0 +1,19 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Part C auth-command I/O paths lack the failure-mode enumeration the review path gets",
+   "description": "The design states spawning is confined to \"a Codex turn, `sq auth login/logout`, and `sq auth status` for a profile that is already valid\" (line 82), and D7 assigns a wall-clock cap to each review-path operation \u2014 but the coverage does not extend to all three of those places:\n\n1. **`sq auth logout` has no failure modes at all.** It sends a new message type (`AsyncCodex.logout()`) and, per line 82, spawns the runtime, yet no row in the failure-modes table, no `codex.*_timeout_s` key, and no teardown statement covers it. A hung `__aenter__`/`initialize` during logout, a `logout()` that raises, and the already-not-logged-in case are all unspecified. The test list at line 199 names \"logout\" but there is no specified error behavior for it to assert.\n2. **The login command's runtime start is unbounded.** `codex.login_timeout_s` is scoped to \"`handle.wait()` for browser or device-code login\" (line 108), and `codex.account_timeout_s` explicitly covers \"runtime start + `account()` in `sq auth status` and post-login confirmation\" (line 126) \u2014 neither names the login flow's own `AsyncCodex(config)` / `login_chatgpt()` before `wait()`. A hung spawn or initialize during `sq auth login` has no listed bound.\n3. **`sq auth login openai-oauth` with the extra absent does not surface the install hint.** The login flow (line 84) enters at `AsyncCodex(config)` directly, D2 lists the shared resolver's consumers as \"agent, provider, and doctor\" (line 98), and the install hint is \"referenced by agent, provider, doctor, and `model list`\" (line 139) \u2014 login appears in none of them, so a raw `ImportError` at the in-function import is the implied result. This leaves the Value bullet \"a missing piece is named at the point of failure with the exact command to fix it\" (line 28) unmet on this path, and the Verification Walkthrough's without-the-extra step (line 209) exercises review, model list, and doctor but not login.\n\nThe requirement left unmet is the enumeration rule for each new I/O path. The fix is additive: extend the failure-modes coverage (or state the timeout wraps) for the three auth commands, assign `account_timeout_s` (or a login-scoped wrap) to login/logout runtime start, and route `login.py` through `resolve_codex_runtime()` so the hint has one source.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Architecture document predates the Codex provider; design defers the doc edit",
+   "description": "`100-arch.orchestration-v2.md` lists planned providers (SDK, Anthropic, OpenAI, Gemini, OpenRouter, local) and an Authentication Patterns table that contain no mention of Codex or `~/.codex/auth.json` \u2014 the Codex provider arrived via slices 124/128 after the architecture's last update. The design's \"Relationship to the architecture's auth model\" section addresses the auth principle explicitly and defers editing the architecture until a second provider adopts `InteractiveLogin`, which is a reasonable, deliberately stated decision. Informational only: the architecture's provider inventory is stale relative to this work, and a PM-level architecture refresh is the natural place to record both the Codex provider and the login capability.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89"
+  }
+ ]
+}

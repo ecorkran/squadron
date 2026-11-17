@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The f32/f64 contract is invented, so A3 and the wire protocol break on the default GPU path",
+      "description": "The design asserts at line 150 that \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore carries f64, preserving the downstream contract,\" and A3 (line 328) claims \"same shape and dtype contract as the CPU path ... zero changes\" downstream. No such upcast exists in the architecture or in the contracts this slice consumes. Slice 140's design states \"`TickResult` always carries f64 arrays \u2014 that is the engine's internal precision and the contract does not vary it,\" and its wire-parity verification records STATE_UPDATE as `9-byte header + 100 \u00d7 32` bytes (f64 positions + f64 velocities). Slice 145's task breakdown 3.1 specifies `export_positions()` returns `(N, 2)` f32, and 6.0 specifies `from_quadrants_fields` \"wraps them in a `TickResult` without further copying\" with f32 inputs retained as f32. The architecture (\u00a7Envisioned State, Tier 2) likewise keeps **f32 on GPU** with the ~1.37e-6 L-inf deviation \"accepted and tested\" \u2014 it never introduces a download-time upcast. Consequently the design's `step()` (lines 119\u2013123) hands f32 arrays to `protocol.serialize_state_update` / `serialize_snapshot`, which use `.tobytes()` without a cast: the GPU path emits 16 bytes/agent instead of 32, and the f64 decoder in the viewer and sim log mis-parses every message. `notify_positions_modified(positions: NDArray[np.float64])` (line 221) and `apply_bounds_policy`'s f64 signature encode the same wrong assumption. Requirement left unmet: the architecture's \"tick return type contract is the single shared interface\" and A3. The design must specify an explicit f32\u2192f64 conversion at the tick boundary (and restate the accepted precision deviation), or get an architecture amendment to the wire format \u2014 wire changes are correctly out of scope here.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+    },
+    {
+      "severity": "FAIL",
+      "title": "GPU results never reach `EntityManager.state`, leaving a hidden dependency that invalidates snapshots and makes spawn/despawn re-upload destructive",
+      "description": "The design claims the \"world server call site (`server.py`) is unchanged\" (line 29 \u2014 itself contradicted by \u00a7Server Startup lines 231\u2013254 and the Files Changed table line 293) and that downstream code requires \"zero changes\" (line 328). But the data flow (lines 267\u2013278) writes GPU state only into `TickResult`; nothing writes results back to `EntityManager.state`. Slice 316's design (\u00a7Interfaces Required) documents `EntityManager.state` as \"read by both the tick body ... and `handle_connection`\", i.e. the connect-time SNAPSHOT builder, and slice 140's design documents `SimulationLogger.write_initial_snapshot(em.count, em.state)`. On the GPU path those CPU arrays stay at their spawn values forever, so a newly connecting viewer gets an initial-state snapshot and environment/query consumers read stale positions. Worse, the assigned spawn/despawn path (line 31, plan entry 7) calls `sync_from_entity_manager()` to \"re-upload changed agent state\" from these stale arrays \u2014 resetting the entire live trajectory to tick-0 state on any count change. The architecture's clean-ownership goal permits the server not to know the compute substrate, but it does not permit two divergent sources of truth for the same entity state. The design must state which of `TickResult` or `EntityManager.state` is authoritative on the GPU path and specify how connect-time snapshots and spawn/despawn reads are satisfied (e.g. snapshot from the last `TickResult`, and re-upload from GPU-resident state rather than CPU arrays).",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spawn/despawn `from_numpy()` cannot work with the allocate-once, fixed-N GPU fields",
+      "description": "Line 31 assigns \"Spawn/despawn state synchronization: `field.from_numpy()` on any tick where agent count changes,\" and `count_changed_since_last_tick()` (line 201) fires on exactly that condition. But `setup_from_server()` derives `n` from `entity_manager.count` (line 143), and slice 145's design (\u00a7State Layout) commits to fields \"allocated once in `setup()` and never reallocated per tick ... we do not resize mid-run,\" explicitly relying on the allocate-once lifetime to avoid field-recompilation penalties. Re-uploading an array of a different length into those fixed-shape fields is a shape mismatch, not a sync; no reallocation, `qd.reset()` + re-setup, or capacity-based preallocation (the `TickResult.count <= positions.shape[0]` permission from slice 140's design) is specified. Name the strategy: either allocate at `entity_capacity` and carry an active `count`, or specify teardown/reallocation on count change, including what happens to pending `_positions_dirty` state.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Bounds coverage is incomplete: pseudocode omits the sync-back, REFLECT loses velocity flips, SOFT is not a position correction at all",
+      "description": "Three distinct gaps against A4 (line 330, \"All four `BoundsPolicy` variants ... produce valid positions after 100 ticks\"):\n1. The authoritative `step()` pseudocode (lines 171\u2013199) ends `apply_bounds_policy()` at line 191 with no `notify_positions_modified()` call, while \u00a7Bounds Enforcement (line 213) and the Data Flow (line 276) require it. An implementer following the code block ships a GPU path where wrap/reflect corrections never reach the GPU.\n2. Only positions are synced back (`upload_positions()`, line 227). Slice 313's REFLECT semantics explicitly \"flip the normal velocity component and clamp the position at the edge\"; the flipped velocities live only in the downloaded `TickResult.velocities` and are discarded, so agents re-cross the boundary every tick. A velocity upload (or a stated decision not to support REFLECT on GPU) is needed.\n3. `BoundsPolicy.SOFT` is not a position correction. Slice 314 defines it as a `BulkForce` (`WorldBoundsRepulsor`) registered through `build_forces()` and evaluated inside `tick()` \u2014 which the GPU path bypasses. `apply_bounds_policy` is a documented no-op for SOFT, so the planned \"same sync-back pattern\" (line 209) uploads unmodified positions and the soft force silently disappears. A4's promise for SOFT is unachievable without either a GPU equivalent in the fused kernel or narrowing A4/scope and failing explicitly for that policy. The architecture's \"Preserve behavioral fidelity across scaling tiers\" goal requires the gap to be named rather than covered by a claim.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:171-199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The file move does not eliminate the production\u2192bench dependency, and the import list is incomplete",
+      "description": "Line 383 claims moving `GpuAgentState` to `src/migratory/gpu/agent_state.py` \"eliminates the production\u2192bench import dependency.\" It relocates it: `setup(workload: Workload)` is explicitly \"unchanged\" (line 129, line 152), and slice 145's design has that initializer build state from `migratory.bench.workload.Workload` via the bench harness's initial-state builder. The new shared `migratory/gpu` package therefore still imports from `migratory/bench/...`, which contradicts the stated dependency direction and the architecture's clean-ownership goal. Separately, the Files Changed table (line 296) updates only `quadrants_fused_backend.py`, yet slice 145's design and task breakdown place `build_spatial_hash` and `fused_force_integrate_kernel` in `quadrants_fused_kernels.py`, which also consumes `GpuAgentState` \u2014 that import update (plus tests importing the old path, listed in the task breakdown but not here) is unlisted. Line 301's \"The bench backends ... are not changed\" and line 40's \"Any changes to the bench harness ... out of scope\" contradict line 296. Specify the decoupling (bench-only `setup(workload)` stays in bench; production initializer lives in `migratory/gpu`) and enumerate every importer.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The deferred dirty-flag mechanism is heavier than needed, duplicates validation, and retains `TickResult` arrays across tick boundaries",
+      "description": "`notify_positions_modified()` + `_positions_dirty` + `_pending_positions` + next-tick `upload_positions()` (lines 213\u2013227, plus a second interface listing at 218\u2013225) is the heaviest option for a scope that only needs one upload. The corrected arrays already exist in `SimulationManager.step()` immediately after `apply_bounds_policy()` returns (lines 186\u2013191), so a single direct `upload_positions(positions, velocities)` at that point removes the flag, the \"start of the *next* step()\" ordering hazard, and the stored reference. That stored reference is also a contract violation: slice 140's `TickResult` docstring says consumers \"MUST NOT retain references across tick boundaries \u2014 the underlying buffers may be recycled by the engine on the next call,\" and `from_quadrants_fields` explicitly reserves that freedom. Also, the `[1, 8]` subdivision range is validated at config parse (line 65) *and* again in `setup_from_server()` (task T2b), on top of the constants already defined in slice 145's `GpuAgentState` \u2014 three places for one value, against the project's \"define it once\" convention and DRY. Cut: the dirty flag, `notify_positions_modified()` from the public interface (keep one explicit upload), the duplicate range check, and the second interface listing at lines 217\u2013225 which restates lines 74\u201394. The \"Data Flow\" section (256\u2013284) and the Open Notes bullet at line 384 largely restate the same mechanism a third time.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213-227"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New GPU I/O failure modes and the `qd.cpu` fallback are asserted but not verified or bounded",
+      "description": "The Open Notes cover `qd.init()` failure well (propagate, exit at startup, restart with `backend: cpu`) and declare post-startup GPU failure \"fatal to the process,\" but a **hang** is not a crash and gets no strategy. Each new per-tick I/O path (`qd.sync()` after hash build and after the fused kernel, `to_numpy()` downloads, `from_numpy()` sync-back) can stall indefinitely; slice 316 runs `sim.step()` on a single-worker executor and its tick barrier has only a 2\u00d7tick-budget timeout for connecting clients \u2014 a hung `qd.sync()` leaves the executor future unresolved with no bounded detection or process-level restart hook. Additionally A7 (line 336) promises a working `qd.cpu` fallback and line 117 says it \"still runs correctly,\" but slice 145's design describes the fused-tick backend as GPU-only with CUDA/Metal as the supported arches; no test or verification step exercises A7 \u2014 the unit tests (line 307) \"skip if ... GPU not available,\" which is precisely the A7 host. Add a bounded-timeout/failure strategy for the sync and transfer paths and one explicit test or walkthrough step for the CPU-fallback boot; also reconcile `arch` returning `\"metal\" | \"cuda\" | \"cpu\"` (line 224) with line 252's `\"cuda\" | \"metal\"`, since A7's warning logging depends on the CPU value.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope boundaries and tier-gate placement align with the architecture",
+      "description": "The out-of-scope list correctly excludes wire-format/delta-compression/serialization work and multi-population sharding, matching the architecture's \"The wire is a separate problem\" principle and plan 140's Future Work (multi-population sharding is a separate item). `qd.init()` once at startup (line 32), config read once with no runtime switching (line 39), the explicit `cpu` comparison path (line 68), and the CUDA-only Tier 2 gate (lines 320, 334, 364\u2013370) all match the architecture goal \"Performance gates (Tier 2 TPS targets) are CUDA-only\" and the slice-plan entry's \"60 TPS at N=50k\" target is restated with its specific number. Metal as a first-class default operating mode with the N=1000 Mac demo (A2, line 326) matches \"slice 146 ships the `quadrants` backend as the default on all platforms, including macOS,\" and keeping bounds enforcement in `SimulationManager.step()` (line 125) rather than the engine preserves slice 313's \"keep the engine pure\" boundary. The dependency direction of the new `GpuSimulationDriver` (server \u2192 `migratory.gpu` substrate, `SimulationManager` holding only an optional driver reference) is the right layering; the issues above are gaps in that wiring, not a mis-scoped slice.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:36-41"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "The f32/f64 contract is invented, so A3 and the wire protocol break on the default GPU path",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "GPU results never reach `EntityManager.state`, leaving a hidden dependency that invalidates snapshots and makes spawn/despawn re-upload destructive",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:29",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Spawn/despawn `from_numpy()` cannot work with the allocate-once, fixed-N GPU fields",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Bounds coverage is incomplete: pseudocode omits the sync-back, REFLECT loses velocity flips, SOFT is not a position correction at all",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:171-199",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "The file move does not eliminate the production\u2192bench dependency, and the import list is incomplete",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The deferred dirty-flag mechanism is heavier than needed, duplicates validation, and retains `TickResult` arrays across tick boundaries",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213-227",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New GPU I/O failure modes and the `qd.cpu` fallback are asserted but not verified or bounded",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Scope boundaries and tier-gate placement align with the architecture",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:36-41",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-17T10:15:44.754656",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 297855,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 1444593,
+  "cached_tokens": 1277440,
+  "cache_write_tokens": null,
+  "completion_tokens": 74795,
+  "reasoning_tokens": 70063,
+  "duration_seconds": 829.5580752920359,
+  "cost_usd": 0.190022791,
+  "cost_basis": "alias_pricing"
+}

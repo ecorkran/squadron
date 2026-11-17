@@ -1,0 +1,54 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Early exit is lifted out of the A7 seam, so the \"preserved\" swap point can no longer deliver distance-ranked selection",
+   "description": "Plan 140 entry #10 says both interventions \"use the `getNeighbors` seam already designed in slice 145 (A7)\" and asks to \"replace counter-gating in `get_neighbors_first_k` with a `break`\". Option A instead leaves the seam's counter-gating intact and adds `if k_found >= max_neighbors: break` in the calling loop, *before* the seam is reached; line 112 then claims \"A7 seam preserved\". Once the break fires, no candidate after the k-th is ever passed to the seam \u2014 which is exactly what a distance-ranked (k-nearest) implementation needs in order to replace worse neighbors with closer ones. A future distance-ranked swap would have to remove or relocate the cap check in the tick-kernel body, defeating slice 145 A7's isolation guarantee, and it leaves duplicate/dead cap logic in both caller and seam. Specify a seam-owned \"stop scanning\" predicate (or a strategy flag) so the seam stays the single place neighbor selection is decided, or explicitly downgrade the A7 claim here and in the plan.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:23-46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The `break` does not terminate the cell scan, and the candidate-count model contradicts slice 148's measurements",
+   "description": "The `break` is placed in the innermost `for kk in range(start, end)` loop (lines 29\u201331, 38\u201344). That exits only one cell's slot loop; the enclosing `for drow` / `for dcol` loops still iterate over all (2S+1)\u00b2 cells, so at S=3 all 49 cells are visited and each re-enters the `kk` loop to re-check the cap. No cell-loop-level `scan_done` gate is specified. Line 58's \"With S=3 alone: candidates loaded drops to ~5000\" and \"With both: candidates loaded ~555\" also contradict the 148 Phase 2 rediagnosis the doc cites as its basis (`49 cells \u00d7 555 \u2248 27,000`, \"still better than 45,000\"), and \"compose multiplicatively\" does not follow from a 45,000\u219227,000 pre-cap reduction plus a cap at 32. A2's \u22655\u00d7 `force_total` gate is justified by these numbers, so the model needs correcting and cell-loop termination needs stating (a light `done` flag suffices \u2014 no new mechanism).",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:48-58"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`cell_size = query_radius / S` does not say which radius, leaving the neighborhood-preservation claim unproven for multi-profile workloads",
+   "description": "Slice 145's fused tick derives one global `cell_size` from `max_query_radius` across all profiles while the kernel reads `query_radius` per agent from the profile table; the (2S+1)\u00b2 scan covers every profile's radius only if S is applied to the largest one. Lines 53 and 80 say \"cell_size = query_radius / S\" and \"only the cell_size value changes\" without naming `max_query_radius`, and line 56 asserts \"correct neighborhood is preserved\" without qualification. With a mixed-radius workload a smaller-derived cell_size silently drops in-radius neighbors \u2014 a gap A4's 20% statistical-parity gate would not necessarily catch. Name the invariant (`cell_size = max_query_radius / S`) and state explicitly what happens when a valid S makes `grid_w \u00d7 grid_h` exceed the existing setup-time cell cap, rather than leaving that failure implicit.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-80"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough is written against a bench CLI the harness does not provide",
+   "description": "Every gate command in Steps 2/3/5 invokes `python scripts/bench.py --backend ... --config ... --N ... --ticks ... --subdivision-factor ... --parity-check numpy`. Slice 141 defines the harness entry point as `uv run python -m migratory.bench --workload <name> --backend <name>`, and slices 145 and 148 both use that form; that CLI has no `--config`, `--N`, `--ticks`, `--subdivision-factor`, or `--parity-check` flags, and no `scripts/bench.py` exists. Line 139's \"draft demo script; it will be refined after implementation\" leaves the primary verification artifact as a TBD. As written, none of A2, A3, A4, A5 has a runnable path. Rewrite against `-m migratory.bench` (the `mid-flock-50k` workload file already exists) and state where `S` and any ablation toggles enter \u2014 workload YAML field or CLI flag.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:137-190"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Step 3's four-way ablation is two pairs of identical commands and needs an unspecified toggle \u2014 cut or specify it",
+   "description": "\"Baseline (counter-gating)\" and \"Early exit only\" are byte-identical (`--subdivision-factor 1 --ticks 200`), as are \"Cell subdivision only\" and \"Both interventions\" (`--subdivision-factor 3 --ticks 200`). No flag anywhere in the doc toggles the `break` on or off, and Intervention 1 *removes* counter-gating rather than preserving it behind a switch, so the baseline row cannot reproduce slice 145's ~38 TPS at all. The plan's exit criteria need only the recorded 145 baseline plus the S=3 gate run, so the four-way ablation is the heaviest option where a lighter one meets the requirement. Cut the two \"only\" rows and the \"compose multiplicatively\" quantification that depends on them, or specify one explicit early-exit toggle in the config surface and show it in the Component Interactions diagram. Do not ship four commands that produce two distinct measurements.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "A5's register-spill check prescribes tooling unavailable on the CUDA host",
+   "description": "A5 (line 124) requires \"local memory per thread = 0 (confirmed via `nvcc --ptxas-info` or benchmark log)\", and Step 4 says to look for `lmem` with \"`TI_PRINT_KERNEL_STATS=1` or equivalent\". Slice 148's Phase 2 envelope note records that `ptxas`, `cuobjdump`, and `nvcc` are **not installed** on the CUDA host (runtime driver only), and that slice verified no spill by counting `.local` declarations in the cached PTX and via `qd.profiler.print_kernel_profiler_info()`. \"Or equivalent\" is an implicit strategy, not an explicit handling rule. Name the concrete check that works on this host so A5 is actually verifiable.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:180-182"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The slice plan's 7-neighbor benchmark target is silently dropped",
+   "description": "Plan 140 entry #10 assigns \"the 7-neighbor operating point is a benchmark target\" to this slice, and the 148 rediagnosis note makes the same point (`max_neighbors=7` is where counter-gating waste and early-exit gain are largest). The design fixes `max_neighbors=32` as the only gate configuration (line 128), never benchmarks 7, and does not defer it in Out of Scope. This is scope the plan assigns that the design drops without a decision. Add one 7-neighbor bench run to Step 3 (one extra command, no new mechanism), or move it into Out of Scope with a named follow-on.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+  }
+ ]
+}

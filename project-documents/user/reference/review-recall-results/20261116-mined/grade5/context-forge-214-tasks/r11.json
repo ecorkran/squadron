@@ -1,0 +1,26 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit checkpoints are checkbox tasks, not plain `**Commit**:` markers",
+   "description": "The five commit checkpoints (lines 71, 94, 117, 126, 134) are `- [ ] **Task 2C: Commit** \u2014 ...` checkbox items. The Phase 6 prompt finds checkpoints by scanning for lines that start with `**Commit**:` (`project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:368`) and falls back to \"commit at the end of the task\" when none match \u2014 so an implementer would commit after every task, including empty no-op commits for the \"Task nC: Commit\" tasks themselves, and could lose the intended semantic messages. Placement is otherwise correct: after 2T, 3T, 4T, 5 and 6, i.e. at working, tested points, not after every task and not only at the end. Two secondary problems in the same markers: Task 5C/6C are conditional (\"only if Task 5/6 changed files\"), which conflicts with AGENTS.md's \"Git add and commit from project root at least once per task\"; and Task 5 may change code/tests when a `DIFF` is a bug (line 123), yet Task 5C would commit all of it as `docs: record slice 214 parity sweep results`, violating the semantic-prefix rule. Fix: use plain `**Commit**: <message>` lines after 2T, 3T and 4T, and give parity-sweep code/test fixes their own `fix:`/`test:` commit.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 4T's worktree and real-template setup could leave design:173 unverified",
+   "description": "Line 114 permits \"with `--project` **or** a worktree checkout fixture\". A `--project` run from the main checkout only proves that a named project resolves; it does not prove \"the template is read from the invoking checkout's guide, so a worktree uses its own guide copy\" (slice design line 173). The cited `packages/cli/tests/commands/validate-worktree-scope.test.ts` shows the requirement: it needs two checkout roots with distinct templates so a wrong root cannot satisfy the assertion. Make the two-checkout fixture mandatory and drop the `--project` alternative. Separately, line 107 says \"following the setup in `validate.test.ts`\", whose `vi.mock('@context-forge/core/node')` stubs the validator and sets `projectPath: '/tmp/test'` \u2014 the derived template path there does not exist, so a junior AI is nudged toward mocking the new core entry function, which would make the \"real slice designs ... PASS\" case (and the \"missing template\" case) assert mock behavior instead of the real validator against `project-documents/ai-project-guide/project-guides/templates/slice-design.md`. `validate-worktree-scope.test.ts` instead uses `vi.importActual` and real temp directories, so the two cited setups conflict. State explicitly how the real template reaches the command under test (e.g. mock `FileProjectStore.getById` to return the repo root, or write the template into the temp checkout) and keep the core entry function un-mocked for the real-design cases.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:107-114"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Two enumerated exit-2 conditions have no dedicated assertion",
+   "description": "The criterion at slice design line 171 enumerates \"a missing, non-regular or unreadable file, a missing or unreadable template, or a template with no required headings\" as each exiting 2 with empty stdout, \"including under `--json`\". Task 4T covers no arguments, nonexistent path, valid-before-missing and missing template in both modes; Task 3T covers a directory, a missing template and a template with no markers at the file layer. No test exercises an unreadable file or unreadable template, and no CLI-level test asserts exit 2/empty stdout for a template with no required headings under `--json`. This is assertion coverage only, not a behavior gap: Task 3's readability preflight and its \"wrap any unexpected `fs` error in `SliceDesignValidationError`\" bullet implement these, and the criterion explicitly mandates just one test (valid file before missing one), which Tasks 3T and 4T both provide. Informational; no action required.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  }
+ ]
+}

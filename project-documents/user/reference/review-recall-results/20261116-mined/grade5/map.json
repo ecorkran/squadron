@@ -1,0 +1,2967 @@
+{
+ "squadron-129-design/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r03": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r04": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r05": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r06": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r08": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r09": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r10": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r11": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r12": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r13": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r14": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r15": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r16": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r17": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r18": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-129-design/r19": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-174-tasks/r01": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r03": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r04": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r05": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r06": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r07": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r08": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r09": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r10": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-174-tasks/r11": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-362-design/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r02": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r04": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r05": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r06": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r07": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r08": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r09": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r10": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-362-design/r11": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-401-tasks/r01": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r02": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r04": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r05": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r06": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r07": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r08": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r09": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r10": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r11": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r12": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r13": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r14": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r15": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r16": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r17": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r18": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-401-tasks/r19": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-403-design/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r02": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r03": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r04": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r05": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r06": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r08": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r09": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r10": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-403-design/r11": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-920-tasks/r01": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r02": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r03": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r04": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r06": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r08": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r09": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r10": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-920-tasks/r11": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-927-design/r01": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r02": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r03": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r04": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r05": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r06": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r07": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r08": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r09": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r10": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r11": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r12": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r13": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r14": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r15": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r16": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r17": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r18": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-927-design/r19": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r01": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r02": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r03": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r04": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r05": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r06": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r07": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r08": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r09": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r10": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-928-design/r11": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "squadron-320-arch/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r02": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r04": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r06": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r07": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r08": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r09": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r10": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-320-arch/r11": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r01": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r02": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r03": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r04": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r05": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r06": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r07": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r08": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r09": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r10": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r11": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r12": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r13": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r14": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r15": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r16": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r17": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r18": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-360-arch/r19": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r01": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r02": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r04": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r05": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r06": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r07": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r08": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r09": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r10": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-380-arch/r11": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r01": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r03": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r04": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r06": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r08": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r09": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r10": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-400-arch/r11": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "squadron-197-tasks/r01": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r02": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r03": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r04": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r05": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r06": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r07": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r08": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r09": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r10": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r11": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r12": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r13": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r14": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r15": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r16": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r17": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r18": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-197-tasks/r19": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r01": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r03": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r04": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r06": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r07": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r08": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r09": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r10": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-264-tasks/r11": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r01": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r02": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r03": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r06": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r07": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r08": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r09": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r10": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-306-tasks/r11": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r01": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r02": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r03": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r04": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r05": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r07": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r08": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r09": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r10": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r11": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r12": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r13": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r14": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r15": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r16": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r17": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r18": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-322-tasks/r19": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r01": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r02": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r04": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r05": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r06": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r08": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r09": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r10": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-363-tasks/r11": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r01": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r02": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r03": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r04": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r05": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r06": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r08": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r09": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r10": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-385-tasks/r11": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r01": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r02": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r03": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r04": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r05": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r06": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r07": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r08": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r09": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r10": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r11": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r12": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r13": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r14": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r15": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r16": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r17": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r18": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "squadron-917-tasks/r19": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-240-arch/r01": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r02": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r03": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r04": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r05": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r07": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r08": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r09": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r10": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-240-arch/r11": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r01": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r02": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r04": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r06": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r07": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r08": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r09": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r10": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-260-arch/r11": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "context-forge-210-slice/r01": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r02": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r03": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r04": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r05": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r06": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r07": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r08": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r09": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r10": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r11": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r12": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r13": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r14": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r15": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r16": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r17": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r18": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-210-slice/r19": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-214-tasks/r01": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r02": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r04": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r06": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r07": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r08": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r09": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r10": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-214-tasks/r11": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-241-slice/r01": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r03": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r06": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r08": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r09": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r10": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-241-slice/r11": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-261-tasks/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r02": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r03": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r04": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r06": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r08": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r09": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r10": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r11": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r12": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r13": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r14": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r15": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r16": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r17": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r18": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-261-tasks/r19": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r02": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r03": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r04": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r06": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r07": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r08": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r09": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r10": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-268-tasks/r11": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-910-slice/r01": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r02": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r03": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r04": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r05": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r07": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r08": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r09": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r10": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-910-slice/r11": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r01": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r02": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r03": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r05": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r06": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r07": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r08": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r09": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r10": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r11": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r12": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r13": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r14": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r15": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r16": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r17": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r18": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-915-slice/r19": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "slice"
+ },
+ "context-forge-918-tasks/r01": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r02": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r03": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r04": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r05": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r06": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r07": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r08": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r09": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r10": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-918-tasks/r11": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r01": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r03": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r05": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r06": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r07": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r08": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r09": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r10": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "context-forge-925-tasks/r11": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-100-arch/r01": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r02": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r03": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r04": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r06": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r07": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r08": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r09": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r10": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r11": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r12": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r13": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r14": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r15": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r16": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r17": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r18": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-arch/r19": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r01": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r02": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r03": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r05": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r06": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r07": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r08": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r09": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r10": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-140-arch/r11": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r01": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r03": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r04": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r05": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r06": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r07": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r08": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r09": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r10": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-300-arch/r11": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "arch"
+ },
+ "migratory-100-slice/r01": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r02": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r03": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r04": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r05": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r06": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r07": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r08": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r09": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r10": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r11": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r12": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r13": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r14": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r15": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r16": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r17": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r18": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-100-slice/r19": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-102-tasks/r01": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r03": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r04": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r05": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r06": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r07": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r08": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r09": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r10": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-102-tasks/r11": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-109-slice/r01": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r02": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r03": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r04": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r05": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r06": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r07": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r08": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r09": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r10": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-109-slice/r11": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r01": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r02": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r03": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r05": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r06": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r07": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r08": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r09": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r10": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r11": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r12": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r13": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r14": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r15": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r16": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r17": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r18": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-113-slice/r19": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r01": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r03": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r04": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r05": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r06": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r07": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r08": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r09": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r10": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-141-slice/r11": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r01": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r02": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r03": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r04": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r05": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r06": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r07": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r08": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r09": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r10": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-146-slice/r11": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r02": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r03": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r04": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r05": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r06": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r07": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r08": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r09": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r10": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r11": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r12": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r13": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r14": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r15": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r16": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r17": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r18": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-149-slice/r19": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r01": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r02": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r03": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r04": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r05": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r06": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r07": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r08": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r09": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r10": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-152-slice/r11": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r02": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r03": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r04": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r05": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r06": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r07": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r08": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r09": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r10": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-304-slice/r11": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "slice"
+ },
+ "migratory-313-tasks/r01": {
+  "alias": "luna-r-high",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r02": {
+  "alias": "minimax31-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r03": {
+  "alias": "glm53",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r04": {
+  "alias": "glm-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r05": {
+  "alias": "qwen38-max",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r06": {
+  "alias": "terra-r",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r07": {
+  "alias": "kimi3",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r08": {
+  "alias": "terra",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r09": {
+  "alias": "haiku-xhigh",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r10": {
+  "alias": "fable-medium",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r11": {
+  "alias": "sol",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r12": {
+  "alias": "qwen38",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r13": {
+  "alias": "hy4-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r14": {
+  "alias": "luna",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r15": {
+  "alias": "qwen38-27b",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r16": {
+  "alias": "qwen38-flash",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r17": {
+  "alias": "mimo",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r18": {
+  "alias": "hy4",
+  "run": 1,
+  "kind": "tasks"
+ },
+ "migratory-313-tasks/r19": {
+  "alias": "mimo-flash",
+  "run": 1,
+  "kind": "tasks"
+ }
+}

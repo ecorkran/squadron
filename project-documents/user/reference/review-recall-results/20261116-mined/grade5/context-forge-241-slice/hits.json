@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-241-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Scope says to \"Fill the reserved `LIFECYCLE: review-gate` branch in `getNext()`; route each boundary's gated status to `review` / `blocked`\", and the Overview says the four boundaries ship through it, including pre-slice-plan (\"extend the no-active-slice / pre-slice-plan path for the `arch` gate\"). In `WorkflowNavigator.ts` at `fb0f3f50^` that branch (line 248) sits after the `GUARD: no-active-slice` block (line 98), which returns on every path before it. A project at the pre-slice-plan boundary has no active slice, and `deriveSliceStatus` returns `no-active-slice` for an unset `fileSlice` (line 453), so a gated status for the arch boundary can never reach the reserved branch. The design also never says which index looks up the arch review (`detectDocuments(path, sliceIndex, reviewType)` takes a slice index; arch reviews carry the arch index). **VALID**: contradicts code. Needs: code. Corroboration (a lead, not the proof): `d9466c5d` later adds an implementation note that the arch gate had to be evaluated before `detectFirstRunContext`, outside the sketched path.",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     4
+    ],
+    "r06": [
+     4,
+     5
+    ],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "Borderline: r03[0] and r05[4] (and r06[5]) address only the undefined arch review index, not the unreachable reserved branch; r02[4] notes the guard interaction but says the mechanism works; r11[1] covers the arch guard-before-branch issue as a secondary point."
+}

@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria are otherwise fully mapped with correct test-with pairing",
+      "description": "All 11 functional and 8 technical success criteria trace to tasks: base refusal/fall-through (Task 5), both push preconditions (Task 6), the ancestor-review exclusion load-bearing case (Task 8), the two no-write checks (Tasks 12, 14), the title table (Task 10a), dry-run/real equality (Task 13), operator refusal (Tasks 13.2/14), timeout matrix (Task 14), docstring fix (Task 15.2), and the live gate/creation (Task 16). Each implementation task is immediately followed by its test task, dependencies run in the design's implementation order with no cycles, and no `**Commit**:` markers exist (acceptable). No load-test/NFR restatement exists in the slice, so none is owed. The F007 timeout distinction is correctly reflected (verified `GIT_QUERY_TIMEOUT_SECONDS` in `refs.py`/`remotes.py` vs `HOST_COMMAND_TIMEOUT_SECONDS` in `github_cli.py`) and the F008 model-failure path is in Task 10.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Local head SHA required by the precondition has no producer",
+      "description": "`check_head_pushed(..., local_sha: str, ...)` (Task 6.1) needs the local head SHA for the \"behind\" comparison, but no task specifies computing it. Task 3.1 adds only `current_branch` (`rev-parse --abbrev-ref HEAD`) and `commits_in_range` (`git log`), neither of which returns the head SHA; `commits_in_range` needs `base`, which is not selected until after preconditions in Task 13.1's ordering (\"resolve locator \u2192 preconditions (identity, then pushed) \u2192 base selection\"). So at the point `local_sha` is needed, nothing in the breakdown produces it. A junior cannot complete the \"host sha differs from local\" criterion without inventing an unspecified `git rev-parse HEAD` call. Name a producer (e.g. add a `head_sha` helper in Task 3.1 and call it from Task 13.1) so the precondition is independently implementable.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review verdict is required downstream but never gathered",
+      "description": "Task 9.1 requires `PrFacts` to carry the review's \"verdict,\" and Task 11.1 requires writing \"the artifact path, verdict, and reviewed sha under 'review provenance'.\" But the only producer of review input is `find_latest_in_range_review` (Task 8.1), which reads frontmatter \"for `reviewedSha`\" only and says nothing about capturing the verdict. Task 9.1 forbids deriving values in assembly (\"Every field is copied from an input\"), so the verdict has no source. The functional criterion only names artifact + reviewed sha, so the practical impact is a field that is always absent, but the tasks are internally inconsistent. Either drop verdict from `PrFacts`/provenance or extend Task 8.1 to read and return it with the reviewed sha.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success criteria are otherwise fully mapped with correct test-with pairing",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Local head SHA required by the precondition has no producer",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Review verdict is required downstream but never gathered",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-17T07:57:01.935597",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 80290,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 182861,
+  "cached_tokens": 125952,
+  "cache_write_tokens": null,
+  "completion_tokens": 21374,
+  "reasoning_tokens": 19928,
+  "duration_seconds": 124.92571987491101,
+  "cost_usd": 0.005173103,
+  "cost_basis": "alias_pricing"
+}

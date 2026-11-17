@@ -1,0 +1,33 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Density signal pseudocode reads post-cap counts, contradicting the mandated pre-cap signal",
+   "description": "The tick-integration sketch passes `filtered_counts` to `record_density` at step 8, after step 4's `apply_neighbor_cap`. In the actual `tick.py`, `apply_neighbor_cap` reassigns `filtered_flat, filtered_counts` when any profile sets `max_neighbors`, so the array reaching step 8 is the capped counts. This contradicts the design's own statements at line 27 (\"reads the CSR's raw `counts` output \u2026 not anything capped\"), line 116 (\"post-`exclude_self`, pre-cap\"), line 409, and the slice plan entry's explicit requirement that \"the query-side cost that determines grid-vs-brute winner is driven by pre-cap neighbor counts, not capped counts.\" The failure mode under literal implementation is severe, not cosmetic: with `max_neighbors=1` (the walkthrough's own test config), the post-cap mean is \u2264 1, always below `t \u2212 h = 8`, so the dispatcher would pin to the grid permanently \u2014 including in the clustered steady state where Entry 4 measured the grid 1.5\u00d7 slower than brute force. The sketch should capture the `exclude_self` output before the cap step and pass that.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:150-159"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Bit-exact position equality\" integration test is unattainable once the dispatcher switches backends",
+   "description": "Implementation step 5 requires an integration test confirming \"bit-exact position equality against brute-force-only over N ticks\" with a mocked density sequence that exercises both backends. The design itself documents (line 431) that \"order within a row may differ for grid\" \u2014 brute force emits neighbors in column-sorted order (`np.nonzero`) while the grid emits them in cell order. The CSR force implementations sum via `np.add.reduceat`, which is order-dependent in floating point, so a grid-served tick produces last-ULP-different forces, and chaotic integration amplifies that into macroscopic position divergence within a few hundred ticks. This conflicts with the scope section's weaker and correct \"behavioral parity\" (line 41) and walkthrough step 2's \"identical, modulo documented determinism caveats in the hash grid.\" The acceptance criterion should be restated as tolerance-based behavioral parity (or bit-exactness only while pinned to one backend), otherwise the test either fails spuriously or gets silently weakened during implementation.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Walkthrough step 5 references a `test.yaml` that does not match the committed config",
+   "description": "Step 5 says to run \"Using `test.yaml` (2500 entities, `max_neighbors=1`, soft bounds)\" and compare against Entry 5's ~16\u201317 TPS baseline. The committed `config/test.yaml` defines 1000 entities (950 + 50) and no `max_neighbors` fields. Entry 5's journal describes the 2500-entity/`max_neighbors=1` config, so the walkthrough depends on a variant config that does not exist in the repo. The design should say explicitly whether this config is created as part of the walkthrough (and not committed as a silent change to `test.yaml`), so the baseline comparison is reproducible.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`hasattr` duck-typed hook keeps engine layer free of dispatcher API at the cost of an untyped call site",
+   "description": "The `hasattr(spatial, \"record_density\")` guard is a deliberate, reasoned choice (the alternative of adding a no-op protocol method was considered and rejected), and it preserves the \"clean boundaries\" principle for the two standalone backends. It is acceptable as designed; the only residual is that `tick.py` now contains a duck-typed call whose contract lives in prose rather than a type. The design's \"Special Considerations\" note prohibiting no-op `record_density` on the other backends is the right guardrail to keep this from drifting.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+  }
+ ]
+}

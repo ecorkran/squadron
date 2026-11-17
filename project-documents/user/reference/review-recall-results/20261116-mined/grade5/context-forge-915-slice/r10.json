@@ -1,0 +1,47 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Delete routing contradicts the prescribed collision-remediation path \u2014 `cf config unset --project` cannot clear the stale shared-file copy, and following the prescription destroys the personal value",
+   "description": "The Data Flow states delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to,\" and explicitly names `migrate-personal` as \"the one exception that touches the *other* project file.\" For a personal key, that means `cf config unset <key> --project` deletes only from `.context-forge.local.toml`. But the Collision semantics paragraph (`:146`) prescribes clearing the stale *shared-file* copy via \"a separate, explicit `cf config unset <key> --project` the user can run once they've confirmed the personal value is correct,\" and Verification Walkthrough step 9 (`:259`) instructs the same, expecting \"`cf check` is clean again.\" Under the design's own Delete semantics this is impossible: unset removes the developer's *personal* value (the exact data loss the design says it must prevent), the stale shared copy survives, the read falls back to it, and the checker finding persists \u2014 so walkthrough step 9 cannot pass and the prescribed user path actively harms the user. The design must pick and state one resolution before the collision-handling work is implemented, e.g.: `delete` on a personal key also removes any shared-file copy (which is stale by definition once flagged), or `migrate-personal` gains an explicit way to clear the divergent shared copy.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No specified home for the new cross-file config operations \u2014 `ConfigManager`'s TOML helpers are module-private, so the component map implies duplicated TOML key-walking or undocumented core exports",
+   "description": "Two new consumers need file-level capabilities the `ConfigManager` public API does not provide: (a) `migrate-personal`, placed in `packages/cli/src/commands/config.ts` (`:65`), must enumerate personal keys present in the shared file and move keys between the two files; (b) the new `ConsistencyChecker` rule (`:142`) must scan the shared file for present personal keys. `readToml`/`writeToml`/`resolveKey`/`setKey`/`deleteKey` are non-exported module functions inside `ConfigManager.ts`, and the design's export list for `packages/core/src/config/index.ts` mentions only the new path helper \u2014 so an implementer following the component map literally must either re-implement dotted-key TOML manipulation in the CLI and in `introspection` (violating the project's DRY and \"program to interfaces\" conventions) or invent a core export the design never names. The design should specify the migration/scan logic's home (e.g., a `ConfigManager.migratePersonalKeys()` method or exported file-level helpers in `core/config`) so the layering and DRY rules are decidable rather than left to implementation.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:65"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`config_get` MCP tool description will misstate the resolution order after the precedence change; the design's `configTools.ts` update omits the description string",
+   "description": "Technical Scope commits to updating `packages/mcp-server/src/tools/configTools.ts` to surface both project paths, but the current `config_get` description string reads \"Resolution order: project config \u2192 user config \u2192 built-in default,\" which becomes incorrect for personal keys under the new project-personal \u2192 project-shared \u2192 user \u2192 default precedence. For an MCP tool whose primary consumer is an LLM agent, the description is the interface contract agents reason from; the design should include the one-line description update (and note that `config_set`'s scope wording remains accurate) as part of the `configTools.ts` change it already scopes.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`migrate-personal`'s `--project <id>` flag form diverges from the sibling config subcommands' optional-value convention",
+   "description": "The API contract shows `cf config migrate-personal [-p, --project <id>]` (required-value form), while `config get`/`set`/`unset` all declare `-p, --project [id]` where a bare flag resolves from CWD. The walkthrough also always passes an explicit `<id>`. Aligning with the `[id]` optional-value convention (and the 907 centralized `withProjectOption`) would make the new subcommand consistent with the command family it joins; not blocking.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Verification walkthrough presumes `.gitignore` handling runs under `cf init --lite`, but the design doesn't pin where in `init.ts` the gitignore step lands",
+   "description": "The `.gitignore` handling section correctly confirms no gitignore-writing logic exists today, but the walkthrough (step 1) uses `cf init --lite` and then expects `.context-forge.local.toml` in `.gitignore` (step 3), while `init.ts` skips its entire setup block (`if (!opts.lite)`) for guides/commands/IDE. The design should state that the gitignore append runs unconditionally (outside the lite gate, alongside project registration) so the walkthrough passes as written for both init modes.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Design declares `dependencies: [914]` where the plan entry lists \"Dependencies: none\"",
+   "description": "The added dependency is justified in the Prerequisites section (the canonical personal key must already carry its final `git.integration_branch` name) and is already satisfied (914 is complete), so there is no functional impact \u2014 but it is a metadata divergence from the slice plan entry worth recording for traceability.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  }
+ ]
+}

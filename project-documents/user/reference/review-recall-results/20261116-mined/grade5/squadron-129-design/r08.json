@@ -1,0 +1,12 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Define failure handling for logout I/O",
+   "description": "The design adds `sq auth logout` and requires it to remove the Codex login, but does not specify behavior if runtime startup or the SDK logout call hangs, the transport disconnects, or logout fails. The failure table and tests cover login and account/status paths, but not logout failures. Specify bounded execution and explicit error handling so the command does not hang or report a successful logout when credentials remain.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:149-155"
+  }
+ ]
+}

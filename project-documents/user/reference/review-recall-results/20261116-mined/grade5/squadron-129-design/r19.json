@@ -1,0 +1,19 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`sq model list` marker path does not specify handling for aliases whose profile or provider cannot be resolved",
+   "description": "D9 states that `sq model list` \"resolves each alias's profile through `ensure_provider_loaded` + `get_provider` and tests `isinstance(provider, ExtraRequirement)`\". Both lookups can raise for inputs outside this slice's control: user aliases in `~/.config/squadron/models.toml` may reference a profile name that does not exist (`get_profile` raises `KeyError`), and user profiles in `providers.toml` may declare a provider type with no registered implementation (`ensure_provider_loaded` swallows the import failure silently by design, then `get_provider` raises `KeyError`). Today's `sq model list` (`src/squadron/cli/commands/models.py`) never touches the provider layer, so this design introduces a new per-alias failure path into a command that currently cannot fail on user alias config. The design's own integration requirement \u2014 \"`sq doctor` and `sq model list` run cleanly with and without the extra\" \u2014 and the no-regression posture (\"Other profiles' `sq auth login` behavior is byte-for-byte unchanged\") leave this case unmet unless the design states the degradation: an alias whose profile or provider cannot be resolved simply gets no marker (treated as if the provider does not implement `ExtraRequirement`), never a crash. Add that one sentence to D9 or the model-list bullet in \"Sub-part B surfaces\".",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technology Choices"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Deferred slice 907's empty `[codex]` extra premise is superseded by this design",
+   "description": "Slice 907 (status: deferred) designed the `[codex]` extra as intentionally empty \u2014 \"PyPI rejects direct URL references\" \u2014 with the extra existing only as a documentation target. This slice populates the extra with a real PyPI dependency (`openai-codex`), which removes 907's stated reason for emptiness. D1 notes it \"replaces the stale pyproject comment\", which is the right call, but if 907 is ever revived its codex-extra section must not reintroduce the empty extra on top of this slice's declaration. No action required for this design; worth a one-line note in 907 or the slice plan when either is next touched.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions"
+  }
+ ]
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Capping a derived PASS erases 919's verdict provenance, and the synthetic finding states something untrue in that case",
+      "description": "D4's rule fires on `verdict is PASS` with no condition on *how* that PASS was obtained, and D6 explicitly designs for the reachable combination \"a PASS parsed with `fallback_used=True` \u2026 that then gets the synthetic finding.\" In that case `impose_diff_coverage` sets `verdict_source = IMPOSED` (D5), overwriting the `DERIVED` value slice 919 assigned \u2014 so the frontmatter no longer records that the model never stated a verdict, which is the entire contract `VerdictSource` exists for (`models.py` docstring: \"Whether a review's verdict was stated by the model or derived\"). Worse, the synthetic finding's fixed text asserts \"The model's own verdict was PASS\" in a run where no verdict was stated at all. D6 keeps the not-parsed *notice* alive but does not address the provenance field it displaces, nor make the finding text conditional. Fix by composing the two facts (e.g. digest/notice carries \"verdict was derived, then imposed on\", or the finding text keys on `fallback_used`) rather than letting IMPOSED silently replace DERIVED.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D2's tri-state invariant is unreachable on the git-failure path \u2014 a diff that was requested but never measured records as \"no diff\"",
+      "description": "D2 states \"`diff_injection` is `None` when `inputs` has no `diff` key \u2026 When a diff was part of the review, the key is always written.\" But `_inject_file_contents` (review_client.py:420-425) only measures the diff when `_run_git_diff` returns content; on `FileNotFoundError`/non-zero exit it returns `None` and the injection is skipped \u2014 a path that runs *after* `_run_git_diff_filenames` succeeded seconds earlier (same ref, both git calls), so the divergence is possible. In that state `inputs` **has** a `diff` key and `DiffInjection` is `None`, so per D2 the artifact omits `diffTruncated` and a gate reads the run as \"no diff / nothing to judge\" \u2014 precisely the silent-fact-loss this slice exists to fix, on an I/O failure path the slice re-purposes for a new consumer. D3 covers the one skip case `_add_injection` reports (total-limit \u2192 `injected_chars: 0`) but nothing defines the counts or presence for \"diff requested, measurement impossible.\" Enumerate it explicitly: with a `diff` key present and no measured body, either record a defined state (e.g. `diff_chars: null`) or fail loudly \u2014 not absence, which D2 reserves for a run that had no diff request.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D2"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Two `review_client` call sites\" for `_inject_file_contents` is wrong \u2014 there is one",
+      "description": "Step 2 of the Development Approach says to \"Update its two `review_client` call sites.\" The whole file contains a single call (`prompt = _inject_file_contents(...)` in `run_review_with_profile`); the other listed updates are direct test-module calls, which the same sentence covers separately. Small, but this is a change-of-signature task where a wrong call-site count sends the implementer looking for a seam that does not exist.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Development-Approach"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D6's render fix also changes artifacts outside the synthetic-finding case it justifies",
+      "description": "Moving the `fallback_used` notice from an `elif` to an unconditional post-findings render fixes the D6 scenario, but it also changes rendering for any pre-existing review that already produced `findings` non-empty with `fallback_used=True` \u2014 a latent condition that predates this slice. That is a correct fix and tiny, but it is a behavior change to every degraded artifact's body, not only to capped ones; worth one sentence in the CHANGELOG/SC list so snapshot expectations (`clean_pass_artifact.md` aside) aren't surprised.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`aiModel`'s meaning change for OpenAI-dated judges is disclosed and reasoned, but nothing verifies metrology still resolves identities",
+      "description": "D10 correctly identifies the consumer (`metrology/identity.py` keys on frontmatter `aiModel`) and argues the new value is the right calibration identity. The claim in Integration Points that `aiModel`'s new meaning is \"the meaning its consumers assumed all along\" is evidenced for the SDK path (#134) but asserted, not verified, for OpenAI-direct judges whose values will change (`gpt-5` \u2192 `gpt-5-2025-08-07`). Add one walkthrough step or SC confirming metrology identity derivation still succeeds and that no consumer hard-codes the requested id under the `aiModel` key \u2014 D10's own consequence paragraph shows values will move.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D10"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Capping a derived PASS erases 919's verdict provenance, and the synthetic finding states something untrue in that case",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "D2's tri-state invariant is unreachable on the git-failure path \u2014 a diff that was requested but never measured records as \"no diff\"",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D2",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "\"Two `review_client` call sites\" for `_inject_file_contents` is wrong \u2014 there is one",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Development-Approach",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "D6's render fix also changes artifacts outside the synthetic-finding case it justifies",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`aiModel`'s meaning change for OpenAI-dated judges is disclosed and reasoned, but nothing verifies metrology still resolves identities",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D10",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T06:57:12.098551",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 94157,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1103851,
+  "cached_tokens": 913952,
+  "cache_write_tokens": null,
+  "completion_tokens": 24572,
+  "reasoning_tokens": 22009,
+  "duration_seconds": 289.97231129091233,
+  "cost_usd": 0.023130674000000004,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Design's stated baseline (361 skill text, 943 sample, real graph) is absent from the repository",
+   "description": "The design states at line 17 that \"Slice 361 proved the graph contract end to end,\" and its two \"Corrections to the 361 contract\" (lines 121, 146) quote 361's skill text as saying `nodeIds` \"mixes file, function, and class nodes\" and instructing `select(.type == \"file\")`. The walkthrough (lines 368, 466) depends on a `943` sample existing and carrying the two wrong counts, and the whole \"Verified graph facts\" table (lines 90\u2013108) rests on \"this repo's real graph.\"\n\nNone of that state exists here: `commands/analysis/` contains only `tech-debt-audit.md` (no `understand.md`); `user/analysis/` contains `940`\u2013`942` only (no `943`); `.understand-anything/` does not exist in the repo root; and slice 361's own design and task file are both entirely unchecked (`- [ ]` throughout, including Task 0.1 \"Generate the knowledge graph\"), with `status: not_started`. The 361 design text at `361-slice.graph-contract-and-provenance.md:108` shows `.nodes[] | select(.type == \"file\" or ...)` \u2014 an abbreviated sketch, not the assertion the 362 design attributes to it.\n\nRequirement left unmet: slice 361 is this slice's sole prerequisite and the design treats it as completed. As written, 362's corrections to a file that does not exist, the `943` baseline that the walkthrough and success criteria 4 and 5 are pinned to, and the \"already executed unchanged\" 361 contract all have no referent. Either the design must state its precondition explicitly (361 implemented and merged, graph present, `943` generated) or restate the corrections as conditional on what 361 actually ships.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:17"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Correction 1's cross-check is under-specified: no rule for a nodeId resolving to a node without `filePath`",
+   "description": "The fix for Correction 1 is to \"count a layer as `nodeIds | length` directly\" while retaining a cross-check that every `nodeIds` entry resolves to a node carrying `filePath`, and reporting an entry resolving to a `function`/`class` node \"as upstream drift.\" But the check as written does not cover the case where an entry resolves to a node that is neither `function`/`class` nor carries `filePath` \u2014 a node type outside the nine the architecture names (the design itself anticipates \"a tenth file-level type\"). Such an entry would be counted in `nodeIds | length` yet resolve to no file, so the layer's reported count would exceed the number of analyzable files and the \u00a77 reconciliation against `analyzedFiles` would silently break. Correction 2 handles this case (\"A node surviving this filter but carrying no `filePath` is reported as drift,\" line 165) but Correction 1 does not, and the two corrections are applied to the same `nodeIds` array.\n\nRequirement left unmet: success criterion 4 (layer counts equal `nodeIds | length` with a type breakdown) and criterion 5 (238 nodes reconciling with `analyzedFiles`) are only mutually satisfiable if the cross-check rejects or excludes non-file-bearing entries. The design needs an explicit rule for what a `nodeIds` entry resolving to a node without `filePath` does to the count.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:134"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Correction 2's selector contradicts its own stated rationale (\"allow-list\" vs. exclusion) and widens the read past the architecture's nine file-level types",
+   "description": "Line 151 says \"the file-level selector becomes an explicit type allow-list,\" but the code block that follows (line 155) is an exclusion, and line 158 then explains the exclusion is deliberate. The prose and the decision contradict each other, which matters because the correction is the one thing downstream slices 363 and 364 will reuse verbatim.\n\nMore substantively: the architecture (`360-arch.document-intelligence.md`) names exactly nine file-level types and says those \"are sufficient for planning artifacts; function- and class-level nodes are not read.\" The design replaces that enumerated allow-list with `select(.type != \"function\" and .type != \"class\")`, so any future upstream node type (e.g. a `test`, `symbol`, or `documentation` type) is silently swept into every extraction. That is the opposite of the architecture's \"validate shape, not just presence\" principle \u2014 the design trades an explicit contract for an open-ended one, and the \"a node surviving this filter but carrying no `filePath` is reported as drift\" sentence (line 165) shows the exclusion is not actually equivalent to the architecture's set.\n\nRequirement left unmet: the architecture's stated nine-type file-level set is the contract the read discipline rests on. The design should use the architecture's allow-list (updated with `config`/`pipeline` if upstream confirms them as file-level), and treat an unknown type as drift rather than as automatically included.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Dependency-observations section reads function/class-level node data, contradicting the design's own read-discipline criterion",
+   "description": "The \u00a76 detail says \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts as an inter-layer signal.\" Resolving an endpoint to \"its owning file\" requires reading the function/class node's `filePath` \u2014 exactly the node data the architecture's read discipline excludes (\"function- and class-level nodes are not read\") and that success criterion 9 asserts (\"no function- or class-level node is read\") and that walkthrough step 7 verifies (\"Confirm no function/class-level node data appears in any section\"). The \u00a76 rule therefore either reads the excluded nodes (breaking criteria 9 and 7) or cannot be implemented as written.\n\nRequirement left unmet: success criteria 9 and 7 are unverifiable against the \u00a76 rule as specified. The design must either drop the cross-layer `calls` resolution, restrict \u00a76 to file-level endpoints, or restate the read-discipline criterion to permit a field-scoped `filePath` lookup on function/class endpoints while still never emitting their content.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The seven-section mapping does not cover the architecture's concept-section field table, so the \"reused verbatim\" claim for slice 363 is overstated",
+   "description": "The design claims the mapping is \"reused verbatim by slice 363\" (line 36) and provides 363 \"the extraction mapping table \u2014 the 'attempt extraction first' half of the extract-then-ask rule\" (line 299). But the architecture's per-concept-section field table (`360-arch.document-intelligence.md:219-221`) names three different groupings than this design's seven analysis sections: `layers[]`/`tour[]` ordering \u2192 Solution Approach; `project.languages`/`project.frameworks`/`config` nodes \u2192 Initial Technical Direction; test/CI `config` nodes \u2192 **Development Approach**. The 362 mapping has no row for Development Approach, and its \u00a71 Project identity row uses `project.description` (not a field the architecture names for Initial Technical Direction) while \u00a77's `config.json` is upstream's settings file, not the `config` *nodes* the architecture names.\n\nRequirement left unmet: slice 363's \"attempt extraction from its named graph fields first\" rule is defined against the architecture's concept-section table. A mapping that omits Development Approach and substitutes `config.json` for `config` nodes leaves 363 without the per-section field mapping the slice plan says it depends on. The design should either extend the mapping to cover the architecture's five concept sections (or explicitly say which of them it covers) or scope the \"reused verbatim\" claim.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:36"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"File-level\" is redefined against the architecture's node-type enumeration without reconciling the two definitions",
+   "description": "The design argues that \"`file-level` means 'carries a `filePath`', not `type == \"file`'\" and cites the architecture's nine types as the authority. But the architecture's nine types (`file`, `config`, `service`, `endpoint`, `schema`, `table`, `pipeline`, `document`, `resource`) are a *node-type* set, and the design's measured reality (lines 95-100) is that every file-bearing node in the graph is one of only three types (`file`, `config`, `pipeline`) \u2014 no `service`, `endpoint`, `schema`, `table`, `document`, or `resource` node exists. The design's definition and the architecture's definition therefore disagree in principle, and 362 resolves the disagreement unilaterally (\"file-level means carries a `filePath`\") while claiming the architecture as support.\n\nRequirement left unmet: the architecture's read discipline (\"File-level node types (...) are sufficient for planning artifacts\") and 362's operational selector must name the same set, because slices 363 and 364 both consume this definition. The design should state the reconciled rule explicitly and note the architecture amendment it implies.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:146"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Several measured \"facts\" are internally inconsistent with one another",
+   "description": "The Verified graph facts table reports `tour[].languageLesson` populated 9/15 (line 106), but `languageLesson` is never used by any section of the mapping, and the \u00a75 row (line 178) sources `tour[]` as (`order`, `title`, `description`). Separately, the table records `edges[].weight`, `.direction` as consumed (line 86) but the \u00a76 row (line 179) and \u00a76 detail (lines 215-220) only ever use `weight` and never `direction`. Both are dead measurements or dead field lists \u2014 noise that inflates the \"verified facts\" surface without a consumer. Worth pruning so the table reflects only what the mapping actually reads.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:90"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Walkthrough's gap-marker scratch path does not produce a runnable scratch graph",
+   "description": "Walkthrough step 5 copies `knowledge-graph.json` and `meta.json` into a scratch tree and then writes tampered variants to *different filenames* (`kg-empty-tour.json`, `kg-no-entrypoints.json`) rather than overwriting the copied `knowledge-graph.json`. As written, the run under test would read the untampered original. The step also never explains how the run is pointed at the scratch root. Minor, but it is the step that proves the fallback column's core claim, so it should actually be executable.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:396"
+  }
+ ]
+}

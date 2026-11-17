@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough invokes a nonexistent bench entry point with nonexistent flags",
+      "description": "Every command in the walkthrough uses `python scripts/bench.py --backend \u2026 --config \u2026 --N \u2026 --ticks \u2026 --subdivision-factor \u2026 --parity-check numpy`. No `scripts/bench.py` exists (`scripts/` contains only `148_measure_cell_occupancy.py` and `148_smem_vs_dram_microbench.py`), and the real CLI is `python -m migratory.bench.cli` with flags `--workload`, `--backend`, `--workload-dir`, `--results-dir` \u2014 there is no `--config`, `--N`, `--ticks`, `--subdivision-factor`, or `--parity-check` argument anywhere in `src/migratory/bench/cli.py`. The walkthrough therefore cannot be executed by an external agent as written, which defeats its purpose as the reproducibility contract. The task file for this slice inherits the same broken commands, so the defect will propagate into implementation.\n\nThe correct invocation shape is `python -m migratory.bench.cli --backend quadrants-fused --workload mid-flock-50k`, with N and tick counts coming from the workload YAML (`bench/workloads/mid-flock-50k.yaml` currently declares `n: 100000`, `warmup_ticks: 30`, `measure_ticks: 300` \u2014 note this is N=100k, not the N=50k the whole gate is specified against; the file's own description is also stale, claiming \"[400,400]\" while the body says `[1536.0, 1536.0]`).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Step 3's baseline run is impossible on the branch as specified and the four-run matrix confounds the two interventions",
+      "description": "Step 3 asks for four runs \u2014 \"Baseline (S=1, counter-gating)\", \"Early exit only (S=1, break enabled)\", \"Cell subdivision only (S=3, counter-gating)\", and \"Both interventions (S=3, break enabled)\" \u2014 but all four use identical flags apart from `--subdivision-factor`. There is no flag to select counter-gating vs. break; the break is permanent in the kernel. Two of the four runs are therefore literally the same command, and the other two are the same command. The design does not say how to obtain the counter-gating baseline, nor how to isolate Intervention 2's contribution.\n\nThis matters for A2/A3 attribution: the success criteria assert \"\u22655\u00d7 faster than slice 145 CUDA baseline\" and \"\u2265100 TPS\", but without a way to run the counter-gating variant on this branch, the baseline denominator must come from the recorded slice 145 number (38.3 TPS / 25.41 ms `force_total` at N=50k per `145-notes.fused-tick-measurements.md`) \u2014 which was measured at world size 756\u00d7756, not the 1536\u00d71536 that `mid-flock-50k.yaml` currently declares. The task file (T12) explicitly says \"do not attempt to re-run counter-gating on this branch (the break is permanent)\" \u2014 so the design's Step 3 contradicts the task plan that implements it. Either the design should specify a runtime-selectable early-exit flag (e.g. a kernel parameter, consistent with the existing `lead_active` compile-out pattern) so the four-run matrix is real, or Step 3 should be reduced to the two runnable configurations with the baseline taken from the recorded slice 145 measurement and the workload pinned to the density-matched 756\u00d7756 world.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-177"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Option A leaves the seam call structurally unreachable and contradicts the A7 seam-isolation invariant",
+      "description": "Option A places `if k_found >= max_neighbors and max_neighbors > 0: break` **before** the `get_neighbors_first_k` call in the innermost loop. Once the cap is reached the seam is never reached again \u2014 the design says so explicitly (\"The seam becomes unreachable when the break fires\"). Two problems follow:\n\n1. The break duplicates the seam's own decision logic in the kernel body. `get_neighbors_first_k` already encodes exactly this predicate (`k_max <= 0` \u2192 accept; `k_found < k_max` \u2192 accept). The existing test `tests/bench/test_quadrants_fused_kernels.py:217` (`test_get_neighbors_first_k_is_only_inclusion_function`) asserts that the selection conditional `k_found < k_max` appears **at most once** in the module and is confined to the seam. Option A's break writes `k_found >= max_neighbors` in the kernel body \u2014 semantically the same selection decision in a second place, defeating the invariant the seam exists to enforce and the invariant slice 145 A7 and slice 148 both preserved.\n\n2. The parent's slice plan says \"Both interventions use the `getNeighbors` seam already designed in slice 145 (A7).\" Option A does not use the seam for the early-exit decision at all \u2014 it bypasses it. Option B (inline, remove the seam) was rejected in the design as \"destroys the A7 swap point prematurely,\" but Option A preserves the *name* while making the function dead code on the capped path, which is a weaker form of the same loss.\n\nThe coherent alternative the design does not consider: have the seam own the decision and let the kernel act on its return value, e.g. `accept = get_neighbors_first_k(k_found, max_neighbors); if accept == 0: break` \u2014 this keeps the cap predicate in exactly one place, keeps the A7 swap point live, and still breaks out of the loop. Note the seam's `k_max <= 0` uncapped branch already returns 1 for an uncapped agent, so the `max_neighbors > 0` guard in the proposed break is redundant under that formulation.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cell subdivision is specified against `query_radius` but the kernel's cell size derives from `max_query_radius` across all profiles",
+      "description": "The design states `cell_size = query_radius / S` and reasons about a (2S+1)\u00d7(2S+1) scan covering \"the same physical radius.\" But `GpuAgentState.setup()` computes `self.max_query_radius = max(p.query_radius for p in profiles)` and `self.cell_size = self.max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER`. The kernel derives each agent's cell coordinates from the *global* `cell_size` parameter while filtering against that agent's *own* `query_radius` (from `profile_params`). Today every profile in `_PROFILE_REGISTRY` has `query_radius=50.0`, so the two coincide and the 3\u00d73 scan is exactly correct.\n\nOnce `cell_size = max_query_radius / S`, a (2S+1)\u00d7(2S+1) scan covers a radius of `S * cell_size = max_query_radius` for the *largest*-radius profile \u2014 correct. But for any profile whose `query_radius` is smaller than `max_query_radius`, the scan covers more than needed (wasteful but correct), and the design never states the invariant it is relying on: **all profiles must share the same `query_radius`, or the scan extent must be derived per agent**. The document should state this precondition explicitly and note what happens if a future profile has a smaller radius. Related: with `S=3` and `query_radius=50`, `cell_size \u2248 16.7` and the scan covers \u00b150 units \u2014 but `query_radius`/`S` is not an integer divisor, so the (2S+1)\u00d7(2S+1) block covers `3 \u00d7 16.67 = 50.0` exactly only because S=3 and 2S+1=7 gives a half-width of 3 cells = 50.0. The design should assert the general form (half-width `S` cells \u00d7 `cell_size` \u2265 `query_radius`) rather than relying on the specific S=3 case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:53-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BenchConfig` does not exist \u2014 the configuration integration point is misidentified",
+      "description": "The Component Interactions diagram starts from `BenchConfig` with `cell_size (= query_radius / S)` and `subdivision_factor S` as its fields, and the text states \"The bench harness passes `cell_size` at setup; it reads from config.\" No `BenchConfig` type exists anywhere in `src/migratory` (grep confirms zero hits). The actual bench configuration surface is `Workload` (`src/migratory/bench/workload.py`), a frozen dataclass whose fields are validated strictly in `from_dict` \u2014 unknown keys are silently ignored, and `n`/`dt`/`measure_ticks` are the only tuning knobs. `GpuAgentState` then derives `cell_size` itself from `max_query_radius`.\n\nThis matters because the design's config-validation story (S validated at \"config-load time\", before any kernel call) has no defined home under the actual architecture. The task file resolves this \u2014 T2/T3 add `subdivision_factor` to `Workload` and `GpuAgentState`, with `Workload.from_dict` doing the validation \u2014 but the design document, which is the artifact that should specify the interface, names a non-existent type and describes a config flow that does not exist. The design should name `Workload` (with `subdivision_factor: int = 1`) and `GpuAgentState` as the two config touchpoints, and state that validation lives in `Workload.from_dict` (or `GpuAgentState.setup`), with `Workload.from_dict` currently *ignoring* unrecognised YAML keys \u2014 meaning `subdivision_factor` in a YAML file would be silently dropped unless the loader is explicitly extended to read it. That silent-drop path directly contradicts the project's \"never use silent fallback values\" rule and is exactly the case a config-validation rule needs to cover.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:85-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "NFR restatement does not cover the N=100k+ regime the slice's own premises push toward",
+      "description": "The slice restates the Tier 2 NFR (60 TPS at N=50k on CUDA) and gates above it, which satisfies the NFR-restatement requirement for the operating point it targets. But the premise comes from slice 148's envelope measurements, which show the working set spills from L2 to DRAM between N=50k and N=100k, and the parent plan places Tier 3 at 250k. The early-exit intervention reduces *work*, not *bytes*, so it may not help in the bandwidth-bound regime at all \u2014 and indeed slice 148's notes recorded that density-independence at N=50k initially pointed to a memory-bound (not work-bound) kernel, which the later occupancy analysis refuted. The slice does not restate any NFR for N\u2265100k and does not state whether the intervention is expected to help there. The parent's Tier 3 milestone (250k) and the architecture's memory-budget table go unaddressed, so the slice cannot be judged against the tier it is a prerequisite for. A brief statement of the expected behavior at N=100k/250k \u2014 even if it is \"expected to be neutral, measurement deferred to the Tier 3 validation slice\" \u2014 is needed.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:116"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Warp-divergence analysis assumes spatial adjacency that the agent ordering does not provide",
+      "description": "The divergence argument rests on \"threads in the same warp (agents with similar spatial index) hit the cap within a small, similar iteration window.\" In `fused_force_integrate_kernel` the parallel loop is `for i in range(n)` over agent index `i`, and the parallel `range_for` maps consecutive `i` to consecutive lanes \u2014 so warp lanes are consecutive *agent indices*, not spatially adjacent agents. Agents are shuffled by `rng.shuffle(profile_indices)` at setup and placed round-robin into two flocks, so consecutive agent indices are scattered across the two clusters and across cells. Spatial adjacency is only recovered *inside* the kernel via `sorted_agent_ids`, which orders candidates within a cell \u2014 but that reordering happens after the per-lane divergence has already been determined by where each lane's own first-32-neighbors sit in the candidate stream.\n\nThe practical effect is that lanes within a warp will generally hit the cap at *different* iteration counts, which is the divergence-expensive case, not the favourable one. The design's conclusion (wasted-work saving dominates) is likely still right \u2014 the saving is ~45,000 iterations versus a divergence penalty bounded by warp width \u2014 but the stated mechanism is wrong, and the design gives no measurement plan for divergence. Since A2's 5\u00d7 and A3's 100 TPS are both generous relative to the ~50/45,000 = 0.1% theoretical iteration reduction, the risk is low; still, the divergence reasoning should be corrected rather than left asserting an adjacency property the code does not have.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A5's verification method is not reproducible on the CUDA host",
+      "description": "A5 requires \"local memory per thread = 0 (confirmed via `nvcc --ptxas-info` or benchmark log)\" but Step 4 says to \"look for `lmem` in the bench log output (Quadrants/Taichi emits ptxas info when `TI_PRINT_KERNEL_STATS=1` or equivalent)\". The 148 envelope notes record that on this exact CUDA host \"`ptxas`, `cuobjdump`, and `nvcc` are not installed \u2014 only the CUDA runtime driver,\" and that the working method was PTX inspection of the Quadrants kernel cache at `~/.cache/quadrants/qdcache/ptx_cache_sm_86/\u2026ptx`, checking for `.local` declarations (the hot kernel `\u2026_kernel_1_range_for` showed `.local` = 0). `TI_PRINT_KERNEL_STATS` is a Taichi env var name; Quadrants is a Taichi fork, but nothing in the repo or the notes confirms that flag emits `lmem` for this backend.\n\nStep 4 should name the method that is known to work on this host: inspect the cached PTX for the fused kernel and assert zero `.local` declarations. The task file's T13 has the same gap.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+    },
+    {
+      "severity": "NOTE",
+      "title": "S upper bound of 8 is asserted against a cell-count heuristic that does not match the actual grid arithmetic",
+      "description": "The rationale for capping S at 8 is that \"S=8 gives a 17\u00d717 = 289-cell scan, which is already larger than the physical neighborhood \u2026 and risks pushing `grid_w * grid_h * cell_count` auxiliary arrays past practical GPU memory.\" But the grid does not grow with the *scan* extent \u2014 `grid_w`/`grid_h` grow with S\u00b2 because `cell_size` shrinks. At N=50k with `query_radius=50` and S=8, `cell_size=6.25` and a 1536\u00d71536 world gives a 246\u00d7246 grid = ~60,000 cells, well under `MAX_CELLS_SANITY_CAP = 4_000_000` in `quadrants_fused_state.py`. The real cost driver at high S is (a) the per-agent (2S+1)\u00b2 cell-visit loop \u2014 289 cell lookups per agent instead of 9 \u2014 and (b) the CPU prefix sum over `n_cells`, which grows as S\u00b2.\n\nThe bound is still defensible as a conservative guard, but the stated reasoning is wrong on the memory point (the arrays do not approach GPU-memory limits at S=8 for realistic workloads) and does not mention the dominant cost, which is the per-agent cell-visit count. Stating the correct driver would also make the S=3 default (49 cell visits per agent vs. 9) legible as the actual tradeoff.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`S=3` scan does not reduce candidate count by S\u00b2 as claimed, and the interaction analysis understates the gain",
+      "description": "The document asserts \"Agents/cell drops from ~5000 to ~5000/S\u00b2 \u2248 555\" and that \"the scan covers the same physical radius \u2014 correct neighborhood is preserved.\" Both are correct per-cell, but the scan now visits (2S+1)\u00b2 = 49 cells instead of 9, so total candidates scanned per agent is roughly 49 \u00d7 555 \u2248 27,000 versus 9 \u00d7 5,000 = 45,000 \u2014 a ~1.7\u00d7 reduction, not S\u00b2. The slice 148 re-diagnosis notes state this correctly (\"49 cells \u00d7 555 = ~27,000 candidates \u2014 still better than 45,000\"), so the design has lost precision relative to its own source.\n\nThis is not merely cosmetic: it changes the expected contribution of Intervention 2, which is the entire justification for carrying S as a configurable knob. If Intervention 2 buys only ~1.7\u00d7 and Intervention 1 buys ~1400\u00d7 in iteration count, then S is a second-order knob whose own cost (49 vs. 9 cell-visit iterations per agent, plus a 9\u00d7 larger grid and prefix sum) could plausibly exceed its benefit once early exit is in place. The design should either state that S=3 is retained primarily as a warp-divergence/load-balancing lever and cite the measurement that justifies it, or mark it as an experiment whose value is unproven at the gate configuration.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58-64"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Verification walkthrough invokes a nonexistent bench entry point with nonexistent flags",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:153",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Step 3's baseline run is impossible on the branch as specified and the four-run matrix confounds the two interventions",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-177",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Option A leaves the seam call structurally unreachable and contradicts the A7 seam-isolation invariant",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Cell subdivision is specified against `query_radius` but the kernel's cell size derives from `max_query_radius` across all profiles",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:53-58",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`BenchConfig` does not exist \u2014 the configuration integration point is misidentified",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:85-99",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "NFR restatement does not cover the N=100k+ regime the slice's own premises push toward",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:116",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Warp-divergence analysis assumes spatial adjacency that the agent ordering does not provide",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A5's verification method is not reproducible on the CUDA host",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "S upper bound of 8 is asserted against a cell-count heuristic that does not match the actual grid arithmetic",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "`S=3` scan does not reduce candidate count by S\u00b2 as claimed, and the interaction analysis understates the gain",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58-64",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T10:56:12.681046",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 397253,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 967737,
+  "cached_tokens": 744192,
+  "cache_write_tokens": null,
+  "completion_tokens": 101529,
+  "reasoning_tokens": 95479,
+  "duration_seconds": 357.92611991707236,
+  "cost_usd": 0.052433918999999996,
+  "cost_basis": "alias_pricing"
+}

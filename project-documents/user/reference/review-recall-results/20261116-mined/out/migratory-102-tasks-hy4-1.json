@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Adding required profile fields breaks production `build_profiles()`; no task updates it",
+      "description": "Task 2.1 adds two *required* fields to `BehavioralProfile`, but task 2.2 is explicitly scoped to \"all `BehavioralProfile` call sites **in tests**\". `src/migratory_server/simulation.py:18-25` (`build_profiles()`) constructs `BehavioralProfile` from `ProfileConfig` with only the six existing fields, so after 2.1 it raises `TypeError`. It is called unconditionally at `src/migratory_server/server.py:71`, and `config/default.yaml` contains a `profiles` section, so this breaks `tests/test_simulation.py:27-42` (`TestBuildProfiles`), `tests/test_server.py:232` (`test_entities_spawned_from_config`), `tests/test_main.py:69` (`test_starts_with_default_config`), and server startup itself. The catch-all in 2.2 (\"search across `tests/`\") cannot fix source code, so the 2.2 verify step (\"all existing tests still pass\"), 6.1, and Verification Walkthrough step 1 (\"all tests green\") are unreachable as written, and the 2.3/6.3 commits would commit a broken repo. A task is needed to thread the new values through `ProfileConfig` (`src/migratory_server/config.py:51-60`) and `build_profiles()` \u2014 and it must say where the values come from, since CLAUDE.md forbids silent fallback values (hardcoded `0.0` would violate project conventions).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:63-71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`spawn_population()` bypasses the new leadership array",
+      "description": "Task 1.1 adds `leadership` to `AgentState.create()`, `add_agent()`, and `remove_agent()`, but `EntityManager.spawn_population()` builds a batch at `src/migratory_server/entities.py:122` and then manually concatenates only positions, velocities, accelerations, and profile_indices \u2014 leaving `self._state.leadership` at the zero-length array from `EntityManager.__init__`. Task 1.2 explicitly asserts other call sites \"use `AgentState.create()` so they should work without changes\", which is false for this path: `state.count` (derived from positions) diverges from `leadership.shape[0]`, `remove_entity()` would `np.delete` past the end of that array, and `LeadershipForce`'s `state.leadership[neighbors]` indexing would fail for any server-spawned population. This leaves the design's `AgentState` extension only partially delivered (the Integration Points section promises the array is available to slices 103/104/107). Add a step extending the merge, and replace the incorrect no-op claim in 1.2.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/migratory_server/entities.py:135-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Vectorization Technical Requirement has no task, and 4.1's formula contradicts it",
+      "description": "Slice design line 395-396 requires \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\". No step in 3.1 or 4.1 states or verifies this, unlike slice 101's tasks 2.1/3.1/4.1 which each had an explicit \"Use vectorized NumPy within each neighborhood \u2014 no `for neighbor in neighbors` inner loop\" step. Worse, 4.1 specifies `sum(velocity[i] * leadership[i]) / sum(leadership)` and 3.1 says \"For each active agent: compute speed\u2026\", which a junior AI would naturally implement as a scalar per-neighbor Python loop. There is no test or verification step that would catch this, so the Technical Requirement has no corresponding task. Add an explicit vectorization instruction plus a verification step to 3.1/4.1 (or a test in 3.2/4.2).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight verification and integration sections \u2014 name what to cut or merge",
+      "description": "Sections 5\u20136 contain work beyond what the success criteria need. Task 6.2 repeats the `isinstance(..., BulkForce)` assertions already required by 3.1, 3.2, 4.1, and 4.2 \u2014 pure duplication. Task 5.3 re-runs the same seeded 50-agent / 300-tick simulation from 5.2 with a control profile, even though Verification Walkthrough step 5 says \"The herding convergence check implicitly tests this\"; its assertion is also an ambiguous disjunction (\"variance < \u2026 **or** mean eastward > \u2026\") rather than a single measurable metric. Task 5.1's \"confirm forces interact correctly\" specifies no assertion at all. Merge 5.3's control-run comparison into 5.2 as one comparison test (this still satisfies the profile-differentiation Technical Requirement), fold 5.1's smoke check into 5.2, and delete 6.2 (fold into 6.1). Also drop 1.2's no-op \"should work without changes, but verify\" substep in favour of the real production call-site work from the finding above. The rest of the file (one task file, six sections, 18 tasks) is proportionate to this medium-effort slice.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:139-177"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale test-count baseline in Context Summary and 6.1",
+      "description": "Task 6.1 says \"All tests pass (existing 80 + new herding tests)\" and the frontmatter/Context Summary claim \"80 tests passing\". The repo now contains roughly 230 test functions across 15 test files, including the completed 300\u2013303 world-server slices. The criterion \"all tests pass\" is correct, but the baseline number and the projectState (which omits the server slices entirely) are stale and could mislead a junior AI into thinking the suite is unexpectedly large or that tests are missing.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:173"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria are covered with no scope creep",
+      "description": "Every functional/technical criterion maps to a task: `BulkForce` conformance (3.1/3.2/4.1/4.2), hand-constructed inputs (3.2/4.2), no-neighbor zero (4.1/4.2), stationary zero (3.1/3.2), all-zero-leadership zero plus the epsilon guard matching the Risk Assessment mitigation (4.1/4.2), `active_indices` isolation (3.1/4.1 + 3.2/4.2), self-exclusion and own-leadership-does-not-affect-self (4.1/4.2), uniform-leadership degradation (4.2), five-force `tick()` with leaders (5.1/5.2), directional bias (5.2), profile differentiation (5.3), required profile fields with no new validation (2.1), per-agent `leadership` array with `create`/`add_agent`/`remove_agent` (1.1/1.2), and stateless Option-A momentum that ignores `neighbor_lists` (3.1). Verification Walkthrough steps 2 and 3 are reproduced as unit tests in 3.2/4.2. I found no task that fails to trace to a design element.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-137"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern, and commit checkpoints",
+      "description": "Dependencies are respected and acyclic: state and profile extensions precede the forces; `herding.py` is created in 3.1 before 4.1 adds to it; integration tests in Section 5 follow both forces; final verification is last. Each implementation task is immediately followed by its test task (1.1\u21921.2, 2.1\u21922.2, 3.1\u21923.2, 4.1\u21924.2). Commit checkpoints (1.3, 2.3, 3.3, 4.3, 5.4) sit after implementation+test pairs, i.e. working tested points, not after every single task. The file uses checkbox-based \"**N.N Commit:**\" items rather than plain `**Commit**:` lines; a file with no plain markers is acceptable, and the checkbox form matches CLAUDE.md's \"Use checklist format for all task files\". No load-test or CI-gating task is required here: the slice design restates no quantitative NFR (the \"no nested Python loops\" item is an implementation-shape requirement, not a load-testable target), and no `tests/load/` exists.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-177"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Adding required profile fields breaks production `build_profiles()`; no task updates it",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:63-71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`spawn_population()` bypasses the new leadership array",
+      "location": "src/migratory_server/entities.py:135-147",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Vectorization Technical Requirement has no task, and 4.1's formula contradicts it",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-123",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight verification and integration sections \u2014 name what to cut or merge",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:139-177",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Stale test-count baseline in Context Summary and 6.1",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional success criteria are covered with no scope creep",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-137",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern, and commit checkpoints",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-177",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-17T10:01:53.548539",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 229890,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 399921,
+  "cached_tokens": 320960,
+  "cache_write_tokens": null,
+  "completion_tokens": 59315,
+  "reasoning_tokens": 55966,
+  "duration_seconds": 574.3484475407749,
+  "cost_usd": 0.11381064699999999,
+  "cost_basis": "alias_pricing"
+}

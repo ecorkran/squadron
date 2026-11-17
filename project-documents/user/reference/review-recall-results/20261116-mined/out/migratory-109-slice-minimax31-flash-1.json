@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Padded `-1` padding is not safe for a direct `state.positions[indices]` gather \u2014 negative indices wrap to the last agent",
+      "description": "The design states that padded entries are \"padded with `-1` (never dereferenced thanks to `mask`)\" and then shows `neighbor_pos = state.positions[neighbor_data.indices]` as the gather step (line 110). In NumPy, `-1` is a valid index (it wraps to the last element), so `state.positions[neighbor_data.indices]` on a padded row silently reads the *last agent's* position into the padded slot. The current doc's mitigation is to zero the padded slots *after* the gather (`neighbor_pos[~neighbor_data.mask] = 0.0`), which does make the summed result correct \u2014 but only because the garbage value is overwritten. That ordering is not stated as a requirement, and the doc explicitly claims the padding is \"never dereferenced\", which is false for the gather it specifies. The same hazard applies to the `LeadershipForce` gather of `state.leadership[indices]` and to the separation distance computation, where a padded slot produces a finite distance (not a divide-by-zero) that must be excluded by the mask. Fix by making the contract explicit and safe by construction: either pad with `0` and rely on the mask, or clamp indices (`np.where(mask, indices, 0)`) before gathering, and state in the `NeighborData` contract that `indices` must never be used as a gather index without masking. The `-1` sentinel should be described as a debug marker, not as \"never dereferenced\".",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The 50 ms tick-budget NFR is restated only as a pass/fail assertion with no measurable target and no stated source of the number",
+      "description": "The parent architecture requires the hot loop to support \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (`100-arch.behavior-engine.md`, Design Goals), and the world-server architecture defines a tick budget derived from `tick_rate` (`300-arch.worldserver-foundation.md`: budget = 1/tick_rate; the default config sets `tick_rate: 20`, i.e. a 50 ms budget \u2014 `config/default.yaml:8`). The slice cites \"50ms budget\" and \"overruns begin at ~58-60ms after clustering\" (line 215) but never states a target the implementation can be measured against (e.g. \"tick duration \u2264 X ms at n=100 clustered, and \u2264 Y ms at n=10 000\"), and never states the budget is derived from `tick_rate` rather than fixed at 50 ms. It also verifies the outcome only by eye (\"Let run for 5+ minutes\u2026 ticks should stay within the 50ms budget\"). Per the NFR restatement rule, the specific target should be stated here: the budget source (`1/tick_rate` from server config), the measured pre-slice baseline, and the post-slice target (e.g. duration \u2264 some fraction of budget at the stated agent count), plus a repeatable measurement method (the `TickMetrics.last_duration_ms` / `overrun_count` in `src/migratory_server/tick.py` already provide this). A non-reproducible 5-minute eyeball check cannot serve as the verification for a performance slice.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Padded-array memory and allocation cost is asserted for n=100 only and left unbounded for the architecture's stated operating range",
+      "description": "The design justifies the padded representation with \"At n=100 with max_neighbors~100, the padded array is ~80KB -- trivial\" and defers CSR to \"100K+\". But the architecture's design goal is \"Support tens of thousands of agents at full behavioral fidelity\" and the server's `entity_capacity` is 10 000 (`config/default.yaml`), with the world-server architecture naming 10K\u201350K as the initial single-CPU operating range. At n=10 000 with a clustered flock (k \u2192 n), the padded array is 10 000 \u00d7 10 000 \u00d7 8 bytes = 800 MB *per force gather*, and the gather `state.positions[neighbor_data.indices]` materializes an (n_active, max_neighbors, 2) float64 array of the same order. The slice neither states a bound on `max_neighbors` nor a fallback (cap + neighbor truncation, or the CSR path) for the range the architecture targets, and the \"future work\" deferral to 100K+ is above the architecture's stated 10K\u201350K operating range. Either state the supported `max_neighbors`/population envelope explicitly (e.g. \"correct and within budget up to n=10 000 with k \u2264 200; beyond that the padded representation is not supported\"), or add a `max_neighbors` cap with an explicit truncation/error policy \u2014 the project's \"no silent fallback\" principle requires that a truncated neighbor set be a loud, defined behavior, not a silent cap.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:144-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"no per-agent Python loops\" success criterion is narrower than the slice's own stated goal and the verification grep will not detect the remaining per-agent Python work",
+      "description": "The defining technical requirement is \"No Python-level per-agent loops in any `BulkForce.__call__` implementation\", but the verification step greps only `flocking.py` and `herding.py` (line 223) and only for `for.*agent_idx|for.*eval_indices|for.*list_idx`. That grep misses `forces.py` (`ConstantDrift`, `VelocityDrag` \u2014 already vectorized, but not covered by the check) and `repulsor.py` (`WorldBoundsRepulsor`), and it misses the per-agent list comprehensions the design itself introduces: `weights = np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` (line 133), which is a Python-level per-agent loop executed once per force call. With five forces in the accumulation list this is five O(n) Python loops per tick, and at the architecture's 10K\u201350K scale it is the dominant remaining Python cost. The slice should either specify the profile-weight lookup as a genuine array operation (e.g. precompute a per-profile weight vector indexed by `profile_indices` \u2014 one gather of `len(profiles)` values rather than `n` attribute reads) or explicitly scope the requirement as \"no per-agent loops in the neighbor-reduction path, except the per-profile weight gather\", and extend the grep to all `BulkForce` modules including the per-agent comprehensions.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:196-198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU-readiness and the CSR fallback are claimed as slice benefits but belong to unscheduled future work",
+      "description": "The \"Value\" section justifies the slice partly by \"Enables future GPU offload\" and \"GPU-ready data layout\", and \"Provides to Other Slices\" lists \"GPU-ready data layout\" as a deliverable (line 180). The architecture places GPU force accumulation at the 1M+ entity tier, which is future work in the world-server slice plan, and no slice consumes a GPU contract here. Similarly, the CSR fallback (\"At the entity counts where memory matters (100K+), a CSR representation may become necessary\u2026 would sit behind the same `NeighborData` interface\", line 148) describes an interface no future slice is scheduled to implement. These are aspirational justifications, not deliverables, and they inflate the slice's stated value. Cut the GPU claim from Value/Provides, or reword it as a design constraint the layout happens to satisfy (one sentence), and drop the CSR paragraph \u2014 the `NeighborData` abstraction is justified on its own by the vectorization requirement.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`NeighborData` is scoped as an engine-internal structure but is listed as an interface consumed by slice 103, whose design assumes the old `list[NDArray]` shape",
+      "description": "The frontmatter declares `interfaces: [103-predator-prey-dynamics, 105-spatial-query-optimization]` and the \"Provides to Other Slices\" section states that \"future force implementations (predator-prey, territorial) consume this instead of raw lists\". Slice 103's design (written 2026-04-03, before this slice) specifies `FlightForce.__call__(self, state, neighbor_lists, profiles, active_indices)` with `neighbor_lists` as a per-agent index list, self-exclusion performed inline in the force, and per-neighbor interaction-matrix lookups \u2014 a shape that is incompatible with the new `NeighborData` protocol. Slice 103 is `not_started`, so this is not a conflict yet, but the interface claim is currently aspirational. The slice should either mark 103 as requiring an update (103's forces must be written against `NeighborData`) or state that 103 will consume `NeighborData` when it lands, and note that 103's design document needs a corresponding revision.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-180"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The verification grep command targets `src/migratory/engine/...` while the rest of the project's verification steps use `python3.12 -m pytest` / `uv run pytest`",
+      "description": "Step 1 specifies `python -m pytest tests/ -x -q`, whereas slices 102 and 304 use `python3.12 -m pytest` / `uv run pytest`. The `-x` flag also stops at the first failure, which conflicts with step 2's expectation that all tests pass. Minor, but the verification instructions should match the established convention used elsewhere in the project so results are reproducible.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:207-208"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope boundaries with slice 105 and the engine/server layering are respected",
+      "description": "The exclusions are correct and well-drawn: the `SpatialQuery` protocol and `BruteForceQuery` are unchanged, and the remaining per-agent `query_radius` loop in `tick.py` is explicitly left to slice 105 rather than pulled in. `NeighborData` is deliberately kept out of the spatial layer (\"separate from the spatial query layer (which remains unaware of padding)\", line 168), preserving the \"pluggable spatial queries\" principle \u2014 a spatial hash implementation in slice 105 can be swapped in without touching force code, and `build_neighbor_data()` is correctly identified as the bridging seam. No dependency direction is inverted: the new module `migratory/engine/neighbors.py` depends on the engine's state/profile types only, and the server-side `force_builder.py` needs no change beyond the protocol signature.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:41-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "The `BulkForce` protocol change is correctly scoped as breaking and all implementations are enumerated",
+      "description": "The protocol change is stated explicitly as breaking, and the doc enumerates every implementation that must be updated: `CohesionForce`, `SeparationForce`, `AlignmentForce`, `LeadershipForce`, `MomentumForce` (all in the rewritten set), plus `WorldBoundsRepulsor` (`src/migratory/engine/repulsor.py`), `ConstantDrift` and `VelocityDrag` (`src/migratory/engine/forces.py`) which accept and ignore the new parameter \u2014 consistent with how they currently ignore `neighbor_lists`. This matches the parent slice-plan requirement that \"the `BulkForce` protocol and the `neighbor_lists` parameter type change together; all existing implementations and callers update in the same slice\". The `Force` (single-agent) protocol is correctly left untouched, and the new `NeighborData` is confined to the bulk path.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:150-164"
+    },
+    {
+      "severity": "PASS",
+      "title": "Behavioral-equivalence testing strategy is appropriate for a semantics-preserving refactor",
+      "description": "Retaining the loop-based reference implementations in the test module and asserting `np.allclose(old, new, atol=1e-12)` is the right way to guarantee the refactor is semantics-preserving, and the doc correctly states that the old loop code lives only in tests. The listed edge cases (zero neighbors, one neighbor, all agents as neighbors, single agent, `active_indices` subset) cover the paths where a masked reduction can diverge from the `if len(neighbors) == 0: continue` guard. The existing `tests/test_flocking.py::flock_baseline` fixture (100 agents, seed 42, 200 ticks) also provides an existing regression anchor the slice can reuse for the \"positions/velocities after N ticks match\" integration check.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:203-206"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Padded `-1` padding is not safe for a direct `state.positions[indices]` gather \u2014 negative indices wrap to the last agent",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-80",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The 50 ms tick-budget NFR is restated only as a pass/fail assertion with no measurable target and no stated source of the number",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Padded-array memory and allocation cost is asserted for n=100 only and left unbounded for the architecture's stated operating range",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:144-148",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The \"no per-agent Python loops\" success criterion is narrower than the slice's own stated goal and the verification grep will not detect the remaining per-agent Python work",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:196-198",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "GPU-readiness and the CSR fallback are claimed as slice benefits but belong to unscheduled future work",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`NeighborData` is scoped as an engine-internal structure but is listed as an interface consumed by slice 103, whose design assumes the old `list[NDArray]` shape",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-180",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The verification grep command targets `src/migratory/engine/...` while the rest of the project's verification steps use `python3.12 -m pytest` / `uv run pytest`",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:207-208",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "Scope boundaries with slice 105 and the engine/server layering are respected",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:41-47",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "The `BulkForce` protocol change is correctly scoped as breaking and all implementations are enumerated",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:150-164",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Behavioral-equivalence testing strategy is appropriate for a semantics-preserving refactor",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:203-206",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-17T10:56:40.681065",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 433890,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 944509,
+  "cached_tokens": 745728,
+  "cache_write_tokens": null,
+  "completion_tokens": 101186,
+  "reasoning_tokens": 96208,
+  "duration_seconds": 605.1306374999695,
+  "cost_usd": 0.050484471,
+  "cost_basis": "alias_pricing"
+}

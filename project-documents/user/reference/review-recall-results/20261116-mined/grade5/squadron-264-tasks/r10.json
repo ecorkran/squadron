@@ -1,0 +1,26 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The live-demo success criterion is deferred rather than completed",
+   "description": "The slice\u2019s success criterion 6 requires a non-SDK model dispatch to call `cf_build_context` and receive assembled context. Task 9.3 explicitly leaves walkthrough step 4 open, and no task implements or verifies that demo. As written, the breakdown does not cover all stated success criteria.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The fake-server tests do not exercise a CF tool executor end to end",
+   "description": "Slice success criterion 3 calls for a real stdio round-trip in which an executor returns the fake server\u2019s text; criterion 4 requires spawn failure not to escape the executor. Task 5 tests `call_mcp_tool` directly, while Task 7 mocks that transport for descriptor tests. The live executor round-trip in Task 8 uses the real CF server and may be skipped when unavailable, so it does not fill this gap. Add a test that invokes a materialized CF executor against the fake server, including the executor-level failure path.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Some required result and transport behaviors lack test coverage",
+   "description": "The slice\u2019s result-mapping rules require joining multiple text blocks and noting non-text blocks by type, but the fake server and bridge tests cover only a single text response, an error response, and an empty response. The design also lists protocol/transport errors as a failure mode whose observable warning should be tested; an unknown tool test does not establish handling of a closed stream or transport exception. Add targeted fixture cases and assertions for these behaviors.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  }
+ ]
+}

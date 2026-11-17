@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Workload force set excludes PropulsionForce and miscounts the engine's BulkForce set",
+      "description": "`Interfaces Required` states \"The five existing `BulkForce` implementations (cohesion / separation / alignment / momentum / leadership).\" The engine exposes six weight-driven BulkForce classes in `src/migratory/engine/` \u2014 `CohesionForce`, `SeparationForce`, `AlignmentForce` (flocking.py), `MomentumForce`, `PropulsionForce` (herding.py:102), `LeadershipForce` \u2014 plus `FlightForce`/`PursuitForce`. The parent plan's own slice (144) entry enumerates PropulsionForce as one of the six to port. `config/default.yaml` sets `propulsion_weight: 0.1` / `cruise_speed: 3.0`, and `src/migratory_server/force_builder.py`'s `_FORCE_REGISTRY` therefore puts PropulsionForce in the live default force list while leadership/momentum weights are 0.0 and are skipped. The `mid-flock` workload is documented as \"Roughly equivalent to the live-server default config formation state,\" yet it measures a force set production does not run, and verification step 9 compares it against the architecture's \"force_total (4 forces over CSR): 3.14 ms\" reference budget \u2014 a 5-different-force workload against a 4-force baseline. Requirement left unmet: the architecture goal \"Preserve behavioral fidelity across scaling tiers\" and the plan's \"target representative regimes\" both depend on the default-regime workload exercising the same pipeline the server runs. Fix: add `propulsion` to the force registry, include it in `mid-flock`, and decide explicitly whether `flight`/`pursuit` are in scope (slice 144 says all BulkForces are ported, so a predator-prey workload regime will eventually be needed to benchmark them).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-force breakdown is deferred, but the parent plan assigns it to slice 141",
+      "description": "`Per-phase timings shape` decides \"`force_total` is one number, not per-force, in this slice,\" pushing per-force timings to slice 142. The plan entry this slice implements (140-slices.simulation-scaling.md, item 2) specifies \"per-tick timings broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration).\" Deferring scope the plan assigns to this slice is a finding even when the deferral is reasoned. The cost of keeping it is low and the design already contains the mechanism: the tick body iterates `for force_fn in forces` and bracketing that loop yields the breakdown for roughly three lines, and the design already commits to a `force_breakdown: dict[str, int] | None` extension \u2014 so the schema would ship at `schema_version: 1` with the field present rather than being bumped by 142. Either land per-force in v1, or amend the plan entry so 142's gate is recorded as carrying it. Note the design's own risk section weakens the deferral: it says profile-attribute fancy-indexing is folded into `force_total` at small N and \"not separately broken out at this slice's resolution,\" which is precisely the per-force-resolution question 142 would have to re-litigate.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Harness invents a profile registry it claims to reuse, duplicating server config mapping",
+      "description": "The design says profile names \"resolve against a small registry in `bench/workload.py` that maps `flocker` / `leader` / etc. to the existing `BehavioralProfile` constructors used in `config/default.yaml`\" and \"The harness does not invent new profiles.\" Verified against the repo: `src/migratory/engine/profile.py` is a bare `@dataclass` with no presets or registry; `config/default.yaml` defines profiles named `default` (plus commented `cruiser`, `wolf`, `elk`) \u2014 `flocker` and `leader` do not exist anywhere. So the harness must author profile values, and it will author them in a second place alongside `src/migratory_server/simulation.py`'s `ProfileConfig \u2192 BehavioralProfile` mapping. That violates the project rule \"Never scatter comparison values across code \u2026 Changing a value should require editing exactly one place,\" and it silently makes the harness's default regime drift from the server's default regime as either config evolves. Requirement left unmet: the plan's `mid-flock` = \"current default operating point\" claim. Fix the design to name one path \u2014 either load profiles through the existing config loader (accepting a narrow dependency on the config schema, not on `SimulationManager`), or state plainly that the harness owns a bench-only profile set and that `mid-flock` is *approximate*, and drop the \"does not invent new profiles\" claim.",
+      "file_ref": null,
+      "category": "dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:393"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Force resolution names an interface that does not exist and conflicts with the slice's own no-engine-change rule",
+      "description": "\"**Force names** resolve to module-level singleton instances in the relevant engine modules (e.g. `flocking.cohesion_force`).\" There are no module-level force singletons in `src/migratory/engine/`; forces are classes instantiated per-run by `src/migratory_server/force_builder.py`. Creating them would require editing the engine \u2014 which the Technical Requirements forbid (\"No changes to `src/migratory/engine/`\") and which the `tick_instrumented location` section reinforces (\"The engine module is a clean room\"). The design thus describes a dependency on an artifact that cannot be produced without breaking its own boundary. This is a hidden dependency plus an integration point that a consuming slice (142/144) would read as a contract. Fix: specify harness-local instantiation (`_FORCE_REGISTRY = {\"cohesion\": CohesionForce, ...}` constructing per `setup()`), and note that sharing one instance across backends inside a `--all-backends` run must be re-constructed per backend if any force ever becomes stateful.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:399"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Workload formation schema is written in 3D against a 2D engine",
+      "description": "The `mid-flock.yaml` example uses `world_size: [200.0, 200.0, 200.0]` and `cluster_centers: [[60.0, 60.0, 60.0], [140.0, 140.0, 140.0]]`. Verified: `src/migratory/__init__.py` sets `DIMS = 2` and `AgentState.create` allocates `(n, DIMS)` positions, so positions are `(n, 2)`. As documented, the canonical workload cannot initialize state \u2014 and the parity-hash and per-phase numbers that slices 142\u2013145 depend on have no reproducible formation spec. The design never states the engine's dimensionality, and the architecture's wire figures (\"position + velocity as 6 \u00d7 f32\") are themselves 3D-shaped, so the ambiguity is inherited; that makes pinning it in this slice more important, not less. Requirement left unmet: \"workload definitions checked in \u2026 so future-you can re-run last quarter's bench.\" Fix: state `DIMS = 2`, make `world_size`/`cluster_centers` 2-component in the example, and specify which axes agents move in for the `dispersed`/`packed-herd` regimes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:355"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes missing for the two new external I/O paths and the CLI mode combinations",
+      "description": "The `Failure modes` section covers workload load, unregistered backend, `setup` raise, and sub-1 TPS. It does not cover the paths the design itself introduces:\n- **`git rev-parse HEAD`** (line 233) is a new subprocess on every run. It fails on a non-git tree, a shallow/detached CI checkout, or when `git` is absent, and can block on a hung process or a locked index. There is no stated handling and, under the project's \"never use silent fallback values\" rule, no permitted placeholder for `git_sha` \u2014 yet the reproducibility claim (\"reproducible by repo hash + workload name\") depends on that field. Name the strategy: fail the run with an explicit error, or record an obviously-placeholder sentinel, plus a subprocess timeout.\n- **Markdown rendering over `bench/results/`** is a new *read* path over a gitignored directory that is empty on a fresh clone. The renderer is documented as \"one table per workload across all backends in `bench/results/`\" \u2014 so behavior with no prior JSON, with a JSON at a newer `schema_version`, or with a corrupt result file is unspecified, and ordering between `json_report.write()` and `markdown_report.write()` in the data-flow diagram determines whether the just-measured row appears. The design also says \"Old readers must reject unknown versions explicitly\" but assigns no writer-side path-creation or read-error behavior.\n- **CLI modes:** `--all-backends` with exactly one registered backend, `--workload-dir` yielding zero workloads, `--workload-dir` with two YAML files sharing a `name`, and `--list-workloads` against an absent `bench/workloads/` are all undefined, while the CLI section only specifies \"non-zero on workload load failure or backend error.\"",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tick_instrumented` duplicates the full tick body, not \"~5 lines per phase,\" and the second caller is already planned",
+      "description": "Option (B) is chosen against (A) partly because (A) \"bloats the production tick path with `if timer:` branches,\" and the duplication is described as \"small (the timer body is ~5 lines per phase).\" Verified against `src/migratory/engine/tick.py`: the region being mirrored contains the `active_indices` resolution, the three `all_*` profile-attribute gathers, and the branchy `all_capped` fast path vs. the general `query_radius_batch` + `exclude_self` + `apply_neighbor_cap` path plus the `record_density` hook \u2014 roughly the whole function body. Replicating it partially or wrongly means the harness times a different algorithm than production, which is exactly the drift risk the design's own `Technical Risks` section names, and it conflicts with \"Do not duplicate logic. Respect DRY.\" The design's stated trigger for graduating the hook is \"if a third instrumented call site shows up,\" and it then lists two that are already planned: slice 145's instrumented GPU ticks, and the performance journal's live-server phase timings. A lightweight `profiler`/phase-callback parameter defaulting to a no-op satisfies both without touching the engine's return contract or adding `if timer:` branches to the hot path. Requirement left unmet: \"Every scaling change is benchmarked against the current state\" \u2014 a mirrored-but-stale instrument does not measure the current state. Recommendation: re-decide (A) vs. a callback with the true duplication cost, or state honestly that (B) means duplicating the entire tick body plus a maintenance covenant with 143/144/145.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:255"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tier 3's \"validated on CUDA via (141)\" now has no owner",
+      "description": "Cutting NVIDIA from this slice is reasonable \u2014 no hardware is provisioned, no CI matrix exists, and the design still records `platform.system()/machine()/processor()/python`, which is what a cross-host comparison needs. But the plan's Notes section states Tier 3 is \"250k validated on CUDA via (141).\" The slice's out-of-scope line (\"achieved when someone runs the same workload on an NVIDIA box later\") does not name that owner, and there is no slice in the 140 plan for it. Also relevant: the plan says machine-readable output is \"CSV/JSON\" while the design ships JSON only \u2014 defensible, since the JSON schema is versioned and a CSV writer is a downstream consumer, but worth recording as a deviation. Suggest adding a line identifying which slice or notes artifact owns the NVIDIA run so the Tier-3 milestone is not orphaned.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Workload schema has no spatial-backend selector despite the architecture making spatial per-tier config-selectable",
+      "description": "The architecture's key decision is \"Spatial backend choice is per-tier \u2026 Both live behind the `SpatialQuery` interface; the active backend is config-selectable, not compile-time.\" This design hard-wires `KDTreeQuery` into the NumPy backend's `setup()` and gives the workload YAML no spatial field. That works for 141's single backend, but slice 143 introduces `QuadrantsSpatialQuery` and validates \"across N=10k, 50k, 250k,\" and slice 119 (`staggered-neighbor-updates`) is a spatial-layer change that the harness is supposed to measure. The registry-as-designed collapses compute backend and spatial backend into one key. Cheap fix: add an optional `spatial:` field to the workload schema now (defaulting to the backend's choice) so the two axes stay separable without a schema-version bump later.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Alignment observations and NFR restatement",
+      "description": "Positives worth recording: dependency direction is correct and narrow (`bench` consumes `engine.tick.tick`, `AgentState`, `BehavioralProfile`, `spatial`, and `TickResult`; nothing flows back into the engine, and the explicit non-dependencies on `migratory_server`/`logging_sim`/websockets match the architecture's clean-ownership-boundary goal). The design restates the architecture's per-tick budget table (spatial_build 0.35 ms, spatial_query 5.67 ms, csr_assembly 0.21 ms, force_total 3.14 ms, integrate 0.06 ms) in verification step 9 and cites Entry 8 as its source, which is the right NFR handling for a measurement tool; it correctly declines to assert hard ms thresholds and says why (host variance). The three formation regimes, the formation-dependent report shape, and the \"bottleneck moves\" rationale all trace to named architecture principles. Scope cuts are named and justified rather than silently dropped, which is the pattern to preserve. Frontmatter `interfaces:` lists 142\u2013145, which are consumers of what this slice provides, not providers it requires \u2014 minor vocabulary mismatch, not a boundary violation. `parent` pointing at the slice plan is per convention.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Success-Criteria"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cuttable scope for proportionality",
+      "description": "Effort 3/5 matches the plan. A few items are abstraction with no current user and could be cut or deferred without losing a requirement: `--all-backends` and `--workload-dir` (one backend and three checked-in workloads exist; a shell loop covers both \u2014 and `--all-backends` has an undefined empty-set case per the finding above); the `register_backend(name, factory)` decorator described in Scope while the Architecture section's code registers a *class* (line ~300) \u2014 the two signatures disagree and neither needs a factory today; and the p95/p99/stdev set could be trimmed to mean/median/p99 if nothing consumes the rest yet. The `Pyright strict-mode \u2026 the repo has 433 pre-existing errors, separately flagged` bullet restates repo state rather than a slice requirement and could be dropped.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:71"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Workload force set excludes PropulsionForce and miscounts the engine's BulkForce set",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-force breakdown is deferred, but the parent plan assigns it to slice 141",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependency",
+      "raw_category": null,
+      "summary": "Harness invents a profile registry it claims to reuse, duplicating server config mapping",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:393",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Force resolution names an interface that does not exist and conflicts with the slice's own no-engine-change rule",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:399",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Workload formation schema is written in 3D against a 2D engine",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:355",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes missing for the two new external I/O paths and the CLI mode combinations",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`tick_instrumented` duplicates the full tick body, not \"~5 lines per phase,\" and the second caller is already planned",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:255",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Tier 3's \"validated on CUDA via (141)\" now has no owner",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Workload schema has no spatial-backend selector despite the architecture making spatial per-tier config-selectable",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Alignment observations and NFR restatement",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Success-Criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Cuttable scope for proportionality",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:71",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-17T12:04:56.153781",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 242297,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 600488,
+  "cached_tokens": 504064,
+  "cache_write_tokens": null,
+  "completion_tokens": 61285,
+  "reasoning_tokens": 55734,
+  "duration_seconds": 852.5242931670509,
+  "cost_usd": 0.05082850999999999,
+  "cost_basis": "alias_pricing"
+}

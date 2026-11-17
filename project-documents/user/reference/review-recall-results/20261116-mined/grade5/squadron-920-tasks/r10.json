@@ -1,0 +1,33 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers for tasks 2\u20139 sit at points where the suite is red, because task 1 breaks two existing tests that nothing fixes until task 10",
+   "description": "Task 1 raises the floor to `>=0.2.152` and commits. Once the new SDK is synced, `message_parser.parse_message` returns a native `RateLimitEvent` instead of raising, so two of the four shim-specific tests in `tests/providers/sdk/test_agent.py` fail immediately: `test_the_shim_absorbs_informational_events` (asserts `isinstance(parsed, SystemMessage)` \u2014 now a `RateLimitEvent`) and `test_the_shim_lets_a_rejected_event_raise` (asserts `pytest.raises(MessageParseError)` \u2014 no longer raised). Tasks 2, 4, 6, 7, 8, and 9 each end with a `Commit:` marker while those tests are failing; after Task 9 deletes the shim, all four fail with `ImportError` (function-scoped imports at `tests/providers/sdk/test_agent.py:701,720,743,758`). The suite is only green again at Task 10. Nothing in the task file acknowledges this window, so an implementer following the commit markers produces eight commits that are not at \"working, tested points.\" Fix options: bundle the shim's removal (and its tests' deletion) with the floor bump, move the shim-test deletion before task 1, or add an explicit note that the suite is expected red from Task 1 through Task 9 and that only the `-k`-filtered runs (Task 3) and greps are valid checkpoints in that window.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28-89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 6's informational-event instruction contradicts itself and Decision D4",
+   "description": "The subitem says: \"log at DEBUG and continue the loop **without yielding it** to the caller as a raw SDK type \u2014 let it flow to translation as normal (see LLD D6...)\". These two halves cannot both hold. In `_skip_unparseable`, `continue` without a `yield` means the message never reaches the caller's `async for`, so it never reaches `translate_sdk_message` \u2014 which is exactly what the LLD's D4 requires (\"informational events must not reach translation\", slice line 265). The \"let it flow to translation as normal\" clause describes the *pipeline* path (Task 7 line 70 and Task 8, where an informational event is translated and then excluded from prose per D6's consumer check), not the agent path. An implementer who follows the trailing clause by yielding the event would violate D4; one who follows the first half is left puzzling over the contradiction in the slice's most delicate task. The subitem should read: log at DEBUG, `continue`, and note that D6's translation branch and exclusion set apply to the pipeline path only.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Success Criterion 2's `tests/` half is satisfied only implicitly, with no verifying grep",
+   "description": "The slice's criterion 2 requires no `install_rate_limit_parser_shim` symbol in `src/` **or `tests/`**, but Task 9's success greps only `src/`, and Task 10's success grep targets fabricated-exception patterns, not the shim name. The requirement is in fact met \u2014 Task 10's deletion subitem names all four shim tests, and a repo-wide grep confirms `test_agent.py` is the only `tests/` file referencing the shim or `claude_agent_sdk._internal` \u2014 but no task *verifies* the `tests/` half. A one-line grep addition to Task 10's success criteria (`grep -rn \"install_rate_limit_parser_shim\" tests` \u2192 no matches) would close the loop cheaply.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:88"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 12 is a verification-only task but earns its place through the LLD's affected-files list",
+   "description": "On its face a task whose only deliverable is \"run two test files and write a DEVLOG note\" is granular enough to merge into Task 13. It is justified here: the slice design lists `test_provider.py` and `test_audit_cli.py` as criterion-9-affected files, and the task's explicit purpose is to record that they were examined and needed no changes \u2014 which prevents a reviewer from re-litigating that scope later. No action needed; noting it so the granularity is recognized as deliberate.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110-114"
+  }
+ ]
+}

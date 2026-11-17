@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Any successful tool call is treated as reading the omitted diff",
+      "description": "D4 leaves a PASS unchanged after any successful tool call. A directory listing or unrelated search, for example, does not establish that the model read the omitted files. This is weaker than the slice plan\u2019s exception for a model that *did read files* and contradicts the value statement that a PASS implies the diff or files were read. Distinguish relevant file reads from other successful calls, or explicitly retain a coverage concern when that cannot be established.",
+      "file_ref": null,
+      "category": "review-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:129-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deduplication can select the wrong answering model",
+      "description": "The design deduplicates models in first-seen order but selects the last entry as the model that wrote the review. For a sequence A, B, A, that selects B. A final turn that reports no model can also leave an earlier model presented as the answerer. Track the final answer\u2019s reported model separately from the distinct run-wide list, and disclose when that final model is unknown.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Synthetic finding omits the required location",
+      "description": "The slice plan\u2019s 904 entry requires a `location:` on every finding, using `unverified` when no location is known. D4 explicitly omits it for the synthetic finding. Emit `location: unverified` so the finding conforms to the artifact contract used by downstream consumers.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:140-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Total-budget truncation receives misleading remediation",
+      "description": "D3 records a diff skipped by the total-injection limit as zero injected characters, but D4\u2019s synthetic finding attributes truncation to `review.max_file_size_bytes` and recommends raising it. That does not resolve an exhausted total budget. Preserve or determine the applicable cause and render advice for the total limit separately.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:123-125"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "review-coverage",
+      "raw_category": null,
+      "summary": "Any successful tool call is treated as reading the omitted diff",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:129-135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "Deduplication can select the wrong answering model",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Synthetic finding omits the required location",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:140-152",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Total-budget truncation receives misleading remediation",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:123-125",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T13:49:31.665254",
+  "model": "openai/gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 444,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6.1-terra",
+  "answering_models": [
+    "openai/gpt-6.1-terra"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 188036,
+  "cached_tokens": 136795,
+  "cache_write_tokens": null,
+  "completion_tokens": 1260,
+  "reasoning_tokens": 402,
+  "duration_seconds": 31.848628542385995,
+  "cost_usd": 0.06438075,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,68 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Output Conventions\" contradicts Capability 1's own outputs",
+   "description": "The section opens \"Both capabilities write to the existing `project-documents/user/analysis/` directory with the existing `docType: analysis`. No new directory, no new docType.\" But Capability 1's Outputs section specifies `project-documents/user/project-guides/000-concept.{project}.md` with `docType: concept`, and \"initiative-plan candidates\" that are neither in `user/analysis/` nor `docType: analysis`. The Resolved Design Decisions bullet \"Output location and docType \u2014 existing `user/analysis/` directory and `docType: analysis`, in the 940-949 reserved range\" repeats the blanket claim. An implementer following the Output Conventions section would place the concept document in the wrong directory with the wrong docType; the sentence is only true for the two `analysis`-docType artifacts (comprehension and overview).",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Resolved Design Decisions contradicts the body on two settled decisions",
+   "description": "Two instances: (1) Translation rules state \"Emphasis **is** a generation parameter\" (present tense \u2014 it exists in this design), while the Resolved Decisions bullet \"Client document audience handling\" says \"An emphasis parameter is **added only if** real use demonstrates the need\" \u2014 i.e., deferred. Slice design cannot tell which governs. (2) Output Conventions sanctions overflow (\"Overflow into 950+ is sanctioned\u2026 generated documents take remaining slots in the 900 band as needed rather than stopping at 949,\" arguing ten slots are \"not enough\"), while the Resolved Decisions bullet states output is \"in the 940-949 reserved range\" with \"No new convention.\" The settled record and the body state different index policies; the body itself admits the overflow \"may need to be widened or re-cut later\" in `file-naming-conventions.md`, which is in tension with the same bullet's \"no change to `file-naming-conventions.md`.\"",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#resolved-design-decisions"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Capability 2's tested no-concept path leaves three schema fields unsourced",
+   "description": "The Inputs section says the no-concept case \"is the tested path, not an edge case\" and that the skill then \"sources purpose from the initiative plan plus interview.\" But in the Document field schema, only **Purpose** has a fallback named (\"Concept Overview / initiative plan\"). **Problem** (sole source: Concept Problem & Motivation), **Audience** (sole source: Concept Target Users), and **Approach** (sole source: Concept Solution Approach) name the optional concept as their only source and have no stated degraded-path source. Additionally, \"plus interview\" introduces an input that appears nowhere in the Inputs section and nowhere in the schema's Source column, straining the translation rule \"Every claim traces to an input artifact\" \u2014 an interview answer is not among the declared input artifacts. The document must say what happens to Problem/Audience/Approach when the concept is absent (interview-sourced? flagged as gap? omitted?) and declare the interview as an input.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The staleness warning's mandated \"provenance\" location is never defined",
+   "description": "Flow step 1 says the staleness warning \"must appear in the generated document's provenance,\" and Resolved Design Decisions repeats \"the warning is recorded in the generated document's provenance.\" No output schema anywhere defines a provenance section or frontmatter key: the concept output's structure is the concept guide's section list (plus User-Provided Concept and Refined Concept), the comprehension analysis's structure is a bare list (\"layers, complexity hotspots, entry points, dependency observations\"), and Capability 2's field schema has nine named fields and no provenance field. This is load-bearing \u2014 the document itself names \"a confidently wrong concept doc built on a stale graph without the reader knowing\" as the genuine failure mode, and the provenance record is the entire mitigation for it. Where it lives (frontmatter key? a section? how does it survive the \"strip internal vocabulary\" translation rules in the overview?) is unspecified.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Initiative-plan candidates and generated frontmatter lack an output contract",
+   "description": "Two gaps relative to the document's own standard (\"Everything written lands in `project-documents/user/` with correct `docType` frontmatter and index conventions\"): (1) The initiative-plan candidates output has no path, filename, docType, or status \u2014 the other two Capability 1 outputs have all four. \"Written only on explicit confirmation\" does not say *where* they are written on confirmation (`user/project-guides/001-initiative-plan.{project}.md`?), nor in what form they are \"offered for PM review\" before that (conversation only?). (2) The Output Conventions specify only `docType` and status-enum membership for generated frontmatter, but the gate the document leans on as the reason for docType reuse validates more than \"docType and status against a fixed enum\": per slice 172, `FM004` requires universal fields (at least `dateCreated`) and `cf validate frontmatter` checks per-docType schemas for `concept` and `analysis`. What full frontmatter each generated document carries (e.g. `project` for an outside codebase, `dateCreated`, any docType-specific fields) is unspecified, so \"no gate change\" is true but \"output that passes the existing gate\" is asserted, not designed.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "intermediate/scan-result.json is in neither hygiene bucket",
+   "description": "The output contract table lists six paths. Hygiene classifies `.trash-<epoch>/` (gitignored) and names exactly four tracked files (\"`knowledge-graph.json`, `meta.json`, `config.json`, and `.understandignore` remain tracked\"). `intermediate/scan-result.json` is in neither list: the gitignore entry (`.understand-anything/.trash-*/`) does not cover it, and the tracked list omits it. If left untracked, `.understand-anything/intermediate/` sits in `git status` forever \u2014 violating the design goal \"Leave the working tree clean. Consuming a third-party tool must not force the user to hand-manage its scratch output.\" If tracked, every incremental `/understand` run churns it in diffs. The stated principle \"Ignore the scratch, track the artifacts\" partitions the world into two buckets; this file is in neither, and \"squadron does not touch it\" addresses deletion, not tracking.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "No schema or version validation of the actively-developed upstream graph contract",
+   "description": "The document pins its consumption to the v2.8.1 output shape (\"Graph shape (from the plugin's own reference)\") while simultaneously describing the plugin as \"upstream-maintained and actively developed.\" Preconditions verify only that the plugin is installed and `knowledge-graph.json` exists \u2014 there is no version check, no shape check (`nodes[]`/`edges[]`/`layers[]`/`tour[]` present with expected fields), and no stated behavior when the shape doesn't match. If upstream renames `layers[]` or a node field in v2.9, a grep-driven skill reads whatever matches and produces a concept document with silently missing structure \u2014 the exact \"silent fallback\" class the project conventions call a bug (\"Fail explicitly with errors\"). The staleness machinery shows awareness of *content* drift (git hash) but the *contract* drift risk \u2014 the more likely one for an actively developed plugin, including the Phase 7 trash behavior and Phase 6 tour persistence this design depends on \u2014 is unaddressed.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Flow step 3 extraction list is narrower than the outputs promise",
+   "description": "Step 3 extracts \"`project`, `layers[]`, `tour[]`, and file-level nodes with their `summary`, `filePath`, and `complexity`\" \u2014 excluding `edges[]`, `tags[]`, and `languageNotes?`. But the comprehension analysis output promises \"dependency observations\" (naturally `edges[]` with `imports`/`depends_on`), and the Interview scope table sources \"Initial Technical Direction\" from \"Graph (languages, frameworks, dependencies)\" \u2014 none of which are fields of the extracted set. Either the extraction list (and the \"Grep for the needed section\" read discipline, which never names the edges/tags sections) must grow, or those output promises must name a different source.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Dispatcher passes `[target]` through, but the understand skill takes none",
+   "description": "`commands/sq/analysis.md` parses \"The first word of `$ARGUMENTS` is the skill name. The remainder is passed through as `[target]`\" \u2014 a contract shaped for `tech-debt-audit [target]`. The `understand` skill's input is a fixed path (`.understand-anything/knowledge-graph.json`); the delivery plan's \"three edits (valid-skills line, usage block, skill section)\" does not include the input-parsing section, so `/sq:analysis understand stray-arg` hands the skill an argument it has no use for, with undefined behavior. A one-line note in the dispatcher (or in the skill section) closing that case would suffice.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+  }
+ ]
+}

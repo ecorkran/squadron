@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope fully covers slice-plan entry 129",
+      "description": "Every item in the slice plan's entry 129 (Part A port to `openai_codex`, bundled-binary-first resolution, optional extra, effort via `ReasoningEffort` closing #171, per-turn usage; Part B exact-install-command error, `sq doctor` row, `sq model list` marker, README; Part C browser + `--device-code` login, `sq auth logout`, email/plan in status, other profiles unchanged, smoke test) maps to an Included item, a decision (D1\u2013D9), or a Success Criterion. Exclusions match the plan (no squadron token store, `login_api_key` out, streaming/approvals unchanged). No assigned scope is dropped.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Capability-based dispatch aligns with slice 128 and the architecture's provider invariants",
+      "description": "D3 and D9 use `runtime_checkable` Protocols with `isinstance` checks instead of profile-name or auth-type string comparisons, directly continuing slice 128's elimination of string dispatch. The provider still registers without the extra so `get_provider` can raise an install hint, keeping the registry complete. Dependency direction is correct: CLI \u2192 provider-layer Protocols \u2192 `core.usage`; the lazy, function-scoped `openai_codex` imports keep the module graph importable without the optional extra, preserving the \"core never depends on provider internals\" invariant.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99-112"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architecture's Authentication Patterns section explicitly reconciled",
+      "description": "The design addresses the one place it is net-new relative to `100-arch.orchestration-v2.md` (\"Squadron does not attempt to unify authentication. Each provider's credential resolution is self-contained.\") head-on: `InteractiveLogin` is an optional capability implemented only by the Codex strategy, delegates entirely to the Codex runtime, and squadron stores no credentials (`~/.codex/auth.json` remains the only store). The deferral note (\"if a second provider adopts InteractiveLogin, the architecture text should gain a sentence then\") is a reasonable boundary call, not a silent deviation.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timeout scope for runtime spawn is internally inconsistent",
+      "description": "The \"Runtime startup cost\" paragraph (line 82) asserts that the spawn/`initialize` hang case \"is already bounded by `codex.turn_timeout_s`,\" but the Failure Modes table (line 125) applies that timeout only \"around `thread.run`.\" On the first message, `CodexAgent` performs `AsyncCodex.__aenter__` (subprocess spawn + `initialize`) and `thread_start` before `thread.run`; if the timeout truly wraps only `thread.run`, a hang during spawn or `thread_start` is unbounded, contradicting line 82. The same gap appears on the login path: D7 documents `codex.login_timeout_s` as bounding `handle.wait()` only, while `login.login()` first constructs `AsyncCodex(config)` and calls `login_chatgpt()`/`login_chatgpt_device_code()` (Data Flow, line 84) \u2014 a hang in that spawn is not covered by the documented scope, unlike `sq auth status`, where `account_timeout_s` explicitly covers \"runtime start + account().\" The design should state exactly what each timeout wraps (e.g., turn timeout wraps `__aenter__` + `thread_start` + `thread.run` on first use; login timeout wraps the whole `login.login()` call).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82-125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Logout I/O path has no enumerated failure modes or timeout",
+      "description": "`sq auth logout` is a new I/O path \u2014 `login.py` performs \"async login/logout/account flows over AsyncCodex\" and Interfaces Required lists `AsyncCodex.logout()` \u2014 yet the Failure Modes table and the Patterns and Conventions list (which names login timeout, login `success=False`, and `account()` failure) contain no row for logout. There is also no timeout covering it: D7 defines `turn`, `login`, and `account` keys but nothing for logout, even though logout spawns the runtime. A hung runtime start or an SDK error during `logout()` has no stated handling strategy (raise vs. warn-and-delete-file vs. report). Add a row (e.g., reuse `codex.account_timeout_s` or the login key, state the exit behavior and what `sq auth status` shows afterward) and a matching test alongside the existing logout test in Technical Requirements.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#failure-modes---codex-turn"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Version upper bound explicitly deferred with a stated default",
+      "description": "D1 ships a concrete pyproject line (`codex = [\"openai-codex>=0.159.3,<1\"]`) while Special Considerations leaves \"whether to cap\" to the PM. Because a default is stated in the design itself, this is not a silent fallback or a blocking TBD \u2014 implementation can proceed with `<1` \u2014 but the decision should be resolved and recorded in the task file so the final constraint doesn't drift between D1 and the implementation. Also minor: D8 appears after D9 in Technical Decisions (lines 112\u2013114), a numbering slip worth fixing for readability.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97-231"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Scope fully covers slice-plan entry 129",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Capability-based dispatch aligns with slice 128 and the architecture's provider invariants",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99-112",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Architecture's Authentication Patterns section explicitly reconciled",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Timeout scope for runtime spawn is internally inconsistent",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82-125",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Logout I/O path has no enumerated failure modes or timeout",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#failure-modes---codex-turn",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Version upper bound explicitly deferred with a stated default",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97-231",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-17T13:03:23.889034",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 74715,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 291897,
+  "cached_tokens": 237824,
+  "cache_write_tokens": null,
+  "completion_tokens": 19703,
+  "reasoning_tokens": 17394,
+  "duration_seconds": 578.7884142082185,
+  "cost_usd": 0.2739288,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Deletion-commit grep gates silently depend on earlier deletions",
+   "description": "Description: The per-task `grep` success criteria in section 4 (e.g. 4.3's `grep -rn \"writeAdoptionState|adoption-completed\"` over `packages/*/src packages/*/tests`) only return empty because section 4.1 has already deleted the test files that still referenced those names (e.g. `adoptionCompletion.test.ts:22` and `adoptionBuild.integration.test.ts:185-214` call `writeAdoptionState`; `adoptionFacts.test.ts:60` references `adoption-completed`). I traced every current reference to the grepped symbols and confirmed all are either in files deleted by 4.1/4.4 or explicitly removed by the named task, so each gate is satisfiable in the prescribed order. This is correct behavior for an ordered deletion, not a defect \u2014 recorded only so the ordering is not accidentally \"fixed\" by re-running a later grep standalone (it would appear to fail out of order).",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:243"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Purity test reuses a fixture helper that is deleted mid-file via `git show`",
+   "description": "Description: Task 5.1 recreates `createBrownfieldCheckout` by reading it back with `git show {target}:.../adoptionParity.test.ts`, since 3.6 deletes that file. I confirmed `createBrownfieldCheckout` exists at `packages/mcp-server/tests/integration/adoptionParity.test.ts:67` and that the steps it performs (copy `fixtures/integration-project`, install the `brownfield-guide` prompt, write \u22652000 source lines, add a comprehension document, no planning artifacts) match both the design's D5 fixture and the task's step list. This is a reasonable, non-circular way to port the setup to the new in-process purity test and is consistent with the design's \"Special Considerations\" (fake `sq` on `PATH` for the test process only; MCP runs in-process). No action needed.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:266"
+  }
+ ]
+}

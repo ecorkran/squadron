@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T13's fallback (\"scope to the store-recorded samples only\") contradicts its own success criterion and the design's non-empty-offers guarantee",
+   "description": "T13 instructs the implementer to \"reuse 320's existing result-discovery surface,\" but no such surface exists in the code 322 builds on: `capture.resolve_target` resolves a single user-named target (src/squadron/metrology/capture.py:80-140), `MetrologyStore.list_samples` lists human samples, not judge results (src/squadron/metrology/store.py:160), and the review package's list functions (`list_slices`/`list_tasks`/`list_templates`) are planning/template surfaces, not persisted-result enumeration. The task's stated fallback \u2014 \"scope this task to the store-recorded samples only\" \u2014 cannot work: offers are *unsampled* judge results, which by definition are not in the store, so a store-only scope cannot satisfy T13's own success criterion (\"3 unsampled matching results at rate=1.0 yields 3 OfferTargets\") or the design's Functional Requirement that a graduated config with unsampled results yields a non-empty offer set. The escape hatch (\"ask the Project Manager\") softens this, but a junior AI is left choosing between an instruction pointing at a nonexistent surface and a fallback that fails the task's tests. The same gap affects the lapse-detection bullet (line 204), whose \"have the CLI re-derive it via `find_graduation` against current results\" doesn't parse \u2014 `find_graduation` scans the store, not current results. Fix: reword the fallback to the real option \u2014 a bounded scan of `project-documents/user/reviews/` reusing the primitives that do exist (`_REVIEWS_SUBDIR`, `read_review_frontmatter`, `derive_judge_config_id`) \u2014 or make the PM escalation the only fallback.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-211"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T7's numbered precedence list is self-contradictory about TIGHTEN vs the floor gate",
+   "description": "The list says \"implement the design's bands exactly, in this precedence order,\" with rule 1 (`n < floor` \u2192 `INSUFFICIENT_EVIDENCE`) checked before rule 4 (`match_rate <= tighten_rate` \u2192 `TIGHTEN`) \u2014 but rule 4's parenthetical and the following bullet demand that \"a low-n, low-match-rate cell reach `TIGHTEN` rather than stopping at `INSUFFICIENT_EVIDENCE`.\" Implemented literally in the stated order, rule 1 fires first and rule 4 is unreachable for below-floor cells \u2014 exactly the behavior T8 rejects (\"n < floor with a low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\"). The intent is recoverable from the prose and from T8, but the instruction as ordered produces a first implementation that fails its own test task. Fix: reorder so the TIGHTEN check precedes the two `INSUFFICIENT_EVIDENCE` gates, or rewrite rule 1 as \"`n < floor` **and** `match_rate > tighten_rate` \u2192 `INSUFFICIENT_EVIDENCE`.\"",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:116-120"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Coverage Check claims the malformed-judge-block failure mode is \"exercised in T8,\" but T8 contains no such test",
+   "description": "The design's Failure Modes table assigns every boundary a test, including \"malformed `judge:` block (non-numeric floor) \u2192 fall back to `resolve_thresholds`' documented merge; flag the target; WARNING naming the template.\" The task file's Coverage Check (line 287) asserts this row is \"exercised in T8\" \u2014 but T8's bullets cover only direction bands, floor asymmetry, unversioned refusal, and registered/unregistered template reads. There is also a latent handling decision the task never makes: `resolve_thresholds` does not \"fall back\" on a non-numeric floor \u2014 `float(pass_floor)` raises `ValueError` (src/squadron/pipeline/actions/judge.py:49-56) \u2014 so T7's `read_current_thresholds` as specified would crash on a malformed block rather than \"flag the target.\" Add a malformed-block test to T8 and an explicit catch-and-WARNING decision to T7, or correct the Coverage Check claim and record the row as unexercised.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:129-142"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Idempotent re-graduate is required but has no mechanism in the specified store API",
+   "description": "T15 requires that re-running `graduate` for an already-graduated pairing \"update its evidence snapshot in place (idempotent \u2014 one record, not two),\" and the design's failure-mode table demands the same. But the specified API cannot locate the existing record to update: `write_graduation` \"returns a generated record id\" mirroring `write_sample` (src/squadron/metrology/store.py:131-149 \u2014 random UUID filenames), `find_graduation` returns only the `GraduatedConfig` payload with no record id or path, and `GraduatedConfig` (T3) has no id field. A second write therefore necessarily creates a second file; nothing in T11's surface can find the first to rewrite it. Specify the handle: e.g. `find_graduation` returns the record id alongside the payload, or derive a deterministic record id from `(JudgeConfigId, artifact_level)` so a re-graduate overwrites by construction.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:171-184"
+  }
+ ]
+}

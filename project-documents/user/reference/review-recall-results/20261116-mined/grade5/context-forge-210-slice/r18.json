@@ -1,0 +1,47 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Overwrite protection excludes generated files and worktrees",
+   "description": "The sequence checks only the two root files, then generates instruction and prompt files and copies all four targets into worktrees. It does not protect unmanaged files that collide in those directories or at worktree destinations. The slice plan requires unmanaged content to be protected on re-runs. Define per-file conflict, backup and refusal behavior for both generation and propagation, including an existing `.bak` and `--yes`.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Translation inputs are unclear for a fresh Copilot setup",
+   "description": "The examples identify `.claude/rules/` and `.claude/skills/` as sources, while this target must not create or modify `.claude/`. The design does not identify the guide-side source locations or explain how the required rules and skills are available on a fresh `cf init --ide copilot`. Define the authoritative inputs, discovery and missing-input behavior, including how task workflows become usable Copilot prompts.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-48"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New setup and propagation failure modes lack handling",
+   "description": "The sequence specifies synchronous script execution and worktree copies but not a timeout or termination policy for a hung script, handling of script failure after partial writes, or reporting and recovery when a worktree copy fails. Define these outcomes so the command does not report success for incomplete setup and users can safely retry.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-103"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Translation and Copilot behavior lack required verification",
+   "description": "The test plan does not verify `paths`-to-`applyTo` conversion or the generated prompt content. It also omits the slice plan\u2019s manual verification that a VS Code Copilot agent reads the generated guidance and follows project conventions. Add translation cases for multiple paths and omitted paths, plus the planned Copilot verification.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Onboarding time target is not carried into the design",
+   "description": "The parent architecture targets **under two minutes from npm installation to useful context output**, for both fresh and existing repositories. This slice changes the onboarding path through `cf init --ide copilot` but does not restate that target or address its impact. Include the target and how the Copilot path will be assessed against it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:31-33"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Required tool-guide reference is omitted",
+   "description": "The slice plan explicitly requires the design to reference `user/tool-guides/copilot-vscode/setup-ide.md` and to promote it to a published guide if needed. The design mentions documenting custom-agent mapping but neither references the guide nor identifies where that mapping will be documented. Add the reference and documentation destination.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:51-54"
+  }
+ ]
+}

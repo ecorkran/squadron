@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`verdictSource: imposed` extends a published cross-repo contract on a \"no reader\" assumption",
+   "description": "D5 justifies a third `VerdictSource` member with \"Nothing outside squadron reads `verdictSource`: grep of context-forge on 20260926 found no reader.\" The parent documents treat this key as a *cross-repo consumed contract*: plan entry 19 calls 919 Part B \"the only cross-repo dependency\", 919's D6 filed context-forge#89 asking CF's review gate to read `verdictSource` and decline to auto-clear on `derived`, its D7 defines a closed two-value vocabulary, and its Risks section names \"Part 2's frontmatter key is a cross-repo contract\". The published CHANGELOG line advertises `verdictSource: stated | derived`. Adding `imposed` changes the value set of a key an external tool is being asked to consume, yet the design neither restates that contract nor plans a consumer/CHANGELOG update. A grep showing no reader *today* is not a durable boundary argument. State the new three-value contract, what a consumer that only knows `stated | derived` does with `imposed`, and record the coordination.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:154-156"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The synthetic finding drops the `location:` tag the artifact contract requires",
+   "description": "D4's synthetic `[CONCERN] Diff truncated; the omitted part was never read` finding deliberately has \"no `location` because it cites no file\". Parent plan entry 4 (904) made `location:` mandatory on **every** finding, PASS included, with `unverified` as the explicit \"I don't know\" token, and called it load-bearing for ensemble dedup keyed on location; the code template states \"Every finding MUST include a `location:` tag\". Because this finding is constructed by squadron rather than parsed from model output, the parser's missing-location \u2192 `unverified` normalization never runs on it, so the rendered frontmatter finding has no `location` line at all. Set `location=\"unverified\"` (the token the design itself names as the honest \"I don't know\" value) and keep `location_verified=None`; otherwise any consumer validating or deduplicating findings by location sees a malformed entry.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:140-152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No failure-mode enumeration for the new `answering_models` metadata message",
+   "description": "The slice introduces a new metadata key (`metadata[\"answering_models\"]`) flowing SDK/OpenAI stream \u2192 final Message \u2192 `collect_turn` \u2192 `ReviewResult`, plus a new `TurnResult.model` field. The Risk Assessment lists exactly one risk (D9 false positives) and no failure modes for that path. The project's Failure-Mode Enumeration rule requires explicit hang / timeout / peer-disconnect-mid-send answers with an observable WARNING-or-higher signal and a test for each new I/O path or message type. Concretely: D8 stamps only on the SDK's `ResultMessage` translation, and OpenAI stamps on the final Message in `_stamp_tool_telemetry`. A stream that ends early (CLI disconnect before the result message, or an OpenAI stream closing after partial chunks) yields no stamp, and D11 *deliberately suppresses* WARNING for the \"not reported\" state \u2014 so the run is recorded identically to a Codex run that never reports, with `aiModel` set to the requested id. That is the exact false identity #134 exists to eliminate. Name the distinguishing observable signal and add a test that asserts it.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:355-361"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`TurnCapture.answering_models` has no stated initial value, so D11's `== []` rule can drop the \"not reported\" line",
+   "description": "D11 requires the digest's \"not reported by provider\" line to key on `answering_models == []` (not falsiness) so hand-built results and the snapshot fixture render unchanged, and the Data Flow sets `result.answering_models = capture.answering_models`. State Management says only that models \"append in order, deduplicated\" and that agents reset per `handle_message`; it never states `TurnCapture.answering_models`' initial value. Every existing `TurnCapture` optional starts at `None` meaning \"not reported\", and the design's own Patterns section says `None` means not reported and is never replaced by a plausible value. An implementer following that convention initializes `None`, so a provider that stamps nothing produces `None`, `== []` is false, and SC11's \"not reported\" digest line never renders \u2014 while `ReviewResult.answering_models` is `None`, which D11 reserves for \"hand-built, not produced by review_client\". Name the two states explicitly and derive the digest condition from them.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-204"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Overweight for a 3/5 maintenance slice: cut the multi-model machinery and the single-function module",
+   "description": "The parent architecture asks for slices that are \"small and focused\" and \"lighter-weight given the maintenance nature\"; the plan scores 927 at Effort 3/5. This design carries 13 decisions, two new modules, ~10 changed files, 12 success criteria and a six-step live walkthrough. Scope that can be cut without touching Parts A/B/C: (1) D12/SC11's multi-model machinery \u2014 distinct-first-seen accumulation in two providers, a `- Answering models: a, b` digest line, a WARNING and dedicated tests \u2014 serves an unsymptomatic edge; the plan asks for \"the model that answered\" singular, so last-reported-wins with the list kept internal meets it. (2) `models/snapshot.py` is a new module for one ~10-line predicate; `answers_as_requested` can sit in the existing `models/aliases.py` at the same layer with no new dependency direction. (3) D9's requirement to capture real ids from one live review per configured profile makes the substitution rule's correctness depend on credentials the walkthrough itself admits may be absent (\"for each profile with credentials\"); one stubbed-provider test plus captures for profiles that actually exist is enough. The scope above is additive to the plan; keep Parts A, B and C intact.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Implementation Notes miscount `_inject_file_contents` call sites and mislabel its direct callers",
+   "description": "Step 2 says \"Update its two `review_client` call sites and the direct callers in `test_content_injection.py`, `test_convention_root.py`, `test_injection_decision.py`, and `test_review_client.py`.\" There is exactly **one** production call site (the prompt-building assignment in the review client), plus the definition. `test_injection_decision.py` and `test_review_client.py` never call the function directly \u2014 they call `run_review_with_profile`, and the latter patches `_inject_file_contents` with a `side_effect` returning the bare prompt string, which is precisely what a `(prompt, DiffInjection | None)` return breaks. `test_content_injection.py` holds roughly twenty direct calls. On a signature change that touches every injection test, an inaccurate inventory is a real implementation hazard: replace it with the verified list and call out the patched `side_effect` explicitly.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:370-371"
+  }
+ ]
+}

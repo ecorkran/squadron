@@ -1,0 +1,39 @@
+{
+ "case": "squadron-264-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Slice design Result mapping: \"Non-text blocks are noted by type in the content, not dropped silently\" (design line 138), part of SC2 \"maps results per the Result mapping rules\". Task 4.2 implements it, but the Task 3 fixture has only `echo`/`fail`/`sleep`/`empty`, Task 5 never produces a non-text block, and Task 7 mocks the bridge. No task tests the rule, although the zero-text-blocks rule next to it has a fixture tool and a test. **VALID** (minor, `coverage`): the tasks leave out verification of a rule SC2 names. Needs: doc (design plus tasks). Raised by the original review (F001).",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [],
+    "r04": [],
+    "r05": [
+     0
+    ],
+    "r06": [
+     2
+    ],
+    "r07": [],
+    "r08": [
+     2
+    ],
+    "r09": [
+     1
+    ],
+    "r10": [
+     2
+    ],
+    "r11": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "r04 finding 3 (join rule) not counted: its description assumes a nontext fixture tool exists and does not claim non-text mapping is untested. r10 finding 2 counted: names non-text block mapping among untested rules, bundled with other items."
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Specify failure handling for new config reads",
+   "description": "The design describes new reads from `.context-forge.local.toml` and the shared file, but its failure-mode section covers writes and `.gitignore` updates\u2014not read failures in `ConfigManager.get` or the `ConsistencyChecker` scan. State how read errors are distinguished from a missing file and surfaced; otherwise an unreadable config could be mistaken for an absent value, undermining the promised compatibility fallback and migration warning.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:77-80"
+  }
+ ]
+}

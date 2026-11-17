@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator sweep step targets the union TD-3 declares untouchable",
+   "description": "The Technical Scope table (`project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36`, repeated at `:75` and Migration Plan step 4 at `:90`) assigns 3 `WorkflowNavigator.ts` sites to the sweep. Inspection of the current tree (post-912, the stated as-of state) shows all three remaining bare `'complete'` literals there \u2014 the `slice.status === 'complete'` comparisons and the `{ ...base, status: 'complete' }` construction \u2014 are comparisons/assignments against `SliceStatus.status`, the workflow-position union TD-3 (`:104-106`) explicitly says to leave alone (\"its `'complete'` member is incidental overlap ... Left untouched\"; \"touching it risks conflating two independent unions\"). The genuinely `NormalizedStatus`-typed comparisons in that file already use `STATUS.*` (slices 241/911/912 landed them). So step 4 is either a no-op with a wrong rationale or \u2014 as the derived task file reads it (\"Locate all 3 bare-string 'complete' ... replace each with `STATUS.Complete`\", with the TD-3 guard listing only `'pending-review'`/`'review-failed'`/`'needs-design'`) \u2014 it instructs the implementer to do exactly what TD-3 forbids. Resolve before implementation: re-derive the count, drop WorkflowNavigator from the sweep list (or re-scope with an explicit statement that a same-spelled `SliceStatus` member may use `STATUS.Complete`), and fix the guard list.",
+   "location": "project-documents/user/slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success criterion spans \"production code\" but scope/verification exclude packages/cli, leaving a live bare-literal site",
+   "description": "FR-1 (`:135`) promises \"No bare `NormalizedStatus`-value string literals ... remain in production code outside `types.ts`'s own `STATUS` definition\", but the included scope (`:27-30`) and the verification grep (`:147-151`) cover only `packages/core/src`. The tree contains at least one production site outside core that compares a normalized-status-bearing value against a bare literal: `packages/cli/src/commands/arch.ts:189` (`init.slices.filter((s) => s.status === 'complete')`, where `s.status` carries `buildModel`'s normalized values, and the same file already imports `STATUS`). The Overview's claim that \"every reference is a compiler-checked property access\" after this slice is therefore overstated. Either fold this site in (it is trivially in the same spirit and the same slice's mechanical pattern) or narrow FR-1/Value to `packages/core` and record the residual as known debt. As written, the design sets an acceptance bar its own verification command cannot enforce.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Exclusion rationale for test files is factually wrong, though the conclusion holds",
+   "description": "The design states \"grep confirms zero `.test.ts` files assert against these literals directly.\" That is not correct \u2014 e.g. `packages/core/tests/introspection/taskFileParser.test.ts` (`expect(result.inferredStatus).toBe('in-progress')` etc.), `ConsistencyChecker.test.ts` fixture literals, and cli/mcp test fixtures all assert against these bare strings. The operational conclusion (no test edits required) still survives, because literal comparisons stay valid against the retype `NormalizedStatus`, and the plan entry's \"existing test suite is the regression guard\" principle is met \u2014 but the stated evidence should be replaced with the correct argument, since an implementer relying on the quoted grep result will find it contradicted immediately.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Per-file site counts and post-sweep arithmetic do not reconcile with the tree",
+   "description": "Minor but they feed the acceptance gate: `statusNormalizer.ts` is listed as \"13 (of 16 total; 3 are alias keys)\" but the file has 14 value-side literals and 2 regex-matching quoted alias keys; `types.ts` \"5 (of 8 total; 4 are the `STATUS` definition itself)\" leaves 4 non-definition matches, not 5 (3 from the `inferredStatus` union, which disappear via retype rather than being swept to `STATUS.*`, plus 1 from `SliceStatus.status`, excluded by TD-3). The Verification Walkthrough's expected post-state (\"SliceStatus.status (4) sites\") is likewise off \u2014 only `'complete'` among the 7 `SliceStatus` members matches the grep pattern, so the intended \"after\" count will not match actual output and risks the implementer chasing phantom sites or weakening the check. The task file's looser phrasing already hedges this; tightening the design's numbers to match a fresh grep run would make FR-1 cleanly testable.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:34"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Vocabulary boundary is drawn by file, not by semantic domain, for ConsistencyChecker frontmatter comparisons",
+   "description": "TD-2 (`:100-102`) excludes `frontmatterSchema.ts` because it speaks the raw-frontmatter vocabulary; yet ~a dozen of the 36 `ConsistencyChecker.ts` sites in scope are comparisons against *raw* frontmatter strings (`fmStatus = data.status.toLowerCase()`, `planStatus`, `archStatus`) and `fixAction` values written *back into frontmatter* (`detail: { key: 'status', value: 'in-progress' }`). The sweep is byte-identical (so the no-behavior-change claim holds), but the design should state that frontmatter-facing strings in `ConsistencyChecker.ts` are being folded into the `NormalizedStatus` vocabulary by reference, since the hyphenated `'in-progress'`/`'not-started'` values written to frontmatter are not members of `VALID_STATUSES` in the schema's own underscore vocabulary. A one-line note here prevents a future reviewer from calling it a TD-2 boundary violation.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "ProjectModelBuilder drop from the plan entry is factually justified; update the plan text to match",
+   "description": "The slice plan (item 10 of `project-documents/user/architecture/900-slices.maintenance-and-refactoring.md`) names `ProjectModelBuilder.ts` among the ~50 sweep sites; the design assigns it 0 sites. Verification against the tree confirms the design is right \u2014 that file's only remaining literal is the `'unknown'` sentinel in a comment and it already uses `STATUS.*` (swept by slices 241/911). This is a stale-plan correction rather than a scope drop of assigned work, and it is documented transparently; worth ticking the plan entry's file list down (or annotating \"already swept by 911\") so the two artifacts stop disagreeing for the next reader.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:39"
+  }
+ ]
+}

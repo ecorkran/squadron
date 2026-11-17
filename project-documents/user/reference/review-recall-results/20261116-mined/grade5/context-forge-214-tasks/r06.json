@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "No CHANGELOG entry task for a new user-facing command",
+   "description": "Task 6 (\"Docs and full validation\") covers only the README command table plus build/lint/test. Nothing in the breakdown adds a `CHANGELOG.md` `[Unreleased]` entry, yet this slice introduces a brand-new user-facing CLI command (`cf validate design`), the guide's Phase 6 completion checklist names \"Update CHANGELOG.md in project root\" as a required step (`project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:388`), and every comparable feature slice in this repo carries a CHANGELOG task (923 Task 19, 924 Task 11, 925 Task 31, 926 Task 21, 928 Task 21, 929 Task 8, 930 Task 11, 934 Task 9). The command would ship unannounced. The same task should also run `cf check` (Phase 6 completion step 2), which no task currently does \u2014 note that `pnpm test` does not run the consistency checker, so the new design/tasks documents and the new command are never checked for consistency.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items, not `**Commit**:` lines",
+   "description": "The commit checkpoints are written as `- [ ] **Task 2C: Commit** \u2014 \\`feat(core): add slice design heading validator\\``. The Phase 6 prompt instructs the implementer to \"Commit at each checkpoint marked in the task file (look for lines starting with `**Commit**:`)\" \u2014 no line in this file starts with that token, so the documented lookup finds nothing. Every other task file in the repo writes the marker as `**Commit**: <message>` (e.g. `934-tasks.stable-default-worktree-marker.md` Task 9, `923-tasks...` Tasks 5/9/16). Placement here is correct \u2014 each marker sits after its implementation *and* test task, and the two conditional markers are properly marked \"only if \u2026 changed files\" \u2014 so only the marker format needs to change to `**Commit**: \u2026` for the checkpoints to be discoverable.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The \"unreadable file\" exit-2 condition has no test",
+   "description": "Task 3 implements the readability check (\"exists, is a regular file and is readable\"), and Task 3T/4T cover missing file, directory-as-file, missing template, and template with no required markers \u2014 but no case exercises a path that exists, is a regular file, and yet cannot be read. The design lists \"unreadable\" as its own exit-2 condition in the Functional Requirements, so a single chmod-000 fixture would close the set; slice 934 used the same read-only-file trick for an equivalent path.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The doctype frontmatter message has no defined home",
+   "description": "Task 3 defines `DesignValidationResult` as `path`, `pass`, `missing`, and optional `reason: 'doctype'` \u2014 no message field \u2014 while Task 4 requires the CLI to print \"the frontmatter message\" for `reason: 'doctype'`. The exact string the design mandates (`frontmatter must declare 'docType: slice-design' (see file-naming-conventions.md)`) therefore has to be defined in one place, but neither task says where. Defining it as a core export next to the `'doctype'` constant keeps it from drifting from the design's documented output and satisfies the \"never scatter comparison values\" rule.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Parity-sweep fixes are directed into already-completed test tasks",
+   "description": "Task 5 says a parity difference that turns out to be a bug should be \"fix[ed] and add[ed] a test in the matching test task's file\". By the time Task 5 runs, Tasks 2T/3T/4T are finished and checked off, so the new test lands outside the test-with pairing and the checked-off checklist no longer matches the file's contents. Having Task 5 append a numbered follow-up task (e.g. \"Task 5.1\") keeps the pairing intact and the file self-consistent.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  }
+ ]
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Force and profile name-resolution references symbols that do not exist",
+      "description": "The design's workload loader says **profile names** \"resolve against the existing `BehavioralProfile` constructors used in `config/default.yaml`\" and **force names** resolve \"to module-level singleton instances in the relevant engine modules (e.g. `flocking.cohesion_force`)\". Neither exists. There are no module-level singletons \u2014 the five force *classes* (`CohesionForce`, etc.) are instantiated per-run in `src/migratory_server/force_builder.py` via its `_FORCE_REGISTRY`, not exposed as named singletons like `flocking.cohesion_force`. And `config/default.yaml` defines a single profile named `\"default\"` \u2014 there is no `flocker` / `leader` preset anywhere. So the mechanism the workload schema depends on (resolving `flocker`/`leader` to real `BehavioralProfile` objects, and `cohesion`/\u2026 to real force instances) is under-specified and currently points at nonexistent symbols. The named \"flocker 0.95 / leader 0.05\" mix has no defined mapping to a real profile. This needs a concrete resolution rule (e.g. define named profiles/forces in `bench/workload.py` with the actual field values, or read them from a real config path).",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:395-400"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The workload omits `PropulsionForce`, which is active in the default operating point",
+      "description": "The design states \"The five existing `BulkForce` implementations (cohesion / separation / alignment / momentum / leadership)\" and its `mid-flock` workload engages exactly those five. The engine actually has **six** weight-driven forces \u2014 `force_builder._FORCE_REGISTRY` also includes `PropulsionForce`. `config/default.yaml` sets `propulsion_weight: 0.1` on the `default` profile, so propulsion is engaged in the live default configuration. A \"mid-flock (current default operating point)\" workload that omits propulsion would benchmark a force set that is *not* the default operating point, and the \"resolve force names against the engine's force list\" rule has no entry for a force that is on by default. The count and the engaged set should match the engine's actual six forces.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:91-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"numpy\" backend's force dispatch mode is unspecified and internally inconsistent",
+      "description": "The slice registers a single `numpy` backend that \"calls `tick()` directly\". But `engine/_jit_config.USE_JIT_KERNELS` defaults to `True`, so `tick()`'s force loop dispatches to the **Numba-JIT** kernels in `forces_jit`, not the pure-NumPy reference path. The doc is internally inconsistent about this: the `PhaseTimings` overhead note describes the excess as \"Python dispatch, profile-attribute fancy indexing\" (true only on the NumPy reference path), while the Technical Risks section assumes `force_total` \"includes per-tick `all_radii = ...` Python work\" is non-trivial (also a NumPy-path assumption). Since slice 142 is *defined* as \"benchmark a Quadrants cohesion force against Numba and NumPy,\" the identity of the \"NumPy\" baseline \u2014 JIT-forces vs pure-NumPy forces \u2014 is load-bearing and must be pinned (e.g. explicitly set `USE_JIT_KERNELS` in the numpy backend's `setup` and state which path it runs). As written, it is ambiguous which force path the \"numpy\" numbers represent.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:322-335"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Workload specifies a 3-D world for a 2-D engine",
+      "description": "The `mid-flock` formation uses `world_size: [200.0, 200.0, 200.0]` and `cluster_centers: [[60.0, 60.0, 60.0], [140.0, 140.0, 140.0]]` \u2014 3-D vectors. The engine is 2-D: `migratory.DIMS = 2`, `AgentState.create` allocates `positions`/`velocities` as `(n, DIMS)` = `(n, 2)`, and the repulsor force indexes `x = pos[:, 0]`, `y = pos[:, 1]`. A 3-D `world_size` / `cluster_centers` cannot be seeded into `(n, 2)` position arrays, and there is no 3-D bounds logic to make it meaningful. The doc needs to say whether the world is 2-D (in which case the field should be `[w, h]` and centers 2-D) or whether the harness intends 3-D, and how `world_size` is actually used (it isn't tied to any bounds enforcement in an engine-only harness).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:352-360"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-force breakdown is dropped from the per-phase breakdown the plan assigns",
+      "description": "The parent plan's entry for slice (141) specifies per-tick timings \"broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration)\". The slice instead ships a single aggregate `force_total` and defers per-force breakdown to slice 142 (\"Slice 142 introduces per-force timings \u2026 extending `PhaseTimings` with an optional `force_breakdown`\"). That drops a deliverable the plan assigns to 141. The deferral is defensible on the grounds that 142 is the actual consumer and the mechanism is a single optional field \u2014 but it should be called out as a deviation from the plan's \"force totals per force\" wording (or the plan's entry reconciled) rather than silently narrowed.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"mid-flock (current default operating point)\" conflates the live operating point with the config default",
+      "description": "The `mid-flock` workload (N=3500) is labeled the \"current default operating point,\" but `config/default.yaml` defaults to a **100-agent** flock. The 3,500 figure is the architecture's *live-server operating point* (3,500 @ 57 TPS), not the checked-in config default. The number is correct relative to the architecture, but the \"default operating point\" label should be qualified as the live operating point to avoid implying it is derivable from `config/default.yaml`.\n\nVerified-and-consistent (not findings): `tick()` returning `TickResult` and the five canonical phase boundaries map cleanly to `PhaseTimings` (`src/migratory/engine/tick.py`); `pyyaml` and `pytest-benchmark` are real dependencies (`pyproject.toml`); the `tick_instrumented` \"keep the engine a clean room\" choice is a justified, contained DRY trade-off with a named drift-mitigation test; CLI failure modes (missing YAML field, unregistered backend, `setup` raising, TPS < 1) are explicit with no silent fallbacks; and the \"no changes to `src/migratory/engine/`\" technical requirement is coherent with the registry design.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:178-180"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "Force and profile name-resolution references symbols that do not exist",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:395-400",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "The workload omits `PropulsionForce`, which is active in the default operating point",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:91-96",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "The \"numpy\" backend's force dispatch mode is unspecified and internally inconsistent",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:322-335",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Workload specifies a 3-D world for a 2-D engine",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:352-360",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-force breakdown is dropped from the per-phase breakdown the plan assigns",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "\"mid-flock (current default operating point)\" conflates the live operating point with the config default",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:178-180",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-17T12:30:59.912741",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 146450,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 360664,
+  "cached_tokens": 311744,
+  "cache_write_tokens": null,
+  "completion_tokens": 37440,
+  "reasoning_tokens": 33896,
+  "duration_seconds": 243.6946689169854,
+  "cost_usd": 0.10969600000000002,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,33 @@
+{
+ "case": "context-forge-214-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criteria say a missing, non-regular or **unreadable** file, and a missing or **unreadable** template, each exit 2. Task 3 implements the preflight and template checks, but Tasks 3T and 4T test only a missing file, a directory and a missing template; no test covers an unreadable file or template. **VALID** (minor, `coverage`): the tests leave out a branch the parent design's criterion names. Needs: doc (design plus tasks). **Raised by the original review (F004, note)**; the response then added the `chmod 000` test.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     1
+    ],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     2
+    ],
+    "r07": [
+     2
+    ],
+    "r08": [],
+    "r09": [
+     0
+    ],
+    "r10": [],
+    "r11": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "No borderline calls"
+}

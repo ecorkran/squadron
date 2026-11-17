@@ -1,0 +1,40 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Collision remediation deletes the wrong value",
+   "description": "When migration finds different values in both files, it leaves both intact and directs the user to run `cf config unset <key> --project` to clear the shared copy. But the specified delete routing targets the **personal** file for a personal key (line 89). The command would remove the developer\u2019s preferred value and expose the stale shared value through fallback. Define an explicit way to remove the shared copy without deleting the personal value, and correct the collision walkthrough at line 259.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:144-146"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Existing projects can write an unignored personal file",
+   "description": "The plan requires personal settings to stay out of commits, but the design adds the ignore rule only during `cf init`. An existing project that upgrades and runs `cf config set ... --project` can create `.context-forge.local.toml` without rerunning init, leaving it available to be committed. Define how existing projects receive or are warned about the required protection before personal values are written.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:30-33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Gitignore presence check does not establish effective protection",
+   "description": "A substring or simple line check can mistake a comment or a negated rule for effective coverage; a later negation can also override an earlier matching line. The resulting file may not be ignored despite init reporting success. Specify a check and update strategy that establishes effective Git ignore behavior, and address an already-tracked personal file, which an ignore rule alone cannot protect.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Migration recovery assumes writes cannot damage existing data",
+   "description": "Write-personal-then-delete-shared protects the source key only if a failed write leaves the destination file intact. The design reuses the existing write helper but does not establish that a partial write, disk-full error, or interruption cannot truncate the personal file and lose other settings; the same issue applies while rewriting the shared file. Specify a safe replacement strategy and recovery behavior for failures during either write.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-150"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough cannot reach its expected migration state",
+   "description": "Step 1 creates a personal value, but step 4 leaves that file untouched and expects a different shared value to win. The specified precedence instead returns the personal value, and migration subsequently skips the differing collision rather than moving it. Reset the personal value before testing fallback and migration, then retain a separate collision test.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-253"
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "arch-status-vs-plans half of the consistency-checker criterion has no test task",
+   "description": "The slice design's final Success Criterion explicitly names **both** rules: \"`ConsistencyChecker`'s `plan-status-vs-entries` / `arch-status-vs-plans` rules do not false-positive when a plan's frontmatter is `status: complete` and its only non-checked entry is a `[~]` deprecated one,\" and the design's own \"Current Behavior\" section calls out both (`ConsistencyChecker.ts:726,749,828,849`). Task 12 only covers `plan-status-vs-entries`; no task adds the complementary `arch-status-vs-plans` case. Both rules compute `allComplete = completedSlices === totalSlices` (`ConsistencyChecker.ts:749` and `:849`), so Decision 3's parser arithmetic fixes both automatically \u2014 which is why this is a CONCERN, not a FAIL. But the criterion is left unverified. Add a case to Task 12: arch frontmatter `status: complete` + a plan whose only non-checked entry is `[~]`, asserting no `arch-status-vs-plans` finding.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:200-212"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "New unindexed `[~]` fixture entry breaks existing positional assertions; Task 5 doesn't call this out",
+   "description": "Task 1 adds an **unindexed** `[~]` line to `sample-slice-plan.md`. Unindexed entries receive a sequential `unindexedCounter` fallback index starting at 1 (`slicePlanParser.ts`, and there are currently no unindexed entries in parsed sections), and entries are sorted by index ascending. The new entry will therefore sort to index **1**, shifting every positional assertion. The existing test at `slicePlanParser.test.ts:9-31` asserts `result.entries[0]` is index 101, `result.entries[2]` is index 103, and `toHaveLength(5)` at line 11 \u2014 all of which break once Tasks 1\u20134 land. Task 5 only instructs updating the `totalSlices`/`completedSlices` test and adding a new regression test; it never tells the junior that the existing \"extracts correct entries\" test must be converted to lookup-by-index (e.g., `.find(e => e.index === 101)`) and its length bumped to 7. As written, a junior following the steps hits a red suite without guidance, and the \"byte-identical / parsing unchanged\" framing could tempt an incorrect fix. Amend Task 5 with this explicit instruction.",
+   "location": "packages/core/tests/introspection/slicePlanParser.test.ts:9-31"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers sit at tested points but use checkbox form, not plain `**Commit**:` lines",
+   "description": "Placement is good \u2014 markers appear at tested points (parser+tests, derivation+tests, CLI wiring+integration test, the two verification tests, and final verification), not after every task and not only at the end. They are written as checkbox sub-items (`- [ ] Commit: ...`) and without the `**Commit**:` bold form described in the review criteria, but this matches the prevailing repo convention (CLAUDE.md mandates checkbox format for all task items, and sibling task files use the same style), so no action is required.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Residual-offer task permits a fallback that cannot discover unsampled results",
+   "description": "T13 says to use a discovery surface if one exists, but otherwise restrict selection to store-recorded samples. Those records identify results that have **already** been sampled, so that fallback cannot meet the design\u2019s requirement to offer unsampled results and keep agreement data accumulating. The current metrology code has target-specific review lookup, but no general unsampled-result discovery surface. Add an actionable discovery task rather than permitting the incomplete fallback.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-204"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Direction precedence contradicts the required low-evidence warning",
+   "description": "T7 calls its numbered list a precedence order, but places the below-floor return before `TIGHTEN`; following it makes the required below-floor `TIGHTEN` result unreachable. Replace the contradictory sequence with explicit precedence that permits tightening on thin evidence while preventing graduation below the floor or without a version key.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Recommendation note omits the runtime-selected model limitation",
+   "description": "T9 requires the model-pairing note but does not require it to state that a threshold cannot track a model drawn at runtime and that the recommendation does not apply to that step. The design requires this warning in recommendation output. Add it to the implementation and test criteria.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145-147"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Required failure signals are not assigned implementation and test coverage",
+   "description": "The design requires a malformed `judge:` block to be flagged with a warning and tested, but T8 only tests registered and unregistered templates; the coverage check incorrectly claims the malformed case is exercised. Likewise, T15 requires an explanatory empty-offers line only for a lapse, not for the exhausted \u201cnothing due\u201d case required by the design. Add those behaviors and corresponding tests.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:129-136"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers precede tests and appear after every task",
+   "description": "This pattern repeats throughout the file: an implementation commit is marked before its immediately following test task, and another marker follows the test. Consolidate markers after coherent implementation-and-test pairs, at working, tested points, rather than after every task.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39-52"
+  }
+ ]
+}

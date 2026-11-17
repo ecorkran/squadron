@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The \"two questions plus one confirmation\" inventory is unsatisfiable as written against the shared preflight's staleness prompt",
+   "description": "Task 5.3's success line asserts the \"interaction inventory is exactly two questions plus one confirmation,\" and the PM interaction notice promises the PM \"two engagement answers and one description confirmation\" and instructs \"Never fire the questions without framing.\" But Precondition 1 is the 361 preflight \"executed unchanged,\" and that preflight has its own human interaction: on graph drift it \"state[s] the finding and ask[s] the Project Manager whether to proceed with the stale graph or stop\" (`commands/analysis/understand.md:178-184`), and the shared rule requires recording that choice in provenance as a PM decision (`:186`). The design's own state makes this near-certain to fire \u2014 361's verification measured graph hash `1bfbca1` behind HEAD (`project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md:182`), and 363's frontmatter records the graph as unchanged since. The requirement this leaves unmet: SC2's \"the only questions ever asked\" check is scoped to nothing, so a junior implementer running 8.1 will hit an unframed third prompt and either mis-scope the run or report a false SC2 defect. Fix is small \u2014 state in 1.1 or 5.3 that the preflight's staleness decision is inherited and permitted (and that 8.1's provenance check includes its PM-decision record), and add that prompt to the PM notice's framing. I did not run `git`, so the current HEAD-vs-`1bfbca1` distance is inferred from the recorded measurements, not re-measured.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:215-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The guide-tree premise checks will stop on an uninitialized submodule, and the named remedy does not fit that condition",
+   "description": "`project-documents/ai-project-guide` is registered as a git submodule (`.gitmodules:1-3`), and in the tree I read it exists but is empty: the concept guide path resolves to \"path does not exist\" and listing the directory returns no files. Three tasks depend on reading it \u2014 0.2 (\"concept guide contains `^## User-Provided Concept` exactly once,\" with a STOP-and-report divergence rule), 2.2 (\"Confirm the guide tree path is readable\"), and 6.3 (\"Execute both checks against the real guide\"). So the very first premise check halts work, and when it does the prescribed message names `cf init` / `/cf:onboard` (Precondition 2) as the setup step \u2014 neither of which initializes a submodule; that is `git submodule update --init`. The unmet requirement is a disambiguated stop path: the breakdown needs an explicit 0.1/0.2 step ensuring the submodule is populated, and Task 2.1's precondition-2 text needs to distinguish \"guide tree absent (setup not run)\" from \"submodule not initialized (local checkout state)\" so the implementer does not conclude the design's measured facts are wrong and escalate a false divergence. Note the design's Verified-facts row and the task file's Verified-anchors table both assert the guide contains the section exactly once \u2014 that assertion is not reproducible in this working tree as I find it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:65-77"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tasks 1.2 and 4.2 are diff-only re-reads of their own authoring task's success line",
+   "description": "Task 1.2 checks \"the selector against design lines 137\u2013148: routing table matches case-for-case,\" and its live behavior is deferred to 8.5; Task 1.1's success line already states \"selector covers all four argument cases.\" Task 4.2 checks \"each row against the design; confirm no source renamed, dropped, or added,\" which is a restatement of 4.1's \"table matches the design row-for-row.\" Neither executes a command against the repo or the produced document, so the check is the author looking at the same text again. What to cut: fold both into their author tasks as an added success-criterion bullet (keep the commit marker on the merged task) \u2014 that removes two steps and one commit boundary from an otherwise proportionate 9-group file. By contrast 2.2, 3.4, 5.3 and 6.3 earn their keep: they run `jq`/`grep` against the real repo, byte-diff the question block, and confirm the `cf` registration resolves a name. Minor overlap in the same direction: 2.2 re-checks the guide path and `project.name`, already covered by 0.2.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Success Criterion 4's document-level half is not demonstrated by any walkthrough check",
+   "description": "Criterion 4 requires the dropped topics to appear nowhere \"neither as content nor as gap markers.\" The breakdown covers the \"not asked\" half (4.1's rule, 5.3's flow-text scan, 8.1's \"nothing else asked\") and the anti-prose half (8.2's \"no section holds prose without a source\"), but no step inspects the generated `000-concept.squadron.md` for stray why-now / audience-evolution / methodology-preference content or markers. One line in 8.6 (a `grep -iE` over the generated file returning nothing) closes it; the design's own walkthrough step 3 omits it too, so this is a faithful mirror rather than a transcription error.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Mapping row 6 (Initial Technical Direction) is authored but never verified in the walkthrough",
+   "description": "Task 4.1 requires the full seven-row table, including Initial Technical Direction from `project.languages`/`.frameworks`, `config` nodes and `entry-point` nodes, and 7.3 requires that section's outcome in provenance. But 8.1's confirmation list covers Problem & Motivation, Target Users, Development Approach, Solution Approach and the Overview, and design step 3 likewise skips row 6. SC3 (\"every structural claim names its graph field\") is therefore un-demonstrated for one section; adding one bullet to 8.1 closes it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commit markers sit at working points but are written as checkbox lines",
+   "description": "Eight `Commit:` lines (Tasks 1\u20137 and 8.6) sit at coherent, individually-testable increments \u2014 one per task group, none after every step, none deferred to the end \u2014 and Tasks 0 and 9 correctly carry none. Format only: these are rendered as `- [ ] Commit: ...` checkboxes rather than the plain `**Commit**:` line form. This matches the dominant precedent in 105/112/113/114/116/121 and arguably follows `CLAUDE.md`'s \"use checklist format for all task files, each item and subitem should have a `[ ]` checkbox,\" while 122 uses the plain `**Commit:**` form. No action required beyond choosing one convention project-wide.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  }
+ ]
+}

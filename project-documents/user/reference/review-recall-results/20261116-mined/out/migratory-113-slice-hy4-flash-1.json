@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Density hook leaks a dispatcher-specific method into the engine tick loop",
+      "description": "The design adds `if hasattr(spatial, \"record_density\"): spatial.record_density(...)` to `tick.py` (lines 158-159) and rejects putting the method on the protocol (line 164). This contradicts the parent architecture's \"Pluggable spatial queries\" and \"Clean boundaries\" principles \u2014 the strategy must be \"replaceable without changing the engine\" and spatial strategy must be \"hidden behind these interfaces\" \u2014 and breaks the established pattern from slice 105, which explicitly *excluded* any `tick.py` change (\"the swap is at the construction site\"). It also creates a hidden, non-protocol dependency that only `AdaptiveSpatial` satisfies, and line 315 rationalizes it with speculative future `record_*` subscribers that no slice needs. The lighter mechanism already exists: `AdaptiveSpatial` sees every `query_radius_batch` call and its own `counts` output, so it can derive the density and schedule the next `build()` entirely inside the wrapper \u2014 zero `tick.py` change, fully behind `SpatialQuery`. The only nuance (wanting post-`exclude_self` counts) is a constant \u22121 per agent the wrapper can account for. Recommend recording density in the wrapper and dropping the engine hook.",
+      "file_ref": null,
+      "category": "architecture-boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Operator-configurable `initial_backend` is promised but absent from the config schema and wiring",
+      "description": "The Technical Decision states \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator ... can choose grid-first,\" but `SpatialConfig` (lines 168-195) exposes only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band`, and `_build_spatial` hardcodes `initial_backend=\"brute\"` (line 238). The requirement in that decision is therefore unmet. It is also scope beyond the slice plan for 113, which names only the threshold and hysteresis as exposed knobs. Recommend cutting the configurability claim and documenting `initial_backend` as fixed to `brute` (the lighter option that matches the slice plan and the \"matches current production behavior\" rationale), or adding the field consistently across config, validation, and wiring if it is truly wanted.",
+      "file_ref": null,
+      "category": "scope-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty active population leaves the density signal under-specified",
+      "description": "`record_density` is defined as `counts.sum() / n_active` (line 116), but the document elsewhere writes it as `float(counts.sum()) / len(counts)` (line 25) and `filtered_counts.sum() / len(filtered_counts)` (line 315). These disagree on empty input: the `float(...)/len(...)` form raises `ZeroDivisionError` in Python, while the NumPy form yields `NaN` plus a warning. `n_active == 0` is a valid, reachable input \u2014 the tick is subset-evaluable (slice 100), zero-profile configs are valid and tested (slice 105 caveat), and \"empty\" is listed as a test distribution (line 366). The design neither settles the expression nor defines empty-count behavior. Recommend an explicit `if n_active == 0: return` guard, one canonical expression, and a `record_density`-specific empty test (the current \"empty\" case only covers output parity, lines 364-366).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-boundaries",
+      "raw_category": null,
+      "summary": "Density hook leaks a dispatcher-specific method into the engine tick loop",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-consistency",
+      "raw_category": null,
+      "summary": "Operator-configurable `initial_backend` is promised but absent from the config schema and wiring",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Empty active population leaves the density signal under-specified",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T08:06:19.964913",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 128766,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 222912,
+  "cached_tokens": 163840,
+  "cache_write_tokens": null,
+  "completion_tokens": 30009,
+  "reasoning_tokens": 28595,
+  "duration_seconds": 188.040221540723,
+  "cost_usd": 0.006514540000000001,
+  "cost_basis": "alias_pricing"
+}

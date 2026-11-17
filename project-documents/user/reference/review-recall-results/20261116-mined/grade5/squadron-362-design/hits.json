@@ -1,0 +1,41 @@
+{
+ "case": "squadron-362-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Dependency section: \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped\", while Success Criterion 9 says \"no function- or class-level node is read\". Resolving an endpoint to a layer reads the node. The fix derives the owning file from the node id string, which makes both hold. **VALID**: self-contradiction. Needs: document alone. Found by the original review (F001 \"Function/class edge-endpoint resolution conflicts with the architecture's 'not read' rule\"), so a control.",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     1
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     3
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [],
+    "r09": [
+     3
+    ],
+    "r10": [
+     0
+    ],
+    "r11": []
+   }
+  }
+ ],
+ "note": "No borderline calls"
+}

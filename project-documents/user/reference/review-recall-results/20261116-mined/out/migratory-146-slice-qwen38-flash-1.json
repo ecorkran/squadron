@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "GPU path silently drops every BulkForce not inlined in the fused kernel",
+      "description": "`SimulationManager.step()`'s GPU dispatch never passes `self._forces` to the driver \u2014 the fused kernel computes only the six weight-driven profile forces. But `force_builder.build_forces()` also appends `WorldBoundsRepulsor` when `policy: soft`, and `FlightForce`/`PursuitForce` when `simulation.interactions` is non-empty (src/migratory_server/force_builder.py:59-77). On the GPU path those forces simply do not exist: no guard, no warning, no config rejection. `apply_bounds_policy()` is a deliberate no-op for `SOFT` (src/migratory_server/bounds_enforcement.py:38-40), so `soft` degrades to `open` \u2014 yet the design still calls `notify_positions_modified()` for soft (a transfer of an unmodified array), which suggests the author assumed the repulsor was covered by sync-back. This directly contradicts Success Criterion A4 (\"All four `BoundsPolicy` variants produce valid \u2026 in-bounds positions after 100 ticks on the GPU path\") and the architecture's first Design Goal, \"Preserve behavioral fidelity across scaling tiers \u2026 regression testing against the existing force implementations is mandatory at each tier transition.\" The architecture does exempt the fused tick from the `SpatialQuery`/`BulkForce` *interface*, but not from producing the same *behavior*. Decide and state one of: reject `quadrants` when `policy: soft` or `interactions` is set; fall back to the CPU tick with a logged reason; or rescope A4 to `open`/`wrap`/`reflect`. Per project convention, no silent fallback.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#bounds-enforcement-on-the-gpu-path"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "f64-on-download assumption conflicts with the exported dtypes and the wire layout",
+      "description": "The \"f32/f64 contract\" section asserts `export_positions()`/`export_velocities()` \"return f64 arrays (Quadrants upcasts on download)\" so \"the `TickResult` therefore carries f64, preserving the downstream contract\" (A3). The methods the design reuses do the opposite: they `astype(np.float32, copy=False)` and `from_quadrants_fields` explicitly \"pass through whatever the caller gave us so f32 input arrays remain f32\". `TickResult.from_numpy_state` is the only f64 producer, and the f64 annotation is documented as backend-dependent. That matters here because the world server now consumes this path: `protocol.serialize_state_update`/`serialize_snapshot` write raw `positions.tobytes()`/`velocities.tobytes()` and document 32 B/agent and 36 B/agent, and the decoder reads `dtype=\"<f8\"` at fixed offsets. A float32 array reaches the same `tobytes()` call and produces half the bytes \u2014 a corrupted STATE_UPDATE/SNAPSHOT for every client, while test 5 only asserts `count == 100` and finiteness, so CI cannot catch it. Either (a) change the exports to upcast to float64 and list that edit, (b) have the driver cast after download \u2014 and say which \u2014 or (c) restate A3 as f32 and document the encoder-side change and the precision loss on the wire. This is the one path where the slice doc's contract statement must be checked against the code it cites rather than asserted.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#gpuagentstate-changes"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Incomplete move leaves a production\u2192bench dependency and an unlisted file change",
+      "description": "The Open Note says moving `GpuAgentState` \"eliminates the production\u2192bench import dependency before it is created,\" but the `step()` design (and the Data Flow diagram) calls `build_spatial_hash()` and `fused_force_integrate_kernel()`, which live in `src/migratory/bench/backends/quadrants_fused_kernels.py`. `gpu_driver.py` therefore imports from `migratory.bench.*`, reproducing the very inversion the note claims to prevent, while the Files Changed table lists only `quadrants_fused_backend.py` as updated. The kernels module also imports `GpuAgentState` from the old path and must be edited. Move both `agent_state.py` and the kernels module (or `run_fused_tick`) under `migratory/gpu/`, update the two bench importers, and correct A5's wording \u2014 \"bench tests pass without modification\" is about behavior, but imports and the Files Changed table must change. A related coupling worth stating: `_bind_state_fields()` rebinds module globals, so only one `GpuAgentState` can be live per process \u2014 acceptable given the single-driver design, but it is a process-global hidden dependency `GpuSimulationDriver` now owns, and test isolation (per the Open Note) depends on it.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mid-run failure modes for the GPU tick path are not enumerated",
+      "description": "The Open Notes cover the startup case only (`qd.init` raising \u2192 exception propagates \u2192 server exits), and declare \"a GPU failure after startup is fatal to the process.\" The tick path introduced by this slice is `run_in_executor(sim.step) \u2192 await result`, and the design does not say how the process actually terminates once an exception surfaces in the awaited coroutine, nor that the tick loop stops before it does \u2014 an unhandled `tick_body` exception can leave the asyncio server alive while sim updates silently cease. The hang mode is worse: a driver stall or a `qd.sync()` that never returns parks the single-worker executor, `await run_in_executor(...)` never resolves, `TickBarrier.begin_tick()` never completes (bounded by 2\u00d7 tick budget at clients.py:289), and clients keep a healthy-looking connection receiving nothing \u2014 no log, no exit, no watchdog. \"Fatal to the process\" is a stated *policy* but not an implemented *strategy* for this path. The slice should name the handling for each mode: exception propagating from `GpuSimulationDriver.step()` (who catches it, what gets logged, how shutdown is requested), and a hung kernel (timeout on the sync, or an explicit acceptance of a wedged server with the reason). Startup OOM, idempotent `finalize()`, and double-`qd.init` are already enumerated, so the gap is narrow: the per-tick path needs the same treatment.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes"
+    },
+    {
+      "severity": "NOTE",
+      "title": "NFR restated with the concrete target",
+      "description": "The parent's Tier 2 target (60 TPS at N=50k on CUDA Linux) is restated as A6 and a CUDA-only `tests/load/test_gpu_server_tps.py`, marked Tier 2 / must-pass-before-shipped, with the Metal path explicitly not performance-gated \u2014 matching the architecture's \"Metal best-effort, CUDA gates\" rule. No action needed.",
+      "file_ref": null,
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#testing"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some slice-doc surface restates other documents",
+      "description": "The Data Flow section re-derives the step dispatch already given in \u00a7SimulationManager Changes and the bounds sync-back already given in \u00a7Bounds Enforcement on the GPU Path; the CUDA Tier 2 walkthrough repeats A6. Effort 3/5, one new class, one new module, one moved module, one config subsection is proportionate to what plan 146 assigns \u2014 spawn/despawn re-upload, bounds sync-back and backend selection are all slice-plan-assigned and present, so nothing must be added. Trimming the two restatements and tightening A5 to \"bench tests pass; backend files move\" would reduce drift risk without cutting scope.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#data-flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Default-to-quadrants flip is authorized and non-silent",
+      "description": "`backend: quadrants` as the default comes straight from the plan-146 entry, and the no-GPU case emits a WARNING naming the platform and the fallback (A7), so the architecture's \"no silent degradation\" and CPU-fallback principles hold. Worth a confirmation rather than a change: every Tier-1 laptop dev host now lands on the Quadrants `cpu` arch instead of the Numba path the architecture keeps alive at Tier 1 \u2014 the log line and the `backend: cpu` escape hatch make that explicit and reversible.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Substrate, boundaries, and vendor-risk direction are consistent",
+      "description": "Config-selectable backend, `qd.init` once at startup, `TickResult` as the single engine/server boundary (A3), `GpuAgentState`/`GpuSimulationDriver` as the substrate boundary with bounds policy staying a server concern, deferred wire/multi-population/scaling work explicitly out of scope, and the accepted f32-vs-f64 L-inf deviation carried forward from 142\u2013145 all align with the 140 architecture's Technical Considerations and the accepted Quadrants vendor risk.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#architecture"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "GPU path silently drops every BulkForce not inlined in the fused kernel",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#bounds-enforcement-on-the-gpu-path",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "f64-on-download assumption conflicts with the exported dtypes and the wire layout",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#gpuagentstate-changes",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Incomplete move leaves a production\u2192bench dependency and an unlisted file change",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Mid-run failure modes for the GPU tick path are not enumerated",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "summary": "NFR restated with the concrete target",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#testing",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Some slice-doc surface restates other documents",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Default-to-quadrants flip is authorized and non-silent",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#scope",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Substrate, boundaries, and vendor-risk direction are consistent",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#architecture",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-17T11:56:33.593272",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 95388,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1016270,
+  "cached_tokens": 840960,
+  "cache_write_tokens": null,
+  "completion_tokens": 25917,
+  "reasoning_tokens": 22166,
+  "duration_seconds": 344.2053189999424,
+  "cost_usd": 0.05109189,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,206 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "PR-keyed persistence is asserted, not reconciled with the formatter and validation gate it must actually pass",
+      "description": "The doc claims a PR review \"saves under a PR-keyed name that satisfies the review frontmatter contract without a slice index\" and that \"Archiving, digest, and integrity checks from the 900-band review work apply unchanged.\" Neither claim is derived from the code it must slot into. `format_review_markdown` (`src/squadron/review/persistence.py:198-246`) unconditionally emits `slice: {slice_name}`, `project: {project_name}` (falling back to `unknown`/`0`) and the body heading `# Review: {review_type} \u2014 slice {slice_index}`; `save_review_result` (line 497) hardcodes the `{slice_index}-review.{type}.{slice_name}` base and stamps `reviewedSha` via `resolve_reviewed_sha(\".\")` \u2014 i.e. **local HEAD**, not the PR head sha. The doc says \"the head sha recorded in the artifact is what was reviewed\" but never specifies how the PR head sha replaces that `resolve_reviewed_sha(\".\")` call, nor what fills `slice:`/`project:` for a PR target. Frontmatter is validated externally: `documents/schema.py` states validation is `cf validate frontmatter`, wired into the pre-commit hook \u2014 so a PR artifact committed into a planned project's reviews directory must satisfy a schema the doc only *asserts* it satisfies. The \"PR-keyed persistence\" slice as written starts from an unverified contract; the doc should name the exact filename and frontmatter shape and confirm it against `cf`'s schema and `format_review_markdown`'s current output.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned-State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A PR-keyed name collides with the `{index}-review.*` consumers the doc says \"apply unchanged\"",
+      "description": "Multiple modules parse review filenames assuming position 1 is a **numeric slice index**: `metrology/capture.py:97` globs `{index}-review.*` and `resolve_target` only takes the indexed path when `target.isdigit()`; `metrology/discovery.py:46` globs `*-review.*`; `review/resolution_evidence.py:105` locates `{index}-review.{type}.*.md`; `review/addressed/judge.py` and `discover_judge_results` enumerate the same glob. If the PR-keyed name uses the PR number as the index (e.g. `123-review.pr...`), a PR #123 review is silently found when an operator asks for slice 123's reviews \u2014 ambiguous-index errors or wrong attribution. If it does *not* match the glob, then `sq review resolve`, metrology, and judge-result discovery simply never see PR reviews, and the \"apply unchanged\" claim is false in the other direction. The doc never states the concrete name, so the interaction with four separate filename consumers is undecidable from the document.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Anticipated-Slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One `cwd` is handed to the review path while serving four distinct roots \u2014 jail, config, rules, persistence",
+      "description": "The \"Isolated checkout for tool-enabled reviews\" principle says the adapter hands \"range, working directory, and PR metadata\" to the existing code review. In the current code the agent's `cwd` **is** the tool jail root (`cli/commands/review.py:247`, `tools/registry.py:46`), but that same `cwd` also drives `get_config(..., cwd=)` for injection caps and profiles (`review_client.py:337-340`), rules-directory resolution, and the save path \u2014 `save_review_result` writes to `REVIEWS_DIR` = `project-documents/user/reviews` **relative to the process cwd** (`persistence.py:37,494`). Redirecting cwd to the scratch worktree means: config is read from the PR's own head tree rather than the operator's checkout; and the review artifact is written *inside* the worktree that the doc says \"is removed afterward\" \u2014 destroying the artifact, or silently splitting persistence away from the project's reviews directory. The doc treats \"working directory\" as a single concept; the existing review path treats it as four. This conflation is the hidden complexity cliff of the design and is not addressed anywhere in the document.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Idempotent comment update assumes the prior comment is editable by the current operator",
+      "description": "\"Posting idempotency and attribution\" says the comment is \"marked so squadron can find and update its own prior comment,\" while \"Envisioned State\" says each comment is \"posted through the adapter under the operator's identity\" and a later invocation \"updates or supersedes rather than stacking.\" These conflict: `gh` posts and edits with the operator's credentials, and GitHub only lets you edit **your own** comments. A second operator (or the same operator on a different machine/login) running `--post` finds squadron's marker on a comment they cannot edit \u2014 the update path fails, and the fallback (\"supersedes\") is never specified as a rule, only named. The marker scheme, the update-vs-new decision, and the cross-identity case are the hard part of this feature and the doc leaves all three as one sentence.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hard failure on multiple remotes makes fork workflows unusable, and no remote selector exists",
+      "description": "\"Target grammar\" says resolution \"must fail loudly when the repository has no host remote, has more than one, or the branch has no open PR.\" `origin` + `upstream` (the standard fork topology, and common in the enterprise PR-centric setting that is this initiative's motivation) has more than one remote \u2014 so the documented behavior is to refuse. `gh` itself resolves forks correctly; this failure rule is self-imposed. No flag anywhere in the document (`--remote`, `--repo`, and the \"full parity with the existing review flags\" promise) provides a way to disambiguate. Either the grammar needs a remote/repo selector, or the multi-remote case needs a defined resolution order \u2014 currently it is a dead end.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`gh` subprocess discipline is unspecified despite a documented precedent for unbounded/hanging subprocesses",
+      "description": "\"`gh` as the transport\" acknowledges \"a process boundary and JSON parsing per call\" but says nothing about executing `gh`: no timeout, no closed/non-interactive stdin, no exit-code/stderr handling. The codebase treats exactly this as a real failure class \u2014 `run_git` bounds every invocation with `GIT_COMMAND_TIMEOUT_SECONDS` precisely because \"a command touching an unreachable remote-tracking ref blocks the review forever with no output\" (`git_utils.py:22-26`), and issue #63 pinned text decoding for subprocess output. An unauthenticated or SSO-pending `gh` invocation, or an unreachable enterprise host, will reproduce the same hang the git layer already solved. The adapter slice should state the equivalent discipline (timeout, `stdin=subprocess.DEVNULL`, UTF-8 pin, typed error mapping) rather than leaving \"host unreachable\" to be discovered at runtime.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"One new boundary and nothing else\" is contradicted by two of the three capabilities depending on a second new boundary",
+      "description": "The Overview states the three capabilities \"share one new boundary and nothing else\" \u2014 that boundary being the code-host adapter. But capability 2 posts \"the **saved** review,\" and capability 3 composes from \"the **latest saved review**\" \u2014 both require the PR-keyed persistence target, which the Scope line itself lists as a separate deliverable (\"a persistence target that does not require a slice index\"). Posting and `pr create` therefore couple adapter \u2192 persistence \u2192 adapter in a loop the \"nothing else\" framing denies. This matters for slicing: the Anticipated Slices section sequences \"Post findings to the PR\" and \"`sq pr create`\" without ordering them against \"PR-keyed review persistence,\" even though both consume it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Overview"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Base moved since resolution\" is listed as a fatal error but is the normal state of an open PR",
+      "description": "The failure-modes paragraph enumerates \"base moved since resolution\" as \"a named error with a WARNING-or-higher log line and a non-zero exit,\" while \"Base semantics\" says the range is merge-base-to-head precisely *because* \"a PR's base branch routinely moves after the PR is opened.\" Under merge-base semantics the review remains correct when the base advances; treating movement as a non-zero-exit error would fail reviews on any actively developed target branch. The document should say whether this is a fatal error or an informational WARNING \u2014 as written, the two sections disagree.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "PR-keyed persistence is asserted, not reconciled with the formatter and validation gate it must actually pass",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned-State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "A PR-keyed name collides with the `{index}-review.*` consumers the doc says \"apply unchanged\"",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Anticipated-Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "One `cwd` is handed to the review path while serving four distinct roots \u2014 jail, config, rules, persistence",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Idempotent comment update assumes the prior comment is editable by the current operator",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Hard failure on multiple remotes makes fork workflows unusable, and no remote selector exists",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "`gh` subprocess discipline is unspecified despite a documented precedent for unbounded/hanging subprocesses",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"One new boundary and nothing else\" is contradicted by two of the three capabilities depending on a second new boundary",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Base moved since resolution\" is listed as a fatal error but is the normal state of an open PR",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-17T07:05:20.728919",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 112969,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 418467,
+  "cached_tokens": 342944,
+  "cache_write_tokens": null,
+  "completion_tokens": 29384,
+  "reasoning_tokens": 26003,
+  "duration_seconds": 420.3528442499228,
+  "cost_usd": 0.011800978,
+  "cost_basis": "alias_pricing"
+}

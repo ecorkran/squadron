@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "No task specifies how the local head sha for the \"behind\" check is obtained",
+      "description": "Task 6.1 defines `check_head_pushed(host, locator, *, head: str, local_sha: str, cwd: str)` \u2014 `local_sha` arrives as a caller-supplied parameter. Task 3 adds only `current_branch` and `commits_in_range`; neither yields the working tree's HEAD sha. Task 13.1's wiring order (\"resolve locator \u2192 preconditions (identity, then pushed) \u2192 \u2026\") never names obtaining `git rev-parse HEAD`, and no other task owns it. The success criterion \"a branch whose host sha differs from local fails \u2026 with the same command\" is unit-tested with a sha passed in (Task 6.2), but the production producer of that value is unspecified. A junior AI would likely infer `git rev-parse HEAD`, but under the project's no-inferred-values discipline this should be an explicit step \u2014 either a helper in Task 3 alongside `current_branch`, or a named sub-step of Task 13.1.",
+      "file_ref": null,
+      "category": "task-sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`PrInputs` and the combined `gather_inputs` have no owning task",
+      "description": "Task 7.1 says to create `inputs.py` with \"the commit and slice halves of `gather_inputs`\", and Task 8.1 adds `find_latest_in_range_review(...)` to the same file \u2014 but neither task creates the `PrInputs` dataclass that Task 9.1's `assemble_facts(inputs: PrInputs)` consumes, nor completes `gather_inputs` by combining the three halves, nor tests their combination. Each half is tested in isolation (7.2, 8.2), so the assembled input object and its contract (what fields exist, how absence is represented) are left to be invented at Task 9. This is the seam between Tasks 7/8 and Task 9 and should be an explicit step in Task 7.1 or a small follow-on.",
+      "file_ref": null,
+      "category": "task-sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:157"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The review's `verdict` is carried into assembly but never read by the scan task",
+      "description": "Task 8.1 specifies reading only `reviewedSha` from frontmatter, while Task 9.1's `PrFacts` carries \"its verdict\" and Task 11.1 writes \"the artifact path, verdict, and reviewed sha\" under review provenance. Reading the `verdict` field from the already-selected file's frontmatter is an easy inference (the success criterion explicitly requires the verdict on the page), but no checklist line states it. Worth one added bullet in Task 8.1.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:176"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage is complete",
+      "description": "Each functional criterion maps to a task: slice-branch body content (7, 9, 11, 13.2), unplanned-repo five sections (11.2, 16.2 step 4), merged-ancestor exclusion (8.2, its \"load-bearing case\"), base refusal/confirmation (5.1\u20135.2), push preconditions (6.1\u20136.2, 13.2), presence-check failure with zero writes (12.2, 13.2), three-term title with fallbacks (10a.1\u201310a.2), dry-run/real equality (13.2, 16.2 step 5), identity refusal (13.2, 14.1), live creation (16.2). Technical criteria map to 14.1 (timeouts per call site), 10.2 (provider failure), 13.2 (single write after reads), 15.1 (`review/` \u21cf `pr/`), 2.2 (parser fixture), 16.1 (ruff/pyright), 15.2 (docstring + test). No criterion is untasked; no task lacks a criterion (Task 4's extraction is mandated by D6 as part of Task 13's prerequisite surface, not creep).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:522"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern, and proportionality are sound",
+      "description": "Order matches the LLD's \"Implementation Notes \u2192 Order\": parsers \u2192 git helpers \u2192 locator extraction \u2192 refusal paths \u2192 inputs \u2192 assembly \u2192 body \u2192 command \u2192 docstring \u2192 verification. Dependencies are acyclic and each implementation subtask (x.1) is immediately followed by its test subtask (x.2); Task 14 sits directly after Task 13, its implementation. Model-call refusals are sequenced before the write, matching D8. Effort points stay at 1\u20133, no task is split beyond need, and no `**Commit**:` markers appear anywhere in the file \u2014 acceptable per policy. The slice restates no load/NFR requirement, so no `tests/load/` task or CI gating task is owed.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "task-sequencing",
+      "raw_category": null,
+      "summary": "No task specifies how the local head sha for the \"behind\" check is obtained",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-sequencing",
+      "raw_category": null,
+      "summary": "`PrInputs` and the combined `gather_inputs` have no owning task",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:157",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The review's `verdict` is carried into assembly but never read by the scan task",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:176",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage is complete",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:522",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern, and proportionality are sound",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-17T07:09:57.116231",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 40857,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 109603,
+  "cached_tokens": 80032,
+  "cache_write_tokens": null,
+  "completion_tokens": 12285,
+  "reasoning_tokens": 10641,
+  "duration_seconds": 180.98674470884725,
+  "cost_usd": 0.0043500940000000005,
+  "cost_basis": "alias_pricing"
+}

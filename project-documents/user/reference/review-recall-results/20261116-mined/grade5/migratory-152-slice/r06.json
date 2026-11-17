@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Exit gate redefined away from the plan's baseline; k-first regression guard dropped",
+   "description": "The parent slice plan entry (140-slices.simulation-scaling.md:56) assigns these exit criteria: \"k-nearest TPS at N=200k within 20% of k-first TPS at the same N; parity ... within 5% ...; no regression on k-first path.\" This doc instead (a) swaps the comparison baseline from `k_first` to the newly invented `radius_only`, and (b) removes `k_first` entirely (lines 34, 67, 179), which makes \"no regression on k-first path\" untestable and vacuous. The comparison at line 358 and verification step 4 (line 395) therefore no longer measure what the plan committed to, and a removed path cannot be shown non-regressed. Neither the doc nor the plan record this re-baselining as an approved scope change. Reconcile with the plan: either retain `k_first` and its gate, or get the plan entry's exit criteria amended before treating this gate as authoritative.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Mode-set overhaul and multi-million-agent probes are overweight for the assigned fix",
+   "description": "The assigned deliverable is a coherent reindex that makes k-nearest viable at 200k. The doc bundles several larger items that are not required by that deliverable: a new `radius_only` neighbor mode with its own JIT specialization (68, 181-185), removal of `k_first` plus a default flip in two public config surfaces (67, 197-199, 349), and 500k/1M headroom probes with new workloads (357-358, verification step 5). These exist mainly to chase the published 16M boid reference, which the doc itself says is \"not the destination\" and defers to a future FRNN slice (Future Work, line ~459). It also changes the external `neighbor_mode` config surface while claiming \"does not change any external interface other than collapsing three neighbor_mode values to two\" (Value) \u2014 that collapse *is* an interface change consumed by server/workload/bench. A lighter slice that keeps the existing two modes, adds the reindex, and measures against the plan's `k_first` baseline would satisfy the assigned criteria. Cut or defer `radius_only`, the `k_first` removal/default flip, and the 500k/1M probes into the already-planned FRNN/reference slices.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67-68"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No absolute throughput NFR restated; the load-bearing gate is purely relative",
+   "description": "The architecture's overarching throughput goal is 60 TPS at the tier targets (Overview; tier milestones in 140-slices:148), and this slice touches that exact GPU fused-tick path. Criterion 4 sets only a relative gate (`k_nearest \u2265 0.8 \u00d7 radius_only` at 200k) and criterion 3 explicitly gives `radius_only` \"no pass/fail\"; the doc further calls the gate \"a checkpoint ... not a ceiling\" (line 44). Consequently every stated criterion can pass at any absolute TPS (e.g. single-digit TPS at 200k), so a \"green\" result is indistinguishable from meeting the architecture's tier target. Restate the relevant absolute target (and the tier NFR it tracks toward) in the gate, or state explicitly which future slice owns it and make clear that this slice's pass is not tier completion. This is not blocking because the plan defers absolute validation to the Tier 3 production-scale slice, but the doc should say so rather than omit it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357-358"
+  }
+ ]
+}

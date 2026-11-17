@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All 12 success criteria are covered by traceable, correctly sequenced tasks",
+      "description": "Verified criterion-by-criterion: SC1 \u2192 1.1/1.2/8.5 (selector incl. `candidates` unrecognized); SC2 \u2192 5.1/5.2/5.3 (verbatim questions, once-as-one-block timing, defect rule, inventory check) plus 8.1's \"nothing else asked\" check; SC3 \u2192 3.1/3.2/3.3 (attribution rules, closed checklist, absence-is-observation) plus 4.1's mapping table and 8.1's document checks; SC4 \u2192 4.1/4.2 (dropped-topics rule in skill text); SC5 \u2192 5.1 (skip semantics) + 8.2 (decline-path walkthrough); SC6 \u2192 6.1/6.2/6.3 + 8.1 (verbatim diff) + 8.4 (re-run, byte-identity via `git diff`); SC7 \u2192 2.1 (terminal precondition), 6.1 (both contract checks with distinct stop messages), 8.3 (loud stop, nothing written); SC8 \u2192 6.2 + 8.4 (default stop, augment refillability); SC9 \u2192 7.2 + 8.1 (`cf validate frontmatter`, `squadron` filename, divergence stated and recorded); SC10 \u2192 7.1/7.3 (checkable rule, full outcome set, no invented outcomes) + 8.1 provenance lines; SC11 \u2192 3.1 read discipline + 8.6 (jq-only reads, no function/class nodes, `git diff --name-only` changed-file set, empty `src/` diff); SC12 \u2192 8.1 (PM live, deliberate correction outcome) + 9.3 hand-off. Sequencing is linear and dependency-correct: each verify subtask (1.2, 2.2, 3.4, 4.2, 5.3, 6.3) immediately follows its authoring subtask, 8.4 correctly depends on 8.1's document, and the PM-live 8.1 carries the framing notice. No circular dependencies. Task sizes (1/5\u20133/5) are appropriate; 8.1 is the largest but is a bounded checklist with explicit PM framing, not an oversized task. No scope creep found: 7.4 (362 cross-reference sentence) traces to Implementation Notes; 8.6's ruff/pytest checks trace to SC11 (\"no incidental change\"), not new scope.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "SC4's document-level clause is not re-verified on the generated concept",
+      "description": "Success Criterion 4 requires dropped topics (why-now, audience evolution, methodology preference) to \"appear nowhere **in the document** \u2014 neither as content nor as gap markers.\" Task 4.1/4.2 verify the rule is authored in and verified within the skill text, and 8.1 verifies interaction-level behavior (\"nothing else asked\"), but Task 8.1's checklist for the written `000-concept.squadron.md` contains no check that the dropped topics are absent from the generated document itself (e.g., grep for why-now/audience/methodology gap markers or headings). The design's own walkthrough omits this too, so the task file is faithful to the design \u2014 but the walkthrough is the only place the output document is inspected, so a hallucinated \"why now?\" gap marker would pass uncaught. Suggested fix: add one line to 8.1's document checklist confirming the three topics appear nowhere in the written concept, as content or as `[GAP: ...]`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-316"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers use checkbox items and bare `Commit:` rather than plain `**Commit**:` lines",
+      "description": "All eight commit markers (lines 99, 125, 164, 185, 221, 254, 296, 351) are written as `- [ ] Commit: \\`feat: ...\\`` checklist items. Their *placement* is correct per the review convention: each sits after its task's verification subtask at a working, tested point (selector after 1.2, sources after 3.4, etc.), there is no marker after every task (Tasks 0 and 9.x have none \u2014 9.3 commits in prose), and none sits only at the end. The format deviates from the plain-line `**Commit**:` convention, but CLAUDE.md's document conventions mandate \"`[ ]` checkbox\" for \"each item and subitem\" in task files, so the checkbox form is defensible under project convention. Noting for consistency; no action required unless the project wants to resolve the convention conflict.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load-test or CI-gating obligations apply to this slice",
+      "description": "The design restates no NFR (no performance/load requirements; it is a markdown-only skill-flow slice), so no `tests/load/` task is required, and consequently no CI wiring task is needed. Single task file, 9 tasks / 22 subitems \u2014 proportionate to the design's 3/5 relative effort and \"everything is markdown editing\" scope.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/363-slice.concept-generation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All 12 success criteria are covered by traceable, correctly sequenced tasks",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "SC4's document-level clause is not re-verified on the generated concept",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-316",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers use checkbox items and bare `Commit:` rather than plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "No load-test or CI-gating obligations apply to this slice",
+      "location": "project-documents/user/slices/363-slice.concept-generation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-17T12:16:25.964829",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 61494,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 62246,
+  "cached_tokens": 20800,
+  "cache_write_tokens": null,
+  "completion_tokens": 16555,
+  "reasoning_tokens": 14961,
+  "duration_seconds": 58.12251583393663,
+  "cost_usd": 0.04740804,
+  "cost_basis": "alias_pricing"
+}

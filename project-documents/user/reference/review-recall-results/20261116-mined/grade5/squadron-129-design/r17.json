@@ -1,0 +1,40 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Unset effort must preserve the backend-default behavior",
+   "description": "D5 unconditionally evaluates `ReasoningEffort(config.effort.value)` and passes `effort` to `thread.run`. Slice 931 defines `AgentConfig.effort` as `Effort | None` and explicitly requires an unset effort to send no effort parameter. The current wording therefore risks an `AttributeError` for ordinary Codex use without an alias effort, or an unintended default if one is introduced to avoid that error. Specify that `None` omits the SDK argument, and add a test covering both unset and explicitly configured effort.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:101"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Interactive auth lacks the specified missing-extra diagnostic",
+   "description": "The exact install-command error is specified at `create_agent`, while the login flow constructs `AsyncCodex` directly and no corresponding preflight is described for login or logout. This leaves the Success Criterion that any `openai-oauth` use without the extra reports the exact install command unmet for Part C. Define how interactive operations use the shared runtime/extra check before importing or starting the SDK, including behavior when no runtime binary is available, and add missing-extra tests for login and logout.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Runtime startup and login initiation can hang outside the configured timeouts",
+   "description": "`codex.turn_timeout_s` is placed around `thread.run`, and `codex.login_timeout_s` around `handle.wait()`. However, `AsyncCodex.__aenter__`/`initialize`, `thread_start`, and the browser or device-code login initiation calls all perform new I/O before those timeout scopes. A startup or login-initiation call that never returns is therefore not bounded by the documented strategy. Assign explicit timeout coverage and cleanup behavior to these operations, with stalled-startup and stalled-initiation tests.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80-84"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Logout and mid-login transport failures need explicit outcomes",
+   "description": "The failure table covers login timeout and a `success=False` notification, but not an SDK exception or peer disconnect while initiating login or waiting for completion. `AsyncCodex.logout()` has no failure contract despite introducing another runtime-start and RPC path. Specify handling for timeout, SDK failure, and transport disconnect on these operations: command exit status, user-facing error, handle/runtime cleanup, and how remaining authentication state is reported. Add corresponding failure tests rather than covering only successful logout.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-138"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Cancellation and teardown do not yet guarantee bounded cleanup",
+   "description": "On turn timeout, the design says to cancel the turn and rely on `shutdown()` in `finally`, concluding that no runtime process is orphaned. That conclusion does not hold if cancellation waits indefinitely or `shutdown()` itself hangs; the teardown-error row only handles an error after teardown returns. Define a bounded cancellation/shutdown strategy, including what happens when cleanup exceeds its deadline and how the original timeout or transport error is preserved. Test stalled cancellation and stalled shutdown explicitly.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-135"
+  }
+ ]
+}

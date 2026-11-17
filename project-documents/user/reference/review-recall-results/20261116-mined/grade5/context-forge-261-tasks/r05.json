@@ -1,0 +1,26 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Renderer test task omits three outcome kinds the success criteria require",
+   "description": "The slice's Technical Requirements (project-documents/user/slices/261-slice.detection-and-adoption-state.md:336) specify `renderAdoptionFacts` tests for \"**every outcome**, the state-set notice, 'none found' facts, the squadron bullet\". Task 8T covers `brownfield`, `adoption-in-progress`, and `NOT_EVALUATED`, plus the notice/none-found/squadron cases \u2014 but not `adoption-closed`, `already-planned`, or `greenfield` rendering. Since `AdoptionOutcome` is a five-kind discriminated union and Task 8 explicitly builds in an exhaustive `never` check, each kind's bullet text is part of the spec and should have a rendering case (Task 7T covers `decideOutcome` branches, but that is the decision layer, not the renderer). Adding three cases to the 8T list closes the gap.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Commit checkpoints are checkbox task items, not plain `**Commit**:` lines",
+   "description": "The commit checkpoints (Task 2C/3C/5C/6C/8C/9C/11C/13C/14C/15C) are written as checklist items (`- [ ] **Task 2C: Commit** \u2014 ...`), whereas sibling task files (e.g. `184-tasks.status-display-updates.md:37`, `205-tasks.consistency-checker-build-template-fixes.md:42`) use plain `**Commit**:` lines. The substance is correct \u2014 commits sit at working, tested points (each `*C` follows its implementation and test tasks), not after every task and not only at the end \u2014 and a file with no `**Commit**:` markers is acceptable, so this is a convention-consistency note only.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "No load-test task for the sub-second detection NFR \u2014 correctly out of scope",
+   "description": "The slice restates a performance target (D2, slice design line 167: \"detection adds under one second\"), which normally implies a `tests/load/` task plus CI gating. That tier is mandated only by `project-documents/ai-project-guide/project-guides/rules/python.md:57`, a Python-scoped rule this TypeScript repo does not fall under (no load-test requirement exists in `typescript.md` or `testing.md`), and D2 itself defines verification as \"tests assert the caps, not timings\". Task 3T covers both caps (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`), so the NFR's stated verification is met and no load-test or CI-wiring task is needed.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  }
+ ]
+}

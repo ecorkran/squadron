@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Authentication stays self-contained and dispatch stays capability-based",
+      "description": "`InteractiveLogin` is opt-in, implemented only by `OAuthFileStrategy`, delegates entirely to the Codex runtime, and adds no squadron-side credential store \u2014 consistent with the HLD statement that \"Squadron does not attempt to unify authentication. Each provider's credential resolution is self-contained.\" Using `isinstance(..., InteractiveLogin)` / `ExtraRequirement` rather than profile-name or auth-type strings continues slice 128's explicit ban on string dispatch, and the provider still registers so it can emit the install hint. The `OPENAI_API_KEY` fallback being resolved in-slice (rather than deferred) also avoids a silent-fallback path in the HLD's OpenAI auth model.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship to the architecture's auth model"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Logout and the login/logout runtime spawn are new I/O paths with no failure handling",
+      "description": "`sq auth logout` calls `AsyncCodex.logout()` and, per the \"Runtime startup cost\" paragraph, spawns the app-server subprocess (`AsyncCodex.__aenter__` + `initialize`). Yet neither the failure-modes table nor the \"Patterns and Conventions\" list (which names only \"login timeout, login success=False, and account() failure\") covers logout, and D7 defines timeouts for turn/login-wait/account only \u2014 no logout timeout and no bound on the runtime spawn for login or logout. The design explicitly bounds runtime start in the `account()` path with `codex.account_timeout_s` but leaves the identical spawn in the login and logout paths unbounded. Per the requirement that each new I/O path enumerate hang/timeout/peer-disconnect handling with an explicit strategy, add a logout row (spawn failure, logout RPC failure, hang) with a config timeout and cancellation/`finally` teardown similar to the turn path, and state whether login's `__aenter__`/`login_chatgpt()` calls are covered by `codex.login_timeout_s` or need their own bound.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Overlap with deferred slice 907 should be explicitly reconciled",
+      "description": "Slice 907 (\"Optional Dependency Split \u2014 serve and codex extras\", status `deferred`) declares an intentionally empty `codex = []` extra with a manual-install comment and adds a `CodexProvider.create_agent()` guard built on `resolve_codex_binary()`. This design populates the same `codex` extra with `openai-codex` (D1) and sets a success criterion of \"no remaining reference to ... `resolve_codex_binary`\" (D2). D1 acknowledges replacing the \"stale ... GitHub installs\" comment, but the design never states that it supersedes 907's codex portions. If 907 later lands, the two designs conflict on both the extra definition and the `create_agent` binary check. Recording the supersession explicitly (or aligning with 907's author/PM) would prevent a future regression; this does not block the current slice since 907 is deferred.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Authentication stays self-contained and dispatch stays capability-based",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship to the architecture's auth model",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Logout and the login/logout runtime spawn are new I/O paths with no failure handling",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Overlap with deferred slice 907 should be explicitly reconciled",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-17T07:41:46.285378",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 37803,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 139414,
+  "cached_tokens": 99584,
+  "cache_write_tokens": null,
+  "completion_tokens": 10123,
+  "reasoning_tokens": 8717,
+  "duration_seconds": 69.61181512475014,
+  "cost_usd": 0.002960646,
+  "cost_basis": "alias_pricing"
+}

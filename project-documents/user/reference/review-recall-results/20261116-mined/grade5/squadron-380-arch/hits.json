@@ -1,0 +1,35 @@
+{
+ "case": "squadron-380-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"Rules outside a planned project\": \"In an unplanned repository the review runs with the template's rules and language auto-detection only, and says so\" (line 175). `review/rules.py:resolve_rules_dir` at `76bd0251^` resolves CLI flag, config, `{cwd}/rules/`, `{cwd}/.claude/rules/`, then `~/.config/squadron/rules/`, so a review in an unplanned repository can load rules from the repo or the user directory, silently. **VALID** (minor): contradicts code. Needs: code. Raised by the original review (F012). The response changed the doc to \"reported, not suppressed\".",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     3
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [],
+    "r06": [
+     2
+    ],
+    "r07": [
+     7
+    ],
+    "r08": [],
+    "r09": [
+     2
+    ],
+    "r10": [
+     6
+    ],
+    "r11": []
+   }
+  }
+ ],
+ "note": "Borderline: r04 f2 (says rules dir resolves to None, omits user-dir/repo-dir silent loading, but same contradiction with resolve_rules_dir and unobservable degradation); r09 f2 (rules claim contradiction is a secondary point inside an injection finding, but explicitly notes resolve_rules_dir finds foreign .claude/rules). r01 f3 excluded (CLAUDE.md in template, different problem)."
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "T13's \"reuse 320's existing result-discovery surface\" does not exist; the sanctioned fallback cannot satisfy the non-empty-offers guarantee",
+   "description": "The design's success criterion \"a graduated config with unsampled results yields a non-empty offer set (asserted by test)\" is the load-bearing commitment, but the premise of T13's primary branch is factually false: the only review-directory enumeration in the codebase is `resolve_target`, which globs `{index}-review.*` for a caller-supplied index \u2014 there is no surface that enumerates *all* persisted judge results (verified: no `list_reviews`/`discover*` for the reviews dir anywhere in `src/squadron`; `_REVIEWS_DIR` is used only by `review/persistence.py:17,236,279`). The fallback branch \u2014 \"scope to the store-recorded samples only\" \u2014 is incoherent for the guarantee: \"unsampled\" is defined as *no `SampleVerdict.result_ref` points at it*, so store records alone can never contain an unsampled result. The same missing enumeration also breaks T13/T14's lapsed-graduation detection (needs current judge results to compare identity against) and the pruned-file case. As written, a junior AI either fails the guarantee test or invents the file-walk the task forbids. Remedy: replace \"reuse 320's existing surface\" with an explicit step in T13 that adds a discovery helper (e.g. scan `<cwd>/project-documents/user/reviews` + `derive_judge_config_id` per file, reusing the frontmatter reader \u2014 capture.py already owns `_REVIEWS_SUBDIR`), and define the lapse-vs-exhausted signal in the return type rather than leaving it \"whatever signal T13 produces.\"",
+   "location": "src/squadron/metrology/capture.py:93-95"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Malformed-`judge:`-block failure row is claimed covered by T8 but no task implements or tests it",
+   "description": "The design's Failure Modes table row \"threshold read | malformed `judge:` block (non-numeric floor) | fall back to `resolve_thresholds`' documented merge | WARNING naming the template | malformed judge block \u2192 flagged, not silently defaulted\" has an explicit Test column, and the task's Coverage Check asserts it is \"exercised in T8\". T7's steps and success line only cover the *unregistered template* case, and T8 has no malformed-judge bullet. This matters: `resolve_thresholds` does `float(pass_floor)` on the template value, so a non-numeric floor raises `ValueError`/`TypeError` \u2014 it does not \"fall back\" to the module constant for a *present-but-malformed* key. Because T9 calls `read_current_thresholds` per cell, one malformed template would crash the whole read-only `recommend` command. Add a T7 bullet (catch the coercion failure per cell, return `None` or flag the target, WARNING naming the template) and a corresponding T8 test.",
+   "location": "src/squadron/pipeline/actions/judge.py:49-53"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The runtime-drawn-model half of `model_dimension_note` is unassigned and unasserted",
+   "description": "Functional requirement 4 bundles two assertions: the model+threshold pairing on every recommendation *and* \"the runtime-drawn-model limitation is stated where the recommendation is produced.\" The design's mismatch section is explicit: \"Where a step draws its model at runtime (a 180 pool), the note states that the threshold cannot track the drawn model \u2014 the recommendation does not apply to that step.\" T9's note-text bullet covers only the first clause; the Context Summary's line 19 mentions the (template,model)\u2194(template,step) mismatch but not the pool case; and neither T10 nor T16 asserts the pool clause. A junior AI implementing the given steps will ship a note that silently omits it, and no test catches it. Add the clause to T9's bullet and one T16/T10 assertion string to check for.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Graduate orchestration is placed in the CLI shell, violating the slice's own thin-shell/parity rule; and the CLI has no defined way to resolve the `JudgeConfigId` hash",
+   "description": "T15 states \"thin shells, all logic in `calibration.py`/`graduation.py`\", yet its `graduate` bullet contains the entire decision procedure: re-derive the report, filter the pairing, refuse non-`GRADUATE`, construct `GraduatedConfig`, and perform the idempotent in-place update. None of T9\u2013T13 defines a core function for this, so the logic lands in Typer code (breaking the parity commitment the design's Special Considerations demand) or gets invented untested. Two concrete gaps this creates: (1) the flags are `--template/--model/--level` with no hash \u2014 when multiple cells share `(template, model, level)` with different `template_content_hash` values (exactly the segregation 321 produces for unversioned records), the task never says which cell's identity becomes the graduation; (2) if the implementer reaches for the convenience of 320's `_judge_config_matches` (store.py:73-86) to find the existing record, its \"compare hash only when the filter specifies one\" wildcard semantics would silently re-open the F002 version-blending bug. Fix: add a `graduate_pairing(store, agreement, template, model, level, ...) -> GraduatedOutcome` core task between T13 and T15, specify that ambiguity resolves by refusing (or requiring the hash-bearing `GRADUATE` cell), and tell T11 not to reuse `_judge_config_matches` for version-scoped matching.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "T11's \"extract a shared helper\" forces a refactor of 320's `list_samples`, in tension with \"the capture path (320) is unchanged\"",
+   "description": "No shared tolerant-scan helper exists today \u2014 the `(OSError, ValueError, SchemaVersionError)` skip loop is inline in `list_samples`. The technical requirement permits adding the `graduated_config` discriminator/field but says 320 is otherwise unchanged. Suggest scoping T11's helper as an *added* private method used only by `list_graduations` (and, if touched, `list_samples` delegating with no behavior change), so 320/321 store tests remain untouched and the T17 gate is trivial.",
+   "location": "src/squadron/metrology/store.py:171-186"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "T2's target file splits coverage of the same hash the existing tests already cover elsewhere",
+   "description": "The existing `derive_judge_config_id` / `template_content_hash` assertions live in `test_result_ref.py` (`TestJudgeConfigId`), while `test_identity.py` covers project-id derivation. T2's \"Extend `tests/metrology/test_identity.py` (or add \u2026 check first)\" will most naturally land the `derive_judge_config_id` end-to-end bullet away from its existing sibling tests. Naming `test_result_ref.py#TestJudgeConfigId` as the home for the third bullet avoids split coverage; also note those tests must register `ReviewTemplate`s (the registry is only populated by `load_all_templates()` on CLI/pipeline paths, per review/templates/\\_\\_init\\_\\_.py).",
+   "location": "tests/metrology/test_result_ref.py:105-113"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "One `**Commit:**` marker after every task (17), including 8 implementation tasks whose tests land next",
+   "description": "Markers are plain (non-checkbox) lines with semantic messages \u2014 correct form \u2014 and CLAUDE.md mandates \"at least once per task,\" so this is convention-compliant and matches the 320/321 precedent; recorded only as informational. If the pair-level reading is preferred, T1+T2 and T15+T16 are the candidates to share a single marker, since their success states only exist once both land.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  }
+ ]
+}

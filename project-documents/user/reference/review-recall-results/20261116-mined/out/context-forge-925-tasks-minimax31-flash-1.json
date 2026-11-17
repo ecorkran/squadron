@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`template_preview` is omitted from the auto-init call-site coverage",
+      "description": "The slice requires `ensureCheckout()` from every MCP tool that reads guide content and D3 explicitly requires grepping both CLI and MCP packages. Task 22 names only `context_build`, `prompt_list`, `prompt_get`, and `guide_status`; Task 20 greps only `packages/cli/src`. The existing `template_preview` tool reaches `createContextPipeline()` through the shared `generateContext()` function, so it also reads the guide. On a fresh clone it can still fail against the uninitialized checkout. Add `template_preview` explicitly to Task 22 and a cloned-state case to Task 23, or require the shared `generateContext()` implementation to propagate notices for both consumers and test both.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts#generateContext"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timeout remediation relies on a pattern that is not present",
+      "description": "Task 13 says the existing `/timed out/i` pattern already matches, but the current array only contains `/connection timed out/i` and `/etimedout/i`. The new generic timeout message therefore would not receive `GUIDE_OFFLINE_REMEDIATION`, causing Task 14's required assertion to fail. Task 13 must explicitly add `/timed out/i` or an equivalent timeout-specific pattern.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts#NETWORK_ERROR_PATTERNS"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New cross-package constants lack a public-export step",
+      "description": "This barrel uses an explicit export list. Task 1 schedules exports for `normalizeGuideMethod()` and the alias lookup, but Task 10 does not schedule `SubmoduleCheckoutState`, `CHECKOUT_STATE_LABELS`, or `GUIDE_INIT_TIMEOUT_MS` for the barrel, and Task 28 does not schedule `GUIDE_MANAGED_NOTICE`. Tasks 22, 24, 28, and 29 need these symbols through `@context-forge/core/node`; direct imports from an internal source path are not part of the package's export contract. Add the required exports to Tasks 10 and 28.",
+      "file_ref": null,
+      "category": "api-contract",
+      "raw_category": null,
+      "location": "packages/core/src/guides/index.ts:3-16"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several implementation tasks intentionally leave the tree uncompilable",
+      "description": "Task 1 explicitly accepts type errors until Task 3, while Task 10 says typecheck passes only after Task 11 populates a field. This means those implementation tasks do not leave independently completable, green checkpoints. Merge Tasks 1\u20134 into one atomic rename unit with its tests, and merge Tasks 10\u201311 or otherwise make Task 10 compile independently. Keeping each resulting test task immediately after its implementation would preserve the test-with pattern.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The literal-sweep acceptance criteria cannot pass literally",
+      "description": "Task 7 requires `grep -rn \"manual\" packages/cli/src packages/mcp-server/src` to return only the MCP enum and deprecation text, but `packages/cli/src/commands/update.ts:175` already contains the unrelated word \u201cmanually.\u201d Task 32 similarly says no `manual` may remain outside the alias table and enum, while Tasks 30\u201331 explicitly require README and CHANGELOG text mentioning the deprecated alias and the old output value. Scope these checks to strategy literals in source files, use exact-literal matching, and explicitly exempt documentation and unrelated prose.",
+      "file_ref": null,
+      "category": "validation",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/update.ts:175"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers do not use the canonical label",
+      "description": "The file uses plain `Commit:` labels rather than `**Commit**:`. Their placement is otherwise reasonable\u2014generally after tested implementation groups rather than after every task\u2014but the labels should be converted to the canonical form if task tooling recognizes only `**Commit**:`.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Most enumerated success criteria have direct task coverage",
+      "description": "Tasks 9\u201324 cover the real-git fixture, checkout detection, bounded init, state machine, CLI auto-init, JSON-safe output, and read-only status behavior. Tasks 1\u20138 and 25\u201327 cover normalization, deprecated aliases, config/CLI/MCP boundaries, `cf init --strategy`, and shared help text. Tasks 28\u201332 cover the managed-directory notice, README, CHANGELOG, DEVLOG, and final validation. No substantive scope creep or circular dependency was found beyond the issues above.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`template_preview` is omitted from the auto-init call-site coverage",
+      "location": "packages/mcp-server/src/tools/contextTools.ts#generateContext",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Timeout remediation relies on a pattern that is not present",
+      "location": "packages/core/src/guides/gitExec.ts#NETWORK_ERROR_PATTERNS",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "api-contract",
+      "raw_category": null,
+      "summary": "New cross-package constants lack a public-export step",
+      "location": "packages/core/src/guides/index.ts:3-16",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Several implementation tasks intentionally leave the tree uncompilable",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "validation",
+      "raw_category": null,
+      "summary": "The literal-sweep acceptance criteria cannot pass literally",
+      "location": "packages/cli/src/commands/update.ts:175",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers do not use the canonical label",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Most enumerated success criteria have direct task coverage",
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-17T10:52:07.712811",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 49,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 597310,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1067059,
+  "cached_tokens": 877520,
+  "cache_write_tokens": null,
+  "completion_tokens": 144181,
+  "reasoning_tokens": 140723,
+  "duration_seconds": 878.7028582911007,
+  "cost_usd": 0.063612365,
+  "cost_basis": "alias_pricing"
+}

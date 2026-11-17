@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Capture density before neighbor capping",
+      "description": "The hook receives `filtered_counts` after `apply_neighbor_cap(...)`. Slice 112 shows that the cap replaces `filtered_counts` with `capped_counts`, so this is post-cap density, contrary to line 116 and the slice plan\u2019s explicit pre-cap requirement. With `max_neighbors=1`, the reported mean never exceeds 1, potentially keeping the dispatcher on grid even when pre-cap density strongly favors brute force. Preserve the post-`exclude_self`, pre-cap counts in a separate variable and pass those to `record_density`. Add an integration case with high pre-cap density and a small cap to prove the cap cannot influence backend selection.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:154-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Define empty-subset behavior and correct the density-cost claim",
+      "description": "`counts.sum() / n_active` is undefined when `n_active == 0`, an input explicitly supported by the batch-query and neighbor-cap contracts. Specify an explicit policy\u2014such as recording no sample and retaining the current backend\u2014and test it. Also, because `record_density` receives only `counts`, computing `counts.sum()` is `O(n_active)`, not the `O(1)` operation claimed at line 340. If constant-time recording is required, pass the already-available total edge count or CSR boundary; otherwise correct the technical requirement.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Substantiate the default threshold with consistent benchmark evidence",
+      "description": "The first example calculates approximately 132 mean neighbors for a uniform N=3100 scenario, which selects brute force at threshold 10. The next example claims that the same population spread uniformly across the same world can fall below 10 and select grid. These examples contradict each other, and the first also sits uneasily with Entry 4\u2019s measured grid win in uniform distributions. Consequently, the stated rationale does not establish that the default captures the intended expansion-phase win. Replace these examples with measured pre-cap density traces from the target scenarios and derive or validate the default against the documented phase transitions.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:210-213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Separate cross-backend equivalence from bit-exact determinism",
+      "description": "The integration test requires bit-exact positions against brute force while exercising both backends, but line 431 correctly permits grid rows to contain the same neighbor sets in a different order. Floating-point CSR reductions are not guaranteed to produce bit-identical results under reordering. Either canonicalize row ordering before force evaluation or change cross-backend verification to neighbor-set equivalence and an explicitly justified numerical comparison. Test tick determinism separately through repeated runs with identical state, inputs, and dispatch history.",
+      "file_ref": null,
+      "category": "determinism",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wire the initial-backend choice or cut the operator-facing scope",
+      "description": "The document says an operator can choose grid-first behavior, but `SpatialConfig` contains only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band`, while the adaptive construction at line 238 hardcodes `initial_backend=\"brute\"`. Thus the promised operator choice is unreachable. The lighter option is to remove that operator-facing claim and keep the fixed safe default; if grid-first operation is genuinely required, add the field through YAML validation and wiring with tests.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reconcile the no-spike criterion with the documented switch cost",
+      "description": "The walkthrough requires no dispatcher-induced worst-case spike, while line 439 explicitly predicts a visible first-grid-build spike after switching and leaves mitigation open. Define whether measurements are cold or warmed and specify an acceptable switch-boundary cost, or replace the absolute no-spike assertion with a measurable regression budget. As written, the design simultaneously predicts and forbids the same behavior.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:380"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Capture density before neighbor capping",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:154-159",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Define empty-subset behavior and correct the density-cost claim",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Substantiate the default threshold with consistent benchmark evidence",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:210-213",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "determinism",
+      "raw_category": null,
+      "summary": "Separate cross-backend equivalence from bit-exact determinism",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Wire the initial-backend choice or cut the operator-facing scope",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Reconcile the no-spike criterion with the documented switch cost",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:380",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T12:54:37.736831",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 81250,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "moonshotai/kimi-k3.1-pro",
+  "answering_models": [
+    "moonshotai/kimi-k3.1-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 218625,
+  "cached_tokens": 142464,
+  "cache_write_tokens": null,
+  "completion_tokens": 18089,
+  "reasoning_tokens": 16135,
+  "duration_seconds": 180.18773516686633,
+  "cost_usd": 0.36170480000000005,
+  "cost_basis": "alias_pricing"
+}

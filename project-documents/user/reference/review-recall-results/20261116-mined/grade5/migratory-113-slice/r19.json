@@ -1,0 +1,54 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Restate the architecture\u2019s large-scale performance target",
+   "description": "The parent architecture\u2019s \u201cEfficient large-scale evaluation\u201d goal is to support tens of thousands of agents at full behavioral fidelity on a single CPU process. This slice touches the spatial-query hot path, but its performance checks focus on N=2,000\u20133,000 and do not restate that target or say whether reaching it is deferred. State how this slice is expected to relate to the architecture target, even if this slice does not itself deliver that scale.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Success Criteria"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The density hook creates an undocumented tick-to-dispatcher dependency",
+   "description": "The design says the dispatcher is invisible to consumers, but adds `hasattr(spatial, \"record_density\")` to `tick.py`. This makes the engine tick depend on an optional dispatcher-specific method outside the `SpatialQuery` contract, so another implementation can silently omit the feedback path. Keep the density calculation inside the wrapper if feasible, or define an explicit feedback contract rather than relying on runtime reflection.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Tick Integration"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Empty evaluation sets have no density-signal handling",
+   "description": "The signal is defined as `counts.sum() / n_active`, but the design does not specify what `record_density` does when `counts` is empty. An empty active subset is compatible with the engine\u2019s subset-evaluable tick, and the referenced neighbor-cap design treats `n_active == 0` as a valid input. Define an explicit policy\u2014such as preserving the current selection and skipping the signal update\u2014so this case does not produce an undefined mean and implicit behavior.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Density Signal and Switching Logic"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The documented grid-first option is not configurable through the server",
+   "description": "The design says an operator can choose `initial_backend: \"grid\"` for a scattered-start scenario, but `SpatialConfig` has no `initial_backend` field and `_build_spatial` hardcodes `initial_backend=\"brute\"`. An operator can pin the whole server to grid, but cannot start adaptive mode on grid and later switch. Expose the option if that behavior is required, or remove/defer the operator-facing claim.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Server Configuration"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Verification depends on unspecified dispatch logging",
+   "description": "Walkthrough step 5 expects `grid_selected` and `brute_selected` counts in dispatcher log output, but logging or another way to observe those counts is not included in scope or specified in the design. Either define the minimal instrumentation needed for this verification or make the check use an existing test or benchmark mechanism.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Verification Walkthrough"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Bit-exact parity conflicts with the accepted neighbor-order contract",
+   "description": "The integration test is specified to require bit-exact positions against a brute-force-only run. However, the design accepts neighbor-set equivalence with order differences, and the slice 105 contract likewise allows a different order within each neighbor row. Floating-point force reductions can vary with summation order. Specify canonical ordering if bit-exact cross-backend trajectories are required; otherwise, use a parity criterion consistent with the stated contracts, such as deterministic repeatability and a defined numerical tolerance.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Development Approach"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The design repeats inherited spatial and verification detail",
+   "description": "The slice plan assigns activating the preserved grid, not redesigning or revalidating it. This document repeats the cell-size derivation and empty-profile fallback from slice 105, and repeats test and benchmark rationale across the architecture, walkthrough, testing, and implementation sections. Keep the integration contract and any new dispatcher-specific decisions, but cut the inherited grid explanation and consolidate the duplicated verification material to keep the design proportional to the wrapper, signal, config, and wiring changes.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Cell Size Derivation (Unchanged from Slice 105)"
+  }
+ ]
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage is complete, with test tasks adjacent to their implementation",
+      "description": "Every functional criterion maps to a task: owner/heartbeat on the three SDK paths (13, 14), owner present from the creating write (11, 12), `active_step`/`active_item` cleared at finalize (11, 12), `kill -9` \u2192 `orphaned` + wait exit 8 (9, 10, 19, 20), v4 file \u2192 `UNOWNED` still waiting (10, 20), overdue heartbeat + live PID \u2192 `stale` and excluded from default prune (9, 19, 34), foreground stall with `dispatch stalled:` + WARNING + recovery (15\u201318), prune preview/`--yes`/live-refusal/paused/unowned guards (32\u201339), no per-run warnings plus one summary line and `-v` detail (21, 25, 26), TTY fitting with `\u2026`/floor 8 and no truncation when piped (23, 24, 26), plain aligned pipelines list (27, 28), `pipelines show` byte-exact output (29\u201331). Technical requirements are matched one-for-one (D3 rows \u2192 10; `init_run(owner=)` \u2192 12; the five RunHeartbeat cases \u2192 14; show CLI cases \u2192 31; observer call order + moved `on_step_complete` tests \u2192 6, 7; stall fakes \u2192 17; dispatch mapping \u2192 18; categories/protections/filters/usage errors + real-file apply \u2192 35, 37; `fit_widths` \u2192 24; ORPHANED/STALE wait + exit-8 mapping \u2192 20; the 20 running runs added to the I/O-bounds test \u2192 22, which I confirmed exists at `tests/pipeline/test_run_listing.py:351`). No task is untraceable: Task 40's architecture paragraph comes from D12's \"Architecture record\", Task 41's issue comes from the Excluded entry, Task 3's baseline supports Task 42.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Listing NFR has a load test and its CI gate is named, not implicit \u2014 and the claim checks out",
+      "description": "Task 22a adds `tests/load/test_run_listing_scale.py` against the restated 199 advisory target (sub-1 s, few hundred files) and asserts its gating claim. I verified both halves of the claim: `testpaths = [\"tests\"]` collects `tests/load/`, and `.github/workflows/ci.yml:38` runs `uv run pytest` on the same job as ruff/pyright, so the load test does gate CI. No CI-wiring task is needed and none should be added; the file's existing four `tests/load/` modules (e.g. `test_usage_reader_loop.py`) give the pattern the task says it is modelled on.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "pyproject.toml:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4's \"no import of `executor`\" cannot hold while `RunObserver.step_completed` takes `StepResult`",
+      "description": "D12's protocol signature is `step_completed(self, result: StepResult)`, and `StepResult` is defined in `executor.py:178` \u2014 I checked `executor.py`'s import block (lines 11\u201361): it imports nothing from `state.py`, so the dependency is one-directional `state.py:25 \u2192 executor`. A `run_observer.py` that types the callback and does not import `executor` has no legal source for `StepResult`; routing it through `state.py` would be an implicit re-export, which fails pyright strict (`reportImplicitReexport`, and `include = [\"src\"]` with `typeCheckingMode = \"strict\"`), so Task 4's success line and its pyright line cannot both pass. The same task also creates a cycle: `RunStateRecorder` needs `state.py` (`ActiveItem`, `StateManager`) while Task 4 adds `StateManager.observer() -> RunObserver`, which needs `run_observer.py`. As written a junior will either break the stated criterion or invent a `StepResult` move that no task authorizes. Fix: state the intended import shape in Task 4 (TYPE_CHECKING import of `StepResult` from `executor`, annotation-only, with `state.py` importing `run_observer` under `TYPE_CHECKING` \u2014 the pattern already used at `state.py:21`), or drop the \"no import of executor\" line and say what it is actually protecting against.",
+      "file_ref": null,
+      "category": "task-correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 5 and 6 split one atomic change; the suite is red between them and Task 5's success is written against Task 6",
+      "description": "Task 5 replaces `execute_pipeline`'s `on_step_complete` parameter (`executor.py:390`, call site `:576-577`) and deletes `make_step_callback` (`state.py:267`), while the tests that still pass those names are only updated in Task 6 \u2014 and Task 5's own success line is \"`grep -rn \"on_step_complete\\|make_step_callback\" src tests` is empty after Task 6\", a condition that cannot be observed inside Task 5. This contradicts the file's Context Summary rule that \"every code task ends with ruff format, ruff check, pyright \u2026 and its tests before its commit\", and it means the first commit (Task 7) is the first point where the tree is green even though two code tasks claim to end tested. Merge Task 6 into Task 5 (signature change + its existing-test migration + the `run.py:251` call site as one task, commit at the end of it), and restate Task 5's success as the grep being empty at the end of that task.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:251"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 16 has no verifiable success criterion; D7's six behaviours are only checked one task later",
+      "description": "Task 16 is where the whole interrupt-and-drain policy lives \u2014 WARNING text, `asyncio.timeout(INTERRUPT_DRAIN_TIMEOUT_S)` around `client.interrupt()`, `is_error` results not re-raised, the usable/unusable branch, `unusable_reason` string, the raise in both cases \u2014 but its only \"Success\" line is \"adjust to the Task 2 spike findings if they differ from the design\". That is an instruction, not a check, so a junior completing Task 16 has no way to tell whether they are done, and the file's own rule (tests before commit) is satisfied only from Task 17. Give Task 16 an observable criterion (e.g. the four D7 branches each named in code and `pyright` clean, with the commit deferred to Task 18 where it already sits), and move Task 17's first fake-client test \u2014 interrupt sent, drain reaches the result, session stays usable \u2014 to immediately follow Task 16 so the usable path is proven before the unusable path is written.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:212"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are written as checkboxes, not plain `**Commit**:` lines",
+      "description": "All seventeen markers are `- [ ] Commit: \u2026` (first at Task 7). The convention is plain, non-checkbox lines so a checker agent does not tick them as work items; AGENTS.md's \"each item and subitem should have a `[ ]`\" rule is about task items, not commit anchors. Placement itself is good: markers sit at tested boundaries (7, 10, 12, 14, 18, 20, 22, 22a, 24, 26, 28, 31, 35, 37, 39, 40, 42), not after every task and not only at the end, and Tasks 1\u20136 correctly carry no commit. De-checkbox and bold them.",
+      "file_ref": null,
+      "category": "doc-convention",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two modules have their implementation split across untested halves",
+      "description": "Tasks 15 and 16 are one change inside `sdk_session.py` with tests only at 17, and Tasks 33 and 34 are one `run_prune.plan_prune` function (selection, then protection rules) with tests only at 35. In both cases the intermediate task cannot be validated, and a junior has to hold a half-written function across two sessions. Given 42 tasks for a 3/5 slice this is not overweight overall \u2014 the file is a single task document, test coverage maps to the design's requirement list rather than exceeding it, and steps that name line numbers mirror the design's own contract \u2014 but merging 15+16 and 33+34 would remove two unverifiable handoffs.",
+      "file_ref": null,
+      "category": "task-granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The silent-tool-call risk observation is not scheduled anywhere",
+      "description": "The design's mitigation for \"Silent tool calls\" ends with \"the walkthrough records whether the CLI emits progress during a long Bash call\". That observation lives in walkthrough steps 6\u20137, which Task 42 explicitly permits skipping for lack of credentials, and Task 2's spike prints only the messages that follow `client.interrupt()`, not what arrives while the turn is silent. Add one line to Task 2's record step (log every message received during the long `sleep`, before the interrupt) so the bound's false-positive risk gets evidence even when steps 6\u20137 are skipped.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hermeticity is attributed to `tests/_hermetic.py` for helpers that are not in it",
+      "description": "The Context Summary says tests are hermetic \"(`tests/_hermetic.py`): `tmp_path` runs dir, real `StateManager`, dead PIDs from a subprocess that has already exited\". I read that module: it defines `credential_env_vars` and `write_git_config` only. The behaviours are real and required (Tasks 10, 12, 14, 37, 39 implement them, and `tests/pipeline/conftest.py` already supplies a `tmp_path` `StateManager`), and the design's \"Tests never read the real runs directory or the user pipelines\" requirement is met in substance \u2014 but pointing a junior at a module that lacks those helpers will cost a debugging cycle. Cite the conftest fixture instead, or state the requirement without naming the file.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "tests/_hermetic.py:33"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success-criteria coverage is complete, with test tasks adjacent to their implementation",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Listing NFR has a load test and its CI gate is named, not implicit \u2014 and the claim checks out",
+      "location": "pyproject.toml:82",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-correctness",
+      "raw_category": null,
+      "summary": "Task 4's \"no import of `executor`\" cannot hold while `RunObserver.step_completed` takes `StepResult`",
+      "location": "src/squadron/pipeline/executor.py:178",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Tasks 5 and 6 split one atomic change; the suite is red between them and Task 5's success is written against Task 6",
+      "location": "src/squadron/cli/commands/run.py:251",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 16 has no verifiable success criterion; D7's six behaviours are only checked one task later",
+      "location": "src/squadron/pipeline/sdk_session.py:212",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "doc-convention",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkboxes, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "task-granularity",
+      "raw_category": null,
+      "summary": "Two modules have their implementation split across untested halves",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The silent-tool-call risk observation is not scheduled anywhere",
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Hermeticity is attributed to `tests/_hermetic.py` for helpers that are not in it",
+      "location": "tests/_hermetic.py:33",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-17T11:09:30.494040",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 189726,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 681366,
+  "cached_tokens": 592128,
+  "cache_write_tokens": null,
+  "completion_tokens": 55408,
+  "reasoning_tokens": 51081,
+  "duration_seconds": 768.4396340828389,
+  "cost_usd": 0.04830938,
+  "cost_basis": "alias_pricing"
+}

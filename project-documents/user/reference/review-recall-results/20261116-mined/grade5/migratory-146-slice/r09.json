@@ -1,0 +1,47 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New-client snapshots and EntityManager state reads go stale on the GPU path",
+   "description": "The design's A3 claims \"Downstream code (`client_manager.broadcast`, sim logger) requires zero changes,\" but the world server has another consumer the design never accounts for: `make_snapshot_builder()` (`src/migratory_server/clients.py:344`) constructs `TickResult.from_numpy_state(em.state, em.count)` on every new client connection, reading the CPU `AgentState` arrays directly. On the GPU path the driver owns state; nothing in the design writes GPU results back to `AgentState`, so a client connecting mid-session receives a snapshot of the state as it was at server startup (or last spawn), not current positions. The same staleness applies to `EntityManager.get_position()` and any other direct `em.state` reader. The requirement left unmet: new clients must receive a snapshot reflecting current world state. The design needs to either (a) write back GPU state to `AgentState` per tick, (b) build snapshots from the GPU path's `TickResult`, or (c) explicitly document and accept snapshot staleness \u2014 currently it is silent on this, which is exactly the \"hidden dependency\" failure mode.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#SimulationManager Changes"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No-GPU fallback (A7) is unreachable as designed \u2014 `_select_arch()` contradicts the stated failure behavior",
+   "description": "`_select_arch()` selects by `platform.system()` only: every Linux host returns `qd.cuda`, every Darwin host returns `qd.metal`, regardless of whether the device exists. But the design's own Open Notes state \"If `qd.init()` raises (e.g. CUDA driver absent, GPU OOM during field allocation), `GpuSimulationDriver.setup()` propagates the exception and the server exits at startup.\" These two statements contradict A7: \"A host with no Metal and no CUDA starts successfully with `backend: quadrants` \u2014 `_select_arch()` falls back to `qd.cpu` and logs a WARNING.\" On a Linux host without an NVIDIA GPU, the design as written raises at `qd.init(arch=qd.cuda)` and exits \u2014 A7 can never pass. The requirement unmet: the architecture's failsafe (\"quadrants backend on a host with no Metal or CUDA still runs correctly on `qd.cpu`, with a warning\") and the slice's own Scope bullet (\"falls back to CPU with a logged warning if neither is detected\"). Fix: detect at init time (e.g., attempt the preferred arch, catch the init failure, fall back to `qd.cpu` with the warning), or restrict A7 to the unsupported-platform case and restate A7 to match.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Architecture"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "REFLECT velocity sync-back is missing \u2014 `notify_positions_modified` uploads positions only",
+   "description": "`apply_bounds_policy` (`src/migratory_server/bounds_enforcement.py`) mutates both positions and velocities under `BoundsPolicy.REFLECT` (velocity sign-flip is load-bearing for the bounce behavior). The sync-back mechanism the design specifies is `gpu_driver.notify_positions_modified(result.positions[:result.count])`, which stores and later uploads only positions. Under REFLECT, the flipped velocities are broadcast to clients but never reach the GPU state, so the next tick integrates from the pre-reflection velocity \u2014 the bounce is invisible to the simulation and the GPU and client trajectories diverge. The requirement unmet: A4 requires all four bounds policies to \"produce valid positions after 100 ticks on the GPU path,\" and REFLECT's semantics require the velocity correction to persist. The interface should be `notify_state_modified(positions, velocities)` (or `upload_positions` + `upload_velocities`), with wrap uploading positions only and reflect uploading both.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Count-based change detection misses equal-count mutations and GPU field capacity is unspecified for runtime growth",
+   "description": "Two gaps in the spawn/despawn sync mechanism:\n1. `count_changed_since_last_tick()` compares only the count. `EntityManager.remove_entity()` shifts array indices (`src/migratory_server/entities.py` rebuilds `_id_to_index` with `idx - 1`), so a despawn followed by a spawn between ticks leaves the count unchanged while positions/profile indices at shifted indices differ \u2014 the GPU state is silently stale. The requirement unmet: any mutation of entity state must trigger re-upload. Track a mutation counter (or generation number) rather than the count.\n2. `GpuAgentState` fields are allocated once at `setup()` with `n = entity_manager.count` (Quadrants fields recompile on shape change; slice 145 notes the runner \"allocates once and never resizes\"). The design never states whether `sync_from_entity_manager()` handles a count *larger* than the allocated field size \u2014 an upload beyond the allocated N fails or truncates. `EntityManager.spawn_entity()` is a runtime API, so population growth past the setup-time count is a reachable path. The design must either allocate fields at `entity_manager.capacity` up front or specify reallocation on growth (and name the recompilation cost).",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#SimulationManager Changes"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "f64-export claim contradicts the `GpuAgentState` implementation the design says it moves unchanged",
+   "description": "The design states: \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore carries f64, preserving the downstream contract.\" The actual implementation being moved (`src/migratory/bench/backends/quadrants_fused_state.py:242,253`) returns **f32** (`np.column_stack([x, y]).astype(np.float32)`), and `TickResult.from_quadrants_fields` (`src/migratory/engine/tick_result.py`) documents that \"Slice 145 backends pass f32 positions/velocities here.\" The design also says the moved module gets \"no logic changes.\" These cannot all be true: either the design adds an f32\u2192f64 upcast per tick (a logic change to the export path, with a per-tick allocation cost at N=50k the design does not account for), or `TickResult` carries f32 and the \"preserving the downstream contract\" claim is wrong in dtype terms. The design must pick one and state the real dtype contract, because `apply_bounds_policy` and the wire encoder both sit downstream of this boundary.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#GpuAgentState Changes"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Server-teardown claim references a path that does not exist",
+   "description": "The design says \"Shutdown: the existing server teardown path calls `simulation_manager` cleanup; add `gpu_driver.finalize()` there.\" There is no existing `simulation_manager` cleanup path in `server.py` \u2014 shutdown runs reverse-registered hooks and the `finally` block that shuts down the sim executor. The intent is clear, but the design should name the actual location (e.g., register a shutdown hook or extend the `finally` block after `self._sim_executor.shutdown(...)`), since `finalize()` calling `qd.reset()` must run before process exit on the GPU path.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Server Startup"
+  }
+ ]
+}

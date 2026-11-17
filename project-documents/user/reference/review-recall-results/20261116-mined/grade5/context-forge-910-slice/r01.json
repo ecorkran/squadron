@@ -1,0 +1,19 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Preserve the narrower task-status type",
+   "description": "`TaskFileResult.inferredStatus` is described as having only three possible values; task files cannot be `deprecated`. Retyping it to the full `NormalizedStatus` union admits a state the field cannot represent, weakening its compile-time contract. The literal sweep does not require that widening: derive a three-value task-status type from `STATUS` (for example, excluding `STATUS.Deprecated`) so the values remain centralized while the field stays precise.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#TD-1"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Trim verification and procedural detail for a mechanical refactor",
+   "description": "This is a no-behavior-change sweep, but the design repeats file-by-file work and test instructions across its scope, migration plan, success criteria, and verification walkthrough; the task breakdown also specifies those steps in detail. Cut the duplicated procedural instructions, the temporary typo-and-revert exercise, and the live CLI spot-check. Keep the literal-count check, build, and regression test suite as verification appropriate to the change.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Migration-Plan"
+  }
+ ]
+}

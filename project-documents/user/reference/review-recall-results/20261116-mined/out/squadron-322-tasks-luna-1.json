@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Direction-classification steps contradict the required floor asymmetry",
+      "description": "T7 first says to return `INSUFFICIENT_EVIDENCE` whenever `n < floor`, which would prevent a low-match-rate cell from reaching `TIGHTEN`. It later says that `TIGHTEN` must remain available below the floor, and T8 expects that behavior. Clarify the precedence so implementation has one consistent rule: the evidence floor gates `GRADUATE`, not `TIGHTEN`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-124"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Every task has its own commit marker",
+      "description": "Markers follow all 17 tasks, including implementation tasks whose tests are only in the next task. This conflicts with the requirement that markers sit at working, tested points, not after every task. Group markers at tested milestones\u2014for example, after each implementation-and-test pair\u2014rather than committing implementation before its associated tests.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:40-273"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runtime-drawn-model limitation is not specified for recommendations",
+      "description": "The design requires the per-recommendation model note to explain when a step draws a model at runtime and the threshold therefore cannot track that model. T9 only requires a generic template/model pairing note. Specify the runtime-drawn-model limitation in the generated note and add a test for that case; otherwise the stated limitation may be omitted from the actual recommendation output.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-151"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Direction-classification steps contradict the required floor asymmetry",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-124",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Every task has its own commit marker",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:40-273",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Runtime-drawn-model limitation is not specified for recommendations",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-151",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T05:31:08.869175",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 38570,
+  "cached_tokens": 33152,
+  "cache_write_tokens": null,
+  "completion_tokens": 746,
+  "reasoning_tokens": 381,
+  "duration_seconds": 28.47182337474078,
+  "cost_usd": 0.0012463200000000002,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,68 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`build()` delegates to the selected backend only, which breaks the other backend",
+   "description": "The design states that `AdaptiveSpatial.build()` delegates to the currently-selected backend and that \"the other backend is *not* built,\" justifying it with \"brute-force's `build` does nothing today.\" That premise is false: `BruteForceQuery.build()` at `src/migratory/spatial/brute_force.py:52-54` performs `self._positions = positions.copy()`, and its batch query reads `self._positions`. Conversely `HashGridQuery.query_radius_batch()` raises `RuntimeError(\"build() must be called before query_radius_batch()\")` (`src/migratory/spatial/hash_grid.py:177-181`). Consequences the design does not enumerate: (a) a grid\u2192brute switch makes brute-force query a stale copy of the positions from the last brute-mode tick, or raise `RuntimeError` on a server that has not ticked once in brute mode; (b) a brute\u2192grid switch raises `RuntimeError` out of the tick and kills the tick loop. The same risk section (line 404) reasons only about the \"future brute-force caches something\" case and misses that the *current* brute-force already stores state in `build()`. Fix: build both backends on every `build()` call (accepting the grid's counting-sort cost), or make each backend's `build()` lazy/idempotent; then restate the contract and the switch-cost analysis in the doc.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:108"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Tick integration feeds the *capped* counts to the dispatcher, contradicting the stated pre-cap requirement",
+   "description": "The Value section (line 29) requires that \"the density signal for dispatch reads the CSR's raw `counts` output from the previous tick \u2014 not anything capped,\" and the signal section (line 116) describes it as \"post-`exclude_self`, pre-cap.\" But the `tick.py` sketch calls `spatial.record_density(filtered_counts)` at step 8, and in the actual pipeline `filtered_counts` is *reassigned* by `apply_neighbor_cap` when any profile sets `max_neighbors` (`src/migratory/engine/tick.py:70-78`). So the implementation as specified hands post-cap counts to the dispatcher \u2014 exactly the mistake Entry 5 warns about. This is not theoretical: walkthrough step 5 runs `test.yaml`, where both populations use `max_neighbors=1`, making the capped mean \u22481.0 every tick, permanently below any `>0` threshold, permanently pinning the dispatcher to grid and reproducing the ~30% regression slice 105 was deferred for. The doc must name a distinct variable (e.g. the `exclude_self` output before the cap branch) and add a success criterion asserting the signal is unaffected by `max_neighbors`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:152-159"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Default threshold `10.0` and the sweep range contradict the cited measurements",
+   "description": "The design's own arithmetic (line 210) puts N=3100 uniformly spread in a 300\u00d7300 world at radius 35 at `m \u2248 132`, and concludes \"far above threshold, so brute-force is selected. Matches Entry 4's observation that brute wins at steady-state clustering.\" That misreads the source: perf journal Entry 4 addendum shows the **grid** winning (20 TPS vs ~14) precisely during that scattered expansion phase, and brute only winning once the herd settled. Cross-checking Entry 4's synthetic benchmarks (1000\u00d71000 world, r=50, N=2000): uniform \u2192 grid 3.3\u00d7 faster at `m \u2248 16`; clustered \u2192 brute faster at `m \u2248 220`+; so the crossover implied by the project's own data lies in the low-hundreds, not below 10. With `t = 10.0`, the dispatcher selects brute during the very phase the slice exists to capture, and line 211's claim that the expansion-phase mean \"can drop below 10\" is off by an order of magnitude from line 210. The verification sweep (step 4, line 369) tests only 2/5/10/20/50 and \"expects a clear optimum in the 5\u201320 range,\" so it cannot find the crossover either. Before implementation: re-derive the threshold against the recorded data (the signal is density-proportional, so a radius/world-normalized form may be needed instead of a raw mean), and widen the sweep range accordingly.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No new I/O path failure modes enumerated for the `record_density` hook",
+   "description": "The hook's degenerate-input behaviour is unspecified: `mean = counts.sum() / n_active` divides by zero when `eval_indices`/`active_indices` is empty, which the subset-evaluable tick interface permits (`src/migratory/engine/tick.py:41-45` only short-circuits on `state.count == 0`, not on an empty active subset), and the \"empty\" distribution is explicitly in the parity-test list at line 431. The design also does not specify what happens to the selection when `build()` is called before any density reading, or how a mid-run entity spawn/removal (count changes between ticks) interacts with the signal. Enumerate these with an explicit handling strategy (e.g. `n_active == 0` \u2192 no signal update, keep current backend) rather than leaving them to the implementer.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:96-112"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Stated NFRs are not restated with a concrete target; the TPS acceptance criterion is self-contradictory",
+   "description": "The parent architecture's \"efficient large-scale evaluation\" goal and the world-server architecture's tick-budget constraint (\"tick must complete within the budget at target rates 20\u201360 Hz\", 20 Hz \u21d2 50 ms/tick) are the NFRs this slice is trying to meet, but the slice never states them as numbers. Worse, step 5's expectations conflict with Entry 5: the cited config (N=2500, `max_neighbors=1`) already holds ~19\u201320 TPS scattered and 16\u201317 TPS settled, so \"grid should hold high during expansion\" and \"brute dominates at steady state\" cannot both be true unless the threshold is mis-set (see the threshold finding), and \"overall average TPS across the full 6000 ticks is strictly >= the brute-force-only average\" is asking for a gain against a baseline that is already near the 20 TPS ceiling. Restate the target explicitly (tick-duration p50/p99 vs the 50 ms budget, worst-case tick at a switch boundary, TPS in each phase) and make the criterion measurable rather than a strict inequality.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:376-380"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Full-suite-under-each-backend requirement is not achievable as specified",
+   "description": "\"Full existing test suite (652 tests) passes under `backend: 'adaptive'`\" is stated as a property of the slice, but the engine/server test suite constructs backends directly (`BruteForceQuery()` at ~30 call sites across `tests/test_simulation.py`, `tests/test_herding.py`, `tests/test_flocking.py`, `tests/test_force_builder.py`, `tests/test_repulsor_integration.py`), so nothing in that suite currently routes through `server.py`'s construction site and the config `backend` field has no effect on them. Similarly, walkthrough step 2's `MIGRATORY_SPATIAL_BACKEND` env var is not a mechanism that exists in the config layer (`src/migratory_server/config.py` has no env handling) nor any other documented surface, and the design leaves the pinning mechanism as \"an implementation detail\" (line 361). Either specify the fixture that injects the spatial into these tests or drop the claim to what the slice can actually exercise. Also correct the baseline count: 652 is the post-112 suite, so \"current 652 baseline plus new `tests/test_adaptive_spatial.py`\" overstates the pre-slice figure.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:335-357"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Determinism consequences of per-tick backend switching are dismissed rather than reasoned",
+   "description": "\"Tick determinism\" is an explicit architecture design goal (replay, debugging, eventual distribution). Switching backends changes neighbour *row order* (grid order vs brute's `np.nonzero` order), which the design acknowledges by hedging step 2 with \"modulo documented determinism caveats in the hash grid\" while line 343 requires bit-exact position equality against the brute-only baseline in step 5 of the development approach. Order-independent `reduceat` sums (slice 112's tie-breaking analysis) probably keep positions identical, but the design should say so and add an explicit replay-determinism criterion, rather than leaving the two requirements in tension.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:343-357"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Proportionality: several additions serve scenarios this slice does not have",
+   "description": "The slice is one wrapper, one signal, one config section \u2014 appropriately sized \u2014 but carries some speculative ballast that can be cut or deferred: the \"future slices (e.g. LOD) can subscribe via a similar `record_*` hook\" framing (nothing consumes it), the `hasattr` guard's rejected-protocol-alternative discussion (a one-line implementation note would do), the proactively \"build both backends every tick\" refinement floated in Special Considerations (line 439) \u2014 which, per the `build()` finding above, may actually be the *required* behaviour rather than an optional refinement \u2014 and the `_derive_cell_size` extraction into a helper that only exists to move slice-105 logic. The KD-tree/per-agent-dispatch/dynamic-threshold exclusions (lines 45-54) are correctly scoped out and match the plan entry, so no plan-assigned scope has been dropped.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:311-317"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Frontmatter under-declares the slices the body depends on",
+   "description": "`dependencies:` lists 100/110/111 (matching the plan entry) and `interfaces: []`, but the body's central artifact is slice 105's `HashGridQuery` \u2014 a slice whose plan status is `deferred`, not `complete` \u2014 and the design reasons at length about slice 112's `apply_neighbor_cap` interaction (lines 29, 409) plus the `spatial:` section now living in slice 300's `config.py`. The \"Interfaces Required\" section already enumerates these; mirroring them in the frontmatter would make the dependency on a deferred slice visible to anyone checking readiness.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:1-12"
+  }
+ ]
+}

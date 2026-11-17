@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Collision cleanup deletes the wrong file and cannot clear the finding",
+      "description": "Step 9 prescribes `cf config unset git.integration_branch --project` to remove only the stale shared-file copy. That contradicts the Delete contract at line 89: because this is a personal key, deletion is routed to `.context-forge.local.toml`. The command therefore removes the preferred personal value, leaves the stale shared value in place, causes reads to fall back to that stale value, and leaves the `cf check` finding active. This leaves the different-value collision case without a viable cleanup path and risks destroying the developer\u2019s local preference. Define an explicitly file-targeted deletion or an opt-in migration operation that discards only the shared copy, and verify that the personal value survives and the finding clears.",
+      "file_ref": null,
+      "category": "migration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing projects can migrate into an unignored personal file",
+      "description": "The only guaranteed `.gitignore` protection is through `cf init`, while the migration command at line 144 writes the personal file without establishing or checking that protection. Existing projects\u2014the explicit subject of the migration plan\u2014may never rerun `cf init`; both migration and their first post-upgrade `config set` can therefore create an unignored `.context-forge.local.toml`, undermining the requirement that personal settings stay out of git. Reuse the same minimal one-line ignore helper during migration, or make migration/set explicitly verify coverage and stop with actionable remediation. This does not require the deferred general gitignore-scaffolding work.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The fallback walkthrough retains a higher-precedence personal value",
+      "description": "Step 1 writes `git.integration_branch = \"dev/erik\"` to the personal file. Step 4 explicitly leaves that file untouched, adds `\"legacy/value\"` to the shared file, and then expects the shared value with `source: project`. Under the documented precedence, the result must remain `dev/erik` with `source: project-personal`. Consequently, step 6 is a different-value collision and should report `skipped`, not move the key, and step 8 cannot resolve to `legacy/value`. Clear the personal key before the fallback scenario and test the both-files-present precedence separately. The migration tests at line 222 should also cover the absent, identical, and different-value collision branches rather than only happy-path and no-op behavior.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:245"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New config-read and checker I/O failure behavior is unspecified",
+      "description": "The failure-mode section covers personal-file writes, migration write/delete ordering, and `.gitignore` writes, but not the new read paths. It does not define handling for unreadable or malformed personal/shared TOML during `get`/`list`, the checker\u2019s shared-file scan, or migration\u2019s initial reads. Reusing existing helpers alone does not establish whether configuration reads propagate the error, whether `cf check` emits a finding or aborts, or whether migration stops before modifying either file. Specify those outcomes explicitly, including avoiding silent fallback on malformed input and making a migration with any reported per-key failure exit unsuccessfully rather than appearing successful to automation.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-152"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "migration",
+      "raw_category": null,
+      "summary": "Collision cleanup deletes the wrong file and cannot clear the finding",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:259",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Existing projects can migrate into an unignored personal file",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:159",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The fallback walkthrough retains a higher-precedence personal value",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:245",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New config-read and checker I/O failure behavior is unspecified",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-152",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T12:52:58.719119",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 64904,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "moonshotai/kimi-k3.1-pro",
+  "answering_models": [
+    "moonshotai/kimi-k3.1-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 259619,
+  "cached_tokens": 195264,
+  "cache_write_tokens": null,
+  "completion_tokens": 14895,
+  "reasoning_tokens": 12650,
+  "duration_seconds": 156.77992033399642,
+  "cost_usd": 0.3167128,
+  "cost_basis": "alias_pricing"
+}

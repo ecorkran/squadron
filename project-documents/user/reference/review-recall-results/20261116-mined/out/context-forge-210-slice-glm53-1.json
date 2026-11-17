@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Tool guide reference required by the slice plan is absent from the design",
+      "description": "The slice plan makes the tool guide an explicit deliverable of this slice: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed\" (plan line 218), and the slice entry opens with \"Reference: `project-documents/user/tool-guides/copilot-vscode/setup-ide.md`\" (plan line 184). The design document contains no reference to it anywhere \u2014 not in the frontmatter, Overview, Design Decisions, or Risks. This matters because the tool guide is the source for several claims the design makes (the `applyTo` glob format, prompt-file frontmatter fields, the no-guaranteed-order caveat, and the warning that instruction files without `applyTo` are *not auto-applied*). Without the reference, the design's format assumptions are untraceable, and the \"promoted to a proper published tool guide if needed\" decision is never taken. Fix is a documentation edit: add the reference and decide whether the raw research export needs promotion.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Safety and idempotency contract covers only two files; generated-directory collision and stale-file behavior is unspecified",
+      "description": "The design's safety check reads the managed marker in exactly two files (`.github/copilot-instructions.md` and `AGENTS.md`, per the sequence at lines 98-100 and `isManagedCopilotFiles` at line 109). But the Copilot target's distinguishing feature versus Claude is a one-file-per-source layout under `.github/instructions/` and `.github/prompts/`, and the plan requires \"same safety as Claude path\" plus idempotent re-runs (plan lines 198, 213-214). The design never specifies: (a) what happens to user-authored unmanaged files in those directories (overwrite, merge, or leave \u2014 the architecture's \"Never destructive \u2014 if unsure, ask or skip\" principle in `200-arch.developer-onboarding.md` Technical Considerations applies directly here); (b) whether stale generated files are cleaned up when a source rule/skill is renamed or deleted (the Claude path regenerates one compiled file wholesale, so it has no orphan problem \u2014 the per-file layout introduces it); and (c) the mixed case where one top-level file is managed and the other is not (\"If either exists and is not managed\" leaves the branch undefined). Line 65 also says \"Copilot generated files\" carry the marker in the first 20 lines \u2014 plural, implying instruction/prompt files are marked \u2014 yet the check never reads them, leaving the convention's actual coverage ambiguous. The `.bak`-already-exists case from the Claude path's three-case strategy (slice 202) is also not restated.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skill \u2192 prompt-file frontmatter translation is unspecified while the plan enumerates the target fields",
+      "description": "The plan's mapping table assigns this slice the skills translation with explicit target fields: \"`.claude/skills/*.md` (task workflows) \u2192 `.github/prompts/*.prompt.md` ... frontmatter fields: `name`, `description`, `argument-hint`, `agent`, `model`, `tools`\" (plan line 191). The Design Decisions section gives the rules\u2192instructions translation precise, implementable treatment (lines 76-83: the `paths[]` \u2192 `applyTo` comma-string conversion and the `**` default), but the skills\u2192prompts translation gets nothing beyond \"translate skills \u2192 `.github/prompts/`\" (line 114) and the file-layout arrows (lines 46-47). How Claude skill frontmatter maps onto the six prompt-file fields \u2014 which pass through, which are dropped, which are defaulted \u2014 is left entirely implicit in the guide script. Given that the design explicitly says \"the guide script handles this distinction\" only for the rules case, the asymmetry leaves the prompt layer under-specified for the implementer and risks emitting prompt files Copilot chat cannot surface properly.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:57-84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test Coverage omits the plan's translation-correctness and VS Code manual-verification success criteria",
+      "description": "The plan lists two verification-oriented success criteria this design does not carry: \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files\" (plan line 216) and \"Manual verification: an AI agent in VS Code Copilot can read `.github/copilot-instructions.md` + `AGENTS.md` and follow project conventions as well as Claude does with `CLAUDE.md` + `.claude/rules/`\" (plan line 217). The design's seven test bullets cover the CLI mechanics (target validation, safety prompting, propagation, init routing) but contain no verification of translation output correctness \u2014 not even a manual one \u2014 and the \"files created\" bullet (line 126) does not check per-class provenance (non-alwaysApply rules \u2192 `.instructions.md`, skills \u2192 `.prompt.md`). The design should state where translation correctness is verified (guide-repo tests, or a design-level verification walkthrough), even if the logic lives in the submodule.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parent architecture's two-minute onboarding goal is not restated or assessed for the copilot path",
+      "description": "The parent architecture states the initiative-level target: \"from `npm install` to useful context output in under two minutes\" (`200-arch.developer-onboarding.md`, Overview). Slice 210 touches that path via `cf init --ide copilot`, and unlike the Claude path (one compiled file), the copilot backend writes N+3 files plus a second always-on copy. The design neither restates the target nor notes that the added generation step is negligible against it. Impact is almost certainly immaterial (local file writes), so this is informational \u2014 a one-line note in the design would close it.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:15-19"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Identical content dual-written to `AGENTS.md` and `.github/copilot-instructions.md`; duplication cost not discussed",
+      "description": "The design writes \"the same content\" to both always-on files. This matches the plan's mapping row (\"Always-on project guidance; `AGENTS.md` provides cross-tool compatibility\", plan line 188), so it is not a deviation \u2014 but the referenced tool guide describes distinct roles for the two (`.github/copilot-instructions.md` for Copilot-wide guidance, `AGENTS.md` as the multi-agent shared contract) and states both are always-on in VS Code workspace chat. A Copilot-only user therefore receives the entire always-on payload twice. The design justifies the single-compiled-file choice on ordering grounds but never addresses this duplication; a sentence stating it is intentional (and accepted) \u2014 or that the two files should diverge in role \u2014 would make the decision complete.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Tool guide reference required by the slice plan is absent from the design",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Safety and idempotency contract covers only two files; generated-directory collision and stale-file behavior is unspecified",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Skill \u2192 prompt-file frontmatter translation is unspecified while the plan enumerates the target fields",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:57-84",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Test Coverage omits the plan's translation-correctness and VS Code manual-verification success criteria",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Parent architecture's two-minute onboarding goal is not restated or assessed for the copilot path",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:15-19",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Identical content dual-written to `AGENTS.md` and `.github/copilot-instructions.md`; duplication cost not discussed",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T12:51:16.829769",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 315616,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 240646,
+  "cached_tokens": 186688,
+  "cache_write_tokens": null,
+  "completion_tokens": 74908,
+  "reasoning_tokens": 72245,
+  "duration_seconds": 568.1717670829967,
+  "cost_usd": 0.45367528,
+  "cost_basis": "alias_pricing"
+}

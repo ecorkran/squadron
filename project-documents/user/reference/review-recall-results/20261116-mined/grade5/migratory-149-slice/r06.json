@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough invokes a bench harness and CLI flags that do not exist",
+   "description": "Steps 2\u20135 all drive `python scripts/bench.py --backend \u2026 --config \u2026 --N \u2026 --ticks \u2026 --subdivision-factor \u2026 --parity-check \u2026`. There is no `scripts/bench.py` (scripts/ contains only the two slice-148 measurement scripts), and the real harness entry point (`src/migratory/bench/cli.py`, `python -m migratory.bench.cli` / `python -m migratory.bench`) accepts only `--workload`, `--backend`, `--workload-dir`, `--results-dir`, and the `--list-*` flags \u2014 no `--config`, `--N`, `--ticks`, `--subdivision-factor`, or `--parity-check`. Slices 145 and 148 verified through `uv run python -m migratory.bench.cli --backend \u2026 --workload \u2026`, with tick counts coming from the workload YAML. As written, the gate procedure for A2/A3 cannot be executed; the requirement it leaves unmet is a reproducible gate-measurement procedure. Either name the real CLI and where `S` is supplied, or explicitly scope adding a flag/script as slice work.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:150-188"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Gate workload `mid-flock-50k` currently runs N=100k, not the N=50k the success criteria reference",
+   "description": "A2/A3 and the default gate config (\"`mid-flock-50k` workload, `S=3`, `max_neighbors=32`\") are all stated at N=50k, and the problem statement's ~5000-agents/cell occupancy is the N=50k two-flock measurement from slice 148. The checked-in `bench/workloads/mid-flock-50k.yaml` has `n: 100000` and `world_size: [1536.0, 1536.0]` (its own description text still claims an N scaled from mid-flock), so running the named workload produces N=100k numbers at a density that does not reproduce the ~5000/cell operating point. The design should state whether the workload is corrected to N=50k, a new N=50k workload is added, or the criteria are re-anchored to whatever `mid-flock-50k` actually runs \u2014 otherwise A2/A3 cannot be demonstrated at the N they name.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A5's primary verification mechanism is documented as unavailable on the gate host",
+   "description": "A5 offers \"`nvcc --ptxas-info` or benchmark log\", and Step 4 suggests `TI_PRINT_KERNEL_STATS=1` \"or equivalent\". Slice 148's envelope measurement (148-notes.envelope-measurement.md, \u00a72A) recorded that `ptxas`, `cuobjdump`, and `nvcc` are not installed on the CUDA host and that the working method was inspecting cached PTX for `.local` declarations (baseline: 0, confirming no spill). That note also shows the kernel profiler did not yield the needed register/local-memory figures. A5 should name the method that actually worked on this host (PTX cache inspection for `.local`) rather than a toolchain known to be absent.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The configuration carrier for `S` is unspecified; \"BenchConfig\" does not exist",
+   "description": "The component diagram sources `cell_size` and `S` from a `BenchConfig` object, but the harness has no such type \u2014 configuration arrives as `Workload` YAML (`src/migratory/bench/workload.py`, whose loader raises on missing fields) plus CLI arguments, and `GpuAgentState.setup()` derives `cell_size` from `max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER` (quadrants_fused_state.py:150-152). The design says \"the bench harness passes `cell_size` at setup; it reads from config\" without naming where `S` lives: workload YAML schema, CLI flag, or backend parameter. This leaves two requirements unmet: (1) a single named carrier for `S`, and (2) one centralized home for the `S=1` default (project convention forbids scattered magic defaults). Related minor inaccuracy: line 80 attributes `grid_w`/`grid_h` computation to `build_spatial_hash`; that computation is in `GpuAgentState.setup()`.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:85"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Plan entry's 7-neighbor benchmark target is absent from the design",
+   "description": "Plan 140 entry 149 carries a biological note making \"the 7-neighbor operating point \u2026 a benchmark target\" for this slice, and the slice 148 re-diagnosis (which the plan entry mirrors) calls it \"a meaningful operating point to benchmark\", noting the early-exit gain scales with `candidates_scanned / max_neighbors` and is even larger at k=7. The design contains no criterion, workload, or verification run at `max_neighbors=7` \u2014 all gates are fixed at `max_neighbors=32`. Either add a 7-neighbor measurement pass or explicitly defer it with a named owner; as written, scope the plan entry assigns to this slice is silently dropped.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Candidate-count arithmetic in the Intervention 2 interaction analysis is internally inconsistent",
+   "description": "\"With S=3 alone: candidates loaded drops to ~5000. With both: candidates loaded ~555, exits after ~32.\" The slice's own source (148-notes.rediagnosis.md, Intervention 2) computes the S=3 scan as 49 cells \u00d7 ~555 \u2248 27,000 candidates scanned, with early exit then limiting acceptances to ~32; line 56 of this same document correctly derives ~555 as per-cell occupancy. \"~5000\" and \"~555\" conflate per-cell occupancy with total candidates scanned. The gates are empirical so this doesn't block implementation, but an implementer sanity-checking scan counts against the design would misread a correct result as a broken subdivision; correct the arithmetic to the re-diagnosis figures.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "\"CPU fallback\" for Mac verification does not exist for this backend",
+   "description": "\"A1 and A4 can be verified on Mac (Metal or CPU fallback).\" `QuadrantsFusedTickRunner._select_arch()` raises on any platform other than Linux/CUDA or Darwin/Metal \u2014 there is no CPU fallback for the fused backend (slice 145 design: \"there is no CPU fallback\"). Mac verification means Metal only; the numpy backend serves as the parity reference, not as a fallback runner for this backend.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:126"
+  }
+ ]
+}

@@ -1,0 +1,314 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Current State\" claims no world server exists, but four slices are implemented and complete",
+      "description": "`## Current State` states \"No world server exists. The behavior engine architecture (100-arch) defines the computational core but has no host process.\" This is false: `src/migratory_server/` contains `server.py`, `tick.py`, `entities.py`, `simulation.py`, `config.py`, `logging_setup.py`, `__main__.py`, and `300-slices.worldserver-foundation.md` marks slices 300, 301, 302, 303 as `[x]` complete with 202 passing tests. Frontmatter still says `status: in_progress`, `dateUpdated: 20260318` while the slice plan is dated 20260401. For a `guideRole: primary` doc consumed by AI implementers, this is actively misleading: `## Envisioned State` steps 1\u20132 (tick loop, entity management) are delivered, while steps 2/5 of the loop (environment update, distribution) are not, and the doc gives no way to tell which parts are actual versus planned.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:49-53"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter and Related Work point at a concept document that does not exist",
+      "description": "`dependsOn: [001-concept.migratory, 100-arch.behavior-engine]` and line 132's `[001-concept.migratory.md](../project-guides/001-concept.migratory.md)` are dangling. The concept is `project-documents/user/project-guides/000-concept.migratory.md`; `001` in that directory is `001-initiative-plan.migratory.md` (an initiative plan, not the concept that establishes \"Python 3.12, asyncio, NumPy\" as the doc claims). The sibling `100-arch.behavior-engine.md` correctly uses `000-concept.migratory` and reciprocally links to a nonexistent `200-arch.world-server-foundation.md` instead of `300-arch.worldserver-foundation.md`. A primary guide whose two cross-references both 404 will send anyone following links to the wrong artifact.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The synchronous tick inside asyncio starves all client I/O, and the \"NumPy releases the GIL\" upgrade path is misstated",
+      "description": "\"run the tick synchronously, then yield to the async event loop for I/O between ticks\" does not deliver the `Observable by default` goal or the `Client connection lifecycle` requirement (\"handle slow or stalled clients without blocking the tick loop\"). A synchronous NumPy tick executed inside an `async def` blocks the entire event loop; at 20 tps every WebSocket accept, read, write, ping/pong and disconnect is stalled for the tick's duration. The implementation confirms the failure mode: `migratory_server/server.py`'s `tick_body` calls `sim.step()` with no awaits, and `tick.py`'s overrun branch skips `asyncio.sleep()` entirely \u2014 under sustained overrun the loop never yields at all, so `## Envisioned State`'s \"Between ticks, the server handles client connections and disconnections asynchronously\" becomes unreachable. The doc adds \"offloading the tick to a thread or process (NumPy releases the GIL) becomes the upgrade path\", but GIL release is irrelevant when NumPy is called *on the event-loop thread*; offloading requires `asyncio.to_thread`/an executor, which then makes the canonical `AgentState` concurrently accessed by the tick thread and I/O handlers \u2014 a synchronization/snapshot boundary that \"Authoritative state ownership\" and \"Tick as transaction\" never define. The stated upgrade path is therefore both misdiagnosed and missing its hard part.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Pure tick functions\" and read\u2013compute\u2013commit contradict the engine's in-place mutation contract",
+      "description": "`Tick as transaction` promises \"read current state, compute next state, commit. Between ticks, the world is consistent and queryable\"; `Distribution-compatible without distribution machinery` lists \"pure tick functions\"; `## Envisioned State` step 3 says \"Receive updated positions and velocities\" and step 4 \"Apply the updated entity state as the new canonical state.\" The actual contract is `migratory.engine.tick.tick(...) -> None`, which mutates `state` in place via `integrate()` (`velocities += ...`, `positions += ...`) and returns nothing. `100-arch.behavior-engine.md` also says \"Returns the updated state array\", so even the two architecture docs disagree on the signature. With no separate next-state buffer there is no commit boundary, no rollback, and no clean snapshot to hand a new client \u2014 the \"transaction\" and replay determinism claims (`line 43`, `line 90`) rest on a property the interface does not have.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:39-64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment integration is described three incompatible ways and the engine has no environment interface",
+      "description": "`Orchestrator, not monolith` (line 41) says \"The tick loop calls the behavior engine, queries the environment, and pushes state to clients\"; loop step 3 says \"Pass current entity state and environment context to the behavior engine\"; line 72 says the environment \"provides terrain elevation, biome data, resource locations, and seasonal state to the behavior engine through a read-only query interface\". Those are three different data paths (server-side query, value passed as an argument, engine-side callback interface). None exists: `migratory.engine.tick.tick()` takes `(state, profiles, spatial, dt, forces, active_indices)` \u2014 no environment/context parameter \u2014 there is no `migratory/environment` package, and `migratory_server/simulation.py::step()` passes no context. Slice 304 in the slice plan proposes \"Pass environment context to `SimulationManager` and `engine.tick()`\", i.e. a cross-initiative signature change in the engine, which this architecture never accounts for. Loop step 2 (\"Environment update\") likewise calls an `environment.update()` that is not defined anywhere.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:62-72"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Replay fidelity is claimed without any seedable RNG, event queue, or event-log contract",
+      "description": "\"logging only the initial state plus any non-deterministic inputs (entity spawns/removals, configuration changes) is sufficient\" cannot work as specified. `EntityManager.spawn_population()` uses `np.random.default_rng()` with no seed, and `302-slice.entity-management.md` explicitly records \"no seed is configured (non-deterministic)\" as deferred; the `Configuration surface` (line 86) mentions an \"environment seed\" but no entity-spawn RNG seed. Step 4 of the loop refers to \"entity lifecycle events (spawning, removal, profile changes) queued during the tick\" but never names the queue, its producer, or its serialization \u2014 the engine is stateless and returns `None`, so it cannot emit them, and `ServerConfig` is a frozen dataclass with \"configuration changes require a restart\", so that event class cannot occur. Given a log and the same configuration, the initial population itself cannot be reproduced.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Explicit lifecycle\" promises persistence and defined error states that are neither defined nor built",
+      "description": "The claim at line 45 \u2014 \"Server startup, shutdown, and error states are first-class concerns with defined behavior. The server knows how to initialize subsystems in order, drain client connections gracefully, and persist state on shutdown. No silent failures, no undefined states.\" \u2014 is unsupported across the whole document (I read every section; no error-state enumeration, exception policy, or drain ordering appears). \"Persist state on shutdown\" has no counterpart: there is no save/load code in `src/migratory_server/` and `300-slices.worldserver-foundation.md` lists \"State Persistence and World Save/Load\" as unchecked `Future Work` item 3. \"Drain client connections gracefully\" depends on slice 305, which is unchecked and whose design says nothing about drain ordering. There is also no policy for the concrete failure modes the design introduces: an exception from `engine.tick()`, a failed client send, log I/O failure, capacity overflow on a queued spawn, or environment generation failure. This contradicts CLAUDE.md's \"Never use silent fallback values. Fail explicitly with errors\" \u2014 the doc asserts explicit failure without defining any failure behavior.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The WebSocket stack is never chosen; asyncio provides no WebSocket protocol",
+      "description": "\"The WebSocket and async I/O story is well-served by asyncio\" and \"Client communication is WebSocket-based with a simple protocol\" treat WebSocket framing as a stdlib feature. It is not: `asyncio` provides streams/transports, not the HTTP upgrade handshake, frame masking/fragmentation, close codes, or ping/pong required for real clients. `pyproject.toml` declares only `numpy>=1.26` and `pyyaml` (plus pytest dev deps) \u2014 no `websockets`, `aiohttp`, or equivalent \u2014 and slice 305 repeats the error (\"Accept WebSocket client connections via asyncio\"). Likewise \"a minimal framing protocol (tick number, entity count, array layout descriptor) wrapping raw buffers\" specifies no serialization library, no dtype/endianness, and no conversion path between the float64 2-D `AgentState` arrays and the concept document's `Float32Array` transfer requirement. The single hardest integration in the scope is left as \"step 3: magic happens\".",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:53"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No wire-format identity contract: stable entity IDs vs array-index compaction make deltas and culling ambiguous",
+      "description": "Step 5 allows \"snapshots or deltas\", `Client connection lifecycle` keeps deltas as an option, and line 108 requires per-client spatial culling with \"aggregate descriptors\" \u2014 but the document never says whether the wire format identifies entities by stable ID or by array index. The implemented model makes this load-bearing: `302-slice` assigns monotonic never-reused IDs and `AgentState.remove_agent()` compacts arrays via `np.delete`, shifting every subsequent index; the ID\u2192index map is rebuilt on each removal. `AgentState` contains no ID array, so a delta framed as \"entity at index i changed\" is silently wrong after any removal, and an aggregate descriptor has no ID to reconcile against when it disaggregates. \"Region-aware entity management\" (line 35) has no region concept at all. The framing protocol's \"array layout descriptor\" is never defined, so slices 306 and 309 will each invent a different identity scheme.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:64-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scaling figures are mutually inconsistent and contradicted by the O(n\u00b2) implementation",
+      "description": "\"Streaming 500K entity positions (12 bytes each)\" assumes 3-D float32, while \"500K entities \u2248 24MB of state\" assumes ~48 bytes/entity (2-D float64 \u00d7 3 arrays), and the actual `AgentState` is `DIMS = 2` float64 positions/velocities/accelerations plus int32 profile indices (52 bytes/entity \u2248 26MB) \u2014 so the doc's own memory and bandwidth numbers use different dimensionalities and precisions. \"10K\u201350K entities: Comfortable on a single CPU with NumPy-vectorized spatial hashing\" is unvalidated and currently false: spatial hashing does not exist (slice 105 `not_started`), and `BruteForceQuery.query_radius()` is a Python loop over all agents each computing an N\u00d72 distance array \u2014 O(n\u00b2) per tick, ~100M distance computations/tick at 10K. `engine.tick()` also allocates a Python list of N neighbor index arrays plus `total_forces` and `max_speeds` every tick, which at 500K with \"~100 neighbors per entity\" is hundreds of MB of transient state \u2014 directly contradicting \"Memory is never the constraint\". These are load-bearing claims for the whole scaling section with no benchmark behind them.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight architecture: a deferred distribution/GPU roadmap consumes roughly a quarter of the document",
+      "description": "The `Entity scaling and multi-resolution simulation` block (five scaling tiers, CuPy/custom CUDA kernels, multi-GPU dynamic partitioning, \"astrophysics N-body simulations, military wargaming\", group-encounter partition rebalancing, network egress math, three-tier fidelity with statistical disaggregation) is scope the project has already assigned elsewhere and deferred. `001-initiative-plan.migratory.md` initiative 620 says \"Distribution & Scaling ... is acknowledged but deliberately deferred \u2014 it could expand the product scope 5-fold or more ... it need not be designed proactively\"; `300-slices` Notes say \"Multi-resolution simulation deferred ... premature for the foundation slice plan\"; `Design Goals` line 27 says \"Complexity arrives only when single-process scaling is genuinely exhausted\"; CLAUDE.md says \"Always resist adding complexity. Ensure it is truly necessary.\" Cut the five tiers, the GPU path, the group-encounter strategies, the egress arithmetic and the flock-aggregate dynamics specification; keep one sentence pointing at `100-arch`'s subset-evaluable `active_indices` contract. Leaving them in the foundation architecture creates pressure to build for them now \u2014 which is exactly what line 112 does by declaring support for them \"from the start\" a \"key architectural decision\".",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The aggregation/variable-rate extension point is asserted \"from the start\" but never defined and cannot be implemented on the current state model",
+      "description": "\"ensuring the behavior engine's interface and the entity management layer support aggregation and variable-rate ticking from the start\" is the one load-bearing forward-looking decision left in scope, yet no extension point is specified. Half of it exists: `tick(active_indices=...)` is implemented, but `SimulationManager.step()` always omits it, and nothing in the doc says who owns the fidelity tiers, the observer set, or the per-entity tick schedule. Aggregation is not reachable: an \"aggregate flock entity\" (center of mass, dispersion radius, population count, heading) cannot be represented by `AgentState`'s N\u00d72 float64 position/velocity/acceleration arrays plus int32 profile indices, and `SpatialQuery.query_radius()` returns *agent indices*, so aggregates cannot be presented \"through the same neighbor query interface\" as `100-arch` assumes. Disaggregation (\"spawned from the statistical model\") additionally needs deterministic RNG and ID reconciliation, both absent (see the replay finding). The stated future work \u2014 `Future Work` item 1 in the slice plan \u2014 will require rearchitecting the state and spatial layers, not plugging into them.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Well-defined interfaces\" are never written down; the profile schema contract is missing and already breaks startup",
+      "description": "`Subsystem orchestration, not subsystem reimplementation` says the server \"coordinates ... through well-defined interfaces\" and \"Each subsystem can evolve independently as long as its interface contract holds\", but the document specifies zero interface signatures \u2014 no tick call, no environment query, no client protocol, no serialization schema. `Configuration surface` lists \"entity population definitions (which profiles, how many, where)\" but never says who owns the behavioral profile parameter surface or how server config maps to engine profiles. That omission has already materialized as a broken build: `migratory.engine.profile.BehavioralProfile` requires six fields (`max_speed`, `query_radius`, `cohesion_weight`, `separation_weight`, `alignment_weight`, `separation_radius`), while `migratory_server/simulation.py::build_profiles()` constructs it with two, `config/default.yaml` supplies two, and `Server.run()` calls `build_profiles()` unconditionally \u2014 so the server raises `TypeError` at startup with its own default config. The doc's \"Failures should be explicit and immediate\" is satisfied only accidentally; the actual failure is an unowned interface boundary, not bad input.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:33-86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Anticipated Slices diverges from the authoritative slice plan and inverts the initiative-500 dependency",
+      "description": "The seven-slice list conflicts with `300-slices.worldserver-foundation.md`: it merges \"Server bootstrap and tick loop\" (plan splits 300/301), omits \"State Serialization and Protocol\" (306) and \"Client Spatial Culling\" (309) \u2014 both of which `Technical Considerations` explicitly requires \u2014 and renames \"Logging and replay\" (307, which depends on 306). It also claims work owned by another initiative: \"Environment layer foundation \u2014 Terrain generation, resource placement, and the read-only query interface\" and \"Seasonal and temporal systems \u2014 seasonal cycles, resource availability shifts, day/night\" are initiative 500's scope per `001-initiative-plan.migratory.md` (\"(500) Environment Layer \u2014 Terrain, biome, resource locations, seasonal state... Dependencies: [300]\"), and slice plan slice 304 states \"The environment layer itself \u2014 terrain, biomes, resources, seasonal logic \u2014 is owned by initiative 500\". Listing the dependent initiative's deliverables as world-server slices creates an ownership conflict and an upward dependency (300 consuming 500's internals while 500 is defined as depending on 300).",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:114-128"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Current State\" claims no world server exists, but four slices are implemented and complete",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:49-53",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Frontmatter and Related Work point at a concept document that does not exist",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The synchronous tick inside asyncio starves all client I/O, and the \"NumPy releases the GIL\" upgrade path is misstated",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Pure tick functions\" and read\u2013compute\u2013commit contradict the engine's in-place mutation contract",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:39-64",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Environment integration is described three incompatible ways and the engine has no environment interface",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:62-72",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Replay fidelity is claimed without any seedable RNG, event queue, or event-log contract",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:90",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Explicit lifecycle\" promises persistence and defined error states that are neither defined nor built",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The WebSocket stack is never chosen; asyncio provides no WebSocket protocol",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:53",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "No wire-format identity contract: stable entity IDs vs array-index compaction make deltas and culling ambiguous",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:64-80",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Scaling figures are mutually inconsistent and contradicted by the O(n\u00b2) implementation",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-108",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Overweight architecture: a deferred distribution/GPU roadmap consumes roughly a quarter of the document",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-112",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The aggregation/variable-rate extension point is asserted \"from the start\" but never defined and cannot be implemented on the current state model",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "\"Well-defined interfaces\" are never written down; the profile schema contract is missing and already breaks startup",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:33-86",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Anticipated Slices diverges from the authoritative slice plan and inverts the initiative-500 dependency",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:114-128",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-300-arch"
+  },
+  "timestamp": "2026-11-17T09:57:32.154750",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 172281,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 282797,
+  "cached_tokens": 221824,
+  "cache_write_tokens": null,
+  "completion_tokens": 43125,
+  "reasoning_tokens": 38180,
+  "duration_seconds": 466.8517087078653,
+  "cost_usd": 0.08399029499999999,
+  "cost_basis": "alias_pricing"
+}

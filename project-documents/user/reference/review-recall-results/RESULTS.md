@@ -426,3 +426,59 @@ Notes:
 - One run per config; the run-to-run spread for one config is 3-6 flaws. glm-flash against deepseek4-flash (37 against 33) is inside it; both against minimax and glm52 are not.
 - Two cases (squadron-197-tasks, squadron-917-tasks) return a rule-based FAIL in 1-2 s for every model without calling it, and no model found their flaws.
 - Haiku-xhigh's cost here ($0.24) is below section 16's $0.34; the anchor batch ran on different days.
+
+## 20. More cheap and mid-price design reviewers (2026-11-18)
+
+**Method:** the 43 mined cases, `sq review` with read tools, run 1. All 43 cases: mimo, mimo-flash, hy4, hy4-flash, minimax31-flash, qwen38-flash, qwen38-27b, luna-r-high (344 reviews). A 15-case subset (every third case in `cases.tsv`; 3 arch, 9 slice and 10 task flaws, 22 in all): glm53, kimi3, qwen38, qwen38-max, terra-r through OpenRouter, and sol, luna, terra through the ChatGPT plan (120 reviews). haiku-xhigh, fable-medium and glm-flash run 1 are in the same grading batches as anchors. Blind grading as in section 16: 43 Sonnet agents, one per case, names stripped, order shuffled (seed 20261120); brief, inputs, `hits.json` and `map.json` in `20261116-mined/grade5/`, table `score_design5.py`, runs `jobs5.txt`, `jobs6.txt`, `jobs7.txt`. Agent grades, not hand-checked. Costs are alias pricing, per review; the Codex rows are API-equivalent where the saved output has a cost and `n/a` where it has none. The batch stopped once on a key spending limit and was rerun; finished reviews were kept.
+
+All 43 cases:
+
+| Config | Flaws of 82 | Arch (of 19) | Slice (of 32) | Tasks (of 31) | Findings per review | Cost per review |
+|---|---|---|---|---|---|---|
+| fable-medium (anchor) | 50 | 14 | 15 | 21 | | $2.27 |
+| hy4 | 45 | 13 | 14 | 18 | 7.4 | $0.19 |
+| haiku-xhigh (anchor) | 44 | 13 | 15 | 16 | 13.9 | $0.24 |
+| minimax31-flash | 43 | 10 | 20 | 13 | 9.2 | $0.04 |
+| mimo | 38 | 12 | 14 | 12 | 5.3 | $0.07 |
+| qwen38-flash | 38 | 11 | 15 | 12 | 8.2 | $0.06 |
+| glm-flash (anchor) | 37 | 8 | 19 | 10 | | $0.06 |
+| hy4-flash | 32 | 9 | 13 | 10 | 4.0 | $0.01 |
+| mimo-flash | 31 | 9 | 14 | 8 | 5.3 | $0.01 |
+| qwen38-27b | 27 | 10 | 9 | 8 | 4.2 | $0.15 |
+| luna-r-high | 16 | 2 | 6 | 8 | 3.9 | $0.01 |
+
+15-case subset (22 flaws, anchors scored on the same cases):
+
+| Config | Flaws of 22 | Arch (of 3) | Slice (of 9) | Tasks (of 10) | Cost per review |
+|---|---|---|---|---|---|
+| hy4 | 14 | 3 | 5 | 6 | $0.19 |
+| qwen38-max | 13 | 2 | 7 | 4 | $0.74 |
+| mimo | 13 | 3 | 6 | 4 | $0.07 |
+| minimax31-flash | 13 | 3 | 6 | 4 | $0.04 |
+| fable-medium (anchor) | 12 | 2 | 5 | 5 | $2.27 |
+| haiku-xhigh (anchor) | 12 | 2 | 5 | 5 | $0.24 |
+| kimi3 | 12 | 3 | 5 | 4 | $0.32 |
+| glm-flash (anchor) | 11 | 1 | 6 | 4 | $0.06 |
+| qwen38-flash | 11 | 1 | 5 | 5 | $0.06 |
+| hy4-flash | 11 | 2 | 5 | 4 | $0.01 |
+| qwen38 | 10 | 2 | 4 | 4 | $0.45 |
+| terra-r | 10 | 2 | 4 | 4 | $0.05 |
+| terra (ChatGPT plan) | 9 | 1 | 3 | 5 | n/a |
+| sol (ChatGPT plan) | 9 | 1 | 4 | 4 | $0.02 |
+| mimo-flash | 9 | 2 | 4 | 3 | $0.01 |
+| qwen38-27b | 7 | 2 | 3 | 2 | $0.15 |
+| glm53 | 6 | 1 | 2 | 3 | $0.40 |
+| luna-r-high | 5 | 0 | 3 | 2 | $0.01 |
+| luna (ChatGPT plan) | 2 | 1 | 0 | 1 | $0.00 |
+
+Notes:
+- The anchors reproduce earlier sections (fable-medium 50 against 47, haiku-xhigh 44 against 43, glm-flash 37 against 37 in section 19), so the grading is steady to within 3.
+- hy4 (45) and minimax31-flash (43) match haiku-xhigh (44). minimax31-flash does it for $0.04 against $0.24 and is the best of any config on slice designs (20 of 32). hy4 costs about as much as haiku-xhigh.
+- Pairs, run 1 each: haiku-xhigh plus minimax31-flash 58, plus hy4 55, plus glm-flash 55; fable-medium plus minimax31-flash 63 (fable-medium plus haiku-xhigh 58). haiku-xhigh, fable-medium and minimax31-flash together 67; all reviewers together 73 of 82. Nine flaws were found by no config.
+- mimo (38) and qwen38-flash (38) are close to glm-flash (37). hy4-flash (32, $0.008) and mimo-flash (31, $0.013) are the cheapest reviewers that still find about 40% of the flaws.
+- glm53 found 6 of 22 at $0.40 a review, below glm-flash (11) at $0.06 and about the level of the old glm52 (section 19). kimi3 12, qwen38 10 and qwen38-max 13 are no better than the cheap models for 5 to 20 times the cost.
+- The OpenAI models are weak on design review: sol 9 and terra 9 of 22 (terra-r 10), luna 2. terra and sol on the ChatGPT plan cost nothing extra; terra-r through OpenRouter is $0.05 a review.
+- luna-r-high (16) and qwen38-27b (27 and three reviews with no findings) are not worth a slot.
+- The subset table is 22 flaws from one run each. Differences of one or two flaws are noise; only the large gaps (hy4, mimo, minimax31-flash and qwen38-max against glm53, luna and qwen38-27b) carry weight.
+- Precision is not measured. hy4 and minimax31-flash raise 7.4 and 9.2 findings per review against haiku-xhigh's 13.9.
+- Two cases (squadron-197-tasks, squadron-917-tasks) return a rule-based FAIL in 1-2 s for every model without calling it, and no model found their flaws.

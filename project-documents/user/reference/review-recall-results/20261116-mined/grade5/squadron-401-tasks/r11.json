@@ -1,0 +1,26 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" success criterion is unsatisfiable",
+   "description": "Task 2 adds four `SnapshotMetric` members and simultaneously pins `PythonAdapter.metrics` to the explicit old four, with Success: \"the full `tests/metrology/` suite passes unchanged.\" But `tests/metrology/snapshot/test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`; once the enum has eight members and the adapter declares four, that assertion fails. The task must authorize the one-line assertion edit (e.g., to the explicit four-metric set) or the Task 2 commit gate cannot be met as written.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:45"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 7's `FunctionLength` rename breaks `test_render.py`, which its success criterion doesn't name",
+   "description": "Task 7 renames `FunctionLength` \u2192 `MeasuredFunction` and adds a required `complexity: int` field, with Success scoped to \"400's length tests pass \u2026 edited only for the rename.\" However `tests/metrology/snapshot/test_render.py#python_snapshot` imports `FunctionLength` from `lengths` and constructs it positionally (`FunctionLength(\"a.py\", \"f\", 1, 70)`), so after Task 7 that file fails import/collection \u2014 a render test, not a length test. Add `test_render.py` to Task 7's edit list (rename the import and supply a `complexity` value) so the Task 7 commit leaves the touched-area suite green.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:96"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Commit checkpoints are checkboxes and sit at tested points",
+   "description": "All 18 commit markers are `- [ ] Commit: \u2026` checkboxes rather than plain lines. That matches AGENTS.md's explicit rule that every task-file item is a checkbox and the completed slice-400 task file's convention, and each marker follows a task whose success criteria include passing tests, so checkpoints land at working, tested states. No change required.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

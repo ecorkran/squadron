@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All functional and technical success criteria are covered by tasks",
+      "description": "Every functional requirement (PASS/FAIL output, `missing:` lines, doctype handling, multi-file ordering, all exit-2 cases including valid-before-missing and `cf guides update`, `--json` contract, worktree template resolution) and every technical requirement (normalization unit tests, real-template test asserting `## Overview` and `### Verification Walkthrough`, real-slice command test, build/lint/full test and line limits) maps to a concrete task with a stated success condition. The Verification Walkthrough steps 1\u20136 are covered by Task 5, including the parity sweep and \"no unexplained DIFF\" success gate.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern and commit placement are correct",
+      "description": "Each implementation task is immediately followed by its dedicated test task and then a semantic commit (Task 2\u21922T\u21922C, 3\u21923T\u21923C, 4\u21924T\u21924C). Test tasks use inline strings for the pure validator and the real template/files for the file and command layers, matching the design's pure-vs-file-layer decision. Commits land at tested points rather than after every task or only at the end; Tasks 5C and 6C are correctly gated on actual file changes.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, scoping, and proportionality are sound",
+      "description": "Dependencies run strictly forward (constant \u2192 pure validator \u2192 file layer \u2192 subcommand \u2192 verification \u2192 docs) with no circular dependencies; each task is independently completable by a junior AI given the design's contracts. No task widens the frozen output/JSON/exit contract, adds the excluded `cf check` wiring or `SLICE_DESIGN_TEMPLATE` override, or does the excluded guide-side edits. One task file, 16 bounded tasks, and step detail that mirrors the design rather than inventing implementation constraints are proportionate to a 168-line-script port with three new source files and three test files.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All functional and technical success criteria are covered by tasks",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Test-with pattern and commit placement are correct",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, scoping, and proportionality are sound",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-17T07:57:52.333867",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 24210,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 17627,
+  "cached_tokens": 5120,
+  "cache_write_tokens": null,
+  "completion_tokens": 6722,
+  "reasoning_tokens": 5734,
+  "duration_seconds": 48.86704487493262,
+  "cost_usd": 0.0013865050000000001,
+  "cost_basis": "alias_pricing"
+}

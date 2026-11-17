@@ -1,0 +1,96 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Environment layer foundation\" slice contradicts the orchestrator principle and the initiative plan",
+   "description": "The Design Goal \"Orchestrator, not monolith\" (line 41) states the server \"does not compute flocking forces or generate terrain,\" yet Anticipated Slices lists \"**Environment layer foundation** \u2014 Terrain generation, resource placement, and the read-only query interface\" as a slice of this initiative. The initiative plan assigns terrain, resources, and seasonal content to a separate initiative (500) Environment Layer, and the derived slice plan (300-slices) already re-scoped this to \"(304) Environment Layer Integration \u2026 The environment layer itself \u2014 terrain, biomes, resources, seasonal logic \u2014 is owned by initiative 500.\" The architecture is the odd document out. Relatedly, the Envisioned State (line 72) and tick step 2 depend entirely on an environment layer whose architecture document (500-arch) appears in neither `dependsOn` (line 9) nor Related Work (line 130\u2013133), even though the doc's own scope claims \"environment hosting.\"",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:122"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Logging and replay scope collides with initiative (320) Logging & Replay",
+   "description": "The Overview scope claims \"state serialization and distribution, configuration, and logging infrastructure,\" and Anticipated Slices includes \"**Logging and replay** \u2014 Capture simulation state to a log. Replay a log to reconstruct past simulation runs\" (line 126), with tick step 5 writing \"to the event log if logging is active\" (line 65). The initiative plan defines a separate initiative \"(320) Logging & Replay \u2014 Event log and state snapshot infrastructure for simulation replay, analysis, and debugging \u2026 Dependencies: [300],\" and 300-slices delivers (307) Simulation Logging and Replay inside this initiative. Two initiatives now claim the same subsystem with no disambiguation of ownership anywhere in the document \u2014 a recipe for duplicated or divergent log formats (320 says \"Format TBD (NDJSON or binary state dumps)\" while this doc's Technical Considerations debates snapshot-vs-event logging independently).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Overview"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Broken dependency reference to the concept document",
+   "description": "Frontmatter line 9 declares `dependsOn: [001-concept.migratory, 100-arch.behavior-engine]` and Related Work (line 132) links `../project-guides/001-concept.migratory.md`. No such file exists \u2014 the concept document is `000-concept.migratory.md`; `001-initiative-plan.migratory.md` is a different document (verified: `project-documents/user/project-guides/` contains exactly those two files). Both the dependency declaration and the link are wrong. (For context, the behavior engine doc reciprocally links this document as `200-arch.world-server-foundation.md`, which also doesn't exist \u2014 the cross-references between the two architecture documents disagree on both names and numbering.)",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Related Work"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tick step 5 does in-tick client distribution and log I/O, contradicting the non-blocking design",
+   "description": "Envisioned State step 5 \"Push the committed state to connected clients as snapshots or deltas. Write to the event log\" places network and disk I/O inside the synchronous tick body. But \"Client connection lifecycle\" (line 82) requires that \"The server must handle slow or stalled clients without blocking the tick loop,\" and \"Tick loop and asyncio coexistence\" prescribes \"run the tick synchronously, then yield to the async event loop for I/O between ticks.\" The document never reconciles these: it doesn't say distribution is enqueue-only with async delivery, and the slow-client policy is explicitly left open (\"buffering, dropping frames, or disconnecting unresponsive clients are all strategies to consider\") despite being load-bearing for the tick-loop invariant. The same gap applies to log writes eating tick budget. The tick sequence (lines 61\u201366) should be written as compute-then-enqueue, with the slow-client policy chosen rather than listed.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:65"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Explicit lifecycle\" promises defined error states and shutdown persistence the document never specifies",
+   "description": "The principle claims \"startup, shutdown, and error states are first-class concerns with defined behavior \u2026 persist state on shutdown. No silent failures, no undefined states.\" No section delivers this. There is no defined behavior for an exception raised mid-tick (particularly step 2 mutating environmental state before step 3's behavior evaluation \u2014 \"tick as transaction\" (line 39) claims atomicity but no rollback/swap mechanism is described, so a failure between steps leaves the world half-advanced), an environment-update failure, a log write failure during step 5 (disk full), or a crash in a client connection handler. Worse, \"persist state on shutdown\" has no delivering slice at all \u2014 300-slices puts \"State Persistence and World Save/Load\" in Future Work. The principle asserts a guarantee the plan defers.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:45"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tick loop has no write path for stigmergy; environment is read-only",
+   "description": "The concept and 100-arch require the swarm archetype to work via \"stigmergic coordination through the environment\" \u2014 \"reinforced paths\" that strengthen through agent use. That requires agent-driven environment writes (trail deposits). But line 72 defines the environment as \"a read-only query interface,\" and the six-step tick (lines 61\u201366) has no phase for applying agent\u2192environment mutations \u2014 steps 2\u20134 cover environment advancement, behavior evaluation, and entity state commit only. The derived slice plan had to bolt on \"post-tick environment writes (e.g., stigmergic trail deposits)\" to slice 304, a phase the architecture's tick transaction does not include and its \"state flows outward\" principle actively discourages. Either the write channel (who buffers deposits, when they commit, how they interact with tick atomicity) is designed here, or swarm intelligence is infeasible on this tick sequence.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:72"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Entity ID \u2194 array-index mapping and removal semantics are unspecified",
+   "description": "\"The server assigns entity IDs, allocates space in the state arrays, and removes entities when appropriate\" is the entire treatment of a load-bearing storage decision. Pre-allocated SoA arrays (line 84: \"Entity capacity determines array pre-allocation sizes\") plus removal plus dense wire buffers (line 80) plus replayable removals (line 90) all depend on the removal strategy: swap-remove destroys index stability, tombstones destroy array density and waste serialization/bandwidth, compaction requires an ID\u2192index indirection table. Which one is chosen determines the snapshot format, delta encoding, and whether entity indices in the behavior engine's subset masks survive a removal. This is exactly the kind of \"hard part\" that cannot be left to \"removes entities when appropriate.\"",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:70"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Per-client spatial culling has no input mechanism in a server-push-only protocol",
+   "description": "The network-egress solution mandates that \"clients receive full entity data only within their view frustum \u2026 The server must perform spatial culling per client.\" But the protocol is defined at line 68 as \"the server pushes state, clients render. No client-to-server simulation commands exist in v1,\" and nothing in the document describes how the server learns a client's viewport, region of interest, or relevance horizon. The derived slice plan (309) states \"Each client declares a viewport or region of interest\" \u2014 a client\u2192server message the architecture's protocol explicitly excludes \u2014 and places culling in v1 Integration Work, not Future Work. The culling \"must\" (line 108) and the protocol definition (line 68) are incompatible as written.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:108"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Replay fidelity is asserted but its mechanisms are conditional and deferred",
+   "description": "Line 74 asserts \"The log format supports replay: given a log and the same configuration, the simulation can be reconstructed tick-by-tick.\" Line 90 undercuts this: re-simulation-based replay works only \"If the tick function is deterministic (a design goal of the behavior engine)\" \u2014 a design goal of a dependency, not a guarantee this document can rely on \u2014 and then defers the format decision (\"The right balance depends on actual usage patterns\"). Missing pieces: no seeding story for entity spawn placement (config covers \"environment seed\" at lines 47/86, but population placement \"where\" and any spawn-time randomness are unseeded), and bit-exact float reproducibility across runs/machines is never addressed (100-arch itself floats float64-vs-float32 as open). Snapshot-based replay sidesteps determinism but requires the very format decision being deferred, while slice 307 commits to a replay mode. Pick one guarantee and design for it.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:90"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Scaling narrative is disproportionate and imports speculative requirements into v1",
+   "description": "The \"Entity scaling and multi-resolution simulation\" consideration is roughly a quarter of the document's body and mostly describes tiers the doc itself places far outside scope: 1M\u20134M GPU tiers with \"CuPy or custom CUDA kernels\" (line 97), \"Multi-GPU with dynamic spatial partitioning\" (line 98), predictive partition rebalancing and merge-front disaggregation for 500K-vs-500K group encounters across machines (line 110), and 4M+ multi-machine escalation paths (line 112) \u2014 while the stated initial operating range is 10K\u201350K (line 94) and the initiative plan deliberately defers Distribution & Scaling to (620) (\"could expand the product scope 5-fold or more \u2026 need not be designed proactively\"). The section is not free: line 112 turns it into v1 requirements (\"the key architectural decision now is ensuring the behavior engine's interface and the entity management layer support aggregation and variable-rate ticking from the start\"), which has already propagated subset-evaluable ticks and aggregation-aware neighbor queries into 100-arch's principles and an \"Aggregation interface support\" slice \u2014 complexity for hypothetical futures in a project whose conventions say \"Always resist adding complexity.\" The genuinely load-bearing output of this analysis (serializable state, pure tick function, protocol-based clients, region-aware entity management) is already stated in Design Goals; the tier-by-tier GPU/partitioning narrative can shrink to a paragraph pointing at initiative 620.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-112"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\"Current State\" is stale and contradicts the project's own records",
+   "description": "\"No world server exists.\" Slices (300)\u2013(303) \u2014 bootstrap/configuration, tick loop, entity management, and behavior engine integration \u2014 are checked complete in 300-slices.worldserver-foundation.md (dated 20260401, vs. this doc's dateUpdated 20260318), and `src/migratory_server/` (server.py, tick.py, entities.py, simulation.py, config.py) exists in the repository. The document is marked `status: in_progress` and serves as `guideRole: primary`; a Current State section that misdescribes what exists will mislead implementers reading it as the authoritative reference.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:51"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Engine lifecycle interface described inconsistently with the dependency that defines it",
+   "description": "This document states \"The behavior engine operates on whatever entities the server provides \u2014 it does not manage the entity lifecycle itself,\" consistent with the batch array-in/array-out tick described in Envisioned State. But 100-arch.behavior-engine.md \u2014 cited here as defining \"the computational interface the server must integrate with\" \u2014 says \"the engine presents a narrow interface: tick the simulation forward, query agent state, **register/remove agents**\" (contradicting its own \"stateless between ticks\" claim in the same section). The two documents that jointly define the entity-registration boundary describe it differently; the contract for who calls register/remove, and against which state container, is ambiguous precisely where the server's entity management (line 70) meets the engine.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:70"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Wire-format precision unresolved; per-entity byte figures imply mixed float widths",
+   "description": "The framing protocol (\"array layout descriptor\" wrapping \"raw float buffers\") cannot be pinned while 100-arch explicitly defers the float32-vs-float64 decision (\"the engine should define its internal precision and provide an efficient conversion path\"). The same scaling section computes network egress at \"12 bytes each\" per position (3\u00d7float32, line 108) but memory at \"500K entities \u2248 24MB\" (line 92, ~48B/entity \u2014 consistent with float64 position+velocity), implying a float64-sim/float32-wire split that neither document commits to. Worth settling at the serialization boundary (slice 306) with the descriptor fully specified.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:80"
+  }
+ ]
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Residual offers have no viable source of unsampled results",
+      "description": "T13 says to fall back to store-recorded samples if no discovery surface exists. The existing capture resolver finds reviews for a supplied target, while the store contains samples\u2014not an inventory of unsampled reviews. That fallback cannot satisfy the non-empty-offers criterion. Add a bounded review-discovery task and test it with real unsampled review files; do not defer the missing capability.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Graduation lookup does not select the current version",
+      "description": "T15 filters recommendations by template, model, and level, but the report can contain multiple cells with those same values and different content hashes. A historical `GRADUATE` cell could therefore authorize graduation after a prompt edit. Require an exact match to the current full `JudgeConfigId`, define refusal when no current cell exists, and test old-version evidence alongside a new version.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Direction precedence contradicts the required outcomes",
+      "description": "T7 explicitly orders `n < floor` before `TIGHTEN`, then requires a low-n, low-match cell to reach `TIGHTEN`. A junior implementer cannot follow both instructions. Replace the ordered list with unambiguous, mutually compatible rules and tests, including the interaction between unversioned and low-match cells.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Offer selection omits the graduation\u2019s artifact level",
+      "description": "T13 matches results by `JudgeConfigId` but does not require matching `GraduatedConfig.artifact_level`. Graduation is scoped to both identity and level, so offers could be drawn for a level that did not earn it. Add level matching and a cross-level regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runtime-drawn-model limitation is absent from the required note",
+      "description": "T9 requires the model-and-threshold pairing note but not the slice\u2019s explicit warning that a runtime-drawn model cannot be tracked by the threshold. T10 and T16 check only that a note is present. Require and test that limitation in both rendered and JSON recommendations.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Model placement introduces a circular dependency",
+      "description": "T3 places `GraduatedConfig` in `calibration_models.py`, which needs `GroupKey` and `JudgeConfigId`; T11 then puts `GraduatedConfig` in `MetrologyRecord` in `models.py`. Since `report_models.py` already imports `models.py`, straightforward runtime imports form a cycle. Specify a dependency-safe model arrangement or forward-reference strategy and verify imports and envelope round-trips.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:56-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed threshold handling is neither implemented nor tested",
+      "description": "The coverage check claims T8 exercises malformed judge blocks, but T8 only tests registered and unregistered templates. `resolve_thresholds` converts values with `float()` and can raise for a non-numeric floor; it does not provide the documented warning and fallback. Add explicit handling and a test for the slice\u2019s malformed-block failure mode.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:121-139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty-result CLI signals are missing",
+      "description": "T15 requires a lapse message but does not require the slice\u2019s \u201cno evidence\u201d message for an empty recommendation report or \u201cno offers due\u201d for an exhausted current graduation. Add both output requirements and CLI tests, distinguishing exhaustion from lapse.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:226-252"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers precede tests and occur after every task",
+      "description": "The same pattern repeats throughout: each implementation task has a commit marker before its immediately following test task, and every task has a marker. Consolidate markers at selected working, tested points after implementation/test pairs rather than committing untested implementations and every individual task.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39-52"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Residual offers have no viable source of unsampled results",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Graduation lookup does not select the current version",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Direction precedence contradicts the required outcomes",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Offer selection omits the graduation\u2019s artifact level",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Runtime-drawn-model limitation is absent from the required note",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-151",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Model placement introduces a circular dependency",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:56-67",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Malformed threshold handling is neither implemented nor tested",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:121-139",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Empty-result CLI signals are missing",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:226-252",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit markers precede tests and occur after every task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39-52",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T13:50:05.946548",
+  "model": "openai/gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 1314,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6.1-terra",
+  "answering_models": [
+    "openai/gpt-6.1-terra"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 97455,
+  "cached_tokens": 57595,
+  "cache_write_tokens": null,
+  "completion_tokens": 1743,
+  "reasoning_tokens": 325,
+  "duration_seconds": 33.04038279084489,
+  "cost_usd": 0.05145475,
+  "cost_basis": "alias_pricing"
+}

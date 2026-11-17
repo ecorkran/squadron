@@ -1,0 +1,182 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "An active subset does not define reduced-rate simulation",
+      "description": "The tick advances only active agents, but no contract specifies elapsed simulation time for agents evaluated every fourth or sixteenth tick. Using the base timestep makes those agents move four or sixteen times slower; using a larger timestep leaves their neighbor-visible positions stale between evaluations. The world-server design also expects interpolated positions. Specify whether force evaluation and integration have separate schedules, who advances inactive positions, and which timestamp neighbor queries observe.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent neighbor queries leave the vectorized hot path undefined",
+      "description": "The design requires bulk NumPy computation and eventual GPU execution without Python callbacks, but describes querying neighbors separately for each active agent. It never defines how variable-length neighborhoods become bulk force inputs. A Python list of per-agent arrays preserves the very iteration and allocation costs the goals prohibit; an unrestricted dense pairwise array introduces quadratic memory consumption. Define a batched neighborhood representation, its mapping to active indices, and its allocation strategy before treating `BulkForce` as a GPU-compatible boundary. Validate the CPU target with representative densities, not renderer throughput.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agent-specific behavioral state has no representation",
+      "description": "Shared profile weights cannot by themselves identify an individual's home-range center, distinguish experienced leaders within one herd, or identify which pack shares a hunting target. The stated arrays contain positions, velocities, and profile indices, while all state is supposed to arrive through those arrays. Define the additional per-agent attributes and group/target references, including their initialization and removal semantics. Otherwise these behaviors require hidden state or one-off profiles that conflate species configuration with individual identity.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:72-91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stigmergy has no feedback path and disappears from delivery scope",
+      "description": "Swarm intelligence is an explicit fidelity goal, and the envisioned behavior depends on paths reinforced through use. However, the environment interface is read-only, the tick returns only agent state, and the anticipated slices contain no swarm implementation or environmental feedback work. The slice plan separately defers swarm intelligence, leaving the architecture's assigned scope undelivered. Retain an explicit swarm slice and define a tick output for environmental deposits, with ownership and application timing; merely querying existing trails cannot produce reinforcement.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spatial backend replacement has no determinism contract",
+      "description": "Brute-force, spatial-hash, and KD-tree queries can return the same neighbors in different orders. Floating-point force reductions can then differ and produce diverging trajectories. Radius-boundary inclusion, self-exclusion, target-selection ties, and reduction ordering are unspecified. Define these semantics and distinguish reproducibility within one backend from numerical equivalence across backends or devices. Purity alone does not establish the claimed replay and regional-agreement guarantees.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stateless computation conflicts with lifecycle ownership and leaves commit semantics unclear",
+      "description": "The engine is described as a stateless function receiving arrays, yet its public interface also registers, removes, and queries agents. The world-server architecture assigns lifecycle and canonical state ownership to the server instead. Clarify whether these engine operations are merely array utilities or introduce a second owner. Also specify whether tick mutates its input or produces separate next-state buffers: the server's read\u2013compute\u2013commit transaction cannot preserve canonical state after an exception if the engine has already partially mutated it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregate neighbors cannot be substituted for point agents without new semantics",
+      "description": "Presenting an aggregate through the same neighbor interface does not establish how forces consume its population count, dispersion, or spatial extent. A flock center can lie outside a query radius while part of the flock lies inside; treating it as one point also changes cohesion, alignment, and separation weighting. Define aggregate query inclusion and force-contribution semantics, including how double counting is prevented during transitions between individual and aggregate representations. Otherwise this extension requires changing both spatial queries and force implementations despite the promised replaceability.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "An active subset does not define reduced-rate simulation",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Per-agent neighbor queries leave the vectorized hot path undefined",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-99",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Agent-specific behavioral state has no representation",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:72-91",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Stigmergy has no feedback path and disappears from delivery scope",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47-115",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Spatial backend replacement has no determinism contract",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31-45",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Stateless computation conflicts with lifecycle ownership and leaves commit semantics unclear",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62-81",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Aggregate neighbors cannot be substituted for point agents without new semantics",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-17T05:29:41.523435",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 49217,
+  "cached_tokens": 47104,
+  "cache_write_tokens": null,
+  "completion_tokens": 1124,
+  "reasoning_tokens": 154,
+  "duration_seconds": 69.9622374586761,
+  "cost_usd": 0.0201764,
+  "cost_basis": "alias_pricing"
+}

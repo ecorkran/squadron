@@ -1,0 +1,68 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Canonical step() implementation contradicts the stated post_tick requirement",
+   "description": "The Implementation Details sketch of `step()` (line 276) does `if self._entity_manager.count == 0: return` before `post_tick()` is reached at line 288, so `post_tick()` is skipped whenever entity count is zero. This directly contradicts the note immediately below it (line 291), Special Considerations (line 408), the success criterion \"`environment.post_tick()` is called after `engine.tick()` each tick\" (line 346), and the earlier orchestrator sketch (lines 180-190) which correctly guards only `engine.tick()` with `if count > 0:`. Implemented literally, time-varying layer updates (trail decay) silently stop once no agents exist \u2014 a silent-fallback-style behavior the project guidelines forbid. The document contains two conflicting canonical implementations of the slice's central mechanism; the Implementation Details block (the one an implementer would copy) is the wrong one.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:276-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Post-tick write transport left unspecified despite plan assignment",
+   "description": "The slice plan assigns \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" to slice 304. The design establishes only the call site \u2014 `environment.post_tick()` with no arguments (lines 105, 288) \u2014 and asserts at line 196 that \"agent-originated writes (trails, threats) apply after evaluation,\" but never specifies how those writes reach `post_tick()`. No transport exists: `BulkForce.__call__` returns an N\u00d72 force array and `engine.tick()` returns `None` (slice 100), while 500-arch requires the world server to pass `trail_deposits`/`threat_mutations` into `post_tick()`. This gap is not listed in Excluded either, so the plan item appears delivered when only half of it is. Either specify the transport (engine write-output, or a server-side accumulation path) or explicitly defer the item in Excluded with a named owner (initiative 100 / slice 506).\n\n### [CONCENV] Deviation from \"pass environment context to engine.tick()\" is not flagged for reconciliation\n\n\n\n(Corrected heading: **[CONCERN]** \u2014 see below.)",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:196"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Deviation from \"pass environment context to engine.tick()\" is not flagged for reconciliation",
+   "description": "The slice plan entry for 304 assigns \"Pass environment context to `SimulationManager` and `engine.tick()`.\" The design passes it to `SimulationManager` but never to `engine.tick()` (Data Flow, line 101: `engine.tick(state, profiles, spatial, dt, forces)`), instead routing environment access through constructor-injected forces (lines 200-216). Constructor injection is a defensible decision \u2014 the engine's `tick()` as built in slice 100 has no environment parameter, and it avoids modifying a completed external slice \u2014 but the design presents it without acknowledging that it supersedes the stated integration point in the plan, in 500-arch (\"The world server passes the environment (or its query method) to `engine.tick()` as the 'environmental context' parameter\"), and in 100-arch (tick \"Receives the current agent state array, environmental context\u2026\"). 500-arch already flags the `update()`\u2192`pre_tick`/`post_tick` alignment for this slice but not this one. Consuming slices (environment-aware forces, initiative 100) reading those documents will expect the parameter path. Explicitly note the deviation and mark the plan/500-arch wording for update, or specify how environmental context will enter `engine.tick()` when those forces arrive.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:216"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Promise that layers \"plug in without server changes\" contradicts the providing architecture's static composition",
+   "description": "The Overview promises the wiring exists \"so that when layers arrive they plug in without server changes,\" and the Provides section (line 329) says \"The server creates the environment; layers register themselves.\" This misstates the integration contract that slices 501-507 will build against: 500-arch states layers are \"statically composed in the environment container,\" explicitly rejects a dynamic layer registry (\"The environment layer does not provide a dynamic layer registry or abstract plugin interface\"), and specifies that \"The world server loads this specification [environment spec, slice 507] from its configuration and passes it to the environment constructor at startup.\" When layers arrive, `server.py` must change \u2014 it has to construct layers from the 507 spec and pass them into `Environment(bounds, layers)`. This slice creates `Environment(layers={})` with no registration path at all, so no self-registration mechanism exists or is planned. Left as written, layer slices will look for a registration API the providing architecture deliberately refuses to build.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:19"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Two-thirds of the plan-assigned environment config scope deferred without reconciling the slice plan",
+   "description": "The slice plan assigns 304 \"Server-side environment configuration (seed, grid resolution, layer selection) in YAML.\" The design delivers only `seed` and explicitly excludes grid resolution (line 48) and layer selection (line 153), on the grounds that no grids or layers exist yet. The engineering rationale is sound \u2014 dead config with no consumer contradicts the project's \"resist adding complexity\" guideline \u2014 but the deferral is not recorded against the plan entry, which still assigns all three fields to this slice. When 304 closes, the plan will show its config scope delivered while two assigned fields were never built. Amend the slice-plan entry to scope 304's config to `seed` (deferring grid resolution/layer selection to 507 or the layer slices), or record the deferral explicitly in the plan.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:153"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slice 305's \"terrain summary in snapshots\" handoff dropped with no named owner",
+   "description": "The slice plan states \"Terrain summary in snapshots deferred to (304) Environment Layer Integration,\" and slice 305 lists \"Environment state in snapshots \u2014 slice 304 (not yet integrated)\" (305-slice:52). This design's Excluded section instead says \"Environment data in client snapshots/broadcasts \u2014 deferred to future work,\" with no mention of the handoff it is receiving from 305. Terrain data genuinely cannot exist in this slice (501 is not delivered), so delivery is impossible \u2014 but as written, a scope item the plan explicitly assigned to 304 ends up owned by an unnamed \"future work,\" and 305's deferral points at a slice that disclaims it. Reconcile: update the plan note to name the real owner (e.g., a post-501 snapshot slice) or state the deferral target in this document.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tick-budget NFR not restated for new per-tick environment work",
+   "description": "The slice adds synchronous `pre_tick()`/`post_tick()` calls inside the tick body \u2014 the exact path where the parent architecture states the tick NFR: a fixed-timestep budget of 1/tick_rate (50ms at the configured 20Hz), overrun logged as a warning with best-effort continuation, target rates 20\u201360Hz (300-arch envisioned state step 6 and Technical Considerations; enforcement in slice 301). Neither Success Criteria nor Technical Requirements (lines 341-357) restates any budget or latency target for the environment lifecycle calls. Restate the requirement with its target \u2014 e.g., environment pre/post-tick work must fit within the per-tick budget, with overrun behavior inherited from 301 (warn, continue) \u2014 so that layer slices 501-507 (whose `pre_tick` will do real work: trail decay, seasonal modulation) know the performance envelope their updates must fit.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Data Flow"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`_seasonal_parameter` state field specified but never set or read",
+   "description": "State Management adds `_seasonal_parameter: float` to `SimulationManager`, but no code sketch in the document assigns or reads it \u2014 `step()` takes `seasonal_parameter` as a parameter and forwards it directly to `pre_tick()`. Either drop the field (the value is owned by slice 308 and passed in per call) or specify who updates it. An unused state field invites a stale-value bug when 308 wires real seasonal values.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "\"Environment is Always Present\" rationale is contradicted by the None-handling in every step() sketch",
+   "description": "The section claims always-present environment \"avoids `if environment is not None:` checks scattered through the codebase,\" yet both canonical `step()` implementations guard `pre_tick`/`post_tick` with exactly those checks, and the `environment` property returns `Environment | None`. The backward-compatibility rationale for the optional parameter is legitimate; the stated benefit is simply not achieved. Rephrase the claim, or make the parameter required and update the existing tests as the doc already contemplates for the `tick_number` change.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:220"
+  }
+ ]
+}

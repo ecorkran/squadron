@@ -1,0 +1,160 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Merge step at line 48: ## Part A \u2014 Branch steps: catch-up merge (D5), `restore_target()`, `branch: { plan: }` (D6)",
+      "description": "Line 48 schedules a merge: `## Part A \u2014 Branch steps: catch-up merge (D5), `restore_target()`, `branch: { plan: }` (D6)`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+      "file_ref": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md",
+      "category": "merge-step",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:48"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Merge step at line 71: - [ ] Work count 0 \u2192 `git merge --ff-only {target}` (no merge commit)",
+      "description": "Line 71 schedules a merge: `- [ ] Work count 0 \u2192 `git merge --ff-only {target}` (no merge commit)`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+      "file_ref": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md",
+      "category": "merge-step",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:71"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Merge step at line 72: - [ ] Otherwise \u2192 `git merge --no-ff -m \"merge: {target} into slice {n}\" {target}`",
+      "description": "Line 72 schedules a merge: `- [ ] Otherwise \u2192 `git merge --no-ff -m \"merge: {target} into slice {n}\" {target}``. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+      "file_ref": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md",
+      "category": "merge-step",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:72"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Merge step at line 73: - [ ] Conflict \u2192 record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT \u2026 (conflicted: \u2026); resolve on the branch and retry`); checkout stays on the clean slice branch",
+      "description": "Line 73 schedules a merge: `- [ ] Conflict \u2192 record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT \u2026 (conflicted: \u2026); resolve on the branch and retry`); checkout stays on the clean slice branch`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+      "file_ref": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md",
+      "category": "merge-step",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:73"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Merge step at line 82: - [ ] Behind with work: merge commit `merge: main into slice N` created; branch history preserved",
+      "description": "Line 82 schedules a merge: `- [ ] Behind with work: merge commit `merge: main into slice N` created; branch history preserved`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+      "file_ref": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md",
+      "category": "merge-step",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:82"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Merge step at line 89: - [ ] Commit: `test: cover catch-up merge on branch enter`",
+      "description": "Line 89 schedules a merge: `- [ ] Commit: `test: cover catch-up merge on branch enter``. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+      "file_ref": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md",
+      "category": "merge-step",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:89"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "merge-step",
+      "raw_category": null,
+      "summary": "Merge step at line 48: ## Part A \u2014 Branch steps: catch-up merge (D5), `restore_target()`, `branch: { plan: }` (D6)",
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:48",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "merge-step",
+      "raw_category": null,
+      "summary": "Merge step at line 71: - [ ] Work count 0 \u2192 `git merge --ff-only {target}` (no merge commit)",
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:71",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "merge-step",
+      "raw_category": null,
+      "summary": "Merge step at line 72: - [ ] Otherwise \u2192 `git merge --no-ff -m \"merge: {target} into slice {n}\" {target}`",
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:72",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "merge-step",
+      "raw_category": null,
+      "summary": "Merge step at line 73: - [ ] Conflict \u2192 record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT \u2026 (conflicted: \u2026); resolve on the branch and retry`); checkout stays on the clean slice branch",
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:73",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "merge-step",
+      "raw_category": null,
+      "summary": "Merge step at line 82: - [ ] Behind with work: merge commit `merge: main into slice N` created; branch history preserved",
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:82",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "fail",
+      "category": "merge-step",
+      "raw_category": null,
+      "summary": "Merge step at line 89: - [ ] Commit: `test: cover catch-up merge on branch enter`",
+      "location": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md:89",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/197-tasks.implementation-batch-pipeline-implement-plan.md",
+    "against": "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-197-tasks"
+  },
+  "timestamp": "2026-11-17T08:58:46.120780",
+  "model": "squadron-task-gate",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": null,
+  "setting_sources": null,
+  "fallback_used": false,
+  "verdictSource": "imposed",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": null,
+  "answering_models": null,
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": null,
+  "effort": null,
+  "profile": null,
+  "turns": null,
+  "prompt_tokens": null,
+  "cached_tokens": null,
+  "cache_write_tokens": null,
+  "completion_tokens": null,
+  "reasoning_tokens": null,
+  "duration_seconds": null,
+  "cost_usd": null,
+  "cost_basis": null
+}

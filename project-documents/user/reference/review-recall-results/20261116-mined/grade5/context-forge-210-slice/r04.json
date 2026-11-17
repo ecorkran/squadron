@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Plan-assigned success criteria dropped: tool guide deliverable and end-to-end Copilot verification",
+   "description": "The slice plan entry assigns two success criteria (200-slices.developer-onboarding.md:217-218) that this slice design omits entirely. (1) \"Manual verification: an AI agent in VS Code Copilot can read `.github/copilot-instructions.md` + `AGENTS.md` and follow project conventions as well as Claude does\" \u2014 this is the acceptance test for the slice's core translation, yet Test Coverage (lines 121-129) covers only CLI behavior (target validation, prompts, propagation); no verification of the compiled output's actual effect in Copilot. (2) \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed\" \u2014 the slice never references this path (zero occurrences in the doc), and the referenced file currently exists only as a raw research transcript (Perplexity answer dump with HTML and citation footnotes), so the \"promote\" half is real unaddressed work. Per the review rules, dropping scope the slice plan assigns to this slice is a CONCERN.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Managed-marker safety check covers only two of the four Copilot output locations",
+   "description": "`isManagedCopilotFiles(projectPath)` (line 109) checks the marker only in `.github/copilot-instructions.md` and `AGENTS.md`, but the generator also writes `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md` (lines 42-48), and the design states generated files carry the marker (line 65). The plan requires marker convention \"for Copilot target files \u2026 first-run warns before overwriting unmanaged user content\" and its success criterion says \"re-running on a project with existing unmanaged files prompts before overwriting\" \u2014 unqualified beyond the Claude-parity clause. As designed, an unmanaged user file whose name collides with a generated name (e.g. a hand-written `commit.prompt.md` or `typescript.instructions.md`) is silently overwritten on first run whenever the two checked files are managed or absent \u2014 violating the plan's warn-before-overwrite contract for those directories. Either extend the check to per-file markers at emit time (the design already puts markers in these files), or explicitly justify and document the narrowed contract. Secondary: the helper is named `isManagedCopilot(filePath)` at line 29 but `isManagedCopilotFiles(projectPath)` at line 109 \u2014 settle one name/signature.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:109"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new propagation and generation I/O paths are not enumerated",
+   "description": "The new `copilot` propagation block copies four items to each worktree (line 89, Sequence step 6 at line 102), and the guide script writes four output locations \u2014 both new I/O paths. The design enumerates no failure modes or handling strategy for them: worktree path disappearing between listing and copy, a copy failure mid-loop leaving some worktrees updated and others stale, or the guide script exiting nonzero after partially writing generated files (e.g. `copilot-instructions.md` written but `instructions/` incomplete). The Risks section (lines 131+) names only the missing-submodule-case failure (\"fail at the script step with a clear error\"); the copy/partial-write paths are handled only implicitly by mirroring the Claude branch. State explicit strategies (fail-fast with error vs. best-effort with per-worktree report; whether partial generation is cleaned up or left for the idempotent re-run) rather than leaving them implicit.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:89-104"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Onboarding-time NFR from the parent architecture is not restated",
+   "description": "The parent architecture states a specific target: \"from `npm install` to useful context output in under two minutes\" (200-arch.developer-onboarding.md:21). This slice extends `cf init --ide copilot` \u2014 that exact onboarding path \u2014 adding a compilation step whose cost scales with the number of rules and skills, and a four-item-per-worktree propagation pass. The slice restates no NFR and gives no target for the copilot path. Add one sentence acknowledging the under-two-minute onboarding target and that copilot compilation must stay comparable to the Claude path's cost. (Impact is likely negligible \u2014 one bash script invocation \u2014 but the rubric requires the NFR be restated with its specific target when the slice touches such a path.)",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Overview"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Skill\u2192prompt frontmatter translation is unspecified",
+   "description": "The design specifies exactly one frontmatter translation \u2014 rule `paths: [...]` \u2192 `applyTo: \"a,b,c\"` (and `applyTo: \"**\"` default) \u2014 and tests only that (line 128). Skills \u2192 `.github/prompts/*.prompt.md` is in scope (lines 19, 46-48), but the plan's mapping table names target prompt fields `name`, `description`, `argument-hint`, `agent`, `model`, `tools`, several of which (`argument-hint`, `agent`, `tools`) have no defined Claude-skill source. The guide-script implementer must invent the mapping (carry over? drop? map `allowed-tools` \u2192 `tools`?). A one-line mapping rule \u2014 even \"carry `name`/`description`, omit the rest\" \u2014 removes the ambiguity.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#Technical Scope"
+  }
+ ]
+}

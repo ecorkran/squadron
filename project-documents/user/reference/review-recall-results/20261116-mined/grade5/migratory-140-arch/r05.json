@@ -1,0 +1,89 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Current State baseline for the wire track is wrong: the protocol is already binary, and the byte math matches neither JSON nor the shipped format",
+   "description": "The \"Current State\" section states \"The wire protocol is currently uncompressed JSON over WebSocket\" and sizes it at \"24 bytes \u00d7 3,500 agents \u2248 84 KB/tick.\" Neither is true of the project. Slice 306 shipped a binary framed protocol (`src/migratory_server/protocol.py`: `serialize_state_update` emits `[u8 type | u32 tick | u32 count | f64 pos\u00d72 | f64 vel\u00d72]` = 9 + 32\u00b7N bytes \u2014 ~112 KB/tick at N=3,500, not 84 KB), and slices 315/317 added TERRAIN/TERRAIN_CHUNK/TERRAIN_HEADER with zstd/lz4 compression. Consequently the Tier 2 envisioned milestone \"Binary WebSocket replaces JSON\" re-announces shipped work, and the \"wire becomes a bottleneck at N=50,000+\" projection is computed from a baseline that never existed. Every wire-track slice sized from this section will be mis-scoped.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Current State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Anticipated Slices re-propose slices 319 and 311 with divergent, unreconciled designs",
+   "description": "Under \"World server (extending initiative 300)\" the document lists \"Delta compression \u2014 int16 delta encoding with large-delta fallback\" and \"Server-side frustum culling \u2014 camera-aware agent filtering.\" The 300 slice plan already contains **(319) STATE_UPDATE Delta Encoding** (dead-band omission, keyframe every N ticks, DELTA 0x06 opcode, backward-compat handshake flag) and **(311) Client Spatial Culling** (viewport/region-of-interest with aggregate descriptors for distant groups). These are materially different mechanisms for the same two message paths \u2014 quantized per-entity int16 deltas vs. dead-band+keyframe deltas; per-client frustum filtering vs. region-of-interest plus aggregation \u2014 and this document references neither slice number, nor `300-slices.worldserver-foundation.md` at all (Related Work lists only `300-arch`). Whoever implements from this plan will either duplicate 319/311 or silently supersede them; the `relatedSlices: [118, 119]` frontmatter should at minimum cover 311/319.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Anticipated Slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Delta compression + frustum culling + multiple clients requires per-client stream divergence that slice 319 explicitly puts out of scope",
+   "description": "The document says the client \"reconstructs by accumulating deltas onto its last-known positions\" and that the server sends \"full positions\" only for large-delta events (teleportation, spawn). Add culling \u2014 which the Tier 3 design layers directly on top \u2014 and each client has a different visible set governed by its own camera, so each client's \"last-known positions\" baseline diverges the moment an agent crosses a frustum boundary (it needs a full baseline, not a delta, on entry \u2014 an unhandled case the document never names). Slice 319 states out-of-scope: \"per-client delta streams diverging from a shared canonical state,\" and keyframes are defined per-broadcast, not per-client. The interaction of these three features (deltas, culling, N cameras) is the hard part of the wire track and this document asserts the layers compose without addressing who owns per-client reconstruction baselines, when per-client keyframes are emitted, or how a client resyncs after a missed entry event.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical-Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Stream rate decoupling at Tier 2 violates a stated Non-Functional Requirement in 300-arch",
+   "description": "Tier 2 specifies \"sim 60, stream 30, client interpolation.\" The world server's operating envelope in `300-arch.worldserver-foundation.md` mandates \"p99 STATE_UPDATE inter-arrival: < 1.5 \u00d7 tick budget under steady state.\" At a 30 Hz stream over a 60 Hz sim, inter-arrival is 2 \u00d7 tick budget \u2014 a literal, permanent NFR breach, and 300-arch declares NFR failure \"a release blocker, not a known issue.\" Either the NFR must be amended (per-stream-rate formulation) or the decoupling design must explain why it does not regress it; the document does neither.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Cached neighbor lists and GPU spatial state contradict the stateless-tick / server-owns-spatial-index contract in 100-arch",
+   "description": "Slice 119 caches neighbor lists across ticks, and the Quadrants tier keeps a GPU spatial hash and CSR structures resident between ticks. `100-arch.behavior-engine.md` states flatly: \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it, **including the spatial index**. The caller (world server) owns the spatial index, rebuilds or updates it between ticks.\" A stale neighbor cache and a persistent GPU hash are exactly the between-tick state that contract forbids, and this document never revisits it \u2014 ownership of the cache (engine vs. `SimulationManager`), how it is invalidated on spawn/remove (entity lifecycle events in 300-arch happen \"between behavior evaluation and state distribution\"), and how slice 307 replay reconstructs stagger phase are all unstated. The document also concedes staggered updates break trajectory-level equivalence with the NumPy reference, which sits in tension with the Design Goal \"every optimization must produce outputs verifiable against the current NumPy implementation.\"",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical-Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The \"central architectural decision\" is deferred, and the proposed answer \u2014 support all three tick-contract options behind an abstraction \u2014 is unnecessary complexity",
+   "description": "The document itself calls the tick return type \"the central architectural decision,\" then recommends \"support all three behind an abstraction, with the choice made per-platform\": (a) internal `to_numpy()`, (b) engine returns Quadrants fields, (c) DLPack zero-copy. This is optionality nobody has a use case for yet \u2014 tier sequencing already makes (a) sufficient through Tier 2 (Apple Silicon unified memory, where the doc concedes the copy is nearly free), and Tier 3+ can be re-decided with a measured PCIe number. Building a tri-option abstraction now inverts the project's \"resist adding complexity\" rule, and option (c)'s feasibility is unverified: DLPack export depends on Quadrants (a young Taichi fork) supporting it for Metal and CUDA buffers, and on the Three.js/zstd client path consuming it \u2014 none of which this document or any referenced doc confirms. Decide (a) now, name (c) as the revisit trigger (measured PCIe transfer exceeding tick budget at Tier 3).",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical-Considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The Tier 3 culling estimate is invalidated by the Tier 5 scenario, and aggregation \u2014 the other half of the scaling story \u2014 is missing entirely",
+   "description": "Tier 3 projects \"~50k visible at ground level\" and claims bandwidth then \"fits within 10G LAN or modern WiFi.\" Tier 5's defining scenario is a camera standing *inside* a collision of two 1M-agent populations \u2014 precisely the density regime where frustum culling yields its worst-case visible set, potentially several times 50k with no occlusion reasoning anywhere in the design. Meanwhile `300-arch` and slice 311 both make **aggregate descriptors** (center of mass, heading, dispersion for distant groups) the load-bearing half of the network-scaling strategy, and multi-resolution simulation is the 300 slice plan's first Future Work item; this document's tiers contain culling only. The Tier 5 bandwidth case is asserted, not derived, from an estimate its own flagship scenario defeats.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Tier 4's server-render path contradicts this document's own biome-shading guidance and its stated scope",
+   "description": "The Scope excludes \"viewer/client rendering optimization,\" and Technical Considerations says biome terrain shading \"is fragment shader work in the Three.js client... it should ship before or alongside the 50k milestone.\" Tier 4 then proposes a \"server-side render path (Vulkan framebuffer \u2192 H.264 stream)\" as a Tier 4/5 option \u2014 which would make client-side fragment shaders, including the just-shipped biome shading, dead code for exactly the tiers that matter (250k\u20132M demos). These cannot both be the plan. Either server-render is struck as a contingency outside this architecture, or the document must state that it obviates the viewer rendering stack and reorders the biome work accordingly.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The \"~32\u00d7 compression\" claim for int16 deltas does not follow from the stated design",
+   "description": "\"Quantizing deltas to int16 with a scale factor... gives ~32\u00d7 compression over float32 positions\" is arithmetically unsupported: int16 vs. float32 is 2\u00d7 per component (16 bits \u2192 2 bytes on 4), and vs. the float64 positions actually on the wire today (protocol.py) it is 4\u00d7. No mechanism producing 32\u00d7 (dead-band omission, delta-of-delta) is stated here. The document also sizes deltas for positions only while the shipped STATE_UPDATE carries velocities, which are never discussed. Since Tier 3's \"fits within 10G LAN\" and Tier 5's feasibility rest on these ratios, the number needs to be derived, not asserted.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical-Considerations"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Scope excludes network hardware decisions that Tiers 4\u20135 then specify",
+   "description": "Scope says the document \"Excludes... network hardware decisions (10G/25G LAN),\" yet Envisioned State Tiers 4 and 5 commit to \"Dedicated LAN link (10G or 25G)\" as design elements. Pick one: either hardware is a downstream consumer assumption (state the assumption) or it's in scope.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "No failure-mode story for the new substrates",
+   "description": "The only failure discussion is \"the Numba tier provides a working fallback at 10k,\" which is a tier-ordering statement, not an error strategy. Startup-time and runtime behavior when Quadrants kernel compilation fails, Metal/CUDA is unavailable or driver-mismatched, or a GPU OOM occurs at 1M agents is unstated \u2014 and the project rule is \"fail explicitly,\" so the eventual slice will need a defined error surface rather than an implicit silent downgrade to Numba.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical-Considerations"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "GPU/host synchronization and thread affinity vs. the 300 asyncio execution contract are unaddressed",
+   "description": "`300-arch` fixes a load-bearing contract: `sim.step` runs in a dedicated `ThreadPoolExecutor(max_workers=1, ...)` thread, with a `TickBarrier` gating cross-task reads. Under option (a), Quadrants/Taichi context initialization and kernel launches happen inside that executor thread while `to_numpy()` introduces a device\u2192host sync point each tick; on discrete CUDA the sync serializes the pipeline inside the tick budget the executor measures. None of that interaction (where the device context is created, whether sync stalls push the tick past budget, whether barrier timing must bracket the device sync) is mentioned. Probably workable under option (a), but it should be named as a constraint on the tick-pipeline slice rather than discovered there.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical-Considerations"
+  }
+ ]
+}

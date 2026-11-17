@@ -1,0 +1,61 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`sq auth logout` (and login's runtime startup) have no failure-mode row and no timeout key",
+   "description": "The design states that runtime spawning is \"confined to three places \u2014 a Codex turn, `sq auth login/logout`, and `sq auth status` for a profile that is already valid\". Only two of those three are covered:\n\n- The failure-mode table is titled \"Failure Modes \u2014 Codex Turn\" and contains no row for the logout path at all. `AsyncCodex.logout()` still spawns the app-server subprocess, performs `initialize`, and issues an RPC; a failure to start, an RPC error, or a hang during logout is unspecified.\n- `codex.login_timeout_s` is scoped in D7 to \"`handle.wait()` for browser or device-code login\" \u2014 not to the `AsyncCodex(...)` / `__aenter__` runtime startup that precedes it. `codex.account_timeout_s` is scoped to \"`sq auth status` and post-login confirmation\". So the runtime spawn inside `sq auth login` is bounded by no key, and the \"Runtime subprocess fails to start / `initialize` fails\" row is written for the turn path only.\n\nConsequence: `sq auth login` can hang indefinitely on a wedged app-server spawn, and `sq auth logout` has neither a timeout nor an enumerated behaviour \u2014 the gap the criteria call out (hang / peer-disconnect on every new I/O path). Add a `codex.logout_timeout_s` (or reuse a single \"runtime startup\" cap), extend the `login_timeout_s` scope to cover the login runtime start, and add explicit rows for logout: spawn failure, RPC error, timeout, and interrupted Ctrl-C (with the same `handle.cancel()`/teardown treatment the turn path gets).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure-Modes---Codex-Turn"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Logout's effect on the credential store is not reconciled with the file-presence validity check",
+   "description": "The success criteria require \"`sq auth logout openai-oauth` removes the login\", and verification step 8 expects `sq auth status` \u2192 `\u2717 not authenticated` afterwards. But `sq auth status` still derives validity from `OAuthFileStrategy.is_valid()`, which is a check for the existence of `~/.codex/auth.json` (the design's own \"Status\" data flow: \"existing validity/source; if the strategy is `InteractiveLogin` and valid, append account email + plan from `account()`\"). The design lists `AsyncCodex.logout()` under \"Interfaces Required\" but never states whether it deletes `~/.codex/auth.json`, invalidates the token server-side only, or leaves the file in place \u2014 and that SDK behaviour is not verified anywhere in the document.\n\nIf `logout()` leaves the file, `is_valid()` stays True and `sq auth status` reports \"\u2713 authenticated\" immediately after a successful logout \u2014 the opposite of the stated success criterion, and exactly the silent-fallback shape the project rules forbid. If `logout()` only invalidates the token, the file-presence check is also wrong for the reverse case (a revoked-but-present file reads as valid). The design must state the assumed `logout()` store semantics and the resulting validity rule (delete the file if the SDK does not; otherwise make `is_valid()` consult the runtime's account state and say which one wins). As written, a required user-visible behaviour rests on an unverified SDK assumption.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Success-Criteria"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`sq model list` is not an existing command surface \u2014 the real command is `sq models` / `sq models list`",
+   "description": "The design (and the parent slice plan) name the discoverability surface `sq model list`. The CLI registers `models_app` under the name `\"models\"` (`src/squadron/cli/app.py`), with a default callback (`sq models`) and a `list` subcommand (`sq models list`). There is no `sq model` command. The design's Component Structure correctly points at `cli/commands/models.py`, so the implementation target is unambiguous, but the Verification Walkthrough step 1 (`sq model list` \u2192 aliases marked) and the Success Criteria would fail as literally written. Rename the surface in the design to `sq models list` (or `sq models`).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Sub-part-B-surfaces"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The new `codex provider` doctor row has an unaddressed interaction with `sq setup`'s fixed recheck map",
+   "description": "`sq setup` (slice 908) is a renderer over `run_all_checks()` with a hard-coded check-name \u2192 recheck-function map (`setup_steps.py` currently maps `\"codex CLI\"`), and its design states that a doctor row absent from that map degrades to \"press enter when done\" without verification. Adding a `codex provider` row therefore adds a new setup step that never re-verifies after the user runs `pip install 'squadron-ai[codex]'`, and slice 908's design anticipates a CI check that compares the doctor check-name list against setup's recheck map. The design should say whether this slice updates that map (preferred: the step's command is exactly the extra install, and re-verification is what makes the step close) or explicitly accepts the degraded recheck. As written, the doctor row is specified in isolation from a consumer that will render it.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Sub-part-B-surfaces"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "D2 and the Data Flow describe two different importability probes for `resolve_codex_runtime()`",
+   "description": "D2 says `resolve_codex_runtime()` \"checks `codex_cli_bin` importability, else `shutil.which(\"codex\")`, else raises\", while the Data Flow says the same call \"raises `ProviderError` naming the extra if `openai_codex` is not importable; names the PATH fallback if neither binary exists\", and the failure table treats \"openai_codex not installed\" and \"no bundled binary and none on PATH\" as two separate rows. These are different distributions (`openai-codex` vs `openai-codex-cli-bin`) and the two readings produce different error text for a user who has the extra installed but no runtime. Pin one definition \u2014 e.g. `resolve_codex_runtime()` resolves the *binary* (bundled-or-PATH) and a separate, explicit check raises the \"install the extra\" error for the missing `openai_codex` package \u2014 so the two failure rows keep their distinct remedies.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical-Decisions"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`ExtraRequirement` duplicates the existing `ProviderCapabilities` channel; merging it is the lighter option",
+   "description": "`ProviderCapabilities` (a frozen dataclass with defaults, added by slice 128) is already the established, registry-consistent mechanism for \"callers adapt based on capabilities, not provider identity\" \u2014 which is exactly what D9's `ExtraRequirement` protocol introduces alongside it. The ISP argument that justifies D3 (a separate protocol rather than extra methods on `AuthStrategy`) does not transfer to `ProviderCapabilities`: adding `missing_extra_hint: str | None = None` to that dataclass costs every provider one defaulted field and no stubbing, and keeps a single capability channel. `ExtraRequirement` also has exactly one implementer today, so the generalization (\"lets any provider with an optional dependency surface an install hint\") is speculative. Folding the hint into `ProviderCapabilities` removes a protocol, an `isinstance` check, and one file edit without changing any behaviour the slice plan asked for.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical-Decisions"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The architecture document's Authentication Patterns table gains no row, and the design's own trigger condition is one provider late",
+   "description": "The design correctly reasons that `InteractiveLogin` does not violate the architecture's \"squadron does not unify authentication / each provider's credential resolution is self-contained\" principle, and it stores no credentials itself \u2014 that part is well aligned. The remaining nit is the trigger condition: the architecture's Authentication Patterns table (OpenAI \u2192 \"API key\") is already incomplete for the `openai-oauth` provider introduced by slice 128, and this slice adds a genuinely new auth *method* (provider-delegated browser/device-code OAuth into a provider-owned token store). Deferring the architecture update \"if a second provider adopts `InteractiveLogin`\" waits for a second provider to record the first one. A one-line addition to the table (a ChatGPT-subscription row) would keep the architecture document the accurate single source it is meant to be; the design's choice not to edit it is defensible but should at least name the table row as a known gap.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship-to-the-architectures-auth-model"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The `OPENAI_API_KEY` fallback outcome contradicts the Technical Scope exclusion",
+   "description": "Technical Scope \"Excluded\" states \"`login_api_key` \u2014 API-key users keep the `openai` profile\", while Special Considerations allows the outcome \"**works** \u2192 keep the fallback, label the source `OPENAI_API_KEY` in status\". These are different end states for the same file, and the second one re-introduces exactly the key-only path the design flags as a silent fallback. The design also leaves the decision itself to implementation (\"Either outcome is recorded in the task file\"). Since the whole point is to remove an ambiguous credential source, the design should state the intended end state (drop the env fallback from `OAuthFileStrategy` and point API-key users at the `openai` profile) and treat the runtime check as confirmation, not as a branch that decides the design.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Special-Care Considerations"
+  }
+ ]
+}

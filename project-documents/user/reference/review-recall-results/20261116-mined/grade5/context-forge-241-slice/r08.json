@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Config-read failure modes for the new gate path are unspecified; fail-fast NFR not restated",
+   "description": "The gate introduces a new I/O path \u2014 `resolveGateConfig(config)` reads `workflow.review_*` from TOML on every status-derivation call \u2014 and names no failure handling for it. Verified against the code this design builds on: `ConfigManager.get()` rethrows non-ENOENT read/parse errors (malformed TOML in a hand-edited `.context-forge.toml` makes the call throw, and the design's data flow has no error branch), and `get()` performs no read-time validation (`validateValue` runs only in `set()`), so an out-of-enum `review_threshold` or non-boolean `review_enabled` can be returned raw. The design's stated narrowing (\"`=== true` for `review_enabled`\", Patterns and Conventions) then silently disables gating on a malformed value, and a value outside `ThresholdToken` reaches `evaluateVerdict` with no defined behavior \u2014 a silent fallback (against CLAUDE.md) and a \"silent pass\" the parent arch's **Fail-fast on configuration errors** principle forbids (\"an invalid `workflow.review_threshold` value \u2026 surfaced immediately, not a silent pass or silent block\"). That NFR is also not restated anywhere in the slice doc. Specify `resolveGateConfig`'s behavior for un-narrowable values (explicit error) and for a config-read throw, and restate the fail-fast requirement with its enforcement point.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1: `reviewGate.ts` is a standalone pure module"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Arch requirement that the rationale name the parse failure explicitly is dropped",
+   "description": "240-arch \u00a7Technical Considerations (\"File-read failure modes\") requires that for a review file that exists but cannot be parsed, \"the rationale returned to the caller names the parse failure explicitly.\" The design instead embraces conflation \u2014 \"a read failure and a missing frontmatter both surface as 'no verdict present'\" \u2014 and TD-7's rationale contract names only review type, verdict, and threshold. Verified: `parseFrontmatter` returns the same `{ found: false, data: {} }` for a missing frontmatter block, an unclosed block, and any read/permission error, so the gate as designed cannot distinguish these cases and cannot name a parse failure. The failure-mode *handling* (\u2192 `UNKNOWN` \u2192 `review_unknown_as`, never silently cleared) is correct; what is lost is the rationale-naming requirement. State how the unparseable case's rationale is worded (and record the deviation from the arch if \"verdict absent or unparseable\" is the accepted granularity), or capture the distinction.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Interfaces Required"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`STATUS` const does not cover the two new `SliceStatus` values this slice introduces",
+   "description": "TD-6 defines `STATUS` over the `NormalizedStatus` vocabulary (`complete`/`in-progress`/`not-started`/`deprecated`, union explicitly unchanged), but the slice's new statuses `pending-review`/`review-failed` live in the separate `SliceStatus.status` union (`introspection/types.ts:258`), and the design's own new code must assign and compare them (TD-3 routes `pending-review` \u2192 `review`, `review-failed` \u2192 `blocked`). Those values have no const entry, so the slice's own pattern \u2014 \"No magic strings: \u2026 status values via `STATUS`; never a bare `'code'` or `'complete'` in the new code\" \u2014 cannot be satisfied for exactly the values this slice adds, violating the project's define-once rule. Extend the const to cover the `SliceStatus` vocabulary (or add a second const), while keeping the `NormalizedStatus` derivation byte-identical for 910's sweep.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-6: `STATUS` const introduced here; sweep deferred to 910"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`GateOutcome` includes `pending` but TD-2 assigns the pending outcome to the navigator",
+   "description": "TD-1 declares `evaluateVerdict(verdict, threshold, unknownAs): GateOutcome` with `GateOutcome = 'clears' | 'pending' | 'failed'`, but TD-2 states \"the navigator supplies the `pending` outcome for the **absent** case from the `review === null` signal.\" Under that split `evaluateVerdict` can never return `pending` \u2014 the variant is dead or the ownership is contradictory. Clarify the return contract (drop `pending` from `evaluateVerdict`'s return, or route the absent case through it).",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Design resolves an arch-internal inconsistency in `pending-review` semantics",
+   "description": "240-arch's slice-status extension allows \"`pending-review` \u2014 \u2026 (or verdict is `UNKNOWN` and `review_unknown_as` treats it as pending)\", yet the `review_unknown_as` enum (`fail`/`concerns`/`pass`) has no \"pending\" policy. The design's stricter resolution \u2014 present-but-unparseable is never `pending`, always `UNKNOWN` then policy \u2014 is consistent with the arch's own verdict-handling section and the \"must not silently pass\" principle, and is explicitly justified in TD-2. This is a correct resolution of a parent-document inconsistency; worth having 243 document the resolved semantics so the arch's parenthetical is not cited later.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix"
+  }
+ ]
+}

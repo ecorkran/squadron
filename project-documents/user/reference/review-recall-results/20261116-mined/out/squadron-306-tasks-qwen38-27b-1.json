@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T12/T13 guard `save_review_file`, but the `sq review code` path the success criterion names goes through `save_review_result`, which bypasses it",
+      "description": "The design's success criterion is \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns; nothing is silently destroyed\" (walkthrough step 7 exercises exactly this: hand-edit the file, run `sq review code 305`, expect WARNING + `archive/` copy). I verified the code path: the CLI's `review code` command saves via `save_review_result` (`src/squadron/cli/commands/review.py:746`), and `save_review_result` writes the file directly with `path.write_text(...)` in both its markdown and JSON branches \u2014 it never calls `save_review_file`. T12 places the archive-on-overwrite guard only \"before `save_review_file` writes to an existing `path`\", and T13's tests exercise `save_review_file` directly. A junior completing T12/T13 to green leaves the actual data-loss path (CLI `sq review code`, and the pipeline's `slice_info` branch, which also uses `save_review_result`) silently overwriting hand-edited reviews \u2014 the exact bug Part D exists to fix. The task must either guard both write sites (e.g., extract a shared archive-then-write helper used by both, or route `save_review_result` through `save_review_file`) and T13 must include a test that reproduces walkthrough step 7 through `save_review_result`.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py#save_review_result"
+    },
+    {
+      "severity": "FAIL",
+      "title": "T6's \"no test may need rewriting\" gate is unsatisfiable: moving the transport call site orphans 305's `_JUDGE_TRANSPORT` patch targets",
+      "description": "T5 moves the `run_review_with_profile` call into the new `review/addressed/judge.py` (`judge_residue_core`), where the name is resolved in that module's namespace. But both 305 suites patch the old module's attribute: `_JUDGE_TRANSPORT = \"squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile\"` at `tests/pipeline/test_findings_addressed_judge.py:32` and `tests/pipeline/test_findings_addressed_e2e.py:27`. After the move, that patch either raises AttributeError (if the pipeline module drops the now-unused import) or silently fails to intercept (if it keeps the import), so the mock is never called and the real transport is hit \u2014 T6's required \"all pass unchanged\" cannot hold. T6 further instructs \"if one did [need rewriting], the extraction changed behavior \u2014 stop and reconcile\", which converts a one-line, behavior-preserving patch-target update (two string constants) into an unplanned halt. Fix: T5 should explicitly include updating the two `_JUDGE_TRANSPORT` strings to `squadron.review.addressed.judge.run_review_with_profile` as part of the relocation, and T6's criterion should be \"same test count and assertions pass; only the patch-target strings changed\" (the mock still intercepts the same call, so the proof of preserved behavior stands). Note the `no_transport` fixture in `test_findings_addressed.py` patches the source module `squadron.review.review_client` and is ineffective both before and after the move (screens never touch the transport) \u2014 it needs no change, so a junior should not be led into \"fixing\" it.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T11 integration-covers only one of the two persistence paths the criterion requires",
+      "description": "The design criterion says `reviewedSha:` must be present \"from both the CLI and the pipeline persistence paths\". T10 correctly wires both (`save_review_result` and `pipeline/actions/review.py`), but T11's integration test is explicitly singular: \"on `save_review_result` (or the pipeline review action, whichever is more directly testable)\". If the junior picks the CLI path, the pipeline action's stamping \u2014 including its two-branch persistence (the `save_review_file` fallback branch, where the stamp must be threaded through the `format_review_markdown` call) \u2014 ships with no test, and the unit tests in T11 only cover the formatter. The file-2 walkthrough (T40 step 1) verifies only the CLI path end-to-end. T11 should require a test per path (a `ReviewAction`-level test or equivalent for the pipeline branch), mirroring the interface-parity rule the task itself cites.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T8's baseline phrasing is muddled at T8's position in the plan",
+      "description": "T8 (which runs before any test-adding task \u2014 T11 and all of file 2 follow) expects \"the same pass count as slice 305's close-out baseline (2832 passed, 2 skipped) plus this slice's later additions\". At T8's point in time the relocation adds zero tests, so the expected count is exactly the pre-slice baseline; the \"plus later additions\" qualifier only makes sense when the full suite is re-run at file-2 closeout. The hard-coded 2832 figure is also unverifiable from here \u2014 T2's \"same count as before the move\" instruction (run the suite pre-change) is the reliable baseline mechanism, and T8 should lean on that comparison rather than the number.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T1's expected-importer list names a test file with no code import of the package",
+      "description": "T1 lists \"the four `tests/pipeline/test_findings_addressed*.py` files\" as expected importers of `findings_addressed.models`. I verified `test_findings_addressed_e2e.py` has no code import of the package \u2014 only the string patch target at line 27 (which is the subject of the T5/T6 finding above). The task's grep is the authoritative mechanism, but a junior told to update importers may find nothing to change in that file and second-guess the list. The importer list should read \"the test files that import from the package (per grep)\".",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T12/T13 guard `save_review_file`, but the `sq review code` path the success criterion names goes through `save_review_result`, which bypasses it",
+      "location": "src/squadron/review/persistence.py#save_review_result",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T6's \"no test may need rewriting\" gate is unsatisfiable: moving the transport call site orphans 305's `_JUDGE_TRANSPORT` patch targets",
+      "location": "tests/pipeline/test_findings_addressed_judge.py:32",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T11 integration-covers only one of the two persistence paths the criterion requires",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "T8's baseline phrasing is muddled at T8's position in the plan",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "T1's expected-importer list names a test file with no code import of the package",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-17T12:20:48.758851",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 501812,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 492214,
+  "cached_tokens": 422976,
+  "cache_write_tokens": null,
+  "completion_tokens": 124404,
+  "reasoning_tokens": 121538,
+  "duration_seconds": 460.4224239583127,
+  "cost_usd": 0.31145472,
+  "cost_basis": "alias_pricing"
+}

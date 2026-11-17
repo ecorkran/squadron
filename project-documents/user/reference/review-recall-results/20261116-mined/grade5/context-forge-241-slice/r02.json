@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "New ConfigManager I/O path has no enumerated failure handling; existing catch would silently swallow it",
+   "description": "The design is careful to enumerate failure modes for the other two reads it depends on (`parseFrontmatter` \"never throws\" at line 79, `detectDocuments` never throws), but the third \u2014 `ConfigManager.get(key)` \u2014 can throw. Verified in `packages/core/src/config/ConfigManager.ts` (`readToml`): only `ENOENT` is caught; a malformed `.context-forge.toml` makes `smol-toml.parse` throw out of `get`. The design's data flow (lines 143\u2013168) calls `resolveGateConfig(config)` with no stated handling, and the gate is specified to live inside `deriveSliceStatus()`, whose existing `catch { return base; }` (WorkflowNavigator.ts) would convert a config-read failure into a silent `no-active-slice` status \u2014 a wrong recommendation with no error surfaced. This violates both the arch's fail-fast principle and the project rule against silent fallback values. The design must state the handling strategy explicitly (e.g., log at ERROR and skip the gate, or surface the config error) rather than inheriting the blanket catch implicitly.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:80"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Invalid `review_threshold`/`review_unknown_as` values are unvalidated on the read path; arch fail-fast requirement not restated",
+   "description": "The arch states: \"Fail-fast on configuration errors. An invalid `workflow.review_threshold` value \u2026 is a config error surfaced immediately, not a silent pass or silent block. The `validate` hook in `ConfigKeyDefinition` is the enforcement point.\" Verified: `ConfigManager.get()` never runs `enum` or `validate` checks \u2014 `validateValue` is invoked only from `set()` (`ConfigManager.ts:145`). So a hand-edited TOML value like `review_threshold = \"bogus\"` reaches `resolveGateConfig`/`evaluateVerdict` as-is, and the TD-2 matrix has no row for an unrecognized threshold token \u2014 behavior is undefined at exactly the point the arch forbids silent pass/block. The design should restate the NFR-equivalent requirement and specify what `resolveGateConfig` does with a token outside `{pass, concerns}` / `{fail, concerns, pass}` (explicit error, not a default).",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1: `reviewGate.ts` is a standalone pure module"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "TD-7 example recommendation strings contradict the arch's stable `review`/`blocked` vocabulary and defer the consumer contract to implementation",
+   "description": "The arch specifies the gate output as `{ recommendation: \"review\", \u2026 }` and `{ recommendation: \"blocked\", \u2026 }` (arch \"Gate insertion point\"), and its Related Work section says Amoeba \"depends on CF returning structured `recommendation` values with a stable vocabulary.\" The slice plan likewise says the branch returns \"`review`/`blocked` recommendations.\" The design states this correctly in the Overview, TD-3, and \"Provides to Other Slices\" \u2014 but TD-7's own examples put prose in the `recommendation` field (`'Review required before advancing'`, `'Blocked: review verdict does not clear threshold'`) and close with \"Exact strings finalized in implementation.\" If implemented as the TD-7 example shows, the vocabulary runners route on is unfixed and prose-valued, breaking the arch's consumer contract. The design should pin `recommendation` to exactly the tokens `review`/`blocked` (prose belongs in `rationale`/`summary`) and drop the \"finalized in implementation\" hedge for those two values.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Rationale contract omits the arch's explicit requirement to name the parse failure for an unreadable review file",
+   "description": "The arch's \"File-read failure modes\" entry requires: \"The rationale returned to the caller names the parse failure explicitly.\" The design's rationale contract (TD-7, line 268) requires only the review type (plus verdict + threshold for `review-failed`), and line 79 frames a read failure as simply \"no `verdict` present\" \u2014 which would produce a rationale indistinguishable from a legitimately verdict-less file. `parseFrontmatter`'s contract (verified) collapses read errors, malformed YAML, and absent frontmatter into `{ found: false, data: {} }`, so at minimum the rationale for a present-but-`UNKNOWN` artifact must state that frontmatter is missing or unparseable, per the arch. Add that requirement to TD-7.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:268"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Pre-slice-plan routing depends on an unstated interaction with getNext's `no-active-slice` early-return guard",
+   "description": "The arch-gate `pending-review` status only reaches the reserved `review-gate` branch because that branch sits *after* the `slice.status === 'no-active-slice'` guard returns early \u2014 i.e., `deriveSliceStatus`'s no-active-slice path must return `pending-review` (escaping the guard, and also skipping `detectFirstRunContext`'s FR-3b \"Advance to Phase 3\" recommendation) for the arch boundary to recommend `review`. The mechanism works, but the design states only \"extend the no-active-slice / pre-slice-plan path\" without spelling out this guard interaction, and at that boundary `SliceStatus.name` is `''`/`index` null while TD-7's rationale template assumes \"Slice NNN.\" Worth one clarifying sentence plus a walkthrough step for the `arch` boundary (the demo covers only pre-advance and pre-tasks).",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Surface path naming for MCP call sites is off by one directory",
+   "description": "The component table writes `mcp-server/src/tools/workflowTools.ts`; the verified path is `packages/mcp-server/src/tools/workflowTools.ts` (and `cli/src/...` is `packages/cli/src/...`). The count and identification of the four call sites are correct \u2014 only the path prefix is. Fix so task breakdown doesn't chase non-existent paths.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:94"
+  }
+ ]
+}

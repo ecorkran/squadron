@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough drives a bench interface that does not exist",
+      "description": "Every gate command is written as `python scripts/bench.py --backend quadrants-fused --config mid-flock --N 10000 --ticks 100 --subdivision-factor 3 --parity-check numpy`. The delivered harness has no `scripts/bench.py` (`scripts/` contains only the two slice-148 measurement scripts) and no `--config`, `--N`, `--ticks`, `--subdivision-factor`, or `--parity-check` flags; the real entry point is `uv run python -m migratory.bench --workload <name> --backend <name>`, with N, dt, warmup/measure ticks taken from the workload YAML, exactly as slices 145 and 148 wrote their walkthroughs. There is also no `BenchConfig` type anywhere in the tree \u2014 the Component Interactions diagram's `BenchConfig \u2514\u2500 subdivision_factor S` names an abstraction that does not exist, and the doc never says where `subdivision_factor` is actually declared (new `Workload` field with a default, workload YAML key, or CLI flag). The gap this leaves unmet: A2/A3/A5 cannot be run or reproduced as written, and the implementer has no defined config surface to build. Align the commands to `-m migratory.bench --workload \u2026` and state the `subdivision_factor` carrier explicitly (including its default and whether `Workload.from_dict` validation rejects bad values \u2014 the loader currently raises only on its known required fields).",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:150-188"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Step 3's four-arm ablation requires a counter-gating toggle the design removes",
+      "description": "The walkthrough prints four arms \u2014 \"Baseline (S=1, counter-gating)\", \"Early exit only (S=1, break enabled)\", \"Cell subdivision only (S=3, counter-gating)\", \"Both\" \u2014 but arms 1/2 and 3/4 are identical commands (`--subdivision-factor 1 --ticks 200` twice, `--subdivision-factor 3 --ticks 200` twice). Intervention 1 is specified as an unconditional replacement of counter-gating by `break`; no flag, config key, or backend name selects the counter-gated path. So neither the A2 \"\u2265 5\u00d7 faster than slice 145 CUDA baseline\" comparison nor the attribution between interventions is runnable inside the branch. State the baseline as the recorded slice-145 CUDA numbers (`145-notes.fused-tick-measurements.md`: 37.9\u201338.3 TPS / 25.18\u201325.41 ms force_total at N=50k) and drop the phantom arms, or add a real selector if ablation is genuinely wanted.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:161-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "cell_size ownership and the S-applied radius are ambiguous",
+      "description": "`cell_size` is currently derived inside `GpuAgentState.setup()` as `max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER`, with that multiplier documented as the single source of truth that guarantees a 3\u00d73 walk covers any query radius. Slice 149 introduces a competing derivation \u2014 `cell_size = query_radius / S` supplied from config \u2014 and its \"Cell count / grid dimensions\" paragraph says \"No structural changes needed there \u2014 only the cell_size value changes,\" without saying who owns the value after the slice. Consequences left unspecified: (a) whether `S` divides `max_query_radius` (the grid constant) or each profile's own `query_radius` \u2014 the fused kernel scans with the agent's per-profile radius while the grid is built from the max, so the former choice silently breaks neighborhood coverage for profiles with a different radius; (b) what happens when a config `cell_size` and `query_radius / S` disagree; (c) whether `DEFAULT_CELL_SIZE_MULTIPLIER` is replaced, retained, or superseded. Two sources of one value is exactly the \"changing a value should require editing one place\" rule. Also name the guard the subdivision interacts with: `MAX_CELLS_SANITY_CAP` already raises when `grid_w \u00d7 grid_h` grows (S multiplies cell count by S\u00b2), so the S-validation section should reference it instead of only the ad-hoc upper bound.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:48-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Placing the break in the kernel body breaks the seam contract the slice claims to preserve",
+      "description": "Option A puts `if k_found >= max_neighbors and max_neighbors > 0: break` in the caller and keeps `get_neighbors_first_k` as a \"documented swap point.\" But the plan (140-slices entry 10) and slice 145 (A7) both define the requirement as *neighbor selection logic is isolated behind the seam, so a distance-ranked swap does not change the tick kernel structure*. Once the cap test lives in the kernel body, the acceptance predicate and the exit predicate are split across two places, and Option A's own text concedes the seam \"becomes unreachable when the break fires\" \u2014 it actually becomes a constant-returning guard (it can only return 1 on the capped path). The future distance-ranked slice must then edit the loop, which is precisely what A7 exists to prevent. Either state the revised swap contract (the break condition becomes part of the A7 swap surface, and 145's A7 claim needs an erratum) or express the predicate as one seam-owned value the loop consumes (`if should_stop_scan(k_found, max_neighbors): break`) so the selection decision stays in one place.",
+      "file_ref": null,
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No decision rule when the performance gates miss, and the premise contradicts slice 145's own measurement",
+      "description": "Slice 148's design carries R1\u2013R5 with explicit \"definite next action\" rules and an R5 stop-and-re-diagnose gate. Slice 149 \u2014 which is 148's successor after a negative result \u2014 states no equivalent: if A2 (\u22655\u00d7 force_total) or A3 (\u2265100 TPS) misses, the doc does not say whether that is a re-diagnosis, a partial ship, or a slice failure. That matters because the mechanism has a live counter-argument to resolve: 145 measured TPS identical across 9\u00d7 density variation at N=50k and concluded \"the inner-loop neighbor work is *not* the bottleneck at N=50k; the kernel is dispatch + memory-bandwidth bound,\" and 148's envelope data shows ~1 ms/tick of non-force cost already (spatial_build 0.36 ms + ~1 ms download/Python), which caps any inner-loop win at roughly 2.9\u00d7 on total tick \u2014 i.e. ~100 TPS is the arithmetic ceiling of A3, with no headroom for divergence or the extra `cell_count.to_numpy()` / two `from_numpy()` round-trips that S\u00b2 more cells adds to the per-tick build. Reconcile the two readings in the Problem Statement and add an explicit miss-handling rule (e.g. per 148's R5: stop, profile the new dominant phase, do not iterate inside this architecture).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:15-20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A5 is inherited scope and its prescribed check is not available on the gate host",
+      "description": "Cut the following, none of which serves a requirement this slice must deliver:\n- **A5 \"no register spill\" plus Step 4's `lmem`/`nvcc --ptxas-info`/`TI_PRINT_KERNEL_STATS` procedure.** The intervention deletes loop iterations and adds one scalar kernel argument; it cannot increase register pressure. The gate also prescribes tools the CUDA host does not have \u2014 148's envelope notes record \"ptxas, cuobjdump, and nvcc are not installed on this host \u2014 only the CUDA runtime driver,\" and register/spill evidence was obtained by `strings` on the cached PTX (`.local` declarations = 0). If a spill check is kept at all, it should be that PTX inspection or `qd.start_kernel_profiler()`, not `nvcc`.\n- **The validated S range 1\u20138 with the 289-cell rationale.** Only S=1 (backward compatibility) and S=3 (gate config) are used; the `S > 8` bound's justification (\"risks pushing auxiliary arrays past practical GPU memory\") is unmeasured and duplicates the existing `MAX_CELLS_SANITY_CAP` check.\n- **Option A vs Option B discussion** \u2014 Option B is a strawman that the doc immediately rejects; one sentence suffices.\n- **Two of the four Step 3 ablation arms** (see the separate finding).\n\nAt Effort 2/5, Risk Low, the remaining content is proportionate; these four items are what to trim.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slice\u2192 project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A4 parity gate is ambiguous and is measured off the operating point",
+      "description": "A4 says \"within 20% of numpy reference,\" Step 1 asks that S=3 be \"statistically equivalent to S=1,\" and Step 5 runs the parity check on `mid-flock` at N=5000. These are two different assertions (vs NumPy reference \u2014 the plan's exit criterion; vs S=1 \u2014 an added cross-config equivalence) at a different operating point from the gates. Cell subdivision and early exit both change the *first-k-found* accepted set because cell visit order changes, so S=1-vs-S=3 agreement is a new requirement the plan did not set and the doc does not justify; meanwhile the population-level effect is largest exactly where p99 occupancy is ~5000/cell, not at N=5000. Name the single parity gate (numpy reference at the 50k operating workload, 100 ticks, the same tolerance and metric pair slice 145 A5 uses), and either drop the S=3-vs-S=1 equivalence or state why a third comparison is load-bearing.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:184-188"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The named gate workload does not contain the agent count its criteria reference",
+      "description": "\"Default bench config for gate runs: `mid-flock-50k` workload\" \u2014 the workload file `bench/workloads/mid-flock-50k.yaml` sets `n: 100000`, world `[1536, 1536]`, `cluster_radius: 45.0` with centers at (120,120)/(280,280), which is a different geometry from the density-matched N=50k runs (756\u00d7756) the occupancy figures were measured on. Confirm which workload the p99 \u2248 5000 occupancy premise belongs to, because A2/A3 are stated as \"N=50k\" while the named run is 100k; candidates-per-agent, and therefore the claimed gain, differ between the two.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR restated with target; dependency directions and explicit validation are correct",
+      "description": "The slice restates the parent architecture's Tier 2 NFR with its specific number (\"60 TPS at N=50k on CUDA\") and explains why it gates above it (A3 \u2265 100 TPS for headroom), which is the pattern 148's NFR Context section uses. Dependency directions match the plan entry (depends on 145; consumed by 146; `parent` pointing at the slice plan is correct, not an error). The S validation is a config-time hard error with a message rather than a silent clamp, satisfying the project's no-silent-fallback rule, and the doc's code anchors (inner `for kk` loop, `get_neighbors_first_k`, `build_spatial_hash`) match the current fused-kernel file. Scope guards against the CPU path and `TickResult`/world-server boundary are consistent with the architecture's \"clean ownership boundaries\" goal.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Verification walkthrough drives a bench interface that does not exist",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:150-188",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Step 3's four-arm ablation requires a counter-gating toggle the design removes",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:161-175",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "cell_size ownership and the S-applied radius are ambiguous",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:48-81",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "summary": "Placing the break in the kernel body breaks the seam contract the slice claims to preserve",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No decision rule when the performance gates miss, and the premise contradicts slice 145's own measurement",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:15-20",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "A5 is inherited scope and its prescribed check is not available on the gate host",
+      "location": "project-documents/user/slice\u2192 project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "A4 parity gate is ambiguous and is measured off the operating point",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:184-188",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The named gate workload does not contain the agent count its criteria reference",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "NFR restated with target; dependency directions and explicit validation are correct",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T12:08:01.059398",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 314384,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 902744,
+  "cached_tokens": 769024,
+  "cache_write_tokens": null,
+  "completion_tokens": 84857,
+  "reasoning_tokens": 80377,
+  "duration_seconds": 1027.5364707498811,
+  "cost_usd": 0.07147615,
+  "cost_basis": "alias_pricing"
+}

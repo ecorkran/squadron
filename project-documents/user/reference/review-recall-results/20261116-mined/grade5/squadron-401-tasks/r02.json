@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "SC 10's \"its other metrics are unchanged\" clause has no corresponding test step",
+   "description": "Success Criterion 10 (slice design, line 278) reads: \"\u2026gets `duplicated_lines` as `tool_failed` with a WARNING naming the count and the ceiling, **and its other metrics are unchanged.** A test lowers the constant to trigger it.\" Task 11 (bullet at the cited line) tests the tool_failed outcome and WARNING at the `measure_duplication` module level, where \"other metrics\" don't exist; Tasks 13 and 15 exercise the adapters but not the ceiling scenario. The failure-mode table's second row likewise ends with \"Other metrics are unaffected\", and the Technical Requirement says \"Failure-mode tests assert both the signal and the outcome for each row\" \u2014 so this clause of row 2 is left unmet by name. The structural separation (D1: duplication is its own pass returning one measurement) makes the risk low, but the criterion explicitly asks for the assertion. Cheapest fix: add one bullet to Task 13 \u2014 with `DUPLICATION_MAX_TOKENS` patched small, assert through `PythonAdapter` that `duplicated_lines` is `tool_failed` and file/function length and lint are identical to an unpatched run (and mirror it in Task 15 for TypeScript, since SC 10 says \"a language\", not \"Python\").",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "No load-test task exists, and none is required here",
+   "description": "The slice restates one resource bound \u2014 the D3 memory estimate (133 bytes/token, ~530 MiB at 4M tokens) \u2014 but the design discharges it as an enforced ceiling (`DUPLICATION_MAX_TOKENS`) that converts the overload into an explicit `tool_failed` absence, tested by lowering the constant (SC 10, Task 11) rather than by generating a multi-gigabyte corpus. The repository has no `tests/load/` convention (slice 400 introduced none), and adding one would be scope creep. Recording this so the omission is read as a deliberate design choice, not a gap.",
+   "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 10 is the largest task (Effort 4) but is correctly left unsplit",
+   "description": "Task 10 (the window pass: id mapping, rolling hash with collision confirmation, overlap rule, ceiling, `counting` text) is the algorithmic core and carries the module's ~300-line budget on its own. Splitting it (e.g. hash step vs. window index) would create an intermediate state that can't be tested end-to-end; the spec is exhaustive and each sub-bullet is independently verifiable, and the hash step is already isolated for collision testing. At the other end, no task is too granular \u2014 the Effort 1 tasks (1, 17, 28, 30) are each single-commit units.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:116-133"
+  }
+ ]
+}

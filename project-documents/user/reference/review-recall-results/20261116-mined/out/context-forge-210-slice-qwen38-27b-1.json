@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Overwrite safety contract only defined for the two top-level files; `.github/instructions/` and `.github/prompts/` are unprotected",
+      "description": "The sequence step 4 checks the managed marker in `.github/copilot-instructions.md` and `AGENTS.md` only, and \"Files Changed\" adds `isManagedCopilotFiles(projectPath)` for just those two files. Yet the design decision at line 65 says \"Both Claude and Copilot generated files carry `[//]: # (context-forge:managed)`\" \u2014 i.e., every emitted `.instructions.md` and `.prompt.md` gets a marker that nothing in the CLI checks before overwrite. These two directories are exactly where users author their own content: `.github/prompts/` is the documented VS Code location for user prompt files (see the referenced tool guide's examples), and skill names like `commit` / `review-pr` are plausible collision points. A user-authored, unmarked `commit.prompt.md` would be silently replaced by the guide script with no prompt and no `.bak`, violating the plan's safety contract (\"first-run warns before overwriting unmanaged user content\"). The design should specify per-file marker checks and backup/collision behavior for the instructions/prompts directories, and state explicitly whether backup-to-`.bak` runs even when `--yes` is passed (the 202 contract for `CLAUDE.md` is \"backup runs regardless of `--yes`\"; this slice's \"prompt (or skip with `--yes`), backup to `.bak`\" is ambiguous on that point).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two plan success criteria have no verification counterpart in the slice design",
+      "description": "The slice plan's success criteria include: (1) \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files,\" and (2) \"Manual verification: an AI agent in VS Code Copilot can read `.github/copilot-instructions.md` + `AGENTS.md` and follow project conventions as well as Claude does with `CLAUDE.md` + `.claude/rules/`.\" The Test Coverage section assigns a test to every other criterion (generation, managed re-run, unmanaged prompt, worktree propagation, target validation, init end-to-end) but has no item for the translation or for the in-Copilot behavior check. This matters disproportionately because the plan rates the slice Risk: Med and names \"frontmatter translation correctness\" explicitly, and because the translation lives in a bash script in the guides submodule \u2014 the one component the CLI-side test list cannot reach. The design should name where translation correctness is verified (fixture-based tests in the submodule script, or a CLI-side smoke test asserting emitted `applyTo` values for a known rule set) and add the manual Copilot-verification item.",
+      "file_ref": null,
+      "category": "underspecification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tool-guide reference/promotion criterion dropped from the design",
+      "description": "The plan lists as a success criterion: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed.\" The slice design never references that file \u2014 its VS Code format facts (`applyTo` comma-separated globs, prompt-file frontmatter fields `name`/`description`/`argument-hint`/`agent`/`model`/`tools`, \"multiple instruction files combine with no guaranteed order\", `AGENTS.md` folder-locality) all come from that guide, so the traceability the plan asks for is missing. Additionally, the file as it exists is a raw chat export (embedded CDN logo `<img>`, footnote spans, a closing \"Would you like...\" question), not a published guide; the \"promoted \u2026 if needed\" half of the criterion is silently skipped. Either add a reference (and the format facts it anchors), or record a deliberate deferral with a named follow-up.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Onboarding-time NFR from the parent architecture is not restated",
+      "description": "The 200 architecture's design goal is \"from `npm install` to useful context output in under two minutes,\" and this slice adds a branch to that path (`cf init --ide copilot` routes through `setupIdeAction` plus the new copilot safety checks and worktree propagation). The slice doc does not restate the target. The new work is a single script invocation and file copies, so risk to the two-minute budget is low \u2014 but if the copilot compilation in the guides script is expected to take materially longer than the claude compile, that should be noted against the target.",
+      "file_ref": null,
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Partial-run failure of the guide script and propagation copy errors not explicitly handled",
+      "description": "Step 5's `execFileSync` inherits the claude path's failure behavior (non-zero exit \u2192 clear error, verified in `setup-ide.ts`), and the Risks section covers the out-of-sync-submodule case well. Two modes are not addressed: (a) the script failing mid-write (e.g., `copilot-instructions.md` written with marker, `AGENTS.md` not yet) \u2014 re-run appears safe by construction since managed files skip the prompt, but that should be stated; (b) `propagateToWorktrees` copy failures against a registered worktree whose path is stale or unwritable \u2014 the current claude block lets `fs.copyFileSync` throw to `handleError`, and the parallel copilot block would do the same, which is acceptable, but worth a sentence so implementers don't \"improve\" it inconsistently. Neither blocks the design; both are one-liners.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, boundaries, and integration match the plan",
+      "description": "Every plan scope item (VALID_TARGETS extension, guides-side copilot backend, managed marker, propagation block, init routing, frontmatter translation, single-file ordering rule, additive-only dual-write) appears in the design with matching placement, and all three plan non-goals (Cursor, bidirectional sync, custom agents) are explicitly excluded \u2014 with agents handled exactly as the plan directs (\"document the mapping, implement if backend is stable\"). Dependency directions are correct and verified: CLI validates target and safety, then delegates compilation to the guides submodule script and copies results to worktrees; `interfaces: [202-smart-cf-init-composition]` correctly reflects that 210 builds on 202's extracted `setupIdeAction`/`propagateToWorktrees`, and the \"no changes to init.ts / core / mcp-server\" claims hold against the current code. The design is lean (two files changed plus a script case) and proportionate to a 3/5-effort slice; no scope creep found.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Overwrite safety contract only defined for the two top-level files; `.github/instructions/` and `.github/prompts/` are unprotected",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "underspecification",
+      "raw_category": null,
+      "summary": "Two plan success criteria have no verification counterpart in the slice design",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Tool-guide reference/promotion criterion dropped from the design",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "summary": "Onboarding-time NFR from the parent architecture is not restated",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Partial-run failure of the guide script and propagation copy errors not explicitly handled",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope, boundaries, and integration match the plan",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T12:20:18.950055",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 87494,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 179041,
+  "cached_tokens": 148032,
+  "cache_write_tokens": null,
+  "completion_tokens": 22689,
+  "reasoning_tokens": 20349,
+  "duration_seconds": 90.79575370810926,
+  "cost_usd": 0.06475956000000001,
+  "cost_basis": "alias_pricing"
+}

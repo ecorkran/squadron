@@ -1,0 +1,33 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Staleness handling depends on an undefined commit-distance calculation",
+   "description": "The preconditions require reporting commit drift \u201cincluding the commit distance\u201d when `meta.json`\u2019s `gitCommitHash` differs from `HEAD`, but the design does not define how to calculate that distance when the analyzed commit is not an ancestor of `HEAD`, is unavailable locally, or belongs to a different history. In those cases, a simple revision count may fail or be misleading. Specify the comparison semantics and behavior when distance cannot be established; otherwise this required warning can itself fail or give false confidence.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Capability 2 promises interview-sourced content without defining an interview",
+   "description": "The Inputs section says that without a concept, the skill sources purpose from the initiative plan \u201cplus interview.\u201d But Capability 2 defines no interview flow, and the translation rules say every claim must trace to an input artifact. This leaves the common no-concept path without a specified source for missing purpose, problem, or audience facts\u2014and no rule for whether to ask the PM or mark them unknown. Define that interaction or remove interview as an assumed input.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Analysis index allocation is neither bounded nor collision-safe",
+   "description": "The document assigns generated outputs the remaining 940\u2013949 slots, then permits overflow into the heavily used 900 band \u201cas needed,\u201d but specifies no allocator, collision check, or behavior when those indices are already occupied. This affects both comprehension output and overview output, and repeated or concurrent runs can overwrite an existing artifact or claim an index used by another analysis. Define a deterministic reservation/selection rule and whether runs create new samples or update prior outputs.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Graph input validation and incompatible plugin output are unspecified",
+   "description": "The architecture depends on a detailed upstream graph shape and named fields, but only specifies behavior for a missing graph\u2014not malformed, partial, or newer-version output. For example, absent `tour[]`, unknown node types, or unreadable `meta.json` could undermine the structural extraction or staleness provenance while the workflow still drafts documents. Define the minimum supported contract and explicit failure/degraded behavior for invalid or incompatible inputs.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+  }
+ ]
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests omit three of the seven AdoptionOutcome kinds",
+      "description": "The slice design's Technical Requirements specify `renderAdoptionFacts (every outcome, the state-set notice, \"none found\" facts, the squadron bullet)`. Task 8T enumerates only brownfield (capped), adoption-in-progress, `NOT_EVALUATED`, the state-set notice true/false, empty lists, history unknown, and the squadron bullet. `already-planned`, `adoption-closed` and `greenfield` outcome bullets have no renderer test \u2014 and Task 7T exercises those branches only in `decideOutcome`, not in rendering. The renderer's exhaustive `never`-checked switch (Task 8) is exactly the code an untested branch protects. Add one case per remaining outcome kind to Task 8T.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task verifies `context_build` returns the AdoptionError as an MCP error result",
+      "description": "The Functional Requirements state: \"A guide without the profile or prompt: `cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error. The concept prompt is never produced.\" The `cf build` side is covered (walkthrough step 4 in Task 15) and the core rejection is covered (Task 9T, Task 12 fixture 12), but nothing covers the `context_build` tool handler surface: Task 10T's \"stub throws AdoptionError \u2192 rejects\" is the core integrator, Task 11's `contextTools.test.ts` additions assert only which `adoptionStateWrites` value reaches the mocked pipeline, and Task 13's parity test uses a healthy guide. The handler's existing catch-all does convert thrown errors to `errorResult`, so the behavior likely holds by construction \u2014 but the criterion names this path explicitly and no task asserts it. Add an `AdoptionError`-throwing case to the `contextTools.test.ts` steps in Task 11 (assert `isError: true` and the message).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Sub-second NFR is deliberately covered by cap tests; no load-test tier applies",
+      "description": "D2 restates the sub-second performance NFR. The breakdown covers it with the cap tests in Task 3T (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`), which is the verification the design itself prescribes (\"Tests assert the caps, not timings\"). I confirmed `tests/load/` is mandated only by `rules/python.md` (no matches in `typescript.md` or `testing.md`), and the design explicitly rejects a timing test, so adding one would contradict the parent slice. No CI load-gating task is needed because no load test exists. No action.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`hasBuildManifest` is a dependency the tasks never consume",
+      "description": "The design lists `hasBuildManifest` among the reused 260 dependencies, but D5's fact list (source, history, docs, ADRs, rule files, CI) has no manifest fact and no task calls it (verified: only `setupCiOffer.ts` uses it in `src/`). This is a vestigial reference in the design, not a task gap \u2014 inventing a manifest use would be scope creep. Noting it so the reviewer doesn't read the absence as an omission; no action required in the breakdown.",
+      "file_ref": null,
+      "category": "design-parity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are checkbox tasks rather than plain `**Commit**:` lines",
+      "description": "The ten commit markers (Task 2C \u2026 15C) are checklist items instead of plain, non-checkbox `**Commit**:` lines. Their placement is correct: each follows a tested state (implementation + test task), none appears after every task, and none is deferred to the end. Placement is what matters functionally; the format deviation is cosmetic. Optional to normalize.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Renderer tests omit three of the seven AdoptionOutcome kinds",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No task verifies `context_build` returns the AdoptionError as an MCP error result",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Sub-second NFR is deliberately covered by cap tests; no load-test tier applies",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "design-parity",
+      "raw_category": null,
+      "summary": "`hasBuildManifest` is a dependency the tasks never consume",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:52",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox tasks rather than plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T07:47:25.485756",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 300166,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 647121,
+  "cached_tokens": 449312,
+  "cache_write_tokens": null,
+  "completion_tokens": 77915,
+  "reasoning_tokens": 75484,
+  "duration_seconds": 2104.77837762516,
+  "cost_usd": 0.027899914,
+  "cost_basis": "alias_pricing"
+}

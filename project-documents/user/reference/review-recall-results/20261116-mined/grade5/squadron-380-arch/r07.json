@@ -1,0 +1,89 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "PR metadata flow contradicts the adapter boundary and the typed PR record",
+   "description": "\"The adapter resolves, the review engine reviews\" states the adapter's job ends at \"a local diff range, a head ref \u2026 and a metadata record\", and \"no hosting call lives in the review package\". But \"PR identity is a value, not a string\" defines the resolved record as exactly \"(host, owner, repository, number, base ref, head ref, head sha, URL)\" \u2014 no title, body, linked issues, or review threads \u2014 while Envisioned State hands \"PR metadata (title, body, linked issues, unresolved review threads)\" to the review prompt, and the protocol operation list includes \"read its threads\" as a *separate* operation. The doc names two artifacts (\"a metadata record\", \"a typed record\") and defines one shape. If threads are fetched eagerly at resolution, the record definition is incomplete and the snapshot point (resolve-time vs post-time staleness of thread state) is unstated; if they are fetched later, the reviewing side needs a hosting call the boundary forbids. This is the keystone interface of the design and needs one defined shape and one defined capture point.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"base moved since resolution\" as a named hard error contradicts the base-semantics design",
+   "description": "\"Failure modes are enumerated and observable\" lists \"base moved since resolution\" among errors that each get \"a WARNING-or-higher log line and a non-zero exit\". Technical Considerations (\"Base semantics\") says the opposite: \"A PR's base branch routinely moves after the PR is opened. The reviewed range must be merge-base to head \u2026 so the review matches what the host displays\" \u2014 i.e. base movement is normal and absorbed by merge-base semantics (as `normalize_diff_spec`'s three-dot rewrite already does, git_utils.py). If base movement is routine, making it a non-zero-exit error breaks ordinary reviews; if it is an error, the doc must say which operation it belongs to (review? post?) and what the remedy is. As written, the failure enumeration and the base-semantics rule cannot both hold.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Target grammar's `owner/repo#n` and URL forms are incompatible with the resolution failure rule and the local-repository assumption",
+   "description": "The grammar admits \"a number, a full URL, `owner/repo#n`, a branch name, or absent\", but resolution \"must fail loudly when the repository has no host remote, has more than one, or the branch has no open PR\". The repo-qualified forms exist precisely to disambiguate multiple host remotes (fork + upstream), yet multiple remotes is a hard failure \u2014 the two rules contradict each other unless the failure applies only to unqualified forms, which the text does not say. Worse, a repo-qualified target naming a repository other than the current checkout has no defined behavior: \"the adapter fetches into a namespaced local ref\" and the scratch-worktree story both assume the PR's base and head are fetchable into the *current* repository, and the merge-base computation assumes the base ref exists locally. Either scope the grammar to the current repository (and drop/redefine the cross-repo forms) or define cross-repo fetch and tree materialization.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "PR-keyed naming/frontmatter claim collides with the slice-hardcoded writer and the Context Forge-owned schema",
+   "description": "Envisioned State asserts a PR-keyed name \"satisfies the review docType frontmatter contract without a slice index\" and that the fabricated-minimal-`SliceInfo` pattern \"is not extended to PRs\", while \"Archiving, digest, and integrity checks from the 900-band review work apply unchanged\". But `format_review_markdown` (review/persistence.py) hard-codes `slice:`, `project:`, and the `# Review: {type} \u2014 slice {index}` heading \u2014 a `slice_info=None` PR save emits `slice: unknown` and `slice 0`, i.e. exactly the fabricated placeholders the principle bans (and that CLAUDE.md's \"never use silent fallback values\" rule bans). A PR-aware shape means changing the shared writer or adding a parallel one \u2014 neither is scoped. The naming pattern itself is never given (and must embed host/owner/repo or same-numbered PRs across repos collide). And documents/schema.py records that **Context Forge owns the review frontmatter schema** and validates it via `cf validate frontmatter` in the pre-commit hook \u2014 the doc never establishes that a slice-less review validates against that external schema. \"Apply unchanged\" is asserted about a shape that does not exist yet.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`sq pr create`'s PR base is undefined for the unplanned repositories that motivate the initiative",
+   "description": "\"Squadron's own PR conventions\" only covers the planned-project case: \"the PR targets the configured integration branch when one is set, and never `main` in that case\". The integration-branch value comes from `cf config get git.integration_branch` \u2014 in an enterprise repo \"never planned in squadron at all\" there is no `cf` project, and the existing fallback (`resolve_diff_base`, git_utils.py) degrades to the hardcoded `DEFAULT_DIFF_BASE = \"main\"`. If `sq pr create` inherits that fallback, it opens PRs against `main` on repos whose default is `master`/`develop`/`trunk` \u2014 silently wrong in the exact scenario the Motivation names. The base for the unplanned case (repo default branch via the host? a flag?) must be decided here, not discovered at slice level.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Every existing review flag behaving as it does today\" cannot hold; the `sq review pr` flag contract is unspecified",
+   "description": "The Overview promises \"every existing review flag behaving as it does today\" and Architectural Principles declares \"the CLI is the contract\", yet the existing `review code` surface contains flags that collide with PR-derived inputs: `--diff` (today it *overrides* the range \u2014 but the PR range is the thing under review), `--files` (glob-scoping a PR review), the `slice_number` positional (replaced by `<target>`), and save semantics (`--diff`-only runs warn `NOT_PERSISTABLE` today via `SaveOutcome`; a PR review always has a save target). Which flags carry over, which are rejected, and what `--diff` means on `sq review pr` are never stated \u2014 and since \"the CLI is the contract\" for the slash-command and pipeline transports, the ambiguity propagates to all three.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "PR metadata \"as additional inputs\" fights the template-input and injection machinery",
+   "description": "\"Prompt inputs from the PR\" says title/body/threads are \"injected as clearly delimited data, sized with the same truncation discipline as file injection\". But template inputs are file *paths*: `missing_input_files`/`FILE_INPUT_KEYS` validate paths, and `_inject_file_contents` (review/review_client.py) treats every input value as a path (`Path(value).is_file()`), silently skipping unknown keys, and skips bodies entirely on tool-enabled runs (`should_inject_file_bodies`) \u2014 the mode where the reviewer cannot fetch PR metadata from the tree at all. Inline untrusted text therefore needs either the prompt builder (`code_review_prompt`) or a new injection path with its own size caps \u2014 \"the same truncation discipline as file injection\" is a new mechanism, not a reuse. The anti-injection rendering (\"never as instructions\", clearly delimited) is load-bearing for third-party text yet assigned to no component: it is unclear whether the builder, the engine, or the adapter renders it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Unplanned-repository rules degradation doesn't map onto the rules machinery",
+   "description": "\"Rules outside a planned project\" promises the review \"runs with the template's rules and language auto-detection only, and says so\". In the actual machinery (review/rules.py) there are no packaged \"template rules\": `get_template_rules` reads `review.md`/`review-code.md` *from the resolved rules directory*, and language auto-detection selects files *within that same directory*. `resolve_rules_dir` falls back project `rules/` \u2192 `.claude/rules/` \u2192 `~/.config/squadron/rules/` \u2192 none \u2014 so an unplanned repo runs with whatever the user-global directory holds (a defined behavior Current State's claim that \"outside such a project the rules \u2026 steps have no defined behavior\" also misses), or with nothing but the system prompt. The promised degradation mode (\"template's rules and language auto-detection\") has no source in the current design, and \"says so\" \u2014 in the prompt? a log line? the artifact? \u2014 is unstated.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "PR-keyed artifacts are invisible to the index-keyed review lifecycle",
+   "description": "The doc claims PR-keyed persistence lets \"Archiving, digest, and integrity checks from the 900-band review work apply unchanged\" and that results are \"displayed and gated exactly as today\". But `locate_review` (review/resolution_evidence.py) globs `{index}-review.*.md` by integer index, `resolve_review(index: int, \u2026)` accepts only an index, and `ResolutionRecord` requires an `int` index \u2014 so `sq review resolve` can neither locate nor record a PR review, and PR artifacts in a \"configured squadron-owned location\" are outside the reviews-directory globs that metrology and Context Forge scan (persistence.py notes these enumerate `project-documents/user/reviews` non-recursively). If PR reviews are deliberately not resolvable, say so; if they are, the resolve path's index-keyed lookup is a change the \"unchanged\" claim hides.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "`sq pr create`'s \"review provenance\" input has no source in the motivating enterprise flow",
+   "description": "One of the five fixed body sections is built from \"the latest saved review\", and the Motivation lists \"review artifacts\" among the inputs squadron already holds. But the persistence design defines exactly two save targets \u2014 slice-keyed and PR-keyed \u2014 and PR-keyed reviews require a PR that does not yet exist at `sq pr create` time. A slice-less `sq review code --diff` run (the enterprise workflow the Motivation describes) stays non-persistable \u2014 that missing naming scheme is open issue #90, which slice 916 explicitly deferred (900-slices line 236). So in the unplanned-repository scenario, \"review provenance\" is structurally empty at creation time. Either add a pre-PR save target (branch- or range-keyed \u2014 the \"persistence target that does not require a slice index\" the scope line advertises), or state that this section is expected-empty outside planned projects.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Failure enumeration omits worktree lifecycle and `gh` process bounds",
+   "description": "\"Fetching without checkout\" defers \"Concurrency with the operator's own worktrees, disk use, and cleanup on failure\" to slice level by name, but the enumerated failure modes (\"each is a named error \u2026 and each has a test asserting that signal\") never mention worktree-creation failure (disk full, locked index), a crash leaking a worktree and namespaced ref, or a hang in `gh` itself. git_utils.py exists in its present shape precisely because an unbounded subprocess touching an unreachable remote \"blocks the review forever with no output\" (`GIT_COMMAND_TIMEOUT_SECONDS`) \u2014 the same bound is needed on every `gh` call, and \"Host unreachable\" has no meaning without one.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Posting semantics wobble on update-vs-supersede and stale-head disclosure",
+   "description": "Envisioned State says a later posting \"updates or supersedes rather than stacking\" \u2014 two different behaviors \u2014 while \"Posting idempotency and attribution\" says the comment is marked \"so squadron can find and update its own prior comment\" (update). Pick one. Relatedly, \"Base semantics\" requires that \"a review posted against a PR whose head has since moved must say so\" but never states the mechanism: the posting path must compare the recorded head sha against the PR's current head (a host read at post time) and render the delta in the comment. Both are small, but they are the observable behavior of the one write operation the design permits.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  }
+ ]
+}

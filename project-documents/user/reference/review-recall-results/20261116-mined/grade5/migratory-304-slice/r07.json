@@ -1,0 +1,75 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Two contradictory `step()` listings; the normative one breaks the stated ordering invariant",
+   "description": "The \"SimulationManager Extension\" code uses `if self._entity_manager.count == 0: return` placed *before* the `post_tick()` call, so `post_tick` is skipped when there are no entities \u2014 the opposite of the note printed immediately below it (line 291) and of Success Criterion \"environment.post_tick() is called after `engine.tick()` each tick\" (line 346). The earlier listing at lines 171-195 does the opposite (`if count > 0: tick(...)` then unconditional `post_tick`). An implementer following Implementation Details ships a different invariant than the one the doc tests. Additionally the justification itself is misaligned with the layer contract: 500-arch puts trail *decay* in `pre_tick` (\"Advances time-varying state: decays stigmergic trails\"), while `post_tick` applies *agent-originated* writes \u2014 so with zero entities there can be no deposits/mutations, and the \"trail decay should still run\" reason for calling `post_tick()` is wrong. Delete one listing and correct the rationale.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:252-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Environment is not handed to `engine.tick()` \u2014 an unacknowledged deviation from both parent architectures",
+   "description": "300-arch's tick cycle step 3 is \"Pass current entity state *and environment context* to the behavior engine\"; 500-arch's query principle says \"The world server passes the environment (or its query method) to `engine.tick()` as the 'environmental context' parameter,\" and 500-arch's \"Integration boundary with world server\" names \"passes the environment's `query()` method to the behavior engine\" as the slice-304 contract. This slice instead chooses constructor injection into future forces and explicitly states \"This requires no changes to the `BulkForce` protocol\" (line 216). The choice may well be right \u2014 engine `tick()` (slice 100) has no environment parameter, so the alternative is an initiative-100 interface change \u2014 but the doc presents it as the obvious answer without naming it as a departure from two architecture documents, without recording that 100-arch's stated tick input (\"environmental context\") remains unsatisfied, and without flagging that whichever direction wins must be agreed across initiatives. This is exactly the seam 500-arch said was \"the complete integration surface,\" so leaving 100-arch/500-arch/this slice in three different states is a real reconciliation gap.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-217"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Layers plug in without server changes\" contradicts the static-composition contract this slice is supposed to host",
+   "description": "The Value section promises the wiring exists \"so that when layers arrive they plug in without server changes,\" and Provides-to-Other-Slices says \"The server creates the environment; layers register themselves\" (line 329). Neither is true of the contract in the dependency slice: `Environment.__init__(bounds, layers: dict[str, EnvironmentLayer])` composes layers at construction, and 500-arch's \"Extension through data, not plugins\" principle states outright that \"The environment layer does not provide a dynamic layer registry or abstract plugin interface. Layers are statically composed in the environment container.\" So slices 501-507 must edit the construction site in `server.py` (the inline `Environment(bounds=world_bounds, layers={})` at line 301-303) and will also need per-layer cell sizes that this slice excludes. Since this slice owns environment construction, it should either define the seam now (a `build_environment(config, bounds) -> Environment` factory in `simulation.py` alongside `build_profiles()`, which layer slices extend) or restate honestly that each layer slice changes the server's construction site.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:17-27"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Post-tick write pathway is silently dropped from what the plan assigns to this slice",
+   "description": "The plan entry for (304) includes \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" and \"Pass environment context to `SimulationManager` *and* `engine.tick()`\". The design calls `environment.post_tick()` with no arguments and never mentions `trail_deposits`/`threat_mutations` \u2014 not in Included, not in Excluded, not in Provides. The environment's typed write signature (`post_tick(trail_deposits, threat_mutations)`, per slice 500) means *someone* must eventually carry deposits from engine output to that call; the doc leaves the reader unable to tell whether that's deliberately out of scope here (and owned by 506/505) or simply overlooked. Add it to Excluded with a named owner.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:100-106"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Snapshot terrain summary was deferred *to* 304, and 304 defers it back to \"future work\"",
+   "description": "Plan entry (305) ends with \"Terrain summary in snapshots deferred to (304) Environment Layer Integration,\" and the 305 design lists \"Environment state in snapshots \u2014 slice 304\" in its Excluded (305:52). This slice's Excluded says \"Environment data in client snapshots/broadcasts \u2014 deferred to future work.\" The handoff has no owner: 305 parked it on 304, and 304 releases it to an unallocated future slice. Deferring is defensible (there is no terrain until 501), but the design should say so explicitly and name the receiving slice rather than orphaning an integration point two documents depend on.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:42-48"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No failure modes for the new per-tick environment calls",
+   "description": "The doc enumerates no failure path for the two new calls inserted into the tick body, despite the consumed interface being explicitly raise-heavy: 500-arch's \"Explicit failure at boundaries\" makes `pre_tick` raise `ValueError` for seasonal parameters outside [0,1] and `query` raise for *any* out-of-bounds position, failing the entire batch with no partial results. Slice 301's `TickLoop` runs `await tick_body()` with no tick-body exception containment (its only documented contingencies are budget overrun and shutdown), so a raise from a layer aborts the tick loop and the server. Two specific cases this slice should name: (a) a layer raising inside `pre_tick`/`post_tick` \u2014 does the server catch-and-log-and-continue, or fail loudly per the architecture's \"No silent failures, no undefined states\" principle? (b) who guarantees agent positions stay within `WorldBounds` before they ever reach `query()` \u2014 nothing in 302 (spawn-time constraint only) or 303 (no boundary force) does, and 300-arch lists boundary-driven entity handling as future work. This slice is the one that puts environment calls on the tick path, so the guard's ownership should be stated even if its implementation lands with 501.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:89-110"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tick-budget NFR from the parent architecture is not restated, and no duration metric is added",
+   "description": "300-arch states the timing envelope this slice runs inside (\"negligible against the tick budget at target rates (20\u201360Hz)\", tick-as-transaction, overrun \u2192 warn and continue) and 500-arch states the query load (\"thousands of point queries per tick\", O(N) vectorized batch queries). This design adds two subsystem calls to every tick and a `step()` signature change, yet no Success Criterion or Technical Requirement mentions per-tick cost, tick-budget impact, or a measurement of environment-hook duration \u2014 even though its direct predecessor (303) deliberately shipped \"per-tick metrics: track engine tick duration separately from total tick duration.\" Restate the 20\u201360Hz / 1-per-tick-rate budget here with a target (e.g., empty-environment hooks must not move `TickMetrics.avg_duration_ms` measurably) and carry the 303 pattern forward with an environment-phase duration metric, or explicitly defer the metric and name the slice that adds it.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:341-357"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Speculative config and abstraction nothing in this slice uses",
+   "description": "Three pieces of this design have no in-slice consumer and are justified only by slices that don't exist yet: (a) `EnvironmentConfig.seed` \u2014 admittedly \"Not used by the empty environment in this slice\" (line 149), and structurally unable to reach anything since `Environment(bounds, layers)` takes no seed; 500-arch assigns generation parameters (including per-layer resolutions) to the 507 environment specification, so a server-level `simulation.environment.seed` risks being superseded schema. A hardcoded default of `42` also sits awkwardly against the project's \"no silent fallback values\" convention and against 303's precedent (profiles must be explicit when used; no silent defaults). (b) `SimulationManager.environment` property (line 200ff) \u2014 nothing in the slice reads it; only hypothetical future force construction would. (c) The entire \"Environment Access for Forces\" section (lines 200-217) designs initiative-100 code (`TerrainResistance`) that this slice explicitly excludes. The plan rates this slice 2/5 effort; cutting (b) and (c) and either removing `seed` or stating it is inert placeholder config would bring the design back to proportion.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:125-153"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "`build_world_bounds()` hardcodes origin and duplicates world geometry behind a \"shared\" label",
+   "description": "500-arch's coordinate-system decision specifies bounds \"defined as a rectangular region with configurable origin and extent, set per instance at startup via configuration,\" but the conversion pins `origin_x = origin_y = 0.0` because `WorldBoundsConfig` carries only width/height. Separately, State Management (line 113) describes `bounds` as \"shared with entity manager\" when it is in fact a converted second copy \u2014 `EntityManager` holds `WorldBoundsConfig(width, height)` and `Environment` holds `WorldBounds(origin, extent)`, kept in sync only by convention at one call site. Acceptable for v1 given spawn areas are already `[0, width]`, but the doc should say \"derived from\" rather than \"shared,\" and the config schema gap (no origin) should be recorded as a known constraint rather than an extensible-internal detail.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:155-170"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`seasonal_parameter = 0.0` is described as \"mid-season\"",
+   "description": "The parameter is a continuous 0\u20131 cycle value; 0.0 is the cycle's start, not its midpoint. Harmless for an empty environment (0.0 is inside the validated range, so `pre_tick` won't raise), but the wording will mislead whoever wires 308 or reads layer behavior expecting a mid-season default.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:195-199"
+  }
+ ]
+}

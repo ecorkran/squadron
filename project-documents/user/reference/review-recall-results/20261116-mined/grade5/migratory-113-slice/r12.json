@@ -1,0 +1,40 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Density feedback can read capped counts",
+   "description": "The final hook receives `filtered_counts` after the unchanged cap step. Slice 112\u2019s **Tick Integration** explicitly reassigns that variable to capped counts. Consequently, capped populations can appear sparse even when clustered, violating slice 113\u2019s plan requirement that dispatch use pre-cap density. Capture the density scalar before capping, and test that changing `max_neighbors` does not change dispatch for identical query results.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:149-159"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Neighbor-set equality does not establish deterministic tick parity",
+   "description": "The design requires bit-exact position equality but permits different neighbor ordering and validates query parity using sets. Floating-point reductions can change with ordering; capped selection can also differ when equal-distance candidates arrive in different orders. Backend choice then introduces dependence on dispatcher history, contrary to the HLD\u2019s tick-determinism goal and the spatial-swap parity requirement.\n\nSpecify canonical reduction ordering and tie-breaking, or another mechanism that guarantees parity. Test forced backend switches with uncapped rows and capped distance ties, rather than treating backend correctness as eliminating this risk.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421-431"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Dispatcher feedback is an undeclared engine dependency",
+   "description": "The HLD requires spatial strategies to remain replaceable behind well-defined interfaces. The engine instead discovers and invokes a dispatcher-specific method absent from `SpatialQuery`. This creates a second, implicit contract, despite the claim that the wrapper preserves the protocol abstraction.\n\nDefine a small explicit feedback contract or collect density inside the wrapper\u2019s batch-query delegation. Either approach should preserve standalone backend support without teaching the tick pipeline an undocumented capability.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Empty active subsets have no density-update policy",
+   "description": "The proposed calculation divides by `n_active`. An empty active subset is valid under the subset-evaluable tick contract and is explicitly covered by the batch-query dependency. No handling is specified for this case; division can fail or introduce a non-finite signal.\n\nDefine an explicit policy, such as retaining the previous density and selection when no agents were evaluated, and test the integrated feedback path with an empty subset.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-116"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Performance requirements omit the parent scale target",
+   "description": "The HLD targets tens of thousands of agents at full behavioral fidelity on one CPU process. This slice changes the default spatial strategy but states verification only around 2,500 agents and does not restate that architectural target.\n\nRestate the target and specify representative scale validation or explicitly identify the remaining gap. Also correct the `O(1)` feedback claim: summing the supplied counts array is `O(n_active)` unless an already-computed scalar is passed. Cached data does not make a reduction constant-time.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:337-380"
+  }
+ ]
+}

@@ -1,0 +1,147 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Overwrite protection excludes generated instruction and prompt files",
+      "description": "The safety check covers only `AGENTS.md` and `.github/copilot-instructions.md`, although generation and worktree propagation also write instruction and prompt files. The slice plan requires prompting before overwriting unmanaged files (\u00a7210, success criteria). Extend protection to every destination file that would be replaced, including worktree-local content.",
+      "file_ref": null,
+      "category": "data-safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Script execution and propagation lack failure handling",
+      "description": "The new backend execution and multi-file propagation specify only the successful sequence. Define handling for a hung script, timeout, nonzero exit, failed writes, and worktrees disappearing during copying. State whether propagation stops or continues, how partial output is recovered, and when the command reports failure rather than completion.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skill-to-prompt translation lacks a usable output contract",
+      "description": "The design promises skill translation but specifies only the destination extension. The slice plan identifies Copilot prompt frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`); the design does not explain their mapping or treatment of unsupported Claude-specific metadata and references. Define a minimal translation contract and representative output tests so generated workflows are usable, not merely present.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113-114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parent onboarding latency target is omitted",
+      "description": "The parent architecture sets **under two minutes from npm installation to useful context output**, for both empty directories and existing repositories. This slice extends that onboarding path but neither restates the target nor includes validation against it. Carry the target into the design and its verification criteria.",
+      "file_ref": null,
+      "category": "non-functional-requirements",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Required Copilot consumption verification is dropped",
+      "description": "Tests cover generation, copying, and CLI routing, but omit the slice plan\u2019s explicit manual verification that a VS Code Copilot agent reads the generated guidance and follows project conventions. Add that acceptance check and reference the required `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` guide, which the slice plan also assigns to this design.",
+      "file_ref": null,
+      "category": "scope-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "data-safety",
+      "raw_category": null,
+      "summary": "Overwrite protection excludes generated instruction and prompt files",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Script execution and propagation lack failure handling",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Skill-to-prompt translation lacks a usable output contract",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113-114",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "non-functional-requirements",
+      "raw_category": null,
+      "summary": "Parent onboarding latency target is omitted",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope-coverage",
+      "raw_category": null,
+      "summary": "Required Copilot consumption verification is dropped",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T05:28:22.839371",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 46187,
+  "cached_tokens": 45440,
+  "cache_write_tokens": null,
+  "completion_tokens": 587,
+  "reasoning_tokens": 0,
+  "duration_seconds": 41.49307495774701,
+  "cost_usd": 0.011907999999999998,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Plan-assigned config scope (grid resolution, layer selection) silently dropped",
+      "description": "The parent slice-plan entry for 304 (item 5 in `300-slices.worldserver-foundation.md`) explicitly assigns: \"Server-side environment configuration (seed, **grid resolution**, layer selection) in YAML.\" This slice delivers only `seed` and excludes the other two: \"Grid resolution configuration \u2014 no grids until layers exist,\" and layer selection is nowhere in scope. The doc's justification (\"no grids until layers exist\") is defensible for grid resolution, since 500-arch makes resolution per-layer/per-instance and routes it through the environment specification (507) \u2014 but deferring a requirement the plan entry assigns to this slice is a scope deferral that should be recorded as a decision (e.g., explicitly moving grid resolution and layer selection to 507/the layer slices, or noting the plan needs amending), not listed as a bare exclusion. As written, the slice plan and this design disagree about who delivers that configuration surface.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Post-tick write pathway reduced to a bare `post_tick()` call",
+      "description": "The plan assigns this slice: \"Handle post-tick environment writes (e.g., stigmergic trail deposits).\" The design calls `post_tick()` with no arguments, and the Data Flow section shows no source for `trail_deposits` or `threat_mutations` at all. The 500 architecture describes the write-back as the behavior engine \"returning threat zone mutations ... alongside updated agent state,\" but 303's `engine.tick()` has no such return contract and this slice adds none. So the slice that the plan names as responsible for the write pathway delivers only a no-arg call, without stating who computes the writes, how they reach `post_tick()`, or that this plumbing is explicitly owned by a named future slice. \"Environment-aware behavioral forces \u2014 initiative 100\" (Excluded) covers force construction, not the deposits/mutations plumbing. This should be addressed either by extending the design (define the handoff) or by an explicit deferral naming the slice that owns it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-Extension"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment context not passed to `engine.tick()`, contradicting the plan and the 500 integration surface",
+      "description": "Both the plan (\"Pass environment context to `SimulationManager` **and `engine.tick()`**\") and the 500 docs (500-arch: \"The world server passes the environment (or its query method) to `engine.tick()` as the 'environmental context' parameter\"; 500 slice: \"The `query` method (or the `Environment` object itself) is passed to `engine.tick()` as environmental context\") expect the environment to flow into `engine.tick()`. This slice instead routes the reference via force constructor injection, with `engine.tick(state, profiles, spatial, dt, forces)` unchanged and no environment parameter. That is a coherent alternative, but it changes the cross-initiative integration contract without acknowledging the conflict \u2014 the 500 initiative's stated integration surface (three methods \"plus the constructor ... the complete integration surface,\" with context delivered to `engine.tick()`) will mislead the 501+ slices and the 100-band force work if they read the plan/500-arch. The design should state explicitly that it deliberately deviates from the \"pass to `engine.tick()`\" pattern and what that implies for the 500/100 contracts, or conform.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-as-Simulation-Orchestrator"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Layers register themselves ... plug in without server changes\" conflicts with 500's composition model",
+      "description": "The Integration Points section claims: \"Slices 501-507 add layers to the environment. The server creates the environment; layers register themselves,\" and the Overview claims layers \"plug in without server changes.\" The 500 design says the opposite on both counts: layers are \"composed at construction\" via the `Environment(bounds, layers)` dict (the container \"iterates registered layers\" it was given), and 500-arch is explicit that \"The environment layer does not provide a dynamic layer registry or abstract plugin interface. Layers are statically composed in the environment container.\" When 501 lands, `server.py` must change to construct the terrain layer and pass it into the constructor (eventually via an environment specification). The \"no server changes\" claim is false and risks leaving 304 with a handoff story that no 500 slice will match. The doc should describe the actual handoff: layer slices add construction code (or a spec) that the server startup wires into `Environment(bounds, layers=...)`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick-budget NFR not restated for the newly instrumented tick path",
+      "description": "The parent architecture states target tick rates (20\u201360Hz) and discusses tick-budget overrun handling; slice 301 established the tick budget and overrun metrics. This slice inserts `pre_tick()` and `post_tick()` into the per-tick path \u2014 calls that, once real layers exist, do O(active cells) work per tick (trail decay alone) plus batch-bound validation. The design adds no restatement of the tick-budget target (e.g., 50ms at 20Hz) nor any statement of how environment lifecycle work is expected to fit within it. Even with an empty environment today the cost is near-zero, but the slice's stated promise is that 501+ layers plug in without server changes, which means the budget interaction of `pre_tick`/`post_tick` should be at least acknowledged with the specific target inherited from the architecture.",
+      "file_ref": null,
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Data-Flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`seasonal_parameter=0.0` is mislabeled as \"mid-season\"",
+      "description": "The doc says the fixed 0.0 default produces a \"mid-season\" environment. Per 308/500 the seasonal parameter is a continuous 0\u20131 cycle value advancing per tick, so 0.0 is the *start* of the cycle, not mid-season. Harmless while layers are empty, but the label will mislead the 308 and 504 authors; correct it to \"season-start (0.0).\" Relatedly, the new `pre_tick`/`post_tick` call paths have no failure-mode discussion: with zero layers they cannot raise, so this is acceptable today, but one sentence on what happens if a registered layer later raises (propagate through the tick body? crash? \u2014 cf. 301's tick loop and the \"no silent failures\" principle) would close the gap cheaply.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-as-Simulation-Orchestrator"
+    },
+    {
+      "severity": "PASS",
+      "title": "Overall alignment with goals, boundaries, and proportionality",
+      "description": "The slice honors the parent architecture's \"Orchestrator, not monolith\" and \"Subsystem orchestration, not subsystem reimplementation\" goals (server wires lifecycle; all environment computation stays in `migratory.environment`), the \"Configuration over convention\" principle (`seed` in YAML, validated), and the \"Tick as transaction\" ordering (pre_tick \u2192 evaluate \u2192 post_tick matches the 500 two-phase contract, with `post_tick` deliberately called even at zero entities). Dependency direction is correct (304 depends on 303 and 500; 308 depends on 304). The design is appropriately lean: it excludes layer content, the environment spec format, client-side environment data, and force implementation, each with a named owner. The issues above are about the handoff edges and two plan-assigned scope items, not about excess.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Plan-assigned config scope (grid resolution, layer selection) silently dropped",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47-48",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Post-tick write pathway reduced to a bare `post_tick()` call",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-Extension",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Environment context not passed to `engine.tick()`, contradicting the plan and the 500 integration surface",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-as-Simulation-Orchestrator",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"Layers register themselves ... plug in without server changes\" conflicts with 500's composition model",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "summary": "Tick-budget NFR not restated for the newly instrumented tick path",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Data-Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "`seasonal_parameter=0.0` is mislabeled as \"mid-season\"",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-as-Simulation-Orchestrator",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Overall alignment with goals, boundaries, and proportionality",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+    "against": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-304-slice"
+  },
+  "timestamp": "2026-11-17T12:33:03.736892",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 133092,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 194004,
+  "cached_tokens": 158208,
+  "cache_write_tokens": null,
+  "completion_tokens": 33862,
+  "reasoning_tokens": 31248,
+  "duration_seconds": 274.50091637531295,
+  "cost_usd": 0.09099784000000002,
+  "cost_basis": "alias_pricing"
+}

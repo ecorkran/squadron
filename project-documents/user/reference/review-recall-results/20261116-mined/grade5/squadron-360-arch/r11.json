@@ -1,0 +1,40 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Generated analysis documents are underspecified for the frontmatter gate",
+   "description": "The architecture requires `docType: analysis` and lists allowed `status` values, but does not specify the required frontmatter fields or which status each generated artifact receives. In this repository, `dateCreated` is a required universal field; omitting it will make generated documents fail the frontmatter validator. Merely listing allowed statuses also leaves the skill to choose a status for an unreviewed concept or stakeholder overview, and `draft` is explicitly rejected. Specify the complete required metadata and status mapping for each output.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The external graph contract has no compatibility or invalid-input behavior",
+   "description": "The design assumes a particular graph shape from an actively developed upstream plugin, but specifies no schema/version marker or compatibility check. It also leaves `project` untyped and does not define what the skill does when required fields are absent, node references are inconsistent, or the graph is only partially written. Because the graph is the sole source for structural claims, an upstream format change could silently produce incorrect planning artifacts. Define the supported contract and require an explicit stop/report path for incompatible or malformed input.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The-understand-anything-Output-Contract"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\u201cNever load the whole graph\u201d does not bound the graph data read",
+   "description": "The document acknowledges that the graph is large and excludes function- and class-level nodes, but still directs the skill to extract all file-level nodes, layers, and tour data. Those collections can themselves exceed the model\u2019s context budget; \u201cgrep for the needed section\u201d does not bound their size or specify chunking, filtering, or a stopping condition. Define a bounded extraction strategy so large repositories do not force the skill either to truncate relevant structure silently or to read the full graph.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Read-discipline"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The analysis index policy has no reliable allocation or overflow boundary",
+   "description": "The design shares the 940\u2013949 range with existing analysis documents, then sanctions 950+ and eventual use of the heavily used 900 band without specifying how an index is selected, checked, or reserved. Two runs can choose the same index, and the range can expand into an already busy namespace without a defined convention. Specify collision handling and a stable allocation rule before directing both capabilities to emit repeated files there.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The stakeholder-document grounding rule is not operationalized",
+   "description": "The client overview is supposed to assert only claims traceable to source artifacts, but the design provides only broad source labels for fields and no per-claim evidence or validation step. This matters especially for benefits, which are \u201cderived\u201d from initiative descriptions, and for a client-facing document that may be treated as approved. Add a way to verify claims against their inputs and handle unsupported claims before the overview is presented as ready to share.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Translation-rules"
+  }
+ ]
+}

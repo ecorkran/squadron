@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Performance NFR has no verifying task",
+   "description": "The slice restates a performance target: detection adds under one second to a Phase 0 build (slice D2, line 167). The breakdown adds no timing or load task. Line 38 says the cap tests verify this target, but the caps bound directory entries and bytes read, not wall time, so they cannot show a sub-second result. The argument that `tests/load/` is a Python-only convention holds: `tests/load` appears only in `rules/python.md`. That justifies a different location, not skipping the check. Add a task that times `measureSourceVolume` on a generated tree at the caps, with a generous bound, in the repo's existing test location, and add a CI wiring task if that check gates merges.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Integrator silently skips detection",
+   "description": "\"When the resolver and `project.projectPath` are set, call it\" means a build with a missing resolver or projectPath silently falls back to the Phase 0 concept prompt. That is the regression this slice exists to fix, and the project rules forbid silent fallbacks. The optional `null` default follows the permissiveness precedent (`ContextIntegrator.ts:88`), but the task should state the failure: the production composition root always passes a resolver (Task 11), and a Phase 0 build without a `projectPath` throws. Keep `null` only for explicit test doubles.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:206"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Walk imports a policy threshold, contradicting the slice's layering rule",
+   "description": "Task 3 has `detection/sourceVolume.ts` import `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts`. The slice says `detection/` is \"facts only, no policy\", and that thresholds live in `adoption/` (slice line 106). Task 7 then makes `adoptionOutcome.ts` import `SourceVolume` back, which is why the task needs `import type`. Pass the stop threshold in as an option, `measureSourceVolume(root, { stopAtLines, maxEntries })`, and have the resolver supply `BROWNFIELD_MIN_SOURCE_LINES` and `MAX_WALK_ENTRIES`. The cycle disappears, and Task 3T's entry-cap test (line 101) no longer has to create 20,001 files.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`context_build` error surfacing is untested",
+   "description": "The slice requires that a guide without the profile or prompt makes `cf build` exit non-zero and makes `context_build` return the `AdoptionError` as an error. Task 10T only checks that the integrator rejects. Task 11's `contextTools.test.ts` assertions cover only the `persist` and `read-only` arguments. Walkthrough step 4 is CLI-only, and step 5 covers only the MCP happy path. Add a test where a mocked pipeline throws `AdoptionError` and `context_build` returns an error result carrying the message. Add the missing-profile case to walkthrough step 5.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Renderer tests skip three outcome kinds",
+   "description": "The slice's Technical Requirements say `renderAdoptionFacts` is tested for \"every outcome\". Task 8T covers brownfield, adoption-in-progress and `NOT_EVALUATED`. It omits already-planned, greenfield and adoption-closed. The resolver only renders selected outcomes, but the exhaustive `never` check makes all five kinds reachable from the type. Add one case per missing kind.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`readHistory` catches every failure",
+   "description": "\"Any failure of either call \u2192 unknown\" is a catch-all. The project rule requires a specific exception handled with a reason, or a logged re-raise. The inline comment covers the whole catch, not a specific exception. Check how `gitExec` reports a timeout and a non-zero exit, catch only those cases, and let anything else propagate. Narrow the caught value with `instanceof Error` before reading `.message`, as the TypeScript rules require for `unknown` catch bindings.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:118"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "D6 deviation is justified but the slice still says \"reuse\"",
+   "description": "Task 6 extracts the filename pattern instead of reusing `resolveInitiativePlanPath`, which slice D6 (line 213) still asks for. The reason holds: the helper's catch at line 27 returns null for every error, which conflicts with D6's \"other read errors throw\". Task 6's Context Summary (line 36) records the decision. Amend D6's text so the design and the task agree.",
+   "location": "packages/core/src/introspection/ArtifactIntrospector.ts:27"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Commit points are checkbox items, not markers",
+   "description": "The file has no `**Commit**:` markers, which is allowed. Its checkbox commit items are placed on tested points (2C after 2T, 5C after 4 and 5T, 11C after 10T, 13C after 12), so the cadence is right. If you adopt markers, write them as plain `**Commit**:` lines so they are not checked off as work items.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Task 14 is too small to stand alone",
+   "description": "Task 14 adds one README row and then has its own commit. Fold it into Task 13 or its commit. No other task needs merging.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:253"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Task 12 bundles 13 scenarios at effort 3",
+   "description": "The scenarios come from the criteria, so the count is right. One long fixture task is harder to verify than two. Splitting at scenario 7 would give a midpoint commit. This is optional.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Step 3 prescribes implementation the slice does not require",
+   "description": "The slice requires that symlinks are not followed and that the walk uses `fs/promises` (D2). It does not require `readdir` with `withFileTypes` and `lstat`, or a particular function split. Keep the requirement and drop the call sequence.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:86"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Some test paths are underspecified",
+   "description": "Task 9T names the guide fixture without a path. It is at `packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md`. Task 12 offers \"CoreServiceFactory.test.ts (or pipeline-integration.test.ts)\", but `pipeline-integration.test.ts` is at `packages/core/tests/`, not `tests/services/`. Give the exact paths.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:194"
+  }
+ ]
+}

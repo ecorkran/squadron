@@ -1,0 +1,33 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No test specified for the paths\u2192applyTo translation",
+   "description": "The plan's success criteria include \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files,\" and the design devotes a full Design Decisions subsection to this translation (`paths: string[]` \u2192 `applyTo: \"glob1,glob2\"`, default handling). Yet the Test Coverage list covers only target validation, managed/unmanaged re-runs, worktree propagation, and the init integration \u2014 none of which exercises translation correctness. Since the translation lives in a bash script in the guides submodule, the design should state where and how it is verified (e.g., a fixture-based test in the guides script, or a CLI-level test asserting emitted `.instructions.md` frontmatter from a real `.claude/rules/*.md` input). This also aligns with the project convention that parsers/translators must be tested against the actual format they consume.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Skill\u2192prompt-file frontmatter mapping is unspecified",
+   "description": "The design specifies the frontmatter translation for rule files in detail (`applyTo` subsection) but for skills only says \"translate skills \u2192 `.github/prompts/*.prompt.md`.\" The plan's file-mapping table names the prompt-file frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`), and the referenced tool guide confirms this is the Copilot format. The guides-script implementer needs to know which source-skill frontmatter fields map to which prompt-file fields, what defaults apply when a source field is absent, and whether the managed marker is emitted in prompt files (the design's marker check only covers `copilot-instructions.md` and `AGENTS.md`). One short mapping table closes this without adding mechanism.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Plan success criterion about the tool guide is not addressed",
+   "description": "The plan's success criteria for slice 210 state: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed.\" The file exists at that path (currently research notes from an external Q&A), but the slice design neither references it nor says whether it will be promoted/cleaned up as part of this slice. The design clearly draws on the guide's content (file mapping, `applyTo` semantics, ordering caveat), so acknowledging the reference is cheap; the promotion decision should be stated explicitly, even if the answer is \"leave as-is.\"",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "AGENTS.md ownership is ambiguous once a second non-Claude target lands",
+   "description": "`AGENTS.md` is a cross-tool file, and the managed marker identifies \"CF-managed\" but not which target generated it. When a future target (Cursor, named in the Value section as the pattern's next consumer) also writes `AGENTS.md`, its safety check would see the copilot-generated marker and silently overwrite. Nothing is needed now \u2014 copilot is the only writer \u2014 but since the design explicitly claims to establish the multi-target pattern, a sentence noting that per-target ownership of `AGENTS.md` must be resolved when the second writer arrives would prevent the pattern from being copied blindly.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65"
+  }
+ ]
+}

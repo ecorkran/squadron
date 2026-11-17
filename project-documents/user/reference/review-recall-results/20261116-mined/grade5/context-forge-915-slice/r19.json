@@ -1,0 +1,40 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`cf config unset --project` cannot clear a stale shared-file copy under the design's own delete routing",
+   "description": "Data Flow states \"Delete: mirrors write \u2014 deletes from whichever project file the key's scope maps to\" (line 89), so after this slice `ConfigManager.delete(key, 'project')` for `git.integration_branch` (a personal key) targets only `.context-forge.local.toml`. But the Collision semantics (line 146) and Verification Walkthrough step 9 (line 259) both instruct the user to clear a stale personal key from the **shared** file via `cf config unset git.integration_branch --project` after `migrate-personal` reports `skipped (personal value already set)`. Under the specified routing that command deletes the developer's local preference from the personal file \u2014 the exact value the collision rule protects \u2014 and leaves the stale committed copy in `.context-forge.toml`, with `cf check` still warning. The design's stated cleanup path is self-contradictory and silently destructive. The design should either (a) define delete as falling through both project files (remove from personal, then from shared if present there), or (b) give `migrate-personal`/`unset` an explicit, documented way to target the shared file for this one case, and fix verification step 9 to match.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146-259"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Classification table uses a wildcard row that conflicts with the compile-enforced completeness claim",
+   "description": "The table classifies `workflow.review_gates.*.threshold`, but the actual registry (`packages/core/src/config/ConfigKeys.ts`) has no wildcard key \u2014 it declares four explicit keys: `workflow.review_gates.code.threshold`, `workflow.review_gates.arch.threshold`, `workflow.review_gates.slice.threshold`, and `workflow.review_gates.tasks.threshold`. Since the design makes `scope` a required field on `ConfigKeyDefinition` and its Technical Requirements include a \"scope classification completeness (every key has a `scope`)\" test, the classification table should enumerate the keys that must compile. Expand the wildcard row to the four concrete keys (all clearly `shared`, so the intent carries over) so the table is implementable as written.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:109"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "New `cf check` rule's placement relative to ConsistencyChecker's active-slice gate is unspecified",
+   "description": "`ConsistencyChecker.check()` returns an empty result when the project has no `fileSlice` (it early-returns on `sliceIndex === null`), while `checkAll()` runs the aggregate/document-wide rules regardless. The Verification Walkthrough's scratch project is `cf init --lite` in an empty directory \u2014 no active slice \u2014 so steps 5 and 7 (\"Run cf check \u2026 confirm a warning-severity finding\") will only pass if the new `personal-config-in-shared-file` rule runs on the `checkAll` path (or if `cf check` resolves a slice). The design should state which method hosts the rule, matching how `ruleFrontmatterSchema` is a `checkAll`-only rule.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"reusing the pattern already used for personal ignores\" is not accurate",
+   "description": "Technical Scope says the gitignore change \"reuses the pattern already used for personal ignores\", but there is no existing personal-ignore pattern in the codebase (confirmed: no gitignore logic in `packages/cli` or `packages/core`, which the design itself restates at line 159). The later section describes the actual behavior (create or append one line) correctly; this line just overstates reuse. Harmless, but trimming it avoids an implementer hunting for a nonexistent pattern.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Collision \"identical values\" case reported as \"moved\" although nothing moves",
+   "description": "When a personal key exists identically in both files, the design deletes the shared copy but says to \"report it as moved\" \u2014 nothing was written to the personal file, so a `moved` report mislabels a delete-only operation and would confuse the walkthrough's expectations (step 9's report shape). Consider a distinct label (e.g. `cleaned redundant shared copy`) or at least note the wording is illustrative.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+  }
+ ]
+}

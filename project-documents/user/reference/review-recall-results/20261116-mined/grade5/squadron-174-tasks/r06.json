@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 22a's wall-clock bound has a thin margin over the single local measurement",
+   "description": "Description: `MAX_LISTING_S = 1.0` is asserted over \"a few hundred\" seeded files, but the only measurement behind it is the design's \"0.67 s for 188 runs\", presumably local; that is a ~1.5x margin, and the load test now gates CI (`uv run pytest` on ubuntu-latest runners, plus the hermetic job). The repo's load-test precedent (`test_usage_reader_loop.py`) deliberately uses bounds generous to CI jitter. Nothing to change before starting \u2014 the test will reveal the real CI cost at Task 22a \u2014 but if it proves flaky on CI, the fix is to lower the seed count for CI or widen the constant with a recorded rationale, not to remove the assertion.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:316"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 42 runs walkthrough step 8 under a scratch HOME, not the design's \"real runs dir\"",
+   "description": "Description: The design's walkthrough step 8 measures `sq runs list --all` against the real runs directory (188 runs); Task 42 runs it in the scratch HOME seeded with ~5 runs. This is a legitimate refinement \u2014 the design marks the walkthrough \"Draft, to be refined in Phase 6\", and the actual few-hundred-files cost measurement is enforced by Task 22a \u2014 but it means the walkthrough step only smoke-checks the listing path; the real assertion lives in the load test. No action required; recorded so the deviation is a conscious one.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:520"
+  }
+ ]
+}

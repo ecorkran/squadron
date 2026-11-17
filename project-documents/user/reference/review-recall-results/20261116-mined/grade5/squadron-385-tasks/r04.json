@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2.2's real-file fixture assertion cannot hold for either named fixture",
+   "description": "Task 2.2 requires reading an actual task file (\"this file once it exists, or `384-tasks.post-findings-to-the-pr.md` until then\") and asserting **both groups are non-empty**. I checked both files: `385-tasks...md` has zero `[x]`/`[X]` list-item checkboxes (every checkbox is `[ ]`), and `384-tasks.post-findings-to-the-pr.md` has zero `[ ]` list items (every checkbox is `[x]`). So `checked` is empty for one fixture and `unchecked` is empty for the other. Worse, the fixture is mutable: Task 16.4 (line 371) marks every remaining item `[x]` before closing, so the 385 file ends 100% checked and the test would fail again at close \u2014 it can only pass transiently mid-slice. This leaves the technical success criterion (LLD:565-566, \"a test fixture using this slice's own task file\") and the project's real-input parsing rule with a test that fails for reasons unrelated to parser correctness. Pin an immutable mixed-state fixture and name it, or assert the counts-sum plus \"at least one group non-empty\" with a separate silent-failure check.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 13.1 omits the implementation steps its own tests and success criteria require",
+   "description": "Task 13.1 lists flags, ordering, printing, dry-run, body binding, and the success URL, but has no step that calls `identify_operator` (only the parenthetical \"preconditions (identity, then pushed)\" at line 298), no step wrapping the call sites in `except CodeHostError \u2192 render_code_host_error \u2192 typer.Exit(code=1)`, and no step calling `resolve_title` (defined in Task 10a, line 238). These are required by functional criteria LLD:550-553 (title, dry-run equality, identity refusal \"exits non-zero, names the reason, and makes no write\") and D8 (LLD:465-480), which specifies the wrapper at all five call sites. Task 14.1 (line 324) merely *asserts* the wrapper exists, and Task 13.2 (line 309) tests the identity refusal \u2014 so a junior AI implementing Task 13.1 would discover three missing behaviors only by watching tests fail. Add explicit implementation steps for the identity call and its error rendering, the five-site error handler, and the `resolve_title` call in the command's ordering.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:296-305"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`PrInputs`, `gather_inputs()`, and `local_sha` are consumed but no task produces them",
+   "description": "Task 6.1 (line 138) declares `check_head_pushed(..., local_sha: str, ...)` but no task says how the command obtains the local HEAD sha \u2014 Task 3.1 (lines 78-81) adds only `current_branch` and `commits_in_range`, and the existing `_resolve_rev` in `review/git_utils.py` is private and never named. The live walkthrough's step 3 (Task 16.2) requires a real sha-mismatch refusal, so this is not optional. Likewise Task 7.1 (line 157) builds only \"the commit and slice halves of `gather_inputs`\", Task 8.1 adds `find_latest_in_range_review`, and nothing defines the `PrInputs` dataclass or the aggregate `gather_inputs()` that returns it \u2014 yet Task 9.1 (line 197) requires `assemble_facts(inputs: PrInputs)` and Task 13.1 (line 298) says \"input gathering\" without naming a function. The functional criteria at LLD:534-536 and LLD:545-546 depend on both. Add a step for a public local head-sha reader (or name the derivation) and a step completing `gather_inputs()` with the review half plus the `PrInputs` definition.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138-159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The \"lists checked/unchecked task items\" criterion has no emitting step or assertion",
+   "description": "Functional criterion LLD:534-536 requires the body to *list checked task items under \"how it was verified\" and unchecked items under \"known gaps.\"* Task 11.1's squadron-written deterministic blocks enumerate only the commit list, the design path, and the review artifact path/verdict/sha (lines 260-261); the checked/unchecked items appear only as \"which fact feeds it\" in the section table. Task 11.2's sole verbatim assertion is \"a commit sha from the input appears in the output\" (line 268) \u2014 with a faked composer, nothing pins that a known checked item string lands under its heading (or even reaches the prompt), and Task 9.2 only checks that `PrFacts` fields are populated. Add either a step that emits the two item lists deterministically or an explicit prompt-passing step, plus a test asserting a checked item under \"how it was verified\" and an unchecked one under \"known gaps\".",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:260-269"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "\"the same command\" in a functional criterion conflicts with D2's two commands",
+   "description": "The criterion says the behind-host case \"fails the same way with the same command\", while D2 and Task 6.1/6.2 deliberately require two different remediations (`git push -u <remote> <head>` for missing, `git push <remote> <head>` for behind), with Task 6.2's success line \"the two refusals name different commands\". The tasks correctly follow D2's more specific specification; this is a wording looseness in the parent design, not a task defect. No action needed.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+  }
+ ]
+}

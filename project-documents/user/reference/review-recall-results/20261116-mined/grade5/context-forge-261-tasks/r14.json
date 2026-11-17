@@ -1,0 +1,26 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Context Summary attributes the no-load-test decision to a rule that does not exist",
+   "description": "The Context Summary justifies omitting a load test by claiming \"The `tests/load/` tier is a rule in `rules/python.md`\". I searched the installed guide's rules directory (`testing.md`, `python.md`, `typescript.md`) and found no load-test tier rule. The conclusion is still correct on other grounds: D2 explicitly states \"Tests assert the caps, not timings\", and Tasks 3/3T implement those cap assertions (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`). No action needed beyond correcting the citation if the file is revised; the D2 performance target is verified exactly as the design prescribes.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 6's refactor of `ArtifactIntrospector` is a justified deviation from D6's letter",
+   "description": "D6 says `findPlanningArtifacts` reuses `resolveInitiativePlanPath`, but that helper's `findProjectGuideFile` catches every `readdir` error and returns `null` \u2014 which conflicts with D6's \"other read errors throw\". Task 6 resolves this correctly: it extracts the regex into an exported `INITIATIVE_PLAN_FILE_PATTERN` (one pattern definition, per the project's single-definition rule) and re-implements the read with the ENOENT-only rule, while `resolveInitiativePlanPath`'s behavior stays unchanged. This touches a file the design lists as belonging to `introspection/`, but it is the minimal change that honors D6's error rule, and the task file documents the reasoning. No change requested.",
+   "location": "packages/core/src/introspection/ArtifactIntrospector.ts:20-24"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox tasks, following the project's checklist convention, placed at working tested points",
+   "description": "The ten commit tasks (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) are checkbox items rather than plain `**Commit**:` lines. This follows AGENTS.md (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\") and the completed slice 260's identical pattern. Placement is correct: each commit sits after a tested, working point (implementation + its test task), commits are grouped rather than after every task (Tasks 1/1T/2/2T share 2C; 4/4T/5/5T share 5C; 7/7T/8/8T share 8C; 10/10T/11 share 11C), and they are distributed throughout rather than only at the end. The substance of the commit guidance is satisfied.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

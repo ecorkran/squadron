@@ -1,0 +1,314 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Three of the four advertised review gates have no execution path",
+      "description": "The config example (`### Config keys`) declares four transitions \u2014 `pre-slice-plan`, `pre-tasks`, `pre-implementation`, `pre-advance` \u2014 and the scope statement claims \"the four slice-level transitions\" are v1. But the design carries only one review gate per slice: `### Slice status extension` defines `pending-review`/`review-failed` as values of the single scalar `SliceStatus.status` (verified: `packages/core/src/introspection/types.ts:254-264`, a one-value union), and `deriveSliceStatus()` sets it only after `inferredStatus === 'complete'` (`WorkflowNavigator.ts:446-497`). `### Gate insertion point` inserts exactly one branch, between Priority 5 and Priority 6, i.e. at the `complete \u2192 advance` seam, which is `pre-advance` only. `### Anticipated Slices` adds branches only for \"complete \u2192 advance\" and for `pre-slice-plan`; nothing in the document or the slice list produces a gate at `needs-tasks \u2192 in-implementation` (`pre-tasks`) or `in-implementation \u2192 complete` (`pre-implementation`). Consequences: (a) a project that configures `pre-tasks` gets a silent no-op \u2014 violating the document's own \"Fail-fast on configuration errors\" principle and CLAUDE.md's no-silent-fallback rule; (b) a slice cannot express *which* gate is unsatisfied, so with `reviewType = \"slice\"` on `pre-tasks` and `reviewType = \"code\"` on `pre-advance` the single `pending-review` value is ambiguous and the rationale string (\"type: code\") will be wrong whenever a non-advance gate fires. Either cut `pre-tasks`/`pre-implementation` from the v1 schema, or model review state as a per-transition map (`{ [transition]: 'pending' | 'failed' | 'cleared' }`) instead of two extra enum members.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#config-keys"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The stated config-error enforcement point does not run on the read path",
+      "description": "`Architectural Principles` says: \"An invalid `workflow.review_threshold` value or an unrecognized per-gate config is a config error surfaced immediately... The `validate` hook in `ConfigKeyDefinition` is the enforcement point.\" In the actual stack that hook is only invoked from `ConfigManager.set()` (`packages/core/src/config/ConfigManager.ts:129-133`, `validateValue` called at `:157`). `ConfigManager.get()` (`:90-121`) reads `.context-forge.toml` with `readToml` + `resolveKey` and casts the result `as string | boolean | number` with **no** type check, **no** `enum` check, **no** `validate` call. Every value in the design's example is hand-written into `.context-forge.toml` (`### Config keys`: \"Optional per-transition overrides in `.context-forge.toml`\"), so none of it passes through `set()` and the enforcement point never fires. `review_threshold = \"concern\"` or `\"PASS\"` (wrong casing) will be read back cleanly and reach the comparison. The architecture must specify a read-time validation layer (a gate-config loader that validates on `get`, not a `validate` hook on `set`) and define behavior for unrecognized enum values; naming the `validate` hook as the enforcement point is factually wrong for this config surface.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#architectural-principles"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`workflow.review_gates` cannot be represented or read with the existing config infrastructure",
+      "description": "`Technical Considerations` defers the nested-table decision to slice design, but `### Anticipated Slices` (first bullet) then commits to \"add the three global config keys **and per-gate override structure to `ConfigKeys.ts`**\" as v1 scope. `ConfigKeyDefinition` (`packages/core/src/config/ConfigKeys.ts:1-7`) admits only `type: 'string' | 'boolean' | 'number'` and `default: string | boolean | number`; a `{ reviewType, threshold }` inline table fits neither. Worse, `ConfigManager.get()` throws `Unknown config key` for any key not in `CONFIG_KEYS` (`ConfigManager.ts:91-94`), so the \"flat namespace of dotted keys\" alternative requires registering every `workflow.review_gates.<transition>.<field>` entry in `CONFIG_KEYS` \u2014 and transition names are user-extensible (\"without a code change\", `### Config keys`), so the registry can never be closed. There is also no section/table read API in `ConfigManager` (`get`/`set`/`list` only), and each `get()` re-reads **and re-parses both** the user and project TOML files (`ConfigManager.ts:96-119`) \u2014 a per-slice gate evaluation touching 3 global keys + 8 sub-keys means ~11 full TOML parse passes per `cf next` call, with caching nowhere in the design. The hidden complexity cliff here is not the gate logic; it is that the config system this document says it \"follows\" (Current State: \"following the existing pattern\") has no nested-table support, no table listing, and no read-time validation or caching.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config injection into `WorkflowNavigator` / `ConsistencyChecker` is load-bearing and completely unspecified",
+      "description": "`Design Goals` promises \"Inherited by both surfaces... without per-surface work.\" But nothing today supplies config to the decision points. `WorkflowNavigator` is documented in-code as \"Stateless workflow navigator that derives project status and workflow state from project data and filesystem state\" and takes no constructor arguments; `cf next` calls `new WorkflowNavigator()` (`packages/cli/src/commands/next.ts:26`) and `workflow_next` does the same (`packages/mcp-server/src/tools/workflowTools.ts:~200`). `deriveSliceStatus(project, projectPath)` has no channel for `review_enabled` / threshold / gate table, and `ConsistencyChecker`'s constructor takes only an `IArtifactIntrospector` (`ConsistencyChecker.ts:37-41`) \u2014 `workflow_check` constructs `ConfigManager` separately, in the *tool handler*, purely for `workflow.auto_fix`, and `cf check` does the same at `packages/cli/src/commands/check.ts:140`. So all four surfaces (cf next, workflow_next, cf check, workflow_check) need new plumbing, plus a decision on whether the gate config resolves against `project.projectPath` or the *worktree* overlay (Related Work asserts `workflow.review_*` must resolve at worktree scope, but `ConfigManager` is constructed from a single `projectPath` and there is no worktree-scoped config resolution in the code I read; `applyWorktreeOverlay` only patches project fields). This contradicts a stated design goal and is not listed in any anticipated slice.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `recommendation` \"stable vocabulary\" promised to Amoeba does not exist",
+      "description": "`Related Work` states the gate \"must not change the `NextAction` return type, only add new `recommendation` string values,\" and `### Gate insertion point` introduces `\"review\"` and `\"blocked\"`. But `recommendation` is a free-text prose field (`types.ts:271-280`), and every current value is a human sentence with embedded identifiers: `'Advance to slice ${nextEntry.index}: ${nextEntry.name}'`, `` `Continue implementation \u2014 ${remaining} task${...} remaining` ``, `'Slice plan complete. Review architecture for next initiative'`. There is no enum, constant, or registry of recommendation tokens anywhere in `packages/core/src/introspection` \u2014 the one token (`'blocked'`) that the document does define is a machine value dropped into a field whose other values are not machine values. Meanwhile `Design Goals` claims runners can act \"without parsing recommendation strings,\" which only holds if consumers read `activeSlice.status` via `workflow_status` \u2014 a different tool than `workflow_next`, so runners that call `workflow_next` alone must string-match. Either add a structured field to `NextAction` (e.g. `status: 'pending-review' | 'review-failed' | ...` or a `gate` object) \u2014 which the Related Work line forbids \u2014 or drop the claim of a stable vocabulary and state which field consumers are contractually bound to.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#related-work"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`reviewType` is routed by a human-editable filename substring \u2014 label-as-logic",
+      "description": "The gate selects the artifact by pattern `NNN-review.{reviewType}.*.md`, where `reviewType` comes from the `[workflow.review_gates]` config (`code`, `slice`, `arch`, `tasks`), and the `*` portion is the free-text slug. So review semantics (which gate, which threshold) are keyed on the name segment that a human or an agent types when creating the file. CLAUDE.md is explicit: \"NEVER use user-accessible labels as logical structure. They are fragile.\" There is no validation of the `reviewType` config value against any enum (the document never defines the vocabulary or its source of truth), no statement of what happens when a review file's slug segment contains a dot (the existing detector matches only a `NNN-review.` prefix via `startsWith`, `documentDetector.ts:32-37`, so `reviewType` extraction has to invent a second parse), and no behavior for a review whose type matches no configured gate. `ProjectModelBuilder.ts:102` / `frontmatterSchema.ts:129` already treat the post-segment part of the name as an opaque slug, so this design reads structure out of a field the schema layer treats as free text. Prefer the frontmatter `docType`/an explicit field (or the `sliceIndex` + a `reviewType` frontmatter field) over filename parsing.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`FrontmatterData` is `Record<string, string>` \u2014 `score` and `criteria` cannot be read or preserved as designed",
+      "description": "`### Verdict handling` says the score field \"is read and stored when present,\" and `Architectural Principles` says CF \"carries `criteria` and `provenance` as opaque fields... preserved for downstream tools.\" The only frontmatter machinery in the introspection layer is `FrontmatterData { [key: string]: string }` and `FrontmatterResult { filePath, found, data }` (`types.ts:36-49`), produced by `IArtifactIntrospector.parseFrontmatter`. A float `score` and a `criteria: dict[str, float]` cannot be represented: a nested YAML map either collapses to `\"[object Object]\"`, becomes `undefined`, or throws in whatever the parser does with non-scalar values \u2014 none of which is specified. The document also never names the component that reads the review frontmatter (`deriveSliceStatus` currently never calls `parseFrontmatter` at all; `ConsistencyChecker` does, via `safeParseFrontmatter`). \"CF must not extend or reinterpret this schema unilaterally\" plus a stringly-typed read path means the first CF slice touching this contract *must* extend the frontmatter type \u2014 i.e., widen `FrontmatterData` to `Record<string, unknown>` or add a typed `ReviewVerdict` DTO. That decision is missing and it is not cosmetic: `ruleFrontmatterSchema` (`ConsistencyChecker.ts:~860`) and `validateFrontmatter` both iterate `String(value)`, so widening is a cross-cutting change to 160's infrastructure, contradicting \"no 160 interfaces change.\"",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`review-unknown-as` cannot produce the `pending-review` state the enum definition depends on",
+      "description": "`pending-review` is defined as \"no review artifact present (**or verdict is `UNKNOWN` and `review_unknown_as` treats it as pending**).\" But the only values of `review_unknown_as` ever shown anywhere in the document are `\"fail\"` (`### Config keys`, default) and `\"concern\"` (`## Technical Considerations`). There is no `\"pending\"` policy, and `UNKNOWN` is not in the threshold ladder at all \u2014 so under every documented policy value an `UNKNOWN` verdict maps to `FAIL`-or-`CONCERNS` and therefore to `review-failed`, never to `pending-review`. Two more vocabulary defects: the value is spelled `\"concern\"` in Technical Considerations but the verdict it maps to is `CONCERNS`; and casing is never fixed (`\"fail\"`/`\"concern\"` config values vs `FAIL`/`CONCERNS` artifact values), so the comparison requires a normalization rule the document doesn't state. Separately, `review_threshold` is described as a \"floor\" but the ladder is undefined: `### Verdict handling` says `CONCERNS` \"clears if `review_threshold = \"concerns\"` **or lower**\" while the only other shown value is `\"pass\"` \u2014 whether `\"pass\"` is above or below `\"concerns\"` is never stated, and it is the semantics of the default config. Finally, \"`review-failed` is distinct from `in-progress`\" names a status that is not in the `SliceStatus` union (it is `in-implementation`; `in-progress` belongs to `NormalizedStatus`).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#slice-status-extension"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The gate and the new consistency rule key on two different definitions of \"complete\"",
+      "description": "The navigator gate fires on `deriveSliceStatus` output, i.e. all task checkboxes ticked (`WorkflowNavigator.ts:485-497`) \u2014 `### Slice status extension` says \"tasks complete, review gate configured.\" The `ConsistencyChecker` rule is keyed on \"a slice is **marked complete in the slice plan**,\" i.e. `planEntry.isChecked` \u2014 and `check()` only ever evaluates the *active* slice (`ConsistencyChecker.ts:47-63`), while the same review state must be checkable across the whole plan in `checkAll()`. So the two surfaces can disagree on the same slice (tasks done, box not yet checked \u2192 gate says `pending-review`, consistency says nothing; or box checked by hand with tasks incomplete \u2192 rule fires against a slice the navigator would never gate). Worse, the document specifies no interaction with the existing auto-fix rules: `ruleTaskVsPlan` will check the plan box whenever `inferredStatus === 'complete'` (`ConsistencyChecker.ts:~230-250`, `fixable: true`), and `rulePlanVsFrontmatter` / `ruleTaskFileStatus` similarly push status to `complete` \u2014 so `cf check --fix` or `workflow.auto_fix` mechanically records a slice as complete in the plan while its review is absent or `FAIL`, and the new non-fixable review finding is emitted alongside as a footnote. Precedence between \"review must clear before a slice may be recorded complete\" and the existing fixable rules is the central policy question of this initiative and is not addressed anywhere.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#consistencychecker-rule"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hardcoded status vocabularies in `WorkflowNavigator`/`getNext()` fall through when new statuses appear",
+      "description": "`### Gate insertion point` claims only \"The existing `enrich()` helper and warning-attachment pattern are reused,\" but adding `pending-review`/`review-failed` to the union makes several existing exhaustive-by-luck paths wrong, none of them listed in `### Anticipated Slices`: (1) `deriveSliceStatus`'s outer `catch { return base; }` returns `no-active-slice` for any thrown error (`WorkflowNavigator.ts:493-495`) \u2014 the document's `## Technical Considerations` \"File-read failure modes\" require an *explicit* named failure in the rationale, which that blanket catch will swallow before the gate sees it; (2) `buildSummary()` (`WorkflowNavigator.ts:522-546`) prints `slice NNN <status>` generically, so `pending-review` must be verified in CLI/MCP output and the 300-line file grows past the project's file-size guideline; (3) `MCP workflow_status`'s tool `description` is a literal enumeration of the vocabulary \u2014 \"'needs-design, needs-tasks, in-implementation, complete'\" (`packages/mcp-server/src/tools/workflowTools.ts`, workflow_status registration) \u2014 and that string is the contract agents read, so it is per-surface work after all; (4) `IntrospectionSummary.artifacts` (`types.ts:285-296`) has no review field, and the `project_get` enrichment path is unspecified; (5) Priority 7 fallback (`WorkflowNavigator.ts:~290-320`) handles \"`complete` but no plan\" \u2014 with `complete` no longer reachable when gating is on, slices without a plan fall to the \"Should not reach here\" branch (`'Review project status'`) unless the new branch also handles the no-plan case, which the document doesn't say.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#gate-insertion-point"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"No new convention is introduced\" is not verifiable, and the tie-break contradicts the existing detector",
+      "description": "The document asserts the `project-documents/user/reviews/` + `NNN-review.{reviewType}.{slug}.md` layout is existing practice and cites `210-review.code.github-copilot-vs-code-ide-support.md` as \"the pattern.\" In this repository there is no `project-documents/user/reviews/` directory (the listing returns file-not-found), and the only in-repo review-writing agent outputs to a *different* directory: `.claude/agents/code-review-agent.md:220` \u2014 \"Review generated documents in `project-documents/user/code-reviews/`\". `ConsistencyChecker.DOC_SCAN_DIRS` (`ConsistencyChecker.ts:851-858`) and `ProjectModelBuilder.ts:96` scan `reviews`, and `750-feature.auto-index-resolution.md:58` documents `code-reviews/` with a *different* filename shape (`nnn-tasks.code-review.{name}.md`). So the detection rule has at least two competing conventions in the stack and the architecture picks one without stating why, without a compatibility/precedence rule, and without saying whether `cf check`'s existing `reviews` scan and the code-review agent's `code-reviews` output must be reconciled. Also: the tie-break \"`DocumentDetectionResult` gains a `review` slot\" is silent on cardinality \u2014 a single `string | null` (like `sliceDesign`) cannot hold the per-phase reviews (`slice` + `code` for the same index) that the config schema implies, whereas the multi-file precedent is `taskFile: string[] | null`. And taking the \"lexicographically last\" filename as \"most recent by sort order\" is a false claim for the cited example (the slug carries no date; `dateCreated`/`dateUpdated` live in frontmatter), and it inverts the existing detector's rule, which sorts and takes `matches[0]` (`documentDetector.ts:32-60`) for sliceDesign/architecture/slicePlan.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The architecture is overweight for the one failure it must fix",
+      "description": "`riskLevel: low`, and the motivation (`## Overview`) is precisely one gap: tasks complete \u2192 advance, with no review check. The design delivers 4 config keys plus a nested user-extensible gate table, a 4-transition vocabulary (1 explicitly deferred to \"a later slice within 240\"), an `unknown_as` policy knob, score read/store with a \"documented code path, not a hidden behavior\" switch, pass-through carriage of `criteria`/`provenance` with \"no v1 consumer,\" two new enum values, a new detector slot with a tie-break rule, and a new consistency rule \u2014 across 4 slices. Cut in v1: (a) `review_unknown_as` \u2014 the default (`UNKNOWN` blocks) is already the correct fail-fast behavior; a second value exists only to reintroduce the silent pass the project forbids; (b) `pre-tasks`, `pre-implementation`, and `pre-slice-plan` from the *config schema*, along with the whole `[workflow.review_gates]` nested table \u2014 one hardcoded transition (`pre-advance`), one `review_threshold`, one `review_enabled` gets the stated outcome with zero ConfigManager surgery; (c) reading/storing `score` and carrying `criteria`/`provenance` \u2014 nothing consumes them, and they force the `FrontmatterData` type widening; (d) the lexicographic tie-break by deferring multi-review support until the schema supports it. Shipping a key that is silently inert (see first finding) is worse than not shipping it.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md:1"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`## Current State`'s claim about fractional priorities is inaccurate",
+      "description": "`Technical Considerations` says \"Adding a new branch between 5 and 6 requires renumbering to avoid fractional priorities.\" The cascade already contains a fractional label (`// Priority 2.5: Arch set but file doesn't exist \u2014 recommend creating arch first`, `packages/core/src/introspection/WorkflowNavigator.ts`). The renumbering/\"convert to named stages\" slice is still the right call, but the stated justification is not; the real reason to convert is that these comments are the only record of the ordering and the ordering is the contract.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`relatedSlices: []` while four anticipated slices are named",
+      "description": "`## Anticipated Slices` enumerates four slices but frontmatter `relatedSlices: []` is empty, and the `### Initiative-level gating (v1 deferred)` work is claimed \"in scope as a defined transition\" while `## Overview` also lists it as scope. The slice plan for 240 has nothing to bind to yet; per the project's file-naming/process conventions the deferred transition should either get an entry in the initiative plan or be dropped from the v1 scope sentence.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Three of the four advertised review gates have no execution path",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#config-keys",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The stated config-error enforcement point does not run on the read path",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "`workflow.review_gates` cannot be represented or read with the existing config infrastructure",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Config injection into `WorkflowNavigator` / `ConsistencyChecker` is load-bearing and completely unspecified",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The `recommendation` \"stable vocabulary\" promised to Amoeba does not exist",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#related-work",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "`reviewType` is routed by a human-editable filename substring \u2014 label-as-logic",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "`FrontmatterData` is `Record<string, string>` \u2014 `score` and `criteria` cannot be read or preserved as designed",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`review-unknown-as` cannot produce the `pending-review` state the enum definition depends on",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#slice-status-extension",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The gate and the new consistency rule key on two different definitions of \"complete\"",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#consistencychecker-rule",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Hardcoded status vocabularies in `WorkflowNavigator`/`getNext()` fall through when new statuses appear",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#gate-insertion-point",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"No new convention is introduced\" is not verifiable, and the tie-break contradicts the existing detector",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The architecture is overweight for the one failure it must fix",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md:1",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`## Current State`'s claim about fractional priorities is inaccurate",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`relatedSlices: []` while four anticipated slices are named",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-240-arch"
+  },
+  "timestamp": "2026-11-17T11:26:43.000172",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 63765,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 590968,
+  "cached_tokens": 490752,
+  "cache_write_tokens": null,
+  "completion_tokens": 21518,
+  "reasoning_tokens": 14630,
+  "duration_seconds": 301.9096589172259,
+  "cost_usd": 0.03250714,
+  "cost_basis": "alias_pricing"
+}

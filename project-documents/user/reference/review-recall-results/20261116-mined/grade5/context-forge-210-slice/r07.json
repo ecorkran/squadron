@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Overwrite protection excludes generated instruction and prompt files",
+   "description": "The safety check covers only `AGENTS.md` and `.github/copilot-instructions.md`, although generation and worktree propagation also write instruction and prompt files. The slice plan requires prompting before overwriting unmanaged files (\u00a7210, success criteria). Extend protection to every destination file that would be replaced, including worktree-local content.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Script execution and propagation lack failure handling",
+   "description": "The new backend execution and multi-file propagation specify only the successful sequence. Define handling for a hung script, timeout, nonzero exit, failed writes, and worktrees disappearing during copying. State whether propagation stops or continues, how partial output is recovered, and when the command reports failure rather than completion.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Skill-to-prompt translation lacks a usable output contract",
+   "description": "The design promises skill translation but specifies only the destination extension. The slice plan identifies Copilot prompt frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`); the design does not explain their mapping or treatment of unsupported Claude-specific metadata and references. Define a minimal translation contract and representative output tests so generated workflows are usable, not merely present.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113-114"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Parent onboarding latency target is omitted",
+   "description": "The parent architecture sets **under two minutes from npm installation to useful context output**, for both empty directories and existing repositories. This slice extends that onboarding path but neither restates the target nor includes validation against it. Carry the target into the design and its verification criteria.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Required Copilot consumption verification is dropped",
+   "description": "Tests cover generation, copying, and CLI routing, but omit the slice plan\u2019s explicit manual verification that a VS Code Copilot agent reads the generated guidance and follows project conventions. Add that acceptance check and reference the required `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` guide, which the slice plan also assigns to this design.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  }
+ ]
+}

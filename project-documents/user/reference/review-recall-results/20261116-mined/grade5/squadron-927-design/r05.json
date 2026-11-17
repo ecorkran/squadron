@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The degraded-parse notice is applied to the wrong state",
+   "description": "D6 treats `fallback_used` as equivalent to \u201cfindings were not parsed\u201d and directs the renderer to show that notice whenever `fallback_used` is set. The established contract is broader: `fallback_used` also covers a missing summary where findings were parsed and the verdict was derived. In that state, the proposed notice would falsely claim that no findings could be extracted; prepending the synthetic finding makes the contradiction worse. D6\u2019s cited PASS-with-fallback-but-no-findings case is also not the normal parser state for PASS. Preserve distinct facts\u2014such as original finding count and verdict provenance\u2014and select the notice and its wording from those facts.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6 \u2014 A synthetic finding must not hide a degraded parse"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The synthetic finding can misattribute a derived PASS to the model",
+   "description": "D4 applies to every `PASS` and its synthetic finding states that \u201cthe model\u2019s own verdict was PASS,\u201d while Technical Scope describes the input as a \u201cstated PASS.\u201d A PASS can instead be derived after a summary parse loss. In that case no model-stated PASS exists, and replacing `verdict_source` with `IMPOSED` removes the only remaining indication that the original PASS was derived. The coverage cap can still apply, but the artifact must describe the original verdict accurately\u2014for example, as a derived or recovered PASS\u2014and preserve that provenance in the digest or finding text.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A successful tool call is not evidence that the omitted diff was read",
+   "description": "The parent slice plan permits an unchanged verdict when the model \u201cdid read files,\u201d but D4 uses any successful aggregate tool call as that condition. A successful `Glob`, `Grep`, or `Read` of an unrelated file does not establish that the omitted diff was reviewed, and the available telemetry does not record which tool ran or what it inspected. Consequently, the design\u2019s central guarantee that PASS means the model saw the whole diff or read files with its tools is not actually established. The coverage rule should use evidence of successful relevant file reads, or the artifact guarantee and rule must be weakened accordingly.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The unreported-model fallback contradicts the consumed aiModel contract",
+   "description": "D11 keeps the requested id in `aiModel` when the provider reports no answering model, with the \u201cnot reported\u201d caveat appearing only in the body\u2019s Run Digest. Frontmatter is the machine-consumed artifact contract, and metrology reads `aiModel` directly; JSON consumers can distinguish the empty `answering_models` list, but frontmatter consumers cannot. Such runs therefore continue to be pooled under the requested identity, which does not satisfy Part C\u2019s goal of recording the model that answered. The artifact needs a machine-visible \u201cnot reported\u201d state or an always-present requested/answering representation; using `requestedModel` for this would conflict with its reserved substitution-only meaning.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D11 \u2014 Not reported: keep the requested id, say so in the artifact"
+  }
+ ]
+}

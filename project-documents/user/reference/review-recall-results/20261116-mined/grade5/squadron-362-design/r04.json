@@ -1,0 +1,26 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Sections 2 and 6 cite a preflight rejection as their fallback, but no such preflight check exists",
+   "description": "The mapping table is declared binding (\"The fallback column has no third option. Every section resolves to sourced content or a gap marker\"), yet rows 2 and 6 give \"preflight rejects empty `layers`\" / \"preflight rejects empty `edges`\" as the fallback \u2014 a third outcome (no document at all) rather than a gap marker. 361's preflight is executed unchanged by this slice, and its only such checks are top-level array validation (`layers`/`edges` empty arrays are rejected at contract level, 361 design \"Validation: absence vs malformation\"); the 361 flow's own per-section rule for empty layers/edges is not \"reject\" \u2014 only 362's table introduces that phrasing. As written, an implementer cannot tell whether a present-but-empty `layers[]` reaches section 2 (which would then need a defined non-gap fallback that is not stated) or is intended to be a contract-level rejection. Either restate rows 2 and 6's fallback as gap markers consistent with the \"no third option\" rule, or explicitly cite the 361 contract check by name and note that preflight runs before any section is written.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:175"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Section 6's function/class endpoint resolution mechanism is unstated, leaving the read-discipline criterion unverifiable",
+   "description": "Section 6 requires that \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts as an inter-layer signal.\" The architecture's read discipline states plainly that \"function- and class-level nodes are not read,\" and this slice's Success Criterion 9 asserts \"no function- or class-level node is read\" \u2014 but the design never states how a function endpoint is mapped to its owning file's layer without reading function nodes. (Parsing the type-prefixed node `id` from the edge, which the architecture documents as `function:path:name`, would satisfy both, but that mechanism is not named.) Without it, SC9 cannot be checked against implementation and an implementer could reasonably resolve endpoints by selecting function nodes from `nodes[]`, contradicting SC9 and the architecture's discipline. State the mechanism explicitly (e.g., \"resolve via the `path` segment of the endpoint id; never select function/class nodes from `nodes[]`\").",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The `.understandignore` reporting rule contradicts its own example",
+   "description": "The rule says \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\" \u2014 but the same sentence's parenthetical, the Verified graph facts table (\"17 active lines\"), and walkthrough step 4 (`grep -vE '^\\s*(#|$)' \u2026 | wc -l` \u2192 17) all establish that this repo's file is *not* all-comments. An implementer reading the rule as written will look for an all-comments case and, finding 17 active lines, cannot tell whether \"defaults only\" or the active-pattern count is correct. Split the two cases: report the count and list whenever active lines exist (this repo's case); use \"defaults only\" only when zero active lines exist.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:234"
+  }
+ ]
+}

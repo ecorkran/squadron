@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Detached-HEAD refusal is specified in Task 3 but never wired or tested at the command level",
+   "description": "Description: The slice design's data flow places the detached-HEAD check first in the precondition stage (\"identify_operator \u2192 branch_exists \u2192 sha compare\", all before the model call), and D2 states \"a detached HEAD refuses before either check.\" Task 3.1 (line 79) correctly makes `current_branch` raise for detached HEAD, but no task wires `current_branch` into the command's precondition order, and no task-level test covers the command-level refusal:\n- Task 13.1 (line 298) names the order as \"preconditions (identity, then pushed)\" with no detached-HEAD term;\n- Task 13.2 (line 309) has no detached-HEAD case (its identity-refusal case covers the \"no login\" criterion, but nothing covers the head-refusal);\n- Task 14.1 lists the five call sites and is not where it belongs either.\n\nTask 3.2's unit test only proves the helper raises \u2014 the end-to-end outcome (command exits non-zero, names the condition, makes no write, calls the composer never) is the form every other refusal in this slice is tested at the command level. As written, whether `current_branch` is called before `identify_operator`, its exception is converted to an exit-1 refusal rather than an unhandled traceback, and no host call fires are all left to implementation judgment. Fix: add a detached-HEAD term to Task 13.1's order and one refusal case to Task 13.2 (mirroring the identity-refusal case).",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:79"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Fails the same way with the same command\" contradicts the task's own test expectations",
+   "description": "Description: The slice's functional success criterion states that a branch whose host sha differs from local \"fails the same way **with the same command**\" as an unpushed branch. The task file is internally inconsistent about what \"the same command\" means: Task 6.1/6.2 say the two refusals name *different* commands (`git push -u <remote> <head>` for missing, line 139, vs `git push <remote> <head>` for behind, line 147), with the explicit success note \"the two refusals name different commands\" (line 149). The design's D2 is on the task's side (it specifies the two different fixes, and D2 is the decision the design review PASSed). So the criterion's \"same command\" reads as shorthand for \"the same refusal treatment (before any write, names the fix)\" \u2014 but taken literally, it is unsatisfiable by the specified implementation, and a junior implementer cross-referencing the criteria could \"fix\" the tasks to print one command for both, regressing D2's different-fixes rule. Fix: reword or annotate the criterion (or have the task file note the reading) so the two readings cannot diverge.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "No **Commit:** markers anywhere in the file",
+   "description": "Description: Verified by grep \u2014 there are no plain `**Commit:**` lines. This is acceptable: CLAUDE.md requires committing \"at least once per task,\" which the effort-tagged, checkbox-driven structure satisfies, and the slice has no NFR that would require a load test or CI gating. No action needed; noting only that if commit points are ever wanted, the natural seams are after Task 4 (refactor), 9 (deterministic core), and 13 (command wired, all fake-tested) \u2014 the tested points before live work in Task 16.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 2.2's fixture assertion must hold for non-task markdown too",
+   "description": "Description: The real-file test asserts \"both groups are non-empty **and** their counts sum to the file's checkbox count.\" Any real task file in `project-documents/user/tasks/` that contains checked and unchecked items will satisfy both clauses, so 2.2's fallback choice (`384-tasks.post-findings-to-the-pr.md`) is safe, and this file at test time will contain all-checked items (task-checker checks items as they go \u2014 note its own 2.2 is likely unchecked, keeping the unchecked group non-empty). No fix required; flagging so the implementer doesn't \"helpfully\" tighten the assertion.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  }
+ ]
+}

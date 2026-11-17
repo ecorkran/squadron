@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Round-trip test does not fully verify success criterion 5",
+   "description": "Task 1.4 only reloads the YAML and asserts that the policy matches. Slice success criterion 5 additionally requires `config_to_yaml` to emit the policy as a plain string and reloading the emitted YAML to produce an **equal `ServerConfig`**. Extend the test to inspect the serialized YAML value and assert equality between the original and reloaded configurations, rather than checking only `world_bounds.policy`.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Integration-test setup does not guarantee the prescribed boundary crossings",
+   "description": "The shared setup specifies positions, outward velocities, and `forces=[]`, but not `dt`, profile `max_speed`, or concrete velocity magnitudes. Engine integration still advances positions by `velocity * dt` and clamps speed even with no forces. Consequently, the agent at `(99, 50)` with velocity `(10, 0)` may remain inside the world after one step\u2014for example, with `dt=0.05`\u2014so `vx < 0` would not hold. Specify deterministic fixture values, including `dt` and `max_speed`, that guarantee the one-step crossing and guarantee at least one `OPEN` agent exits during the 50-step run.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-231"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers incorrectly use checkbox syntax",
+   "description": "All five commit markers are checklist items, for example `- [ ] **Commit:** ...`, rather than plain `**Commit**:` lines. The same defect appears at lines 179, 249, 286, and 325. Convert them to plain, non-checkbox markers. Their placement after tested section-level work is otherwise appropriate.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Manual verification can leave the required shipped configuration changed",
+   "description": "Task 5.1 runs the final suite before Task 5.2 edits `config/test.yaml` to `reflect` and then `open`. Step 8 permits restoring \u201cwhichever policy you want,\u201d although success criterion 12 requires the shipped file to retain `policy: wrap`. Require restoration of the committed `wrap` version and perform the final verification after that restoration, so temporary manual-testing edits cannot become the final state.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-306"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Breakdown is over-decomposed for a 2/5-effort slice",
+   "description": "The 325-line breakdown uses 23 task headings and extensive implementation/test prescriptions for a small enum, helper module, call site, and two YAML edits. Merge Tasks 1.1\u20131.3 into one config implementation task, Tasks 2.1\u20132.2 into one module task, and Tasks 4.1\u20134.2 into one shipped-config task. Fold the documentation closeout tasks together, remove the redundant parametrized dispatch test\u2014the policy-specific public-function tests already exercise dispatch\u2014and avoid repeating the full-suite run unless it is retained as the post-restoration final check. Keep the policy edge-case tests because those directly support the success criteria.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

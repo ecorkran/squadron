@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Broken dependency and Related Work reference to a nonexistent concept document",
+   "description": "The frontmatter declares `dependsOn: [001-concept.migratory, 100-arch.behavior-engine]` and the Related Work section links to `../project-guides/001-concept.migratory.md` (line 132). The only concept document that exists is `project-documents/user/project-guides/000-concept.migratory.md` (`001-initiative-plan.migratory.md` is a different document). The sibling 100-arch document correctly references `000-concept.migratory`. Every claim in this document that is grounded in \"the concept document establishes X\" therefore points at a dead path, and the dependency metadata is wrong for anything that resolves `dependsOn`. Fix the ID to `000-concept.migratory` in both places. (Related: the 100-arch document's Related Work links `200-arch.world-server-foundation.md`, which also doesn't exist \u2014 this document is `300-arch.worldserver-foundation.md` \u2014 so the cross-references between the two architecture documents are broken in both directions.)",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Tick as transaction\" has no failure semantics and no defined commit boundary",
+   "description": "The Architectural Principles promise an atomic read/compute/commit tick and \"no silent failures, no undefined states\" (Explicit lifecycle), but the document never says what happens when a step raises:\n\n- Step 2 (environment update) or step 3 (behavior evaluation) throws mid-tick. Is the partially-mutated state rolled back, is the tick aborted and retried, or does the process exit? Nothing specifies this.\n- The transaction claim depends on whether `engine.tick()` receives a copy or a borrowed, mutated-in-place array. The Envisioned State says \"Apply the updated entity state as the new canonical state,\" implying copy-on-write, but neither this document nor the 100-arch interface (\"Returns the updated state array\") pins down aliasing. If the engine mutates the server's arrays in place (which is the cheap approach at 500K entities \u00d7 20 tps and what the derived slice work assumes), a mid-tick exception leaves corrupted canonical state and the \"transaction\" principle is fiction. This is a load-bearing decision that is deferred implicitly.\n- Step 4 \"Handle entity lifecycle events (spawning, removal, profile changes) queued during the tick\" is incoherent as written: the tick runs synchronously to completion, so no other code runs during it to queue events, and the same document says the behavior engine \"does not manage the entity lifecycle itself\" and that no client commands flow in v1. Whoever produces these events, and when, is never stated.\n\nThe document needs explicit per-step failure behavior (abort-tick + rollback, or fail-fast shutdown) and an explicit statement of whether state commit is copy or in-place mutation.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Architectural-Principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Step 5 places client pushes and log writes inside the synchronous tick, contradicting the asyncio between-tick I/O model",
+   "description": "The Envisioned State lists \"State distribution \u2014 Push the committed state to connected clients \u2026 Write to the event log\" as step 5 of the tick, while the Technical Considerations section (\"Tick loop and asyncio coexistence\") says the tick runs synchronously and the server \"yield[s] to the async event loop for I/O between ticks,\" and the prose below says client connections/disconnections are handled asynchronously \"between ticks.\" Sending on an asyncio WebSocket requires `await`; a synchronous tick step cannot push. The document never defines the boundary: does step 5 enqueue frames into a per-client buffer that the async phase flushes (in which case flushing is where backpressure and overrun interact, and neither is specified), or does distribution actually happen outside the tick (in which case step 5 is misdescribed)?\n\nThe same problem applies to the log write: a synchronous disk write inside the tick consumes tick budget and couples storage latency to simulation timing, with no batching/async logging strategy. As written, a data flow in the numbered tick sequence contradicts the stated threading/async model.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned-State"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Per-client spatial culling requires a client\u2192server channel the v1 protocol explicitly excludes, and no mechanism is specified",
+   "description": "The network-egress discussion in \"Entity scaling and multi-resolution simulation\" states \"clients receive full entity data only within their view frustum\u2026 The server must perform spatial culling per client.\" But the protocol is defined as \"the server pushes state, clients render. No client-to-server simulation commands exist in v1\" and the principle \"State flows outward\u2026 Nothing flows back from clients into simulation state in v1.\" Nothing anywhere in the document explains how the server learns a client's viewport, region of interest, or observer position \u2014 that is a required client\u2192server input that the v1 protocol has no slot for, and the word \"observer\" (which drives the entire multi-resolution tiering: full simulation \"near observers\") is never defined as an entity the server knows about.\n\nThe same gap covers recovery: the document says ongoing clients \"may receive deltas,\" but with no specified per-client delta baseline, no resync/keyframe mechanism if a frame is dropped, and slow-client handling left as \"buffering, dropping frames, or disconnecting\u2026 are all strategies to consider,\" a dropped or stalled delta stream has no defined recovery other than full reconnect. The extension point (\"protocol should not preclude adding [commands] later\") does not currently support the culling design the document itself makes load-bearing for the network scaling story without adding a backchannel the v1 contract disclaims.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical-Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Scaling discussion is disproportionate to the stated v1 operating range",
+   "description": "The \"Entity scaling and multi-resolution simulation\" block is roughly a third of the document and details tiers through multi-GPU, multi-machine dynamic spatial partitioning, predictive partition rebalancing, and group-encounter merge strategies (\"Two 500K murmurations merging\u2026 partition boundary explodes\") \u2014 while the same section names 10K\u201350K entities as \"the initial operating range,\" the Design Goals commit to \"no distribution infrastructure\u2026 until it is needed,\" and the slice plan explicitly defers aggregation, GPU, and distribution to High-risk future work. The section even concedes \"The architecture should not prescribe a solution.\"\n\nWhat to cut: the 500K\u20134M+ tier breakdowns, the GPU/multi-GPU/multi-machine escalation path, and the group-encounter partitioning discussion. What to keep is the one paragraph of actual interface requirements this document owes the 100-arch engine \u2014 subset-evaluable ticking, state layout that permits aggregation, per-client relevance culling, and serializable state \u2014 which the behavior engine document already restates. The current text spends its authority on speculative scale while the concrete interface obligations are buried inside it.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical-Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Anticipated Slices omits the serialization/protocol slice that the document's own considerations make load-bearing",
+   "description": "The Anticipated Slices list contains \"WebSocket client layer\" and \"Logging and replay\" but no slice for the framing/wire protocol, even though Technical Considerations (\"State representation and serialization\") treats the \"minimal framing protocol (tick number, entity count, array layout descriptor)\" as a core design element serving both streaming and logging. The derived slice plan (`300-slices.worldserver-foundation.md`) compensates by adding (306) State Serialization and Protocol \u2014 but orders it *after* (305) WebSocket Client Layer, so (305) must invent an interim wire format that (306) then redefines, and (307) logging depends on (306) for a format it could have used from the start. The anticipated slice list in this document should include the protocol slice (ahead of the WebSocket layer) so the sequencing in the plan doesn't invert the dependency the document itself describes.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Anticipated-Slices"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Thread-offload upgrade path overstates how much the GIL is released",
+   "description": "\"Tick loop and asyncio coexistence\" claims the upgrade path is \"offloading the tick to a thread or process (NumPy releases the GIL).\" NumPy releases the GIL only inside individual array ufuncs; the surrounding tick body \u2014 spatial-hash bucket construction, index gathering, profile dispatch, Python-level orchestration described in the 100-arch engine \u2014 runs under the GIL, so a thread offload may buy little for exactly the neighbor-query work the behavior engine identifies as cost-dominant. The process alternative requires serializing entity state across the process boundary every tick, which contradicts the single-process simplicity goal. This is a stated future path, not a v1 blocker, but the parenthetical gives false confidence in the escape hatch.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical-Considerations"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Replay fidelity silently depends on unguaranteed determinism guarantees of a subsystem",
+   "description": "The Envisioned State asserts flatly that \"given a log and the same configuration, the simulation can be reconstructed tick-by-tick,\" while \"Logging format and replay fidelity\" hedges it behind \"If the tick function is deterministic (a design goal of the behavior engine).\" That determinism also requires iteration-order stability that neither document guarantees \u2014 neighbor ordering from spatial hashing, reduction order in force summation, and float32/float64 boundary conversions all affect results, and the 100-arch document explicitly leaves array layout and spatial index strategy open. Either the replay claim should be qualified, or determinism (including stable neighbor ordering across runs and platforms) should be recorded as a hard requirement on the 100-arch contract with a conformance test.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical-Considerations"
+  }
+ ]
+}

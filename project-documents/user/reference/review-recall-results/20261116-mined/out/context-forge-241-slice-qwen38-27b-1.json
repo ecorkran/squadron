@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Single reserved `review-gate` branch cannot route the arch/slice/tasks gates, which fire earlier in the cascade",
+      "description": "TD-3 and the Technical Scope both say the gate status is \"rout[ed] through the reserved `LIFECYCLE: review-gate` branch,\" which slice 240 placed (per 240 TD-4) between `LIFECYCLE: in-implementation` and `LIFECYCLE: complete-advance`. But the design's own boundary-signal table and walkthrough require the gates to fire at three *earlier* cascade points: `arch` in the `GUARD: no-active-slice` path (no active slice, before any `LIFECYCLE:` branch), `slice` at the `needs-tasks` state (design present, no tasks \u2014 the doc's walkthrough step 6), and `tasks` while the slice is `in-implementation` (task file exists, not complete). `getNext()` is a first-match early-return cascade, so a slice in `needs-tasks` or `in-implementation` returns at those branches and never reaches a gate branch positioned after `in-implementation`; a no-active-slice project never enters `LIFECYCLE:` branches at all.\n\nThe design does place the *evaluation* correctly (\"at each boundary in `deriveSliceStatus()` + the no-active-slice path\"), so the mechanism is salvageable \u2014 but the routing description (\"fill **the** reserved `review-gate` branch\") describes one insertion point where three additional, earlier ones are actually required. As written, an implementer could wire only the pre-advance case into the reserved branch and leave the `slice`/`tasks`/`arch` recommendations unreachable, silently failing the plan's \"covering all four lifecycle boundaries.\" This needs an explicit mapping from each boundary's derived status to the concrete cascade branch that emits the `review`/`blocked` recommendation (needs-tasks branch, in-implementation branch, no-active-slice dispatch, and the reserved pre-advance slot).",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Arch requires the block rationale to name the parse failure; the design's parser conflation and rationale contract can't produce it",
+      "description": "The architecture (\u00a7Technical Considerations, \"File-read failure modes\") states: \"The rationale returned to the caller **names the parse failure explicitly**.\" This design, however, (a) rests on `parseFrontmatter` returning the identical `{ found: false, data: {} }` for a file-read error, an unclosed/missing frontmatter block, *and* a well-formed frontmatter that simply lacks a `verdict` key \u2014 which I confirmed is exactly what `frontmatterParser.ts` does (the `catch` and the no-closing-`---` path both return `empty`, and a found-but-`verdict`-less doc returns `found: true` with no `verdict`); and (b) TD-7's rationale contract only requires naming the review type (and, for `review-failed`, the verdict + threshold) \u2014 it never names a parse/read failure.\n\nThe design does satisfy the arch's *conservative* half \u2014 an unparseable file is never silently passed (it is `UNKNOWN` \u2192 `review_unknown_as`, default `fail`). But it cannot satisfy the *diagnostic* half: with the three causes collapsed into one `UNKNOWN`, the gate has no signal for \"this file could not be read/parsed\" versus \"frontmatter present but no `verdict` field,\" so the required rationale text is not derivable. Fixing it is cheap \u2014 branch on `parseFrontmatter().found` (and/or keep the error distinction) to classify the `UNKNOWN` cause, and add \"names the parse/read failure when that is the cause\" to TD-7's rationale requirement \u2014 but as specified the requirement is left unmet.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Recommendation strings are human sentences, while the arch and the doc itself describe `review`/`blocked` as the stable machine tokens runners route on",
+      "description": "The architecture's gate branch returns `{ recommendation: \"review\", ... }` / `{ recommendation: \"blocked\", ... }`, and this doc's Integration Points list \"the `review` / `blocked` recommendation vocabulary \u2014 the stable strings runners route on.\" Yet TD-7's concrete examples set `recommendation` to full sentences (\"Review required before advancing\", \"Blocked: review verdict does not clear threshold\"), and the walkthrough echoes the sentences in `cf next` output. If the machine token is meant to be `review`/`blocked` (matching the arch) with the sentences relegated to `rationale`, that should be stated; if the token itself becomes the sentence, the \"stable strings runners route on\" wording in the same document is wrong. Low impact because TD-7 defers exact strings to implementation and the `NextAction` shape is unchanged \u2014 but the intended routing token should be pinned down so slice 242 and the Amoeba/Squadron consumers route on a stable value.\n\nVerified and not raised: the `parent` frontmatter correctly points to the slice-plan document (not the architecture); dependency direction is 241\u2192240 with no inversion; the per-gate `threshold`-override retention is explicitly authorized by both the plan (\"241's design decides whether to keep it\") and the arch's per-transition-override design, so it is not dead config; the `STATUS` const scope matches maintenance slice 910's entry verbatim; and the gating-off \"byte-for-byte identical\" guarantee is structural (optional ctor dep, no config read when off) with a named regression test.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:260"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Single reserved `review-gate` branch cannot route the arch/slice/tasks gates, which fire earlier in the cascade",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:222",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Arch requires the block rationale to name the parse failure; the design's parser conflation and rationale contract can't produce it",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Recommendation strings are human sentences, while the arch and the doc itself describe `review`/`blocked` as the stable machine tokens runners route on",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:260",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "against": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-241-slice"
+  },
+  "timestamp": "2026-11-17T12:26:46.832731",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 184020,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 367720,
+  "cached_tokens": 319168,
+  "cache_write_tokens": null,
+  "completion_tokens": 44968,
+  "reasoning_tokens": 42100,
+  "duration_seconds": 388.83041287539527,
+  "cost_usd": 0.12654048,
+  "cost_basis": "alias_pricing"
+}

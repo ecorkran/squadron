@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T13 residual-result discovery references a nonexistent 320 surface, and its fallback branch contradicts T14 and the residual-sampling success criterion",
+      "description": "T13 instructs: \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap.\" I verified against the codebase that no result-discovery surface exists: `capture.py` only has `resolve_target` for explicit user-supplied targets; `report.py`'s `enrich_samples` walks only store-referenced files; no list/discover/scan function for persisted review files exists anywhere in `src/squadron`. 320's own capture docstring confirms \"the offer/selection policy is deferred.\"\n\nThe prescribed fallback is not merely weaker \u2014 it is incompatible with the slice. The store contains only **sampled** verdicts; scoping to store-recorded samples makes it structurally impossible to enumerate **unsampled** results. That breaks:\n- The slice's functional success criterion: \"a graduated config with unsampled results yields a non-empty offer set, so agreement data does not freeze (asserted by test).\"\n- T14's first test (the non-empty guarantee) and T15/T16's `offers` behavior.\n\nFix: delete the \"store-recorded samples only\" fallback and instead define the discovery surface inside T13 as a small new function \u2014 e.g., scan `{cwd}/project-documents/user/reviews/*-review.*`, derive each file's `JudgeConfigId` via the existing `derive_judge_config_id`, keep those matching the graduated config exactly, and subtract any result already sampled (matching `SampleVerdict.result_ref.content_hash`). Keep the PM question only for confirming placement (320 capture vs 322 graduation), not for whether discovery ships \u2014 the success criteria require it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's numbered direction-band precedence contradicts the design's floor asymmetry and its own success criteria",
+      "description": "T7 lists the bands in precedence order: (1) `n < floor` \u2192 INSUFFICIENT_EVIDENCE, (2) unversioned \u2192 INSUFFICIENT_EVIDENCE, (3) GRADUATE, (4) `match_rate <= tighten_rate` \u2192 TIGHTEN, (5) HOLD. Implemented literally in that order, a below-floor cell with a low match rate returns INSUFFICIENT_EVIDENCE at case 1 and case 4 is unreachable \u2014 yet T7's own Success line and T8 both require \"a below-floor cell with low match rate returns TIGHTEN, not INSUFFICIENT_EVIDENCE,\" and the design states plainly that tightening is not floor-gated. The item-4 parenthetical tries to amend the list (\"checked first only for the loosening path\"), but the numbered algorithm as written still says otherwise, so a junior AI has contradictory instructions for the slice's core decision function.\n\nFix: rewrite the precedence so the TIGHTEN check precedes the floor/unversioned checks (or express explicitly that cases 1/2 gate only the loosening path), e.g.: unversioned-low-rate handling aside, order = (1) `match_rate <= tighten_rate` \u2192 TIGHTEN, (2) `n < floor` or unversioned \u2192 INSUFFICIENT_EVIDENCE, (3) GRADUATE, (4) HOLD. While rewriting, also state the intended outcome for an *unversioned* cell with a low match rate (TIGHTEN vs INSUFFICIENT_EVIDENCE), which neither the design table nor T7 currently settles.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:114-119"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Idempotent re-graduate has no expressible core API: `find_graduation` returns no record id and `write_graduation` has no update path",
+      "description": "T15 requires that re-graduating an already-graduated pairing \"update its evidence snapshot in place (idempotent \u2014 one record, not two),\" and T16 asserts the record count stays at 1. But T11's API only offers `write_graduation(...) -> str` (generates a new record id) and `find_graduation(...) -> GraduatedConfig | None` (returns the config, not the record id or file path). With these signatures, the CLI cannot address the existing record to overwrite it without re-scanning or inventing a new method. Suggested fix: have `find_graduation` return the record id alongside the config (or have `write_graduation` accept an existing record id), so T15's in-place update is expressible against T11's surface.",
+      "file_ref": null,
+      "category": "interface",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:177"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`model_dimension_note` spec omits the runtime-drawn-model limitation sentence the design requires",
+      "description": "The slice design's success criterion requires the note to state not only the config-time model+threshold pairing but also the runtime-drawn-model limitation (\"Where a step draws its model at runtime (a 180 pool), the note states that the threshold cannot track the drawn model\"). T9's note specification includes only the pairing sentence. Since the recommendation core cannot know which step consumes a template, this is necessarily static caveat text \u2014 add one clause to T9's `model_dimension_note` requirement so the design's full criterion is traced.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Every task carries a Commit marker, so odd-numbered implementation tasks commit untested code",
+      "description": "All 17 tasks end with a `**Commit:**` line. CLAUDE.md does require at least one commit per task, so this is not a violation, but the result is that T1, T3, T5, T7, T9, T11, T13, T15 each commit code whose tests only land in the following task. Committing at the implementation+test pairs instead (e.g., one commit after T1+T2) would keep every commit at a tested point without reducing commit frequency meaningfully.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage is complete and sequencing is sound",
+      "description": "Every functional, technical, and integration requirement in the slice design traces to tasks: hash narrowing (T1/T2), output models incl. version-scoped `GraduatedConfig` (T3/T4), config keys reused-not-redefined for `min_evidence_n` (T5/T6), direction classification with unversioned refusal (T7/T8), no-mutation assertion (T10/T16), version-scoped matching regression from slice-review F002 (T11/T12), exhausted/pruned/lapsed offer cases (T13/T14), graduate refusal + idempotence (T15/T16), surface-agnostic parity test, and the nine-step verification walkthrough (T17). Test tasks immediately follow their implementation tasks, there are no circular dependencies, no scope creep, and the task count and file count are proportionate to a 3/5 slice.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T13 residual-result discovery references a nonexistent 320 surface, and its fallback branch contradicts T14 and the residual-sampling success criterion",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "T7's numbered direction-band precedence contradicts the design's floor asymmetry and its own success criteria",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:114-119",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "interface",
+      "raw_category": null,
+      "summary": "Idempotent re-graduate has no expressible core API: `find_graduation` returns no record id and `write_graduation` has no update path",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:177",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`model_dimension_note` spec omits the runtime-drawn-model limitation sentence the design requires",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Every task carries a Commit marker, so odd-numbered implementation tasks commit untested code",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success-criteria coverage is complete and sequencing is sound",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T13:54:52.372531",
+  "model": "qwen/qwen3.8-max-0902",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 325024,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-max-0902",
+  "answering_models": [
+    "qwen/qwen3.8-max-0902"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 755418,
+  "cached_tokens": 635136,
+  "cache_write_tokens": null,
+  "completion_tokens": 80097,
+  "reasoning_tokens": 76567,
+  "duration_seconds": 1975.8294567498378,
+  "cost_usd": 0.8799300000000001,
+  "cost_basis": "alias_pricing"
+}

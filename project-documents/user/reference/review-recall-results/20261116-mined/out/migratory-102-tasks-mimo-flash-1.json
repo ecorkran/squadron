@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Vectorization technical requirement has no corresponding task or verification step",
+      "description": "The slice design's Technical Requirements state: *\"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\"* No task in the breakdown asserts or verifies this. Tasks 3.1 and 4.1 prescribe the per-algorithm math in scalar-looking notation (e.g., 4.1's `sum(velocity[i] * leadership[i]) / sum(leadership)` with per-neighbor indexing), which a junior implementer could easily translate into a Python loop over neighbors \u2014 exactly what the requirement forbids. The test tasks (3.2, 4.2) check numerical results only, not implementation shape. Add a step to 3.1/4.1 (e.g., \"aggregate neighbors with fancy indexing / `np` vectorized ops, no Python loop over neighbors\") and a verification line in 6.1 or the relevant test task confirming the neighborhood aggregation is vectorized.",
+      "file_ref": null,
+      "category": "missing-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:sections-3-4"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No task creates or verifies the slice branch",
+      "description": "CLAUDE.md requires verifying/creating the slice branch (`102-herding-and-leadership`) from `main` before starting slice work, and the frontmatter's `projectState` says \"Branch to be created from main\" \u2014 but no task step covers branch setup or verification before the first commit in task 1.3. Adding one checklist line under Section 1 (or as a Section 0) would close this.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:frontmatter"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit checkpoints sit at working, tested points",
+      "description": "Commit checkpoints appear after each working-and-tested unit (state + tests, profile + tests, each force + its tests, integration tests), not after every task and not only at the end. Note that they are formatted as checklist items rather than plain `**Commit**:` marker lines, which is consistent with CLAUDE.md's mandate that all task items use checkbox format.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:1.3"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "missing-coverage",
+      "raw_category": null,
+      "summary": "Vectorization technical requirement has no corresponding task or verification step",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:sections-3-4",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "No task creates or verifies the slice branch",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:frontmatter",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit checkpoints sit at working, tested points",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:1.3",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-17T07:34:54.919634",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 11480,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 13686,
+  "cached_tokens": 2880,
+  "cache_write_tokens": null,
+  "completion_tokens": 3482,
+  "reasoning_tokens": 2629,
+  "duration_seconds": 107.73880291590467,
+  "cost_usd": 0.00126406,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Breaking BulkForce signature change omits slice 103's predator-prey forces",
+   "description": "The slice changes `BulkForce.__call__` from `list[NDArray[np.intp]]` to `NeighborData` (lines 161\u2013163) and states \"All `BulkForce` implementations must be updated in this slice\" (line 162), with success criteria \"No Python-level per-agent loops in any `BulkForce.__call__` implementation\" and \"All existing tests pass.\" But the Included rewrite list (lines 35\u201338, 129\u2013134) covers only five forces, and the \"Provides to Other Slices\" section labels predator-prey as a *future* consumer (line 178). Slice 103 already designs `FlightForce` and `PursuitForce` as `BulkForce` implementations using `neighbor_lists` and `for list_idx, agent_idx in enumerate(eval_indices)` loops, and the parent slice plan orders (103) before (109). Under either ordering the design is broken: if 103 is built first, its forces receive a `NeighborData` where they expect a list (`neighbors[neighbors != agent_idx]` fails) and are never migrated; if 109 is built first, 103's already-authored design is silently superseded. The design must state explicitly whether these two forces are in scope for migration or that 103 is to be re-designed against `NeighborData`.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35-38"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Zero-neighbor masked reduction yields nonzero force, contradicting equivalence requirement",
+   "description": "The representative cohesion pseudocode computes `center_of_mass = sum(neighbor_pos) / np.maximum(counts, 1)` then `cohesion = (center_of_mass - self_positions) * weights`. For `counts[i] == 0` this gives `center = 0` and therefore `force = -self_position * weight` \u2014 nonzero for any agent away from the origin. That directly contradicts the \"Handling Zero-Neighbor Agents\" claim (line 172) that the masked reduction produces zero force, and the documented current behavior (slice 101: no neighbors \u2192 zero force; slice 102: zero-sum leadership \u2192 zero force). The same `(mean - self)` pattern affects `AlignmentForce` and `LeadershipForce`, and zero-neighbor/single-agent cases are explicit success-criteria and edge-case tests. Because equivalence requires `np.allclose(..., atol=1e-12)`, this would fail. An explicit `counts > 0` gate (zeroing those result rows) needs to be specified in the pattern.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:114-118"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Constant Python overhead regardless of agent count\" is not achieved by the design",
+   "description": "The Overview claims force cost becomes \"dominated by NumPy C-level array operations with constant Python overhead, regardless of agent count or clustering density,\" echoing the plan's O(n\u00d7k) \u2192 O(1) Python-iteration framing. But `build_neighbor_data` (step 3, lines 88\u201390) must pad, mask, and self-exclude jagged query results into a rectangular array \u2014 no vectorized construction is specified, and doing this from `list[NDArray]` is inherently an O(n \u00d7 max_neighbors) Python loop. The per-agent loop is relocated from the forces into the builder, not eliminated. The design should either specify a vectorized build (e.g., `np.repeat`/`cumsum`-based gathers) or qualify the O(1) claim so the headline does not overstate what this slice delivers.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:19"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Padded-array worst case at the architecture's target scale is unanalyzed",
+   "description": "The HLD's \"Efficient large-scale evaluation\" goal targets tens of thousands of agents on one CPU. Under the full-clustering scenario that motivates this slice (`max_neighbors \u2192 n`), the padded `indices`/`mask` plus the `(n_active, max_neighbors, 2)` gather scale as O(n\u00b2) memory \u2014 roughly 800 MB for indices alone at n=10K, before the position gather. The doc concludes CSR has \"no benefit at n <= 10K\" and defers it to 100K+, leaving the 10K\u2013100K band unaddressed. Density may keep `k` bounded in practice, but the design would be stronger if it named the condition (neighbor density / `max_neighbors` threshold) that triggers the fallback.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:148"
+  }
+ ]
+}

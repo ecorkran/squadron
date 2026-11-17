@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The concept guide (`guide.ai-project.000-concept.md`) is not present in the working tree, so every task that verifies it against the real guide is unverifiable as written",
+      "description": "The `project-documents/ai-project-guide/` submodule is registered in `.gitmodules` but is **not initialized** in this checkout \u2014 `project-documents/ai-project-guide/project-guides/` does not exist, and `grep -c '^## User-Provided Concept'` on the guide cannot succeed. Task 0.2 lists this check as a **STOP condition** (\"if any check diverges from the Verified facts table, stop and report to the Project Manager\"), Task 2.2 requires confirming \"the guide tree path is readable\", Task 6.3 requires both contract checks to pass against the real guide, and Task 8.3 requires a scratch copy of the guide. As written, the implementer hits the STOP condition at Task 0.2 and the slice stalls before any work starts \u2014 and the failure mode is indistinguishable from \"the design's premise is wrong\". The task file's own \"Verified anchors\" table asserts the guide \"contains `## User-Provided Concept` exactly once\" as a traced fact, which is not reproducible in the current tree. Task 0.2 needs an explicit submodule-init step (`git submodule update --init`) with its own failure branch, and the \"Verified anchors\" claim needs qualifying as \"traced in a checkout where the submodule was initialized\". Note also that the guide's *own* section list (Overview, Problem & Motivation, Target Users, Solution Approach, Initial Technical Direction, Development Approach, User-Provided Concept, Refined Concept) is what Task 4.1's binding seven-row mapping table is derived from \u2014 if the guide cannot be read, the mapping table cannot be validated against its source either.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The slice design's own \"Excluded\" boundary forbids the comprehension-flow edit that Task 7.4 mandates",
+      "description": "The design states under Technical Scope \u2192 Excluded: *\"Any change to the Preflight Graph Contract, the comprehension flow, `src/squadron/`, the installer, the frontmatter gate, or `guide.ai-project.000-concept.md`.\"* But Task 7.4 requires editing a sentence inside the comprehension flow (`commands/analysis/understand.md:393` \u2014 \"The concept flow and the initiative-candidates flow are slices 363 and 364\"), and Task 8.6's changed-file check expects \"only `commands/analysis/understand.md`\", which does include that file. The design's own Implementation Notes do authorize the sentence fix (\"362's sentence \u2026 is edited to reflect that the concept flow exists\"), so the design contradicts itself between its Excluded list and its Implementation Notes. The task file resolves the contradiction in favor of making the edit, which is the sensible reading, but the tasks should not leave the implementer choosing between a design \"Excluded\" clause and a design \"Implementation Notes\" bullet. The design's Excluded list should drop \"the comprehension flow\" (narrowing it to \"the comprehension flow's extraction mapping and seven-section scope\"), or the task file should cite the Implementation Notes line as the authority for the edit.",
+      "file_ref": null,
+      "category": "scope-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8.6 requires `uv run pytest tests/skills/` but the slice's scope rule permits no Python change, and the same task's changed-file check contradicts the design walkthrough's file list",
+      "description": "Task 8.6's `git diff --name-only main` expectation is \"only `commands/analysis/understand.md`, the generated concept, this slice's documents, and the DEVLOG\", but the design's Verification Walkthrough step 7 lists the same set and additionally names `.understand-anything/` cleanliness \u2014 both are consistent. The problem is the `uv run pytest tests/skills/` bullet: `tests/skills/` covers the skill-pack manifest/installer/resolver, not the `commands/analysis/` markdown content. It exercises \"the pack install path\", which this slice does not touch, and it does not exercise anything the slice changed \u2014 the skill file's content is not asserted by any test in the repo. Meanwhile the slice's own discipline checks (no whole-graph load, no `function`/`class` node read, only one changed non-document file) are verified only by *inspecting the written prose* in Task 8.6 and by the walkthrough's own narrative, not by anything mechanical. Since Success Criterion 11 (\"the only changed non-document file is `commands/analysis/understand.md`\") and Criterion 12 (\"a concept a PM would edit rather than discard\") are the criteria most at risk of silent regression, the walkthrough should either (a) drop the irrelevant `tests/skills/` invocation and say so, or (b) state explicitly that no automated test covers the skill's markdown, and that the discipline check is prose inspection plus `git diff` \u2014 so the implementer does not treat a green pytest run as evidence for Criterion 11.",
+      "file_ref": null,
+      "category": "verification-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:344"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4.1's binding seven-row mapping table cannot be validated against its source without the guide",
+      "description": "Task 4.2 verifies the table \"row-for-row\" against the *design's* table, which is a self-consistency check \u2014 it confirms the skill file matches the design, not that the design's rows match the concept guide's actual section list. The design itself says the table is \"The concept guide's own sections, in its order\", and the re-run semantics in Task 6.2 refer to \"Refined Concept sections\" \u2014 a section group the mapping table never names. Given the guide is the upstream authority and is not in the tree, Task 4.2 should add a step that reads the guide's section headings (once the submodule is initialized per the first finding) and confirms the seven rows are a subset of them in the same order, and states explicitly which guide sections the table intentionally omits and why.",
+      "file_ref": null,
+      "category": "verification-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:171"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion in the slice design traces to at least one task",
+      "description": "SC1 \u2192 Task 1.1/1.2 + 8.5; SC2 \u2192 Task 5.1/5.2/5.3 + 8.1 (\"both questions asked once, after extraction, before drafting, nothing else asked\"); SC3 \u2192 Task 3.2/3.3 + 8.1; SC4 \u2192 Task 4.1 (dropped-topics rule) + 8.2; SC5 \u2192 Task 5.1 + 8.2 (gap marker + declined provenance entry); SC6 \u2192 Task 6.1 (verbatim/preserve/append-under-dated-subheading) + 8.4; SC7 \u2192 Task 6.1 (both checks, distinct stop messages) + 8.3; SC8 \u2192 Task 6.2 + 8.4 (default stop, mechanical refillability, byte-identity via `git diff`); SC9 \u2192 Task 7.2 + 8.1 (`cf validate frontmatter`, real `model:` id, cf project name vs graph `project.name`); SC10 \u2192 Task 7.3 (full nine-value outcome set) + 7.1 + 8.1; SC11 \u2192 Task 3.1 (read discipline) + 8.6 (diff name-only, no `function`/`class` read); SC12 \u2192 Task 8.1 (\"a PM would edit rather than discard\" is the live-run outcome). No criterion is orphaned.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:1"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep beyond the design's boundary, and no NFR/load-test obligation applies",
+      "description": "Every task's output lands in `commands/analysis/understand.md` or the slice's own documents. No task adds Python, touches `src/squadron/`, the installer, the frontmatter gate, or the guide itself \u2014 consistent with the slice plan's \"No Python is added by any slice\" tripwire. The slice restates no performance or load NFR, so no `tests/load/` task is required and no CI gating task is owed; Task 8.6's `ruff format --check` and `pytest` bullets are the appropriate existing gates. The PM-interaction notice (framing 8.1 before any question is asked, plain text, no `AskUserQuestion`) is a sequencing clarification for the implementer, not a new requirement.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/363-slice.concept-generation.md:50"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task granularity and the test-with pairing are appropriate",
+      "description": "Each implementation sub-task (1.1, 2.1, 3.1\u20133.3, 4.1, 5.1\u20135.2, 6.1\u20136.2, 7.1\u20137.4) is immediately followed by a verification sub-task in the same group (1.2, 2.2, 3.4, 4.2, 5.3, 6.3, 7.x self-verifying) \u2014 a consistent test-with pattern adapted to prose authoring. Effort ratings (1/5\u20133/5) are proportionate; no task bundles multiple design decisions that would need splitting, and no verification sub-task is so small it should be merged into its implementer. Commit markers appear at the end of seven working groups plus the walkthrough, each at a tested point.",
+      "file_ref": null,
+      "category": "task-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The concept guide (`guide.ai-project.000-concept.md`) is not present in the working tree, so every task that verifies it against the real guide is unverifiable as written",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:65",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-consistency",
+      "raw_category": null,
+      "summary": "The slice design's own \"Excluded\" boundary forbids the comprehension-flow edit that Task 7.4 mandates",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification-coverage",
+      "raw_category": null,
+      "summary": "Task 8.6 requires `uv run pytest tests/skills/` but the slice's scope rule permits no Python change, and the same task's changed-file check contradicts the design walkthrough's file list",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:344",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "verification-coverage",
+      "raw_category": null,
+      "summary": "Task 4.1's binding seven-row mapping table cannot be validated against its source without the guide",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:171",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every success criterion in the slice design traces to at least one task",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:1",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No scope creep beyond the design's boundary, and no NFR/load-test obligation applies",
+      "location": "project-documents/user/slices/363-slice.concept-generation.md:50",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "task-design",
+      "raw_category": null,
+      "summary": "Task granularity and the test-with pairing are appropriate",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-17T10:35:00.336253",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 187709,
+  "failed_tool_calls": 4,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1029959,
+  "cached_tokens": 794322,
+  "cache_write_tokens": null,
+  "completion_tokens": 48947,
+  "reasoning_tokens": 45724,
+  "duration_seconds": 305.4276320422068,
+  "cost_usd": 0.037917129,
+  "cost_basis": "alias_pricing"
+}

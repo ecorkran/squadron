@@ -1,0 +1,61 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Stable `review` / `blocked` recommendation tokens are replaced by free-text sentences",
+   "description": "The HLD \u00a7Gate insertion point (`240-arch.review-aware-workflow-gating.md:115-127`) and the slice-plan 241 entry (`240-slices.review-aware-workflow-gating.md:19`) require `getNext()` to return `recommendation: \"review\"` / `\"blocked\"`, and HLD \u00a7Related Work (`:173`) says Amoeba routes on that **stable vocabulary**. TD-7's only concrete values are `'Review required before advancing'` and `'Blocked: review verdict does not clear threshold'`, followed by \"Exact strings finalized in implementation\" (`:268`); the Verification Walkthrough (steps 3\u20137) prints those sentences, while Integration Points (`:286`) claims `review` / `blocked` are \"the stable strings runners route on\". A consumer testing `recommendation === 'review'` will not match. Pin the exact token values in the design and keep the human-readable text in `rationale` / `summary`.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Four-boundary wiring is not reconciled with the single reserved branch and status-only routing",
+   "description": "TD-3 puts all gate evaluation in `deriveSliceStatus()` / the no-active-slice path and says `getNext()` \"only routes\" the two new statuses through **one** reserved `LIFECYCLE: review-gate` branch (`:57-58`). But the specified `SliceStatus` carries no boundary, reviewType, normalized verdict, or resolved threshold, so that branch cannot build the \"structured rationale\" the slice plan requires, nor TD-7's rationale naming review type + verdict + threshold; `:218` only says `reviewGate` \"exposes\" those values, not where they are carried between the two calls. Separately, the `arch` boundary lives in the `no-active-slice` guard, which returns before the reserved branch \u2014 the design never states how that boundary emits `review`/`blocked`, nor how `getStatus()` / `workflow_status` surfaces a first-class status for a boundary with no active slice (HLD \u00a7First-class status representation, `:32`). Specify the gate-result payload and the emission point per boundary.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:220-224"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New config I/O failure modes and fail-fast config errors have no handling strategy",
+   "description": "The slice introduces a new I/O path \u2014 `ConfigManager.get(...)` on every navigator call (`:109`, `:191`) \u2014 with no enumerated failure strategy. A config read error, an unknown key, or an invalid `review_threshold` / `review_unknown_as` token arriving at `resolveGateConfig` is unspecified; `:276` says only to \"narrow explicitly\". HLD \u00a7Architectural Principles (`:48`) requires \"Fail-fast on configuration errors \u2026 surfaced immediately, not a silent pass or silent block\", and 240's `enum` validation is enforced only at `cf config set`, not on read. Restate that principle and state explicitly: what `resolveGateConfig` does with an unrecognized token (explicit error, not a switch default), and what `getNext()` / `getStatus()` do when the config read fails. Also enumerate the review-file and reviews-directory read outcomes so gating-on behavior is defined rather than implicit.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:109-112"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "An unparseable review file cannot be distinguished from a missing verdict in the rationale",
+   "description": "HLD \u00a7Technical Considerations (`:149`) requires \"The rationale returned to the caller names the parse failure explicitly.\" The design instead declares that \"a read failure and a missing frontmatter both surface as 'no `verdict` present'\" and maps both to `UNKNOWN`, while TD-7 (`:268`) requires only review type, verdict and threshold in the rationale. Collapsing the two cases means a present-but-unreadable artifact can clear under `review_unknown_as = pass` with a rationale that says nothing about a read failure, leaving the HLD's \"must not silently pass\" unmet. `FrontmatterResult.found` is available to distinguish them; specify that `found === false` on an existing file is named as a parse/read failure in the rationale while still feeding `UNKNOWN` to the policy.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Worktree scope inherited for free\" leaves project-scope config unreachable",
+   "description": "HLD \u00a7Related Work (`:171`) requires `workflow.review_*` keys \"resolvable at worktree scope \u2026 as well as project scope, using the resolution chain 180 introduced\", and the 180 HLD's \"What Stays Shared vs. Per-Context\" section puts configuration at the project (shared) layer. The wiring constructs `ConfigManager(project.projectPath)` with the worktree-overlaid path (`:109`, `:80`) and asserts the scope is inherited for free (`:110`), but never specifies a fallback to the project-root config. A worktree without its own `.context-forge.toml` therefore reads user/default values and silently ignores a project-level `review_enabled = true` \u2014 gating is off exactly where it was configured on. State the intended resolution order (worktree override \u2192 project \u2192 user \u2192 default) or narrow the claim.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:110"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The v1 documented no-op `score` path is dropped rather than deferred",
+   "description": "HLD \u00a7Verdict handling (`:100`) says `score` \"is read and stored when present but not enforced in v1. The enforcement switch is a documented code path, not a hidden behavior\"; \u00a7Frontmatter as cross-project contract (`:46`) says CF reads `verdict` and (when present) `score`. The slice-plan Notes (`:29`) state score enforcement is \"a documented no-op code path in v1, **not a separate slice**\". The design excludes it as \"No numeric `score` enforcement (out of v1 per arch)\" (`:66`) and defers it to \"Squadron slice 301\" (`:299`) \u2014 an external future slice \u2014 with no reading/storing or no-op path anywhere in `reviewGate.ts`. Since 241 is the only slice that parses review frontmatter (242 imports its evaluator), this leaves a named v1 requirement with no owner. Include the documented no-op, or name the slice that carries it.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:66"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`reviewGate.ts` exported contract is inconsistent about the boundary parameter",
+   "description": "Slice 242 imports these exports directly (plan `:20`; design `:284`), so their signatures are an interface. TD-1 declares `resolveGateConfig(config): ResolvedGate | null` (`:191`) with **no boundary parameter**, yet the same bullet, Technical Scope (`:56`) and TD-4 (`:229`) require it to resolve the per-boundary `threshold` override \u2014 impossible without knowing the boundary. `ResolvedGate` is never defined; `GateOutcome` includes `'pending'` although `:218` says `evaluateVerdict` never returns it; `positionToReviewType` returns a bare `string` rather than the review-type union. Pin the signatures and result type before 242 builds on them.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:176-191"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The HLD's deferred pre-slice-plan gate and configurable reviewType are superseded by the slice plan",
+   "description": "HLD `:22` / `:141` say v1 implements slice-level transitions only and that pre-slice-plan gate logic is a later slice; HLD `:30` / `:82` make `reviewType` configurable per gate. The slice plan's Phase 4 decisions (`:26-28`) explicitly supersede both and retire 244. The design correctly follows its frontmatter parent, so this is not a violation \u2014 but keeping the supersession chain visible prevents a reader working from the HLD alone from treating the `arch` boundary as out of scope.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:68"
+  }
+ ]
+}

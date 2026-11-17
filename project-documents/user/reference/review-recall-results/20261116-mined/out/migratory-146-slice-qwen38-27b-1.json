@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "f64 \"downstream contract\" claim is false for the real code path \u2014 breaks A3 and the no-wire-change scope",
+      "description": "Line 150 states \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore carries f64, preserving the downstream contract.\" That is not what the dependency code does. `GpuAgentState.export_positions()`/`export_velocities()` (slice 145, `quadrants_fused_state.py:228`/`:244`) explicitly return **f32** \u2014 `np.column_stack([x, y]).astype(np.float32, copy=False)`. `TickResult.from_quadrants_fields` (`tick_result.py:124`) passes those arrays through with **no upcast**, so a GPU `TickResult` carries f32 positions/velocities, not f64.\n\nConsequence: `protocol.serialize_state_update`/`serialize_snapshot` (`protocol.py:187`, `:213`) do `np.ascontiguousarray(...).tobytes()` with no dtype cast. On the CPU path that is 32 bytes/agent (f64); on the GPU path it would be 16 bytes/agent (f32), and `deserialize_message` reads `<f8` (`protocol.py:493`) \u2014 so the wire format **changes** on the GPU path. This directly contradicts A3 (line 328: \"same shape and dtype contract \u2026 requires zero changes\") and the scope statement that \"wire format changes \u2026 [are] out of scope.\" The design never specifies the upcast that its own f64 claim requires.\n\nRequired fix in the design: state that the driver's `step()` upcasts the f32 `export_*` results to f64 before `TickResult.from_quadrants_fields` (the `from_quadrants_fields` docstring currently even notes it \"pass[es] through whatever the caller gave us so f32 \u2026 remain f32\"). This is a one-line boundary cast but it is the whole of A3, and as written A3 cannot be met.",
+      "file_ref": null,
+      "category": "contract-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`GpuAgentState` move contradicts the \"bench harness unchanged\" out-of-scope claim",
+      "description": "The Out-of-scope list (line 40) says \"Any changes to the bench harness or `QuadrantsFusedTickRunner`,\" and line 301 says the bench backends \"`quadrants_fused_backend.py`, `runner.py` \u2026 are **not changed**,\" with A5 (line 332) asserting \"All existing bench tests pass without modification.\" But the Files Changed table (line 294) and Open Notes (line 383) move `GpuAgentState` from `bench/backends/quadrants_fused_state.py` to a new `src/migratory/gpu/agent_state.py` and require `quadrants_fused_backend.py` to \"update its import.\" That is a change to a bench-harness file, contradicting the out-of-scope/A5 wording.\n\nThe move itself is the right call \u2014 it eliminates a production\u2192bench import dependency, which is the correct dependency direction and worth doing. The problem is the hidden dependency: the design promises the bench is untouched while silently depending on editing it. Reconcile the statements: either move `GpuAgentState` (and drop the \"bench backends not changed / no modification\" claims for `quadrants_fused_backend.py`), or do not move it and accept a `migratory_server \u2192 migratory.bench` import (which I would not recommend). As written, A5 is understated and the scope boundary is not clean.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:40"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`SOFT` bounds policy does not work on the GPU path; A4 overstates the guarantee",
+      "description": "A4 (line 330) claims all four `BoundsPolicy` variants \"produce valid (finite, in-bounds \u2026) positions after 100 ticks on the GPU path,\" and the Bounds section (line 209) puts `SOFT` in the same \"same sync-back pattern\" bucket as `wrap`/`reflect`. This does not hold for `SOFT`. On the CPU path, `apply_bounds_policy` treats `SOFT` as a no-op (`bounds_enforcement.py:41-42`) precisely because confinement is done by the `WorldBoundsRepulsor` **force**, which `force_builder.py:72` appends only when `policy is SOFT`. The slice-145 fused kernel (`fused_force_integrate_kernel` in `quadrants_fused_kernels.py`) implements exactly 6 forces (cohesion, separation, alignment, leadership, momentum, propulsion) \u2014 it has **no** `WorldBoundsRepulsor`. So on the GPU path, `policy: soft` produces no repulsor force and no position correction: agents drift out of bounds, i.e. `SOFT` behaves like `OPEN`, not \"in-bounds.\"\n\nThe design's position-only `notify_positions_modified` sync-back also can't express `SOFT` (which never mutates positions). As written, A4's `SOFT` leg is unmet. Either (a) exclude `SOFT` from A4 and document that `SOFT` is unsupported on the GPU path (falls back to open-drift until a GPU repulsor kernel is added), or (b) add the repulsor force to the fused kernel / profile table. Note the design already defers \"GPU kernels for bounds enforcement\" as out of scope, so (a) is the proportionate option \u2014 but it must be stated, not implied by \"same sync-back pattern.\"\n\nRelated, lower-weight: for `REFLECT`, the design syncs back only positions, but the CPU path's `apply_bounds_policy` also flips outward velocities in place (`_apply_reflect`). On the GPU path that velocity flip is not synced back, so reflect behaves differently than the CPU path. Given the design calls reflect \"rare,\" this is acceptable but should be noted rather than left implicit in \"same sync-back pattern.\"",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:330"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spawn/despawn `sync_from_entity_manager` has no live caller in the world server",
+      "description": "The design treats spawn/despawn as a load-bearing \"secondary-mutation path the bench harness ignores,\" adding `GpuSimulationDriver.sync_from_entity_manager()`, the `count_changed_since_last_tick()` helper (`entity_manager.py`, line 297), and per-tick count-change dispatch in `SimulationManager.step()` (lines 178, 201). But in the production server there is no runtime channel that changes the entity count: `handle_connection` (`clients.py:241`) is pure server\u2192client push (no client command to spawn/remove), and the only count mutation is the startup `spawn_population` loop (`server.py:473`), which happens before `setup()`. So after startup the count is constant and `count_changed_since_last_tick()` is always false \u2014 the sync path is dead code in the live server.\n\nThe slice-plan entry does assign spawn/despawn handling to 146, so dropping it wholesale would be a concern; but the design should state the honest premise \u2014 that no runtime mutation path exists yet \u2014 and scope this accordingly. As it stands the slice spends interface surface (a driver method, an `EntityManager` helper, a per-tick branch, and test case 6) on a path nothing exercises, which is the \"handling for cases the slice does not have\" the design should either cut or explicitly mark as future-proofing. If a runtime mutation path is anticipated, name it; if not, defer the helper and keep only the startup `setup_from_server` upload.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:178"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mid-tick GPU I/O failure mode not enumerated (setup/config cases are)",
+      "description": "The Open Notes handle the dominant failures well and honestly: `qd.init`/field-allocation failure at startup propagates to a clean process exit (no mid-session recovery; \"process boundary is the recovery unit\"), and invalid config raises before the port binds. That is acceptable and explicit. What is not covered is the **per-tick** GPU I/O path the driver introduces (`fused_force_integrate_kernel`, `qd.sync()`, `export_*` `to_numpy()`): if one of those raises mid-run (device OOM during a kernel, a `to_numpy`/`from_numpy` transfer fault) or `qd.sync()` stalls, the design specifies no handling \u2014 no timeout, no degraded state, and the `tick_body`/executor exception behavior is not addressed (the design's \"mid-session GPU failure is fatal to the process\" is asserted for OOM but not tied to a tick-body exception, and a sync hang is neither OOM nor a clean exit). This is a new I/O path whose failure modes should be enumerated with an explicit strategy rather than left implicit. Given the design already embraces \"restart is the recovery unit,\" a one-line statement of the mid-tick behavior (exception propagates out of `sim.step` \u2192 tick loop behavior; or add a bounded `qd.sync` timeout) would close the gap.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes"
+    },
+    {
+      "severity": "PASS",
+      "title": "GPU fused tick bypassing `SpatialQuery`/`BulkForce` is architecturally sanctioned, and the Tier 2 NFR is restated",
+      "description": "The design's core move \u2014 `GpuSimulationDriver` driving the fused tick directly, with state in GPU fields and no `SpatialQuery`/`BulkForce` on the hot path \u2014 is exactly the exception the architecture carves out (\"the integrated GPU tick (slice 145) intentionally operates outside the `SpatialQuery` and `BulkForce` interfaces by design \u2026 not a constraint on the GPU-resident tick\"), and the CPU path correctly keeps those interfaces. The engine\u2192server boundary still flows through `TickResult` (option-a contract), satisfying the clean-ownership goal. The architecture's Tier 2 NFR (60 TPS at N=50k on CUDA) is restated with a concrete, testable target in A6 (`tests/load/test_gpu_server_tps.py`, \u226560 TPS at N=50k), and A2 adds the Metal N=1000 golden-path demo. These are the alignment points that hold the design to its parent.",
+      "file_ref": null,
+      "category": "boundary-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#architecture"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "contract-alignment",
+      "raw_category": null,
+      "summary": "f64 \"downstream contract\" claim is false for the real code path \u2014 breaks A3 and the no-wire-change scope",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`GpuAgentState` move contradicts the \"bench harness unchanged\" out-of-scope claim",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:40",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`SOFT` bounds policy does not work on the GPU path; A4 overstates the guarantee",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:330",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Spawn/despawn `sync_from_entity_manager` has no live caller in the world server",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:178",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Mid-tick GPU I/O failure mode not enumerated (setup/config cases are)",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "boundary-alignment",
+      "raw_category": null,
+      "summary": "GPU fused tick bypassing `SpatialQuery`/`BulkForce` is architecturally sanctioned, and the Tier 2 NFR is restated",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#architecture",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-17T12:32:36.143408",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 290287,
+  "failed_tool_calls": 4,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 984498,
+  "cached_tokens": 782208,
+  "cache_write_tokens": null,
+  "completion_tokens": 74168,
+  "reasoning_tokens": 69305,
+  "duration_seconds": 281.48566316626966,
+  "cost_usd": 0.2508296,
+  "cost_basis": "alias_pricing"
+}

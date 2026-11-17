@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 2's \"suite passes unchanged\" is false: `PythonAdapter.metrics` narrowing breaks an existing assertion",
+      "description": "Task 2 adds four `SnapshotMetric` members and replaces `PythonAdapter.metrics = frozenset(SnapshotMetric)` (`src/squadron/metrology/snapshot/python_adapter.py`) with an explicit four-metric set. `tests/metrology/snapshot/test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`, so that test fails from Task 2 onward \u2014 contradicting Task 2's success criterion (\"the full `tests/metrology/` suite passes unchanged\") and leaving the suite red until Task 25 restores the full set. No task owns that edit: Task 25 says only \"keep it written out explicitly\" and lists no test change. Task 2 should either keep `frozenset(SnapshotMetric)` semantics (via an explicit literal set compared against the enum) or explicitly own the edit to `test_python_length.py:60` (assert the four-metric set in Task 2, the full set again in Task 25).",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "tests/metrology/snapshot/test_python_length.py:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Python Success Criterion 3 fixture expectation (6) contradicts D2's counting rules",
+      "description": "Task 4 requires \"the Success Criterion 3 fixture (`if`, `elif`, `and`, a comprehension `if`, an `except`) scores 6\", and Task 4/Task 3 restate D2's rule that \"a comprehension adds 1 per `for` \u2026 plus 1 per `if` in it\". Under those rules the listed fixture has six decision points \u2014 `if`(1), `elif`(1 \u2014 a second `ast.If` node), `and`(1), the comprehension's `for`(1), the comprehension's `if`(1), `except`(1) \u2014 so it scores 7, not 6. The value 6 is only reachable with `if`/`else` instead of `elif` (5 decision points), which is also consistent with the TypeScript fixture in Task 6 (`if`+`??`+ternary+2 cases = 5 \u2192 6). Whichever way it is resolved, an implementer following Task 3's rules will produce 7 and the Task 4 assertion will fail, or the implementer will weaken the counting rule to hit 6. The fixture source and its expected score must be pinned before Task 4.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 10 omits D3's \"duplicated non-blank lines\" rule, leaving the counted unit undefined",
+      "description": "D3 defines `per_file` for `duplicated_lines` as \"duplicated non-blank lines, only for files with a non-zero count, as lint does\", and notes that the file-length total over the same files is the denominator. Task 10 only says \"`per_file` holds the count of distinct duplicated lines\". Because the token window drops comments and layout but not blank lines, a duplicated block spanning blank lines would count blank lines as duplicated under Task 10's wording, inflating the metric relative to the file-length denominator. Task 10 should state that only non-blank lines are counted and that the count is per distinct line.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task asserts the duplication (or complexity) `counting` text states its definition",
+      "description": "Success Criterion 1 requires that each new measurement \"has a `counting` text giving its definition (D2, D3)\". The coverage `counting` text is asserted (Task 24: \"the Istanbul fixture's `counting` states the provider limit\"), but no task asserts the duplication `counting` text (window size, exact token match / type-1, comments and layout dropped, the ceiling \u2014 all listed in Task 10's implementation bullet) or the complexity `counting` text content. Task 9 only asserts that the two counting texts \"differ\", which passes for any two distinct strings. Task 11 should assert the duplication counting text names the window size and the exact-match rule, and Task 9 should assert the complexity counting text names the decision-point set.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success Criterion 10's \"its other metrics are unchanged\" has no corresponding assertion",
+      "description": "SC 10 requires that a language over `DUPLICATION_MAX_TOKENS` gets `duplicated_lines` as `tool_failed` \"and its other metrics are unchanged\". Task 11 tests the ceiling at the `measure_duplication` module level, where no other metric is in scope, so the second clause is unverified. A one-line assertion in Task 15 (TypeScript) or Task 13 (Python) that file/function length are still present when duplication fails would close it.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"module-level code isn't counted\" note is specified for Python only",
+      "description": "D2 states the rule generally (\"Module-level code isn't in any function, so it isn't counted. The `counting` text says so\"), but Task 8 attaches that sentence only to the Python complexity identity; the TypeScript identity's `counting` comes from Task 5's constant-derived text with no mention of it. Add the same clause to the TypeScript counting text in Task 8.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 16's \"key name string appears once\" is unachievable alongside the CONFIG_KEYS entry",
+      "description": "Task 16 requires the key name to appear \"once in source, in `coverage.py`, apart from `CONFIG_KEYS`\", while also requiring a `metrology.coverage_report` entry in `CONFIG_KEYS`. The existing convention (`metrology.max_file_lines` at `src/squadron/config/keys.py:237`, with `KEY_MAX_FILE_LINES` in `src/squadron/metrology/snapshot/preflight.py:26`) spells the literal twice in `keys.py` (dict key and `name=`). `keys.py` also cannot import the constant from `snapshot/coverage.py` without a cycle (`keys` \u2192 `coverage` \u2192 `config.manager` \u2192 `keys`). Relax the criterion to \"the key constant lives in `coverage.py`; `CONFIG_KEYS` spells the literal, as 400's keys do\".",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/config/keys.py:237"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 10 is the one oversized unit",
+      "description": "At Effort 4, Task 10 carries the tokenizer contract, the id/array storage, the rolling hash, the collision-confirmation step, the token ceiling and its `tool_failed` path, `MemoryError` handling, the per-file line marking and the `counting` text \u2014 against a ~300-line module budget. Splitting it into (a) window index + ceiling and (b) line marking + per-file assembly would keep each unit under the line budget and make Task 11's test list map one-to-one onto the two units.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, commit markers and criterion coverage are sound",
+      "description": "Every functional criterion (1\u201312), the technical requirements and the integration requirements map to a task: complexity to Tasks 3\u20139, duplication to 10\u201315, coverage to 16\u201326, render to 27, docs/CHANGELOG to 28, walkthrough to 29, final validation to 30. Each implementation task is immediately followed by its test task, and `**Commit**:` markers sit at tested points (Tasks 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29, 30) rather than after every task or only at the end. The failure-mode table's six rows all have signal-and-outcome assertions (Tasks 11, 13, 15, 19\u201322, 24), and the real-report fixture requirement (Task 18) precedes the parser that consumes it (Task 19). No NFR is restated by the parent slice, so no `tests/load/` task is required.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 2's \"suite passes unchanged\" is false: `PythonAdapter.metrics` narrowing breaks an existing assertion",
+      "location": "tests/metrology/snapshot/test_python_length.py:60",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The Python Success Criterion 3 fixture expectation (6) contradicts D2's counting rules",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 10 omits D3's \"duplicated non-blank lines\" rule, leaving the counted unit undefined",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No task asserts the duplication (or complexity) `counting` text states its definition",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Success Criterion 10's \"its other metrics are unchanged\" has no corresponding assertion",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "The \"module-level code isn't counted\" note is specified for Python only",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 16's \"key name string appears once\" is unachievable alongside the CONFIG_KEYS entry",
+      "location": "src/squadron/config/keys.py:237",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 10 is the one oversized unit",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Sequencing, commit markers and criterion coverage are sound",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T10:23:38.494967",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 310688,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 792897,
+  "cached_tokens": 681216,
+  "cache_write_tokens": null,
+  "completion_tokens": 76425,
+  "reasoning_tokens": 72918,
+  "duration_seconds": 472.18028537509963,
+  "cost_usd": 0.036072087,
+  "cost_basis": "alias_pricing"
+}

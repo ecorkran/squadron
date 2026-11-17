@@ -1,0 +1,19 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Explicit vectorization requirement is not captured",
+   "description": "Tasks 3.1 and 4.1 describe the per-agent calculations but do not require vectorized operations within each neighborhood or prohibit nested Python loops. The slice lists this as a technical requirement for both forces, so add it to the implementation acceptance criteria.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Redundant verification tasks add avoidable work",
+   "description": "Task 5.1\u2019s 10-step smoke test of all five forces is subsumed by 5.2\u2019s 300-tick test using the same forces. Task 6.2 repeats protocol-conformance checks already included in 3.2 and 4.2. Merge these checks into the existing tests or remove the duplicate tasks.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  }
+ ]
+}

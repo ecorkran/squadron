@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-force timing is deferred despite being assigned to this slice",
+      "description": "The slice plan assigns the harness phase timings \u201cforce totals per force.\u201d This design records only an aggregate `force_total_ns` and explicitly defers per-force timings to slice 142. That leaves slice 141 short of its assigned measurement scope; include the per-force breakdown here or revise the plan assignment.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Per-phase timings shape"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A parity hash cannot verify tolerance-based GPU parity",
+      "description": "The design says future GPU hashes can be interpreted within a documented tolerance band and that downstream slices will compare against a NumPy reference hash. A cryptographic hash only indicates exact byte equality; it cannot express whether numerical differences fall within tolerance. Keep the hash for exact deterministic checks, but provide a numeric comparison path or state representation for the tolerance-based parity required by the Quadrants work.",
+      "file_ref": null,
+      "category": "behavioral-parity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Parity hash"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The instrumented benchmark can diverge from the production tick",
+      "description": "`tick_instrumented()` duplicates the tick logic rather than measuring the production `tick()` execution. The documented output-equivalence test can catch changed results, but not changes to phase boundaries or performance work that leave results unchanged; the risk section acknowledges this drift is not mechanically detectable. Since these measurements guide optimization decisions, use a shared tick implementation for both paths or otherwise ensure the benchmark times the production operations and their actual phase boundaries.",
+      "file_ref": null,
+      "category": "measurement-validity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Phase timer: instrument `tick()` without modifying it"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure handling is incomplete for benchmark I/O",
+      "description": "The harness reads workload files, obtains the Git SHA, and writes JSON and Markdown reports, but the enumerated failure modes do not specify handling for malformed or unreadable workload files, Git metadata lookup failure or hang, or report-write failures such as permission errors or a full disk. Define explicit behavior for these paths\u2014such as failing with a clear error and nonzero exit status, without silently substituting metadata or leaving ambiguous partial reports.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Failure modes"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-force timing is deferred despite being assigned to this slice",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Per-phase timings shape",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "behavioral-parity",
+      "raw_category": null,
+      "summary": "A parity hash cannot verify tolerance-based GPU parity",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Parity hash",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "measurement-validity",
+      "raw_category": null,
+      "summary": "The instrumented benchmark can diverge from the production tick",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Phase timer: instrument `tick()` without modifying it",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure handling is incomplete for benchmark I/O",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Failure modes",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-17T12:41:26.684414",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 8297,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 62891,
+  "cached_tokens": 36865,
+  "cache_write_tokens": null,
+  "completion_tokens": 8185,
+  "reasoning_tokens": 7448,
+  "duration_seconds": 89.92498962488025,
+  "cost_usd": 0.00706375,
+  "cost_basis": "alias_pricing"
+}

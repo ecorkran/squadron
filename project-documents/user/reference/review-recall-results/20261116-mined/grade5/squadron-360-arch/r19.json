@@ -1,0 +1,96 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Derive, never invent\" cannot hold on the no-concept path the document calls the tested path",
+   "description": "The Inputs section makes the concept optional and says the no-concept case is \"the tested path, not an edge case\", sourcing purpose from \"the initiative plan plus interview\". The translation rules say \"Every claim traces to an input artifact\", and Design Goals say the overview \"is not a place where new claims about the project appear\". An interview answer is a new claim with no artifact behind it.\n\nThe field schema makes this concrete:\n- **Problem, Audience, Approach** are sourced only from concept sections, so on the tested path they have no artifact source at all.\n- **Scope** cites \"Initiative plan + non-goals\". The real `001-initiative-plan.squadron.md` has no plan-level non-goals; they sit inside individual initiative paragraphs, and only for some initiatives.\n- **Risks / Open Questions** cites \"Initiative plan notes\". The plan's `## Notes` section holds re-indexing history, not risks.\n\nSo four or five of nine fields are interview-authored or empty on the primary path. The document needs to pick one: persist interview answers as an artifact first (for example, run Capability 1's concept step) and derive from that, or define per-field behaviour when the source is absent (omit the field, or mark it explicitly unknown). \"Degrades gracefully\" is otherwise the silent fallback the project rules prohibit.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-237"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Audience emphasis is both \"a generation parameter\" and \"not added\"",
+   "description": "Translation rules say \"Emphasis is a generation parameter; the factual content is identical.\" Resolved Design Decisions (lines 328-331) say \"one neutral document, not per-audience variants\u2026 An emphasis parameter is added only if real use demonstrates the need.\" A slice designer cannot tell whether `/sq:overview` takes an audience argument. The resolved decision is the lighter option; delete the sentence in the translation rules.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:238-239"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Index allocation contradicts itself, and a new index per run is the wrong model for two of three outputs",
+   "description": "Resolved Design Decisions (lines 332-333) say output lands \"in the 940-949 reserved range. No new convention\". Output Conventions then say \"Overflow into 950+ is sanctioned\" and that generated documents \"take remaining slots in the 900 band as needed\".\n\n- **The overflow is a convention change.** Taking slots outside a reserved sub-range changes the naming convention this section says it leaves untouched, and nothing says what 950+ is reserved for or how collisions are avoided.\n- **No allocator is named.** \"Incrementing per run\" leaves a markdown skill to list the directory and pick max+1, with no stated behaviour when the range is full.\n- **The exhaustion is self-inflicted.** The tech-debt audits increment per run because \"each run is an independent sample\". An overview is a derived view of current plan state, and a comprehension analysis describes the current graph. Re-running should replace the previous one. Per-run snapshots also leave several stale client documents with no supersession, which is the \"artifacts to keep true\" cost the document rejects for audience variants.\n\nGiving each of the two a stable index, rewritten in place, removes the need for overflow.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Graph extraction by \"grep, never load the whole file\" is under-specified and likely unworkable",
+   "description": "Step 3 of the flow needs `project`, the full `layers[]` and `tour[]` arrays, and every node whose `type` is one of nine file-level values, with `summary`, `filePath` and `complexity`. That is a structured JSON query, not a line search.\n\n- If the plugin writes minified JSON, any grep hit returns the whole file as one line, which is the outcome the rule forbids.\n- If it is pretty-printed, selecting whole node objects by `type` while excluding `function:`/`class:` nodes needs fragile multi-line context matching. The project's parsing rule (\"parse the semantic content, not the formatting\") argues against this.\n- There is no size bound. A large repo can have thousands of file-level nodes, and `layers[].nodeIds[]` lists every file.\n\nThe delivery vehicle is a markdown pack file with \"no installer, manifest, or CLI change\", so no squadron code exists to do the extraction. The architecture must name the mechanism (`jq`, an inline Python one-liner, or a small `sq` subcommand, which would contradict \"no CLI change\"), state the on-disk format it assumes, and set a cap or summarisation strategy for large graphs.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No handling for upstream schema drift or a partial graph",
+   "description": "The output contract is copied from \"the plugin's own reference\" at v2.8.1, for a plugin described as \"actively developed\". Nothing says how squadron detects that the shape has changed. The only precondition check is that `knowledge-graph.json` exists.\n\nUnspecified cases:\n- `tour[]` absent or empty (Phase 6 skipped or failed), which the document treats as the main signal for Solution Approach.\n- `layers[]` missing.\n- `meta.json` missing or lacking `gitCommitHash`.\n- Node `type` values outside the listed nine.\n\nAn LLM skill that finds no tour will write a Solution Approach anyway, which is the \"confidently wrong concept doc\" the document names as the real failure mode. Specify a required-keys check that stops with an explicit error, and decide whether a plugin or graph version is recorded in the output.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:79-105"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Provenance and claim attribution carry the design's safety argument but are undefined",
+   "description": "The staleness decision (\"warn, never block\") is justified only because \"the warning must appear in the generated document's provenance\". Step 5 requires \"attributing structural claims to the graph and intent claims to the interview\". Neither has a defined form.\n\n- Is provenance frontmatter fields or a body section, and which fields (graph commit, HEAD, distance, `lastAnalyzedAt`)?\n- Does it apply to the concept document, whose sections are fixed by the concept guide?\n- Is attribution per claim or per section? The one candidate mechanism, the `[INFERRED]` convention, is deferred to Open Questions (lines 341-342).\n\nTwo inputs to the staleness check are also unhandled:\n- \"Commit distance\" assumes `gitCommitHash` is reachable from `HEAD`. After a rebase, squash or shallow clone, or with a graph committed from another branch, `git rev-list` fails or gives a meaningless number.\n- A dirty working tree is not counted as drift.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:130-144"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Re-run and pre-existing-file behaviour is undefined for the concept and initiative-plan outputs",
+   "description": "`000-concept.{project}.md` is a fixed filename. The document does not say what happens when it already exists, either from an earlier run or because the project has a human-written concept. The skill writes interview answers into **User-Provided Concept**, a section the project rules say must never be modified, so a second run either overwrites that section or has to do something unstated. Specify that it fails explicitly when the file exists.\n\nThe initiative-plan candidates have no output path. They are \"written on explicit confirmation\", but not whether to `001-initiative-plan.{project}.md` or how that interacts with an existing plan.\n\nThe existing plan's `source:` frontmatter points at `user/project-guides/001-concept.squadron.md`, which does not exist and uses a different index from the `000-concept` name used here. Capability 2's optional-concept lookup needs a stated resolution rule.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:146-156"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Initiative-plan candidates from \"layer boundaries and complexity clustering\" conflict with \"never fabricate intent\"",
+   "description": "An initiative is a unit of intended work. Layers and complexity scores describe what already exists. The document states the principle itself: \"A knowledge graph describes structure, not purpose.\"\n\nIt never says whether candidates are a retroactive description (one per existing subsystem, as squadron's own plan was generated) or forward-looking work. If forward-looking, the scope and motivation of each candidate are exactly what the graph cannot supply, and the interview table (lines 163-169) has no row that asks for them.\n\nThis is the least-specified and most speculative of the three outputs, and the document already hedges it. Cut it from this initiative: the comprehension analysis can carry a \"candidate work areas\" section, and plan authoring stays with the existing initiative-plan phase, which then has a concept to work from.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:154-156"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Status and Roadmap fields assume clean initiative statuses that the real input does not have",
+   "description": "Status is sourced from \"Initiative statuses\", under the rule \"Status is honest\". The squadron plan, which is the stated tested input, carries conflicting signals:\n- Initiative 900 is checked `[x]` with `Status: not_started`.\n- Initiatives 100 and 140 are checked `[x]` with `Status: in_progress`.\n- Initiative 340 is checked with no status at all.\n- The plan's Notes say the checkbox means \"architecture documents and slice plans are complete\", not that the initiative is delivered.\n\nThe architecture does not say which signal wins or what to do when they disagree. A client document produced from this input will misstate progress in one direction or the other. Define the precedence (the `Status:` text only, with a missing status reported as a gap to the PM), and say that disagreement is surfaced rather than resolved by guessing.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:224-225"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The client deliverable is filed as internal analysis with frontmatter the translation rules say never appears",
+   "description": "The translation rules say \"initiative indices, and docType frontmatter never appear\". Output Conventions require the file to be `{index}-analysis.overview.md` with `docType: analysis` frontmatter and an enum `status`.\n\n- The artifact handed to a client therefore carries squadron frontmatter and an index-bearing filename, unless a stripping or export step exists. None is described, and Non-Goals pushes conversion downstream.\n- The `status` value for a generated overview is undefined. The existing audits (for example `942-analysis.tech-debt-audit.md`) carry `not_started`, which means nothing for a finished generated document.\n- By the document's own description, the 940-949 range is for \"codebase analysis, research, investigation\". A stakeholder overview is none of these. The docType reuse is justified only by avoiding a gate change, not by fit.\n\nEither state that the committed file is the internal source and the client copy is a stripped export, or reword the translation rule to \"never in the body\".",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:230-231"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "\"Verify the plugin is installed\" is unnecessary and contradicts \"graph is an input, not a dependency\"",
+   "description": "A markdown skill has no dependable way to inspect user-scope marketplace plugin state. A graph committed by a teammate is a valid input on a machine without the plugin. The only real precondition is that the graph file exists and has the required keys. Drop the install check and keep \"report `/understand` and stop\" for the missing-graph case.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-128"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`.gitignore` hygiene has gaps",
+   "description": "- `intermediate/scan-result.json` appears in the contract table but is in neither the ignored nor the \"not ignored\" list, so its tracked status is undecided.\n- The ignore entry does nothing for `.trash-*` directories already committed before the skill first ran.\n- The skill leaves an uncommitted `.gitignore` change as a side effect of an analysis command. That sits awkwardly with the goal \"Leave the working tree clean\"; say whether the change is reported to the user.\n- \"Durable graph files remain tracked\" is stated as policy for a large regenerated JSON file. Squadron does nothing to enforce it, and the diff cost is not weighed.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:174-190"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Delivery section is redundant and names a CLI dependency it then disclaims",
+   "description": "- Capability (b) is described in two consecutive paragraphs that should be merged.\n- Dependencies list \"[100] \u2014 CLI command registration for any command surface\", while Delivery says \"no installer, manifest, or CLI change\". Say whether a new `commands/sq/overview.md` is picked up by the existing install step unchanged.\n- The missing-graph message tells the user to run `/understand`, from a squadron skill that is itself named `understand`. Namespacing avoids a technical collision, but the message should give the plugin-qualified command so the user does not run the wrong one.\n- \"Tested path\" (line 199) has no meaning for markdown skills without a stated verification approach, such as a fixture graph and plan with expected-section checks.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:271-289"
+  }
+ ]
+}

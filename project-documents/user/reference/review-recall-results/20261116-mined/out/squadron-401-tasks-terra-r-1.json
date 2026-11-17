@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 2 cannot pass the existing suite unchanged",
+      "description": "Adding enum members makes existing four-metric `LanguageSnapshot` fixtures invalid. It also makes the explicit four-metric Python adapter fail the assertion in `test_python_length.py` that it declares every enum member. Update the affected fixtures and temporary adapter assertion in Task 2; retain the existing length-value assertions.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:41-46"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The Python complexity fixture contradicts the counting rules",
+      "description": "With the listed constructs, D2 counts `if`, `elif`, `and`, the comprehension\u2019s `for` and `if`, and `except`: six decisions plus the base of one, for **7**, not 6. Reconcile the fixture and expected value with the slice design before implementation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:65"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The function-set test cannot use the specified measurements",
+      "description": "Both measurements contain distributions, not function identity rows; complexity explicitly has no `per_file` or `over_limit`. Test the function set at the shared extraction or builder boundary instead. The design\u2019s proposed downstream join by function identity also needs reconciliation with the frozen record contract. Additionally, an unparsed file still contributes to file length, so \u201cnowhere else\u201d must not exclude it from that measurement.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:109-113"
+    },
+    {
+      "severity": "FAIL",
+      "title": "First-occurrence-only indexing can miss real clones",
+      "description": "If distinct windows have the same hash, the first is retained; two later identical windows with that hash will each be compared only to the different first window and missed. The collision test checks false positives but not this false negative. Revise the collision strategy and test that repeated windows are detected even after a colliding distinct window.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:124-125"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Coverage path containment needs normalization",
+      "description": "The existing `repo_relative` helper performs lexical `relative_to` checks; it does not resolve `..` or symlinks. Passing it a joined path alone can admit an entry that resolves outside the repository, contrary to D4. Normalize or resolve the joined path before checking containment, and test traversal and symlink escapes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:195-196"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplication\u2019s linear bound has no load test or CI gate",
+      "description": "D3 explicitly requires linear time and memory behavior and specifies a token ceiling. Add a load test under `tests/load/` covering that bound and ceiling behavior, plus an explicit CI task that gates on it.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117-142"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage failure tests do not cover the required signals end to end",
+      "description": "The parser tests check returned failures, and a separate generic test checks conversion to `tool_failed`; neither requires malformed or versionless reports to produce both absent metrics **and** a WARNING through the reader and measurement path. Add those assertions, and cover report-stat failure as well as tracked-file stat failure, as required by the failure-mode table.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:201-208"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage failure logging conflicts with the per-language warning requirement",
+      "description": "Task 21 logs each failure, then Task 23 calls `tool_failed` for each of the two metrics; that helper also logs. A single failed read can therefore produce three warnings per language. Assign logging responsibility so failures remain visible without duplicating the design\u2019s per-language warning.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218-233"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Old-record compatibility can remain unverified",
+      "description": "Task 29 permits skipping the old-record part of walkthrough step 10 when no 400-written snapshot exists. Create a representative old-format record in a test or fixture and verify it is skipped with a warning while other records still load; this avoids depending on a developer\u2019s store contents.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:278-280"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 2 cannot pass the existing suite unchanged",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:41-46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The Python complexity fixture contradicts the counting rules",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:65",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "The function-set test cannot use the specified measurements",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:109-113",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "First-occurrence-only indexing can miss real clones",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:124-125",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Coverage path containment needs normalization",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:195-196",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Duplication\u2019s linear bound has no load test or CI gate",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117-142",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Coverage failure tests do not cover the required signals end to end",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:201-208",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Coverage failure logging conflicts with the per-language warning requirement",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218-233",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Old-record compatibility can remain unverified",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:278-280",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T13:48:58.564070",
+  "model": "openai/gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 1956,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6.1-terra",
+  "answering_models": [
+    "openai/gpt-6.1-terra"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 143758,
+  "cached_tokens": 106171,
+  "cache_write_tokens": null,
+  "completion_tokens": 2500,
+  "reasoning_tokens": 982,
+  "duration_seconds": 56.87569479178637,
+  "cost_usd": 0.05539555,
+  "cost_basis": "alias_pricing"
+}

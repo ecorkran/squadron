@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "T7's band precedence contradicts the slice's Direction Bands table and its own Success item",
+      "description": "T7 instructs the implementer to check conditions in this order: (1) `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`, (2) unversioned \u2192 `INSUFFICIENT_EVIDENCE`, (3) `GRADUATE`, (4) `TIGHTEN`. With short-circuit evaluation, a cell with `n < floor` and a low match rate returns `INSUFFICIENT_EVIDENCE` at rule 1 and never reaches rule 4. But both T7's own Success item and T8's test demand the opposite: \"a below-floor cell with low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`.\" The slice design's Direction Bands table is equally explicit: `TIGHTEN` is \"**no**\" floor-gated while `INSUFFICIENT_EVIDENCE` applies to the loosening path. The task even contains a parenthetical (\"only cases 1/2 above are... checked first only for the loosening path\") that is internally incoherent as written \u2014 it says rules 1/2 gate the loosening path while listing them before the tightening check, which makes them gate everything. A junior AI following the numbered precedence literally will produce code that fails T8's own test. Fix: reorder the rules so `match_rate <= tighten_rate` \u2192 `TIGHTEN` is checked before the `n < floor` / unversioned checks (or state that rules 1/2 only suppress the `GRADUATE` outcome), and mirror the corrected order into T8's boundary expectations.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13 depends on a result-discovery surface that does not exist in 320",
+      "description": "T13 says to \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan,\" falling back to \"scope this task to the store-recorded samples only... if no such surface exists yet.\" I verified there is no such surface: `capture.resolve_target` (capture.py:68) resolves one target given an explicit index or path; nothing in `src/squadron` enumerates review files (the only review glob is the single-index `reviews_dir.glob(f\"{index}-review.*\")` at capture.py:95). Meanwhile T14's non-empty guarantee, pruned-file case, and lapsed-detection all require enumerating on-disk judge results matching a `JudgeConfigId` and computing `derive_judge_config_id` per file. The named fallback (\"store-recorded samples only\") cannot satisfy those tests, since sampled records are exactly what must be *excluded* and unsampled results are by definition not in the store. The task should either (a) acknowledge that a bounded review-file walk (mirroring `resolve_target`'s directory convention) is part of T13's scope, or (b) raise the missing-capability question to the Project Manager *before* implementation starts, not as a branch discovered mid-task.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage claim that the malformed-judge-block failure mode is exercised in T8 is unsubstantiated",
+      "description": "The Coverage Check asserts \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8).\" T8's actual checklist has no malformed-judge-block case \u2014 it covers band boundaries, floor asymmetry, unversioned refusal, and `read_current_thresholds` registered/unregistered. The design's Failure Modes row (\"malformed `judge:` block (non-numeric floor) \u2192 flagged, not silently defaulted\") therefore has no test backing it in this breakdown. Additionally, `resolve_thresholds` as written (judge.py:49-57) does not gracefully handle a non-numeric floor \u2014 `float(pass_floor)` would raise, so \"inherited\" handling is an assumption, not a verified fact. Either add a T8 checklist item for the malformed-block case (or state explicitly what `read_current_thresholds` does when `resolve_thresholds` raises), or correct the coverage claim so the gap is visible.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Idempotent re-graduate path appears unreachable with exact-identity matching",
+      "description": "T15 requires that if \"a `GraduatedConfig` for this exact identity already exists, update its evidence snapshot in place,\" and T16 tests that re-graduating keeps the record count at 1. But `find_graduation` (T11, line 177) matches on the **exact** `JudgeConfigId`, which includes `template_content_hash` derived from the *current* template, while the stored `GraduatedConfig.judge_config` carries the hash *at graduation time*. T1's whole point is that a threshold edit leaves the hash unchanged, so after the operator edits `pass_floor` and re-graduates, the current hash differs from the stored one, `find_graduation` finds nothing, and the code writes a second record \u2014 making T16's idempotence test fail. The design's Data Flow step 2 places the config edit *before* `graduate`, so this is the normal path. The lookup for the update case needs to match on `(template_name, model, artifact_level)` with hash-compatible semantics (or T15 must state how the stored record is located), otherwise the \"one record, not two\" commitment is untestable as specified.",
+      "file_ref": null,
+      "category": "design-coherence",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Surface-agnostic (no-Typer) assertion lives in the CLI test task",
+      "description": "The \"core imports no Typer\" parity test is a bullet inside T16 (\"CLI tests\"). The technical requirement it verifies (\"Core is surface-agnostic \u2014 verified by test, matching 320/321\") is about `calibration`/`graduation`/`calibration_models`, which land in T3/T7/T11. As placed, the property goes untested until the final test task. This matches 320/321's reported pattern and T16 still immediately follows the last core change (T15), so it's acceptable \u2014 but noting it since the criterion is a core property, not a CLI property.",
+      "file_ref": null,
+      "category": "test-organization",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:250"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No-mutation assertion is duplicated at unit and CLI layers",
+      "description": "T16 re-asserts byte-identical template/config/store after a `recommend` run at the CLI layer, duplicating T10's unit-level snapshot. The slice design's walkthrough step 4 already requires this check end-to-end at T17, so the CLI-layer copy is arguably redundant. I'm flagging it only as a NOTE because the design explicitly frames no-mutation as \"enforced by test, not convention\" and the CLI shell is the real entry point; keeping it is defensible, but it could be dropped in favor of the T17 walkthrough if the file is trimmed.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:246-247"
+    },
+    {
+      "severity": "PASS",
+      "title": "Full success-criterion coverage, correct sequencing, and sound commit discipline",
+      "description": "Every success criterion in the slice design maps to tasks: advisory recommendation + no-mutation (T9/T10, T15/T16, walkthrough step 4); floor refusal stating n and floor (T7/T8, T10, T16); residual non-empty offer guarantee (T13/T14); per-cell model-dimension note including `--json` (T3, T9, T10, T16); unversioned refusal (T7/T8); version-scoped graduation with lapse reporting (T11-T16, walkthrough step 7); both hash-narrowing directions (T1/T2, T17 step 5); 300/320 unchanged (T17 full suite, T1 scoped to the one sanctioned exception); surface-agnostic core (T16); config-key discipline (T5/T6); and the integration requirements (321 consumed unchanged, no store migration \u2014 T11 explicitly uses 320's reserved `record_type` discriminator, verified against models.py:100-110). Sequencing respects all dependencies: config keys (T5/T6) precede the calibration core that reads them, models precede core, core precedes CLI, and each test task immediately follows its implementation task. No circular dependencies, no scope creep, and no task a junior AI couldn't complete against the stated success items. Commit markers are plain lines at working, tested points \u2014 one after each impl+test pair, absent after test-only pairs, which is correct. Task count (17 for a 3/5-effort slice with four distinct deliverables) and single-file organization are proportional to the slice.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "T7's band precedence contradicts the slice's Direction Bands table and its own Success item",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "T13 depends on a result-discovery surface that does not exist in 320",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Coverage claim that the malformed-judge-block failure mode is exercised in T8 is unsubstantiated",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "design-coherence",
+      "raw_category": null,
+      "summary": "Idempotent re-graduate path appears unreachable with exact-identity matching",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-organization",
+      "raw_category": null,
+      "summary": "Surface-agnostic (no-Typer) assertion lives in the CLI test task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:250",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "No-mutation assertion is duplicated at unit and CLI layers",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:246-247",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Full success-criterion coverage, correct sequencing, and sound commit discipline",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T13:21:54.981236",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 230713,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 564075,
+  "cached_tokens": 509056,
+  "cache_write_tokens": null,
+  "completion_tokens": 58850,
+  "reasoning_tokens": 54477,
+  "duration_seconds": 1572.8591867913492,
+  "cost_usd": 0.5649491999999999,
+  "cost_basis": "alias_pricing"
+}

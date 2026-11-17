@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All 14 success criteria are covered \u2014 no gaps",
+      "description": "Verified each criterion against the tasks:\n- SC1 (StrEnum `OPEN/WRAP/REFLECT`) \u2192 Task 1.1\n- SC2 (`policy` field, default `OPEN`) \u2192 Task 1.2\n- SC3 (loader, case-insensitive, `ConfigError` on unknown) \u2192 Tasks 1.3 + 1.4\n- SC4 (missing key \u2192 `OPEN`) \u2192 Tasks 1.3 + 1.4 (`test_bounds_policy_omitted_defaults_open`)\n- SC5 (`config_to_yaml` round-trip) \u2192 Task 1.4 (`test_bounds_policy_yaml_round_trip`)\n- SC6 (`OPEN` no-op, verified) \u2192 Task 2.3 (`test_open_is_noop_*`) + Task 3.4 (`test_open_policy_does_not_call_enforcement`)\n- SC7 (WRAP into `[0,width)\u00d7[0,height)`, incl. negative + multi-width overshoot) \u2192 Task 2.3 WRAP tests\n- SC8 (WRAP leaves velocities unchanged) \u2192 Task 2.3 `test_wrap_velocities_unchanged`\n- SC9 (REFLECT clamp + flip outward velocity) \u2192 Task 2.3 REFLECT tests\n- SC10 (`step()` calls after tick, not called on OPEN) \u2192 Tasks 3.2 + 3.4 (mock)\n- SC11 (50+ tick integration, per-policy bounds) \u2192 Task 3.4 (`test_open_policy_allows_drift...`, `test_wrap_policy_keeps_all_positions_inside`, `test_reflect_policy_keeps_all_positions_inside`)\n- SC12 (both shipped configs \u2192 `wrap`) \u2192 Tasks 4.1 + 4.2\n- SC13 (full suite passes) \u2192 Tasks 3.5 + 5.1\n- SC14 (manual viewer verification) \u2192 Task 5.2 (mirrors all 8 walkthrough steps)\n\nNo success criterion is left without a corresponding task.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep \u2014 every task traces to the design",
+      "description": "- Every implementation task traces to an in-scope item / success criterion.\n- Task 3.3's startup INFO log line (`Bounds policy: wrap`) is not an SC on its own, but it is required by Verification Walkthrough step 4, so it is in scope.\n- Tasks 5.3\u20135.5 (status updates, CHANGELOG entry, architecture check-off) are standard slice-completion bookkeeping, consistent with the slice's parent architecture list (line 43 shows the `(313)` item) and the project's commit conventions.\n- None of the explicitly out-of-scope items (SOFT/ARENA force, mixed per-axis policies, per-profile policy, engine-integrator change, `WorldBounds.validate_positions`, distributed bounds) are touched; the Notes section even re-states the SOFT deferral. The repo's later `SOFT` variant comes from slice 314, not from 313's tasks.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern, commits, and proportionality are correct; no load-test/CI needed",
+      "description": "- Dependencies respected, no cycles: Section 1 (config enum/field/loader) before Section 2 (enforcement module, which imports `BoundsPolicy`/`WorldBoundsConfig`) before Section 3 (integration, which needs both) before Section 4 (shipped defaults) before Section 5 (final verification).\n- Test-with pattern followed in every section: 1.4 tests follow 1.1\u20131.3; 2.3 tests follow 2.1\u20132.2; 3.4 integration tests + 3.5 regression follow 3.1\u20133.3.\n- Commit markers sit at working, tested points (1.5, 2.4, 3.6, 4.3) and a docs commit at the end (5.5) \u2014 neither after every task nor only at the very end.\n- Proportional: 23 tasks across 5 sections for 14 criteria on a slice the design itself rates 2/5 effort \u2014 right-sized.\n- The slice restates no numeric performance NFR (only \"default path negligible,\" a design rationale), so no `tests/load/` task or CI load-gate is required. Not flagging their absence.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter is `status: complete` but every checkbox is still `[ ]`",
+      "description": "The frontmatter says `status: complete` (and the slice says the same, and the repo is fully implemented), yet every checkbox in the body remains unchecked. CLAUDE.md's Document Conventions say to check off completed tasks/subtasks. This is bookkeeping drift, not a plan defect, and does not block anything \u2014 worth a quick pass when the slice is closed out.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1.4 round-trip test asserts the policy field, not full `ServerConfig` equality",
+      "description": "SC 5 is worded as \"reloading the emitted YAML produces an **equal `ServerConfig`**,\" but Task 1.4's `test_bounds_policy_yaml_round_trip` (as implemented in `tests/test_config.py#test_bounds_policy_yaml_round_trip`) only asserts the reloaded `policy == BoundsPolicy.WRAP`. The full-equality claim is still demonstrated in combination with the pre-existing `test_roundtrip_basic_config`, but that test runs with the default policy. Behavior is correct and the test passes, so this is informational only; tightening the assertion to a full `assert cfg2 == cfg` (or at least `world_bounds` equality with a non-default policy) would match SC 5's wording more literally.",
+      "file_ref": null,
+      "category": "test-strictness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 4.1 and 4.2 are slightly granular",
+      "description": "Each of Tasks 4.1 (`config/default.yaml`) and 4.2 (`config/test.yaml`) is \"add one `policy: wrap` line and run a one-line `python -c` load check,\" followed by a shared commit in 4.3. These two micro-tasks could be merged into a single \"update shipped config defaults\" task. This is the only borderline over-division in the file and is not worth blocking on; each is independently verifiable, so keeping them separate is defensible.\n\nOne additional observation (not a finding): the plan (and the slice) specifies `world_bounds` as a **required** keyword on `SimulationManager.__init__` and directs updating every existing call site (Tasks 3.4/3.5), whereas the shipped `simulation.py` made it optional with a fallback to `entity_manager.world_bounds`. The plan is internally consistent and matches the slice's own \"required keyword argument\" wording, so this is a deviation at implementation time rather than a defect in the breakdown \u2014 no action needed on the plan itself.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "All 14 success criteria are covered \u2014 no gaps",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No scope creep \u2014 every task traces to the design",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern, commits, and proportionality are correct; no load-test/CI needed",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Frontmatter is `status: complete` but every checkbox is still `[ ]`",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-strictness",
+      "raw_category": null,
+      "summary": "Task 1.4 round-trip test asserts the policy field, not full `ServerConfig` equality",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Tasks 4.1 and 4.2 are slightly granular",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-17T12:31:35.341147",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 118275,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 116252,
+  "cached_tokens": 77248,
+  "cache_write_tokens": null,
+  "completion_tokens": 32529,
+  "reasoning_tokens": 30045,
+  "duration_seconds": 114.15929416706786,
+  "cost_usd": 0.08478716000000001,
+  "cost_basis": "alias_pricing"
+}

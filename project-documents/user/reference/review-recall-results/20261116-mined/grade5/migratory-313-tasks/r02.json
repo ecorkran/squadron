@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Explicit `policy: null` can be silently treated as an omitted policy",
+   "description": "Task 1.3 prescribes `data.get(\"policy\", None)` but does not explicitly require checking `\"policy\" in data`. An implementation that branches on `value is None` will accept an explicitly present null value as `OPEN`, contrary to the slice design\u2019s rule that a present policy must be a string. Specify the membership check explicitly and add a test asserting that `policy: null` raises `ConfigError`.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:69-74"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The round-trip test is weaker than the success criterion",
+   "description": "Task 1.4 only asks the test to assert that the reloaded policy matches. SC5 additionally requires the policy to be emitted as a plain string and the reloaded configuration to equal the original `ServerConfig`. Assert that the parsed YAML value is the string `\"wrap\"` and that the complete reloaded `ServerConfig == original ServerConfig`, rather than checking only the policy member.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88-89"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are embedded in checkboxes instead of being plain lines",
+   "description": "The `**Commit:**` marker is written as `- [ ] **Commit:** ...`; the same pattern recurs at lines 179, 249, 286, and 325. Commit markers must be plain lines and never checkboxes. Their current placement after tested work is otherwise reasonable.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Completion status conflicts with the unchecked task list",
+   "description": "The frontmatter says `status: complete`, while all implementation, test, verification, and documentation checkboxes remain unchecked. This conflicts with the project convention that completed tasks and subtasks must be checked off and makes the completion state impossible to audit. Either check off genuinely completed work or mark the file as in progress until execution is complete.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The task file is disproportionately large and granular for a 2/5-effort slice",
+   "description": "The breakdown contains 18 substantive tasks, five commit tasks, and roughly 325 lines for a small additive feature. It also prescribes import ordering, exact test names, and substantial implementation detail beyond the criteria, and invokes the full pytest suite three times. Reduce it by merging Tasks 1.1\u20131.3, 2.1\u20132.2, 3.1\u20133.3, and 4.1\u20134.2 while retaining their immediately following test tasks; remove one redundant full-suite run and the redundant parametrized dispatch test; and retain the meaningful working commit points.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:1-325"
+  }
+ ]
+}

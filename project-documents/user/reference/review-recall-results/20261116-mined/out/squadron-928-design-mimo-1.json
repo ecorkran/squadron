@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D8's \"pack ships no Codex content\" requires a source-side check the doctor layer forbids",
+      "description": "D8 requires `check_skill_packs` to distinguish \"ships no Codex content\" from \"not installed\", but the only per-pack probe the design names is `PACK_LAYOUTS[target].installed_path(entry, root) -> Path | None` (line 104), and `None` collapses both states. The mechanism that tells doctor whether a pack source has an `agents/` directory is never specified. The natural one \u2014 `resolve_source`/`clone_github` \u2014 is a network/subprocess operation that this module's contract explicitly forbids (\"Pure check functions for `sq doctor`. Each returns CheckResult(s); no network, no subprocesses\", `src/squadron/cli/commands/doctor_checks.py:1`) and that `check_skill_packs`'s own docstring narrows further (\"reads the manifest and the filesystem only\", `doctor_checks.py:434`). For a `github:` pack (which `installer.py` supports), a source-side check would clone a repository during `sq doctor`. The design must name the mechanism (manifest-declared content, a filesystem-only check that reports \"unknown content\" for remote sources, or a layout-derived rule) and keep the doctor row inside the pure-check contract; otherwise D8's WARN text is unreachable as written or reachable only by violating the layer.",
+      "file_ref": null,
+      "category": "specification-gap",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agents prefix naming makes `installed_path`'s `p-*` glob match other packs' skills; the exclusion mis-frames this as pre-existing",
+      "description": "D3 flattens every skill directory at a shared root as `<prefix>-<something>`, and the status table (lines 104\u2013110) proves a prefix install with \"first `root/p-*/SKILL.md`\". For manifest packs `demo` and `demo-x`, `demo-x-hello` matches `demo`'s `demo-*` glob, so `sq skills list --ide codex` and the doctor row can report `demo` installed when only `demo-x` is \u2014 a false status on exactly the surface this slice exists to make truthful (see the Value section). The Excluded line dismisses pack-name collisions as \"pre-existing on the Claude path and unchanged here\", but the Claude path keys installs on exact names \u2014 `commands_dir / prefix` and `commands_dir / \"sq\" / f\"{dispatch}.md\"` (`installer.py:_install_prefix`/`_install_dispatch`, and the Claude row of the same status table is `root/p/`), so two user packs never collide there. Prefix-glob overlap is *introduced* by D3's shared-root flattening and is not covered by the stated exclusion. Either `installed_path` disambiguates (receipt-backed existence, or D3 rejecting a prefix that is a strict prefix of another manifest pack's prefix), or the design explicitly accepts and documents the false-positive \u2014 the current text does neither.",
+      "file_ref": null,
+      "category": "specification-gap",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor's hardcoded `~/.claude/commands` root is left unreconciled and the rewrite's root source is unnamed",
+      "description": "The Overview names two hardcoded roots and the Value promises both `sq doctor` and `sq skills list` report status \"for the target the user actually runs\", but only `cli/commands/skills.py` gets its root specified (\"root from `DELIVERIES[target].resolve_root(local=)`\", line 77). The `doctor_checks.py` row (line 78) and D8 say `check_skill_packs` \"loops `_command_targets_to_check(None)` and uses `installed_path`\" without saying where `root` comes from, and neither disposes of `doctor_checks._default_commands_dir()` (`src/squadron/cli/commands/doctor_checks.py:33-34`), which hardcodes `Path.home() / \".claude\" / \"commands\"` and is the current default of `check_skill_packs(commands_dir=...)`. If the rewrite keeps that default for the Claude row, the Claude root resolves from a literal while `skills list` resolves from `DELIVERIES` \u2014 the exact duplication D6 exists to remove, and a silent-drift source the project's one-definition rule forbids. If the rewrite routes all roots through `DELIVERIES`, the function and the `commands_dir` parameter become dead and should be deleted (or repurposed per target) in the same change. The design should say which.",
+      "file_ref": null,
+      "category": "layering",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Removal ownership split is unstated: `remove_receipt_files` \"never removes the destination\" vs. the preserved prefix-directory removal",
+      "description": "The component table gives `skills/receipts.py` one routine whose contract is \"containment check, deepest-first empty-dir removal, **never removes the destination itself**\" (line 75), `skills uninstall` switches to \"uninstall via `remove_receipt_files`\" (line 77), and `install.py` is labeled \"No behavior change\" (line 76) with the migration claiming existing tests pass unedited. But the data flow (line 102) simultaneously requires \"for a Claude prefix pack the now-empty prefix directory is still removed, as today\" \u2014 verified as a separate `SurfaceType.PREFIX` `destination.rmdir()` branch in `cli/commands/skills.py`, i.e. exactly the destination-removal the extracted routine excludes (and which `uninstall_commands`'s `directory != destination` guard deliberately never does \u2014 it leaves an emptied `sq/` behind). The two contracts can coexist only if the prefix step stays a surface-specific call in `skills uninstall` *after* `remove_receipt_files`; if it is folded into the shared routine to honor \"One removal routine\" (D7), `uninstall_commands` behavior changes and the \"no edits to existing tests\" claim fails. The design should place the prefix-directory step explicitly.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:75"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"one line each\" understates the `sq model list` fix",
+      "description": "Verified: `sq model list` appears three times in `commands/sq/review.md` (lines 60, 112, 158) and three times in `commands/agents/sq-review/SKILL.md` (lines 82, 134, 180) \u2014 six edits, not one per file. Success criterion 9's wording (\"both `review` command files say `sq models list`\") is sufficient if read as \"every occurrence\", but the Overview's \"one line each\" could lead a task writer to fix only the first. `sq models list` is the correct command (`models_app` registered as `models` with a `list` command in `src/squadron/cli/commands/models.py`).",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`skills uninstall`'s `--commands-dir` check and no-receipt message lack their new-target semantics",
+      "description": "The contract says `--commands-dir` \"is a check that must match the receipt's destination or the command exits 1 having removed nothing\", but does not state the comparison basis, while the precedent it cites (`uninstall_commands`) deliberately compares canonical paths (`Path(target).expanduser().resolve() != destination.resolve()`) with a comment about symlinks and relative spellings, and carries a specific mismatch message. Separately, once receipts are per-target, the existing \"Pack 'X' is not installed (no receipt found)\" message becomes ambiguous: a Claude-installed pack uninstalled with `--ide codex` reads as \"not installed\" when it is installed, just under another target. The handling strategy is explicit (exit 1, nothing removed) and D1's precision standard for messages is the right bar, so this is naming the comparison rule and the target-aware message, not new machinery.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:194"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "specification-gap",
+      "raw_category": null,
+      "summary": "D8's \"pack ships no Codex content\" requires a source-side check the doctor layer forbids",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "specification-gap",
+      "raw_category": null,
+      "summary": "Agents prefix naming makes `installed_path`'s `p-*` glob match other packs' skills; the exclusion mis-frames this as pre-existing",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:52",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "layering",
+      "raw_category": null,
+      "summary": "Doctor's hardcoded `~/.claude/commands` root is left unreconciled and the rewrite's root source is unnamed",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Removal ownership split is unstated: `remove_receipt_files` \"never removes the destination\" vs. the preserved prefix-directory removal",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:75",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "\"one line each\" understates the `sq model list` fix",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`skills uninstall`'s `--commands-dir` check and no-receipt message lack their new-target semantics",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:194",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-17T06:39:58.446127",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 344730,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 583437,
+  "cached_tokens": 256240,
+  "cache_write_tokens": null,
+  "completion_tokens": 85611,
+  "reasoning_tokens": 82228,
+  "duration_seconds": 4433.875253709033,
+  "cost_usd": 0.21783722500000002,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Preserve `cf init` behavior when `--strategy` is omitted",
+   "description": "Task 26 normalizes `opts.strategy`, but `--strategy` is optional and `normalizeGuideMethod()` accepts a string. The task should specify that normalization happens only when an option is provided, so an invocation without `--strategy` continues to use the configured default. Add a test for that no-option path.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Add tests for MCP prompt-reading tools",
+   "description": "Task 22 wires `prompt_list` and `prompt_get` to `ensureCheckout()`, but Task 23 tests only `context_build` and `guide_status`. The slice requires auto-init before every MCP tool that reads guide content; add coverage for both prompt tools to verify they initialize and return notices as intended.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Test the config-sourced alias warning at the CLI boundary",
+   "description": "The slice requires a shared config value of `guide.git_strategy: manual` to install as tarball and emit the same deprecation warning. Task 6 tests that the manager selects tarball and reports the alias, and Task 7 implements the warning, but the CLI tests in Task 8 cover only the `--strategy manual` path. Add a test for the config-sourced warning on stderr.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Keep help tests adjacent to the implementation they cover",
+   "description": "Task 25 implements the shared strategy help descriptor, but its help-output tests are deferred to Task 27, after Task 26 adds `cf init --strategy`. Merge Tasks 25 and 26 into one implementation task followed immediately by Task 27, or add a test task for Task 25 before proceeding.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  }
+ ]
+}

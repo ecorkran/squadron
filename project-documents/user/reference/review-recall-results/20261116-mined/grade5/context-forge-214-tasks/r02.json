@@ -1,0 +1,12 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Branch setup assumes `main` is always the target",
+   "description": "Task 0 says to stop if `git.integration_branch` is non-empty and otherwise create the slice branch from `main`. The project rules say to use the configured integration branch as the target when set; the task should derive the target from the config and create the slice branch from it rather than stopping or hard-coding `main`.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  }
+ ]
+}

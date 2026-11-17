@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 7's inspection placement marks every rejected event as \"progress\", unbounding the dispatch retry loop",
+      "description": "Task 7 instructs adding the `RateLimitEvent` inspection \"**before** the existing `ResultMessage.is_error` check\" \u2014 i.e., after `progressed = True` (sdk_session.py:153), and never mentions `progressed`. Under sustained rejection (the exact scenario this slice exists for: \"requests into a limiter that is rejecting them\"), each attempt yields the rejected event, sets `progressed = True`, raises `RateLimitRejected`, and then `if progressed: retries = 0` (sdk_session.py:190) resets the counter \u2014 so `retries < MAX_RATE_LIMIT_RETRIES` is always true and `dispatch` loops forever with 2-second sleeps, never exhausting the budget and never surfacing a rate-limit failure (criterion 5's \"`progressed` reset unchanged\" and criterion 6 are both defeated). The mandated test (Task 11: reject twice, succeed on the third, assert `call_count == 3`) passes despite this bug, so nothing catches it. The fix must either inspect before `progressed = True` or exclude rate-limit events from counting as progress \u2014 the agent path is already safe because `_skip_unparseable` raises before yielding. A persistent-rejection test asserting budget exhaustion is also needed.",
+      "file_ref": null,
+      "category": "retry-logic",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:152-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6's informational-event instruction is self-contradictory (and mirrors a D4/D6 tension in the design)",
+      "description": "The bullet says to \"continue the loop **without yielding** it to the caller \u2026 \u2014 **let it flow to translation as normal**\". In `_handle_query_mode`/`_handle_client_mode`, translation only ever sees messages `_skip_unparseable` yields (agent.py:155-157, 203-206); an event that is not yielded can never reach translation. The LLD itself is inconsistent here: D4 says informational events \"must not reach translation\" (slice line 265) while D6 says the translation branch exists so an informational event becomes \"observable rather than dropped\" (slice line ~305). The tasks must pick one resolution \u2014 it determines both whether Task 4's branch is dead code in the agent paths and whether translated rate-limit messages reach downstream consumers (see next finding).",
+      "file_ref": null,
+      "category": "instructions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Other `sdk_type` consumers beyond `sdk_session.dispatch` are uncovered by Task 8",
+      "description": "Task 8 correctly adds `\"rate_limit_event\"` to `dispatch`'s exclusion tuple, but three other consumers of translated messages carry their own `sdk_type` exclusion sets that lack it: `review_client.py:263` (`output_parts` becomes the parsed review prose), `pipeline/summary_oneshot.py:139` (becomes the summary text), and `metrology/audit.py:542-559` (`parts` / narration). Under the D6 reading of Task 6 (informational events flow to translation), a rate-limit notice concatenates into review prose and summary text \u2014 exactly the issue-#23 defect class Task 8 says is \"not optional\". Task 8's instruction is only to \"verify no other `sdk_type` exclusion list exists\" with no fix task and no success check naming these sites. Either these exclusion sets need the same addition (with a test), or Task 6's skip-and-drop reading must be made explicit so these consumers are provably unaffected.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6's \"both gates\" wording misses the third `RATE_LIMIT_MARKER` use; criterion 6 hinges on it and on an unspecified exception message",
+      "description": "`agent.py` has three `RATE_LIMIT_MARKER in str(exc)` sites: the query retry gate (167), the query exhaustion classification that raises `ProviderRateLimitError` (180), and the client retry gate (216). Task 6 says \"replace both \u2026 gates (in `_handle_query_mode` and `_handle_client_mode`)\" and its success line names only the \"retry gates\" \u2014 leaving 180 ambiguous at best. If 180 keeps the substring test, it only fires when `str(RateLimitRejected(...))` contains `rate_limit`; Task 2 says `RateLimitRejected` gets \"no behavior beyond subclassing\" and neither Task 6 nor 7 specifies its message text. Task 10 then asserts `ProviderRateLimitError` is raised on exhaustion (criterion 6) \u2014 an assertion that fails on a plausible message like `\"rejected\"`. Specify all three replacements (or explicitly retain 180 with a required message), and pin the message `RateLimitRejected` is raised with.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers after Tasks 6 and 9 sit on a red suite \u2014 test rewrites are deferred to Tasks 10\u201311",
+      "description": "After Task 6 (commit at line 66), `test_a_rejected_rate_limit_event_reaches_the_backoff` fails: its `MessageParseError` with a `rate_limit_event` payload is no longer re-raised (the special case is removed) and is skipped, so no backoff occurs and `ProviderRateLimitError` never rises. After Task 9 (commit at line 89), the four `test_the_shim_*` tests fail against the deleted shim. Both commits therefore land on failing tests, contradicting the requirement that `**Commit**:` markers sit at working, tested points. Interleave the corresponding test rewrites (Task 10's subsets) with Tasks 6 and 9, or move the markers to the points where the suite is green.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:66"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success criterion 3's `RateLimitStats.throttles` increment is unmet \u2014 and unmeetable \u2014 in the pipeline `dispatch` path",
+      "description": "Criterion 3 requires that a rejected event \"reaching any of the three dispatch paths\" increments `RateLimitStats.throttles`, and Task 15's forced-throttle observation says to confirm it. But `SDKExecutionSession` has no `RateLimitStats` at all (it imports only `MAX_RATE_LIMIT_RETRIES`, `RATE_LIMIT_MARKER`, `install_rate_limit_parser_shim`, `rate_limit_backoff_s`), and `dispatch`'s retry loop logs the WARNING and sleeps without recording anything. The LLD's D4 claim that all three loops already carry \"\u2026 `RateLimitStats`\" is inaccurate for this loop. Either add a stats counter to `SDKExecutionSession` (and assert it in Task 11's tests) or amend criterion 3/Task 15 to scope the stats observable to the agent paths; as written an implementer cannot satisfy the criterion here.",
+      "file_ref": null,
+      "category": "gap",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:183-196"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3's suggested test text collides with Task 10's verification grep",
+      "description": "Task 3 places `_is_throttle(ClaudeSDKError(\"rate_limit_event: slow down\"))` in `tests/providers/sdk/test_agent.py` (its suggested location), but Task 10's success criterion is `grep -n \"MessageParseError.*rate_limit\\|ClaudeSDKError(\\\"rate_limit_event\" tests/providers/sdk/test_agent.py` returning no matches \u2014 which the Task 3 test trips. Use a plain-429-style message that contains `rate_limit` but not the `rate_limit_event:` fabrication prefix (e.g. `ClaudeSDKError(\"429: rate limit exceeded\")`), or move the classifier unit tests to a separate module. Relatedly, after the Tasks 10\u201311 rewrites no test drives the retry loop via the retained substring path (criterion 7 is covered only at the `_is_throttle` unit level) \u2014 one loop-level test using a genuine-429-style `ClaudeSDKError` would close that.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:41"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are checkbox lines after nearly every task",
+      "description": "`Commit:` markers appear as `- [ ] Commit: \u2026` checklist items after 13 of 16 tasks (all but 12, 14, 15), rather than as plain `**Commit**:` lines at a few working, tested points. The checkbox rendering is defensible under the project convention that every item gets a `[ ]`, but the density is higher than \"working points\" implies and makes the markers toggleable items for `task-checker`. Consider consolidating markers to the true integration points (e.g. after Tasks 5, 9+10, 11, 13, 16).",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Criterion 2's `tests/`-half has no verification command",
+      "description": "Criterion 2 requires `install_rate_limit_parser_shim` to be gone from `src/` **and** `tests/`, but Task 9's success grep covers only `src`. The four shim tests referencing it are deleted in Task 10 (verified they are the only `tests/` references), so the work is covered \u2014 adding `grep -rn \"install_rate_limit_parser_shim\" tests` to Task 10's success line would make the criterion verifiable rather than assumed.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:88"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "retry-logic",
+      "raw_category": null,
+      "summary": "Task 7's inspection placement marks every rejected event as \"progress\", unbounding the dispatch retry loop",
+      "location": "src/squadron/pipeline/sdk_session.py:152-156",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "instructions",
+      "raw_category": null,
+      "summary": "Task 6's informational-event instruction is self-contradictory (and mirrors a D4/D6 tension in the design)",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Other `sdk_type` consumers beyond `sdk_session.dispatch` are uncovered by Task 8",
+      "location": "src/squadron/review/review_client.py:263",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 6's \"both gates\" wording misses the third `RATE_LIMIT_MARKER` use; criterion 6 hinges on it and on an unspecified exception message",
+      "location": "src/squadron/providers/sdk/agent.py:180",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit markers after Tasks 6 and 9 sit on a red suite \u2014 test rewrites are deferred to Tasks 10\u201311",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:66",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "gap",
+      "raw_category": null,
+      "summary": "Success criterion 3's `RateLimitStats.throttles` increment is unmet \u2014 and unmeetable \u2014 in the pipeline `dispatch` path",
+      "location": "src/squadron/pipeline/sdk_session.py:183-196",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 3's suggested test text collides with Task 10's verification grep",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:41",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox lines after nearly every task",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Criterion 2's `tests/`-half has no verification command",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:88",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-17T07:33:06.021897",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 734484,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 759261,
+  "cached_tokens": 274208,
+  "cache_write_tokens": null,
+  "completion_tokens": 179701,
+  "reasoning_tokens": 175036,
+  "duration_seconds": 7621.382425707765,
+  "cost_usd": 0.368434757,
+  "cost_basis": "alias_pricing"
+}

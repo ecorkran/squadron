@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough cannot isolate the two interventions; no early-exit toggle is specified",
+   "description": "Step 3 prescribes four ablation runs: baseline (counter-gating, S=1), early-exit only, subdivision only, and both. But the design changes `get_neighbors_first_k`'s counter-gating to an unconditional `break` (Intervention 1) and defines no mechanism to disable early exit. All four commands are identical except `--subdivision-factor`, so:\n\n- Runs 1 and 2 are the same command, as are runs 3 and 4 \u2014 the matrix collapses to two configurations.\n- The \"baseline (S=1, counter-gating \u2014 should reproduce slice 145 ~38 TPS)\" run is unreachable after the change lands, because counter-gating no longer exists in the kernel.\n\nThe parent plan entry and the 148 re-diagnosis note both frame the interventions as complementary and worth comparing, and the design itself discusses their interaction \u2014 so the ablation is part of what this slice should demonstrate. The design needs either (a) a config/CLI toggle that restores counter-gating for ablation runs, or (b) an explicit statement that the baseline numbers are carried over from the slice 145/148 measurement records rather than re-run, with the walkthrough reduced to the configurations that are actually reachable. As written, an implementer following the walkthrough cannot produce the comparison the design claims to make.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-176"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Candidate-count arithmetic contradicts the cited slice 148 re-diagnosis note",
+   "description": "The \"Interaction with Intervention 1\" paragraph states: \"With early exit alone at S=1: agents still load 45,000 candidates but exit after ~32. With S=3 alone: candidates loaded drops to ~5000. With both: candidates loaded ~555.\" The source this rests on (148-notes.rediagnosis.md) gives different numbers:\n\n- S=3 alone: per-cell occupancy drops to ~555, but the 7\u00d77 scan covers 49 cells \u00d7 555 \u2248 **27,000** candidates, not ~5,000. The note states this explicitly.\n- With both interventions: early exit truncates candidates scanned to roughly the first ~32\u201350 qualifying candidates (the note estimates \"~50\"), not ~555 \u2014 555 is the per-cell occupancy, not the scanned count.\n- \"Early exit alone \u2026 agents still load 45,000 candidates but exit after ~32\" is internally contradictory; with the break, candidates scanned drops to ~50.\n\nThe success criteria are empirical gates so this doesn't invalidate them, but the paragraph is the design's central justification for why the two interventions compose, and it materially overstates subdivision's incremental value once early exit is in place (with early exit, subdivision mostly improves the acceptance rate by trimming out-of-radius corner candidates, rather than cutting 45,000 \u2192 555). Correct the figures to match the re-diagnosis note so expectations going into the CUDA gate runs are calibrated.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Plan-assigned 7-neighbor benchmark operating point is absent from the design",
+   "description": "The plan 140 entry for slice 149 states: \"the 7-neighbor operating point is a benchmark target,\" and the 148 re-diagnosis note reinforces it: \"At `max_neighbors=7` the counter-gating waste is even more severe \u2026 The early-exit gain scales with `candidates_scanned / max_neighbors`, so lower `max_neighbors` \u2192 higher gain. The 7-neighbor target is a meaningful operating point to benchmark at.\" The slice design benchmarks only `max_neighbors=32` (Success Criteria default config, Verification Walkthrough steps 3 and 5) and never mentions the 7-neighbor point. The requirement this leaves unmet: a measurement confirming the early-exit gain at the biologically realistic operating point the plan names for this slice. This is cheap to add \u2014 one additional bench run with `max_neighbors=7` in step 3 \u2014 or, if it is being deliberately deferred, say so explicitly.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#verification-walkthrough"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "A5's primary verification tool is known to be unavailable on the CUDA host",
+   "description": "A5 cites \"confirmed via `nvcc --ptxas-info` or benchmark log.\" The slice 148 envelope-measurement note (148-notes.envelope-measurement.md, \u00a72A) records that `ptxas`, `cuobjdump`, and `nvcc` are **not installed** on the CUDA host \u2014 slice 148 obtained the zero-local-memory confirmation by inspecting the Quadrants PTX cache directly. The \"or benchmark log\" alternative and Step 4's log-based approach cover this, but A5 should lead with the demonstrated mechanism (PTX cache inspection / bench log) rather than a tool known to be absent on the gate host.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+  }
+ ]
+}

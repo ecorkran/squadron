@@ -1,0 +1,12 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Slightly granular task splits; Task 2.1 briefly references not-yet-defined helpers",
+   "description": "For a 2/5-effort slice, 15 tasks is on the fine-grained side. Two merges would tighten it without losing verifiability: Task 1.2 (add one dataclass field, one checkbox) folds naturally into 1.1 or 1.3, and Tasks 4.1/4.2 (each a one-line YAML edit to a different file with an identical verify command) could be a single \"update shipped configs\" task. Similarly, 2.1 and 2.2 both edit the same new file, and 2.1's `match` arms call `_apply_wrap`/`_apply_reflect` before they exist \u2014 this imports cleanly (names resolve only at call time) and the deferred test in 2.3 makes it safe, but a linter run at the 2.1 checkpoint would flag undefined names; merging 2.1+2.2 or stubbing the helpers would remove the wrinkle. None of this creates dependency or correctness risk \u2014 each task still has clear, junior-executable success criteria \u2014 so this is advisory, not blocking. Overall file count (one task file, 10 touched files) is proportionate to the slice.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:59-64"
+  }
+ ]
+}

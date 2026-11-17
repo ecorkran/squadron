@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 22a load test contradicts the design's \"no assertion on time in tests\" and the slice's own NFR handling",
+      "description": "Task 22a asserts \"wall-clock under `MAX_LISTING_S = 1.0`\". The slice design's Special Considerations says explicitly: \"The I/O-bounds test enforces the counts, and walkthrough step 8 measures wall-clock time. There is still no assertion on time in tests.\" The design's only time statement is an *advisory* target (\"199's advisory one\"). The task converts an advisory into a hard CI gate with a 1.0 s bound on a machine the task does not control \u2014 this is a flaky-in-CI risk the design explicitly declined. Either soften to a generous non-gating measurement (log the wall clock and assert only a very loose ceiling, e.g. 10 s, purely as a regression tripwire), or drop the time assertion and leave timing to walkthrough step 8. The success criterion \"sq runs list --all stays under 1 s\" is a verification-walkthrough criterion, not a unit-test criterion.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task covers the design's \"process check WARNING names run and PID\" requirement for the listing path",
+      "description": "The design's Technology Choices and Error-handling summary both say the unknown-process-result WARNING names *the run-id and the PID* (\"logged at WARNING with the run-id and PID\"; \"WARNING naming run and PID\"). Task 9 specifies `process_alive` returns `None` \"with a WARNING naming the PID (the run-id is logged by the caller that has it)\". That shifts the run-id into the caller \u2014 but the callers are `run_listing`, `run_wait` and `run_prune`, and no task states that any of them logs the run-id for the unknown-PID case. The `process_alive` helper itself cannot know the run-id, and Task 9's own wording leaves the responsibility unspecified. As written, the \"WARNING naming run and PID\" row in the design's error-handling table is unmet for the listing and prune paths. Name the responsible caller explicitly in Task 9 (or Task 21/33), and cover it in the Task 10 / Task 22 / Task 35 tests.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_liveness.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13's three-SDK-path wiring does not cover the implicit-resume path, which is a fourth SDK entry point",
+      "description": "The design's D13 discriminator says `_run_pipeline_sdk` \"already knows which case it is in (it either calls `init_run` or loads a run to resume)\". Task 13 lists three SDK paths: new run, `--resume`, and `--item` item-resume. But `run.py` also reaches `_run_pipeline_sdk` with an existing `run_id` through *implicit resume detection* (the `find_matching_run(..., status=\"paused\")` branch, which calls `_run_pipeline_sdk(match.pipeline, ..., run_id=match.run_id, ...)`) and through `_run_pipeline` for the prompt-only resume branch. The implicit-resume path is a resume, so it needs `claim=True`, not `claim=False`. Task 13's \"Success: the executor call sits inside the context manager on all three SDK paths\" would let the implicit-resume path silently get the wrong claim mode, and its resumed run would keep its `paused` status while running \u2014 exactly the D13 defect the slice exists to fix. Add the implicit-resume path to Task 13's enumeration and to Task 14's parametrized CLI test.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11's `claim` refusal condition is underspecified for the `UNOWNED` and `STALE` cases",
+      "description": "Task 11 says `claim` \"raises if the file is already `running` with a `LIVE` owner (assessed via `assess_liveness`)\". The design's D13 says the same. But the success criteria require that a resumed run records `owner` and sets `status: running` \u2014 and a resumed run whose prior file was left `running` by a *crashed* process (an orphaned file, or a stale one) must still be claimable by a human running `sq run --resume`. Under a literal reading of Task 11, `claim` raises only for a `LIVE` owner, so orphaned/stale/unowned running files are claimable \u2014 correct \u2014 but the task never says so, and a junior implementer could reasonably read \"already `running`\" as \"any running file\". Spell out: only a `LIVE` owner refuses; `ORPHANED`, `STALE` and `UNOWNED` running files are claimable and overwritten. Task 12's \"claim on a `LIVE` running run raises\" is the only test; add the orphaned/stale claim cases so the permissive path is pinned.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/state.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 22 does not test that `RunListing.unavailable` is populated for pipelines that are unavailable *only* because a running row references them",
+      "description": "Task 21 states \"Running runs enter the default view (loading no definition or report)\". Task 22's test list covers \"unavailable maps pipeline \u2192 message with one entry per pipeline\" and \"no WARNING per run\", but the design's D10 is explicit that `_Definitions` \"keeps caching load failures per pipeline but stops logging per run\" \u2014 meaning the failure is still *recorded*, and `RunListing.unavailable` must be populated. With running rows now in the default view and loading no definition, a running row whose pipeline is missing never calls `definitions.get()`, so that pipeline never enters `_failures` and never appears in `unavailable` \u2014 yet the design's walkthrough step 1 expects \"One stderr line reads `1 runs reference 1 unavailable pipelines`\" and \"sq runs list -v adds the `gone` pipeline's loader message once\", where `gone` is a *completed* run of a missing pipeline. Task 22 must pin both: (a) a completed run's missing pipeline still populates `unavailable`, and (b) a *running* row's missing pipeline either does or does not populate it \u2014 the design does not say, so this must be decided and stated rather than left to the implementer. As written the walkthrough expectation and the listing behaviour are not reconciled in any task.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_listing.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 32's report-sibling glob is specified as `.report.json`/`.report.md` but the real filenames include the step name",
+      "description": "Task 32 says \"define the report-sibling glob once (`.report.json` and `.report.md`) beside `report_json_paths`\", and Task 36 says \"delete `{run_id}.json` and its report siblings (pattern from Task 32)\". The actual on-disk names are `{run_id}.{step_name}.report.json` (see `report_json_paths` at `batch_report.py:60` and `report.md_path` at `:313`), i.e. the step name sits *between* the run id and the suffix. A glob written as `{run_id}.*.report.json` (the correct form) is not the same as the literal `.report.json` suffix named in Task 32. Task 32's own success criterion \u2014 \"the report helper does not match another run's files, including a prefix run-id\" \u2014 shows the author is aware of the prefix-collision hazard, but the pattern is written ambiguously in the task text. Rewrite the pattern literally (e.g. `{run_id}.*.report.json` and `{run_id}.*.report.md`) and state that both globs must escape the run-id the way `report_json_paths` does with `glob.escape`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/batch_report.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 41 leaves the \"close #190 and #165\" step to Phase 7 with no owner",
+      "description": "Task 41 explicitly defers closing #190 and #165 to Phase 7 and only opens the new issue for resuming orphaned runs. That is consistent with the design's step 8 (\"close #190 and #165\") and with the AGENTS.md rule that Phase 7 is where merge happens, but the design assigns the closing to implementation step 8 while the task defers it. Not a blocker; worth confirming the Phase 7 checklist carries the close so neither issue stays open.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criterion coverage is complete across the functional, technical and integration requirement lists",
+      "description": "Every functional requirement has a task: owner/heartbeat/status (Tasks 8, 11, 13, 14), owner-from-the-creating-write and the kill-between-init-and-heartbeat orphan (Tasks 11, 12, 14), `active_step`/`active_item` and clearing at finalize (Tasks 5, 11, 12), orphaned listing and wait exit 8 (Tasks 9, 10, 19, 20), v4 running file reads as UNOWNED (Tasks 8, 9, 19), stale semantics and default-prune exclusion (Tasks 19, 20, 33, 34), the foreground stall triple (Tasks 15\u201318), all five prune behaviours (Tasks 33\u201339), the unavailable summary line and `-v` (Tasks 21, 25, 26), TTY fit and piped no-truncation (Tasks 23, 24, 26), `sq pipelines list` groups/widths/`-v` (Tasks 27, 28), and `sq pipelines show` (Tasks 29\u201331). The technical-requirement list maps one-to-one onto the test tasks, including the 20-running-run I/O-bounds extension (Task 22), the real-exited-subprocess PID fixture (Task 10), and the ruff/pyright gate (Context Summary plus Task 42).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing is sound and the test-with pattern holds throughout",
+      "description": "Every implementation task is followed by its test task before the commit marker: 4\u20136 \u2192 7, 8\u20139 \u2192 10, 11 \u2192 12, 13 \u2192 14, 15\u201316 \u2192 17 \u2192 18, 19 \u2192 20, 21 \u2192 22, 23 \u2192 24, 25 \u2192 26, 27 \u2192 28, 29\u201330 \u2192 31, 32\u201334 \u2192 35, 36 \u2192 37, 38 \u2192 39. Dependencies run forward only: the `RunObserver` protocol lands in Task 4 before the recorder's progress writes in Task 11; `run_liveness` (Task 9) precedes its use by wait (19), listing (21) and prune (33); `cli/columns.py` (Task 23) precedes both view moves (25, 27); `resolve_pipeline` (29) precedes `show` (30); the report-pattern definition (32) precedes `apply_prune`'s use of it (36). No circular dependency is present, and the `RunObserver` refactor is correctly isolated as a no-behaviour-change commit (Task 7) ahead of the state-writing work.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers sit at working, tested points rather than only at the end",
+      "description": "The `**Commit**:` lines appear as plain lines (not checkboxes) after Tasks 7, 10, 12, 14, 18, 20, 22, 22a, 24, 26, 28, 31, 35, 37, 39, 40 and 42 \u2014 each immediately after that task's own tests pass, so no marker sits at a point where the tree is untested. The spacing is not per-task (implementation and test tasks share a commit), which matches the slice's phase structure.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task sizing and proportionality are appropriate for this slice",
+      "description": "The 42 tasks (including the 22a load test) split cleanly along the design's own Development Approach phases, and each is independently completable by a junior AI with a stated success criterion. Tasks 32, 33 and 34 are the tightest \u2014 they are three near-sequential slices of `run_prune.py` \u2014 but they are each small enough to hold one coherent rule set, and merging them would produce a task with nine distinct success criteria. Conversely, no task is too granular: Task 2's spike and Task 3's baseline are the only candidates for merging, and both are deliberately standalone gates (the spike can halt the slice per its own success criterion; the baseline is the comparison point for every later \"matches baseline\" claim). The file count touched \u2014 four new source modules (`run_observer.py`, `run_liveness.py`, `run_heartbeat.py`, `run_prune.py`, plus `cli/columns.py`), four new test files and one load test \u2014 is proportionate to the slice's five functional areas. No scope creep was found: every task traces to a D-decision, an API contract, a UI specification or a success criterion, and the slice's explicit exclusions (orphaned resume, #169, prompt-only liveness, the keep-10 auto-prune, `--json`, typed `RunState.status`) are honoured \u2014 Task 8 sets `_SUPPORTED_SCHEMA_VERSIONS = {3, 4, 5}` without changing `StateManager.prune()`, and no task introduces a `--json` surface.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 22a load test contradicts the design's \"no assertion on time in tests\" and the slice's own NFR handling",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No task covers the design's \"process check WARNING names run and PID\" requirement for the listing path",
+      "location": "src/squadron/pipeline/run_liveness.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 13's three-SDK-path wiring does not cover the implicit-resume path, which is a fourth SDK entry point",
+      "location": "src/squadron/cli/commands/run.py",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 11's `claim` refusal condition is underspecified for the `UNOWNED` and `STALE` cases",
+      "location": "src/squadron/pipeline/state.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 22 does not test that `RunListing.unavailable` is populated for pipelines that are unavailable *only* because a running row references them",
+      "location": "src/squadron/pipeline/run_listing.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 32's report-sibling glob is specified as `.report.json`/`.report.md` but the real filenames include the step name",
+      "location": "src/squadron/pipeline/batch_report.py",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 41 leaves the \"close #190 and #165\" step to Phase 7 with no owner",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success-criterion coverage is complete across the functional, technical and integration requirement lists",
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing is sound and the test-with pattern holds throughout",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers sit at working, tested points rather than only at the end",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task sizing and proportionality are appropriate for this slice",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-17T10:21:27.825145",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 274988,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1082202,
+  "cached_tokens": 895478,
+  "cache_write_tokens": null,
+  "completion_tokens": 72598,
+  "reasoning_tokens": 68012,
+  "duration_seconds": 493.91566833434626,
+  "cost_usd": 0.042052045999999996,
+  "cost_basis": "alias_pricing"
+}

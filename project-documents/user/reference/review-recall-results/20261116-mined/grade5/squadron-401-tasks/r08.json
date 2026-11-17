@@ -1,0 +1,33 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2 cannot reach its required passing checkpoint",
+   "description": "Task 2 expands `SnapshotMetric` while restricting `PythonAdapter.metrics` to four metrics, then requires the suite to pass unchanged. However, `tests/metrology/snapshot/test_python_length.py:60` asserts that the adapter declares every enum member. Update that assertion alongside the transitional declaration, preserving length-value expectations. Otherwise the first implementation checkpoint necessarily fails.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:43-46"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Python complexity fixture contradicts the counting definition",
+   "description": "The required fixture scores **7**, not 6: baseline 1, `if`, `elif`, `and`, comprehension `for`, comprehension `if`, and `except`. This contradiction originates in slice criterion 3 and is repeated here. Reconcile the fixture and expected score with D2 before implementation.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:63-65"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Duplication scalability requirement lacks load testing and CI gating",
+   "description": "D3 explicitly requires linear time and memory growth. Task 11 tests small examples and a lowered token ceiling, neither of which validates scalability. Add a proportional load test under `tests/load/` covering increasing token volumes, followed immediately by an explicit CI-wiring task that gates on it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:114-142"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit checkpoints use checkbox items instead of markers",
+   "description": "Commit instructions throughout the file use `- [ ] Commit:`. Replace these with plain `**Commit**:` lines at tested checkpoints. Most implementation/test pairs already provide sensible checkpoint locations; additional commits after every task are unnecessary.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

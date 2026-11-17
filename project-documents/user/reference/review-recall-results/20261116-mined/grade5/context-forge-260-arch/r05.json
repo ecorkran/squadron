@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Interrupted adoption cannot be resumed",
+   "description": "The flow writes artifacts incrementally (step 5: concept \u2192 architecture \u2192 existing-state slice plan). Detection's rule 2 says any of these artifacts makes the repo \"already planned\", and `sq onboard` step 2 says \"If the project is greenfield or already planned, adoption doesn't apply.\" So an adoption that dies after the architecture is written but before the slice plan is indistinguishable from a genuinely planned project, and re-running `sq onboard` refuses to continue. The superseded prompt contract explicitly carried the property \"a re-run resumes from whatever artifacts exist\"; the amendment drops it without replacement. The doc needs to say what a half-written adoption looks like to detection (e.g. derived architecture with `provenance: derived` and no slice plan) and how the flow resumes, or `sq onboard` will be designed against a flow with no failure recovery.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Adoption flow, under sq onboard (amended 20261025)"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Opt-out precedence masks \"already planned\"",
+   "description": "The outcome order checks \"Opted out\" first and concludes \"It is greenfield.\" A project that opted out and then went through the normal greenfield flow and now holds a concept, architecture and slice plan still reports `greenfield` \u2014 the report is factually wrong for a fully planned project, and rule 2 (\"already planned\") is unreachable for any opted-out project. The report is a read-only JSON contract that `sq onboard` and `cf next` consume; consumers that trust the outcome rather than re-deriving from files will mis-navigate. Opt-out should only resolve the brownfield-vs-greenfield question (rule 3's domain); \"already planned\" should win over it, or the doc must state which consumers ignore the outcome.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Detection: a read-only report (amended 20261025)"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Dependencies section asserts pending items that already shipped in the guide",
+   "description": "\"Still pending, both written after cf specifies them in slice design: the retroactive-marker rule, and the naming-conventions entry for the docs map file\" is stale against the checked-out `project-documents/ai-project-guide`: `guide.ai-project.brownfield-adoption.md` carries the retroactive-slice marker spec (token format, checked/no-design-or-tasks rules, index ordering, `provenance: derived`), and `file-naming-conventions.md` carries the \"Docs Map File\" entry for `050-docs-map.{project}.md` (managed block `cf-docs-map`), both recorded in the guide's CHANGELOG. This is the section ai-project-guide and squadron read to sequence their work; telling them to wait for what already exists will stall or duplicate effort.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Dependencies"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Guide version floor contradicts the amendment, the code, and slice 272",
+   "description": "The same Dependencies bullet says \"cf releases that select the brownfield profile require at least **v0.22.2**\", but (a) the amendment removed profile selection from `cf build` entirely, so no cf release \"selects the brownfield profile\" anymore \u2014 the requirement now attaches to the slice-271 prompt-delivery primitive; (b) `packages/core/src/guides/guideMinimum.ts` already pins `MIN_GUIDE_VERSION = '0.22.6'`, above the stated floor; and (c) slice 272 will raise `MIN_GUIDE_VERSION` again for the drop-`cf build` prompt update. Related wording drift in \"Guide release coupling\": after announcing the fail-fast rule \"moves to the prompt-delivery primitive\", the retained rule text still reads \"cf selects the brownfield profile and the installed guide lacks it, `cf build` fails with a named error\" \u2014 the amended rule should name the new enforcement point. There is no single stated place where the required guide version for the reworked adoption path is defined.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Dependencies"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Rework deletes the shipped adoption path before its replacement exists",
+   "description": "Slices 261\u2013267 shipped a working CF-only adoption path (verified: `packages/core/src/adoption/`, `adoptionNavigation.ts`, and `260-analysis.adoption-verification-runs.md` records passing real-repo runs). The amendment makes 268\u2013270 delete it (`cf build` adoption, adoption state, `cf next` adoption navigation) and 271 delete the probe code, while the replacement \u2014 `sq onboard` \u2014 is \"parked\" on another repo's roadmap, and \"the CF-only fallback is dropped\". After 268\u2013272 land, CF has no adoption path at all until squadron delivers, for an unknown duration. The doc does not state whether 268\u2013272 are gated on a squadron commitment or shipped on trust; that sequencing decision is load-bearing and unstated.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Anticipated Slices"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Related Work references a review artifact that does not exist in this checkout",
+   "description": "The link `../reviews/260-review.arch.brownfield-adoption.md` does not resolve \u2014 there is no `project-documents/user/reviews/` directory here (only slices reference that directory as a convention). The accompanying claim \"All findings are addressed in this revision. F009 is resolved by fixing only the relative order...\" is therefore unverifiable against the cited source, and one of the two resolutions described (the F009 relative-order fix) is the sole justification for a design constraint on retroactive entries. Either the review file needs to be present, or the claim should be dropped to what the arch itself states.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:169"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Anticipated Slices\" still narrates behavior the amendment deletes",
+   "description": "The section lists shipped slices 260\u2013267 with live-sounding descriptions (\"`cf build` selecting the `brownfield-adoption` profile\", \"Brownfield-aware `cf next`: adoption steps while in progress\") that the amendment removes, while the actual future work (268\u2013274) appears only in a one-line note and the slice plan. A cross-repo reader skimming for what to build against can land on deleted behavior. Renaming the section to \"Shipped slices (superseded where noted)\" and listing 268\u2013274 as the anticipated work would remove the ambiguity. The same pattern applies to the retained \"probe contract\" and \"Original (agreed with ai-project-guide 20261020)\" blocks: the live prompt-delivery contract is one paragraph (\"Slice 271's design settles how the profile's variables are delivered\") sitting under two full superseded contracts.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#Anticipated Slices"
+  }
+ ]
+}

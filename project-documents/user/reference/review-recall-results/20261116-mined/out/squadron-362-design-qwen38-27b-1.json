@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Verified graph facts\" and 943 references are not verifiable against the project state",
+      "description": "The design states the facts were \"Probed against this repo's real graph \u2026 while writing this design\" and that \"These are measurements, not assumptions.\" The repository contradicts that premise: slice 361's own design and task files carry `status: not_started`; the 361 entry in the slice plan is unchecked; `361-tasks.graph-contract-and-provenance.md` (frontmatter `projectState`) says \"No graph exists in this repo yet\"; there is no `.understand-anything/` directory in the repo, no `user/analysis/943-analysis.codebase-comprehension.md` (only 940\u2013942 exist), no `commands/analysis/understand.md` (the 361 deliverable), and no 361 branch (only `main` exists). Consequently: (a) the specific numbers in the table (925 nodes / 2184 edges / hash `1bfbca1`, the 238 reconciliation) cannot be confirmed as measurements; (b) the claims \"The generated `943` sample carries both wrong counts\" (line 136), \"943 exists, so expect **944**\" (line 368), and \"The 943 document generated during slice 361 carries the two wrong layer counts\" (line 468) reference an artifact that does not exist; (c) Verification Walkthrough step 1 is worded as re-verification (\"re-run them, because the graph may have been refreshed\"), not as a first-time measurement gate \u2014 if the graph does not yet exist, the jq commands fail rather than \"not agreeing.\" The requirement left unmet: design decisions that rest on measurements (both corrections, the 238-node coverage arithmetic) must be verifiable. Fix: restate the premise \u2014 mark 361 completion as a hard precondition of this slice, present the facts as pending verification (or reword as \"expected values to confirm\"), make step 1 an explicit gate that stops if `.understand-anything/` is absent, and correct the 943/944 index expectation (the corrected run would produce 943, not 944, if 361's proving run happens under 361's own walkthrough).",
+      "file_ref": null,
+      "category": "factual-basis",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:90-110"
+    },
+    {
+      "severity": "PASS",
+      "title": "Extraction mapping and sections align with the architecture's comprehension output",
+      "description": "The architecture's capability-(a) output for the comprehension document is \"layers, complexity hotspots, entry points, dependency observations\"; all four are present in the seven-section mapping, each with named source fields, an ordering rule, and a binding fallback (sourced content or `[GAP: ...]`, no third option) \u2014 consistent with the architecture's \"never fabricate intent\" goal and the `[INFERRED]` governance decision, which matches 361's stated handoff (\"362 governs its use in the deepened analysis\"). The two absorbed open questions are handled as assigned: gap markers inherit 361's settled syntax, and the `analyze-codebase-prompt.md` reuse decision retains the document as required (\"Prior art (retained, not superseded)\") with only a one-line cross-reference. Integration direction matches the slice plan: consumes the 361 preflight/provenance/index conventions unchanged, provides the mapping to 363 (extract-then-ask per-section fields) and the corrected layer/file-level definitions to 364 (whose candidate signals would be wrong under the 361 undercount), and explicitly excludes 363/364/366 scope. The read-discipline requirement is restated with concrete targets (field-scoped `jq` only, 238 in-scope nodes, 687 function/class nodes excluded, success criterion 9), and the observed `config.json` drift (`autoUpdate` absent) is handled correctly by reporting present settings rather than asserting expected keys.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:167-190"
+    },
+    {
+      "severity": "PASS",
+      "title": "Corrections and new reads are proportionate to the slice's mandate",
+      "description": "No Python, no new files, no installer/manifest/`src/` changes \u2014 bounded to `understand.md` plus one cross-reference line, matching the plan's \"No Python is added by any slice\" invariant. The two corrections to 361's skill text go beyond the literal 362 plan entry but are justified: they fix defect behavior (undercounting layer composition, silently dropping 37 analyzed files) that would otherwise corrupt this slice's coverage arithmetic and slice 364's candidate derivations; they keep a cross-check (nodeIds must resolve to `filePath`-carrying nodes; drift reported, not filtered) so the single-graph measurement is safe on unmeasured graphs; and the implementation order applies them in isolation first with a re-run. Walkthroughs 1, 5, and 6 cover the new I/O paths' failure modes (missing `meta.json`, empty `tour`, no `entry-point` tag, `analyzedFiles` mismatch reporting both numbers) with explicit strategies rather than TBDs. The instruction to leave the 943 document un-edited correctly follows the independent-samples convention.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:113-165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"361 explicitly deferred\" traces to the 361 tasks file, not the 361 design",
+      "description": "The claim that 361 \"explicitly deferred\" `config.json`, `.understandignore`, and `meta.json`'s `analyzedFiles` is accurate but is documented in `project-documents/user/tasks/361-tasks.graph-contract-and-provenance.md:72-76` (F011/F012 dispositions of review notes), not in the 361 slice design, which never mentions deferring these fields. A reader verifying the premise against the 361 design alone will not find it. Consider naming the F011/F012 dispositions in the 362 design so the deferral chain is auditable without the (not present in the repo) 361 review document.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:54-55"
+    },
+    {
+      "severity": "NOTE",
+      "title": "File-level definition now diverges from the architecture's nine-type enumeration",
+      "description": "Correction 2 deliberately replaces the architecture's nine-type allow-list (`file`, `config`, \u2026, `resource`) with an exclusion rule (`type != \"function\" and .type != \"class\"`), with a stated rationale (a tenth upstream file-level type is included automatically rather than silently dropped) and a drift check (filter survivor without `filePath` is reported). The deviation is well-reasoned and stays within the architecture's intent (function/class nodes never read), so it is not a violation \u2014 but the architecture's Read-discipline paragraph still presents the nine types as the operative definition, and slices 363/364 will reuse 362's \"file-level\" definition. A one-line update to the architecture's read-discipline text (operating definition: \"all node types except function and class, each must carry `filePath`\") would give the initiative a single source of truth.",
+      "file_ref": null,
+      "category": "documentation-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-160"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "factual-basis",
+      "raw_category": null,
+      "summary": "\"Verified graph facts\" and 943 references are not verifiable against the project state",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:90-110",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Extraction mapping and sections align with the architecture's comprehension output",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:167-190",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Corrections and new reads are proportionate to the slice's mandate",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:113-165",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "\"361 explicitly deferred\" traces to the 361 tasks file, not the 361 design",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:54-55",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-consistency",
+      "raw_category": null,
+      "summary": "File-level definition now diverges from the architecture's nine-type enumeration",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-160",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-17T12:11:55.325529",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 236892,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 387216,
+  "cached_tokens": 335936,
+  "cache_write_tokens": null,
+  "completion_tokens": 60114,
+  "reasoning_tokens": 57188,
+  "duration_seconds": 204.67412379197776,
+  "cost_usd": 0.1613548,
+  "cost_basis": "alias_pricing"
+}

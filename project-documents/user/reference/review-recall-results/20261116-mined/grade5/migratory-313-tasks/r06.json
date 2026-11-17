@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Explicit null policy is treated as missing",
+   "description": "Task 1.3 uses `data.get(\"policy\", None)` and defaults an absent value to `OPEN`. This cannot distinguish an omitted key from `policy: null`, although the slice requires every present value to be a string. Check key presence separately and add a null-value rejection test.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:67-76"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Round-trip test does not verify the full config",
+   "description": "Task 1.4 asserts only that the policy matches after reload. Success criterion 5 requires a plain-string policy and an equal `ServerConfig`. Assert the parsed YAML value is a string and compare the reloaded config with the original.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Manual walkthrough can leave the wrong shipped default",
+   "description": "Step 8 permits restoring `config/test.yaml` to any policy, despite success criterion 12 requiring `wrap`. Require restoration to `wrap` and verify it after the walkthrough.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-306"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers use checkbox syntax",
+   "description": "All five commit instructions are checkbox items written as `**Commit:**`. Commit markers must instead be plain lines using `**Commit**:`. Their placement after tested groups is otherwise appropriate.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Reflect edge-exact behavior lacks a test",
+   "description": "The slice calls for edge-exact coverage, but the reflect cases cover inside and crossed edges, not positions exactly at an edge. Add a case proving that an exact boundary position and its velocity remain unchanged until the position crosses the boundary.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:162-170"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task breakdown is overweight for the slice",
+   "description": "Merge the small enum, field, and loader tasks into one config implementation task, and merge the two shipped-config edits. Remove the extra dispatch-only test, which duplicates the policy behavior tests, and trim prescribed import ordering and similar mechanical details. This retains the required coverage while making the plan easier to execute.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

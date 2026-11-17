@@ -1,0 +1,26 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Frontmatter is `status: complete` but every checkbox is still `[ ]`",
+   "description": "The frontmatter says `status: complete` (and the slice says the same, and the repo is fully implemented), yet every checkbox in the body remains unchecked. CLAUDE.md's Document Conventions say to check off completed tasks/subtasks. This is bookkeeping drift, not a plan defect, and does not block anything \u2014 worth a quick pass when the slice is closed out.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 1.4 round-trip test asserts the policy field, not full `ServerConfig` equality",
+   "description": "SC 5 is worded as \"reloading the emitted YAML produces an **equal `ServerConfig`**,\" but Task 1.4's `test_bounds_policy_yaml_round_trip` (as implemented in `tests/test_config.py#test_bounds_policy_yaml_round_trip`) only asserts the reloaded `policy == BoundsPolicy.WRAP`. The full-equality claim is still demonstrated in combination with the pre-existing `test_roundtrip_basic_config`, but that test runs with the default policy. Behavior is correct and the test passes, so this is informational only; tightening the assertion to a full `assert cfg2 == cfg` (or at least `world_bounds` equality with a non-default policy) would match SC 5's wording more literally.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Tasks 4.1 and 4.2 are slightly granular",
+   "description": "Each of Tasks 4.1 (`config/default.yaml`) and 4.2 (`config/test.yaml`) is \"add one `policy: wrap` line and run a one-line `python -c` load check,\" followed by a shared commit in 4.3. These two micro-tasks could be merged into a single \"update shipped config defaults\" task. This is the only borderline over-division in the file and is not worth blocking on; each is independently verifiable, so keeping them separate is defensible.\n\nOne additional observation (not a finding): the plan (and the slice) specifies `world_bounds` as a **required** keyword on `SimulationManager.__init__` and directs updating every existing call site (Tasks 3.4/3.5), whereas the shipped `simulation.py` made it optional with a fallback to `entity_manager.world_bounds`. The plan is internally consistent and matches the slice's own \"required keyword argument\" wording, so this is a deviation at implementation time rather than a defect in the breakdown \u2014 no action needed on the plan itself.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

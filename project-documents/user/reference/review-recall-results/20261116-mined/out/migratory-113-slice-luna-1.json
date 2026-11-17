@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Tick integration adds dispatcher-specific state to the engine path",
+      "description": "The architecture describes the engine tick as stateless between ticks, with the caller owning and managing the spatial index (architecture \u00a7Envisioned State, lines 65\u201373). This design feeds state back from `tick.py` through `record_density`, guarded by `hasattr`, making the tick pipeline aware of a capability specific to this dispatcher. That weakens the existing `SpatialQuery` boundary and introduces a dispatcher-specific hook into the engine path. Keep density measurement and backend selection outside `tick.py`, or define an interface that preserves the engine\u2019s stated ownership boundary.",
+      "file_ref": null,
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adaptive threshold is not normalized for simulation scale",
+      "description": "The design says the crossover varies with world size, agent count, and query radii, but dispatches on raw mean neighbors per agent using a fixed default threshold. Its examples derive very different neighbor counts from population and radius, yet the document does not explain how one configured threshold remains meaningful across those changes. Since adaptive selection is the slice\u2019s core deliverable, specify how the threshold is calibrated or scoped to a deployment and what happens when the signal is not representative of backend cost.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification scope is heavier than the slice-plan effort suggests",
+      "description": "The plan assigns this slice Medium risk and effort 3/5, but the design adds a multi-backend full-suite matrix, a threshold sweep, a long live simulation, performance-journal updates, and escape-hatch/configuration runs. Some validation is appropriate, but the long live run and repeated suite runs appear disproportionate to adding a wrapper around already-tested backends. Keep the focused parity and dispatcher tests; defer extended benchmarking/live simulation unless a measured performance claim is required for acceptance.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Verification-Walkthrough"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "summary": "Tick integration adds dispatcher-specific state to the engine path",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Adaptive threshold is not normalized for simulation scale",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-136",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Verification scope is heavier than the slice-plan effort suggests",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#Verification-Walkthrough",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T05:32:00.900734",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 39871,
+  "cached_tokens": 32640,
+  "cache_write_tokens": null,
+  "completion_tokens": 621,
+  "reasoning_tokens": 158,
+  "duration_seconds": 24.89502829220146,
+  "cost_usd": 0.00136,
+  "cost_basis": "alias_pricing"
+}

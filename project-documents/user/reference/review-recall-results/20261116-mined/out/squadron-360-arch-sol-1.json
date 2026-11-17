@@ -1,0 +1,200 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Repeated comprehension runs can overwrite the protected concept",
+      "description": "Every run targets the same `000-concept.{project}.md`, but no behavior is defined when it already exists. Reconstructing it from a new interview could replace the explicitly immutable **User-Provided Concept** section. Define create-versus-update behavior, preserve existing protected content verbatim, and specify where subsequent interview answers belong.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:146-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Grep does not provide bounded structured JSON extraction",
+      "description": "\u201cGrep for the needed section\u201d depends on JSON formatting: valid minified JSON puts the entire graph on one line, while formatted arrays can span arbitrarily many lines. Extracting every file-level node also remains unbounded. Specify semantic JSON projection using the available Python stack, with bounded batches or summaries that retain node IDs and expose omitted coverage.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The prescribed extraction omits dependencies needed by the outputs",
+      "description": "Step 3 extracts layers, tour, and node summaries but not `edges[]`; the output nevertheless promises dependency observations, and Initial Technical Direction includes dependencies. Layer membership and tour order cannot establish dependency direction or cycles. Include relevant edges and define how function/class endpoints are aggregated to file-level nodes, or explicitly limit the promised observations.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:138-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graph validity and unknown freshness have no defined handling",
+      "description": "Preconditions check existence, not whether the graph is parseable or contains the required fields and valid node references. Staleness handling also assumes readable metadata and a locally resolvable commit; missing metadata, shallow history, and uncommitted source changes are unspecified. Define explicit invalid-input errors and an \u201cunknown freshness\u201d provenance state rather than allowing these cases to look current or become empty structural evidence.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The concept-free overview path contradicts its evidence rules",
+      "description": "The common path allows interview-derived purpose when the concept is absent, but the field schema still sources Problem, Audience, and Approach exclusively from the concept. \u201cEvery claim traces to an input artifact\u201d also excludes unrecorded interview answers. Define which fields the initiative plan can support, how interview evidence is preserved, and which unsupported fields become explicit unknowns.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-235"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Status translation can manufacture progress",
+      "description": "The example translates `status draft` into \u201cin progress,\u201d although draft does not establish implementation progress and is rejected elsewhere in this document. The actual initiative plan also contains checked initiatives whose explicit status remains `not_started` or `in_progress`. Define authoritative status precedence and mappings; conflicting or unsupported states must not become confident stakeholder progress claims.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:224-237"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Client output cannot both omit and require frontmatter",
+      "description": "Translation rules say docType frontmatter \u201cnever appear,\u201d while Output Conventions require the overview to carry `docType: analysis` for the existing validation gate. Those instructions conflict for the same Markdown artifact. Require repository frontmatter and restrict vocabulary stripping to the body; any metadata-free presentation should be a separate downstream rendering.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:230-246"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overflow allocation contradicts the stated naming contract",
+      "description": "The design claims no naming-convention change while authorizing analysis documents beyond its stated reserved range. \u201cRemaining slots in the 900 band\u201d does not define whether availability is checked across analysis files alone or across initiatives, slices, and their related artifacts. Establish an allocation rule consistent with the canonical convention before overflow occurs; document absence alone does not establish that an index is unreserved.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Repeated comprehension runs can overwrite the protected concept",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:146-156",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Grep does not provide bounded structured JSON extraction",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The prescribed extraction omits dependencies needed by the outputs",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:138-153",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Graph validity and unknown freshness have no defined handling",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-135",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The concept-free overview path contradicts its evidence rules",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-235",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Status translation can manufacture progress",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:224-237",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Client output cannot both omit and require frontmatter",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:230-246",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Overflow allocation contradicts the stated naming contract",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T05:27:49.645064",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 54606,
+  "cached_tokens": 47360,
+  "cache_write_tokens": null,
+  "completion_tokens": 1220,
+  "reasoning_tokens": 318,
+  "duration_seconds": 65.40616841707379,
+  "cost_usd": 0.031428,
+  "cost_basis": "alias_pricing"
+}

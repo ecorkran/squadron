@@ -1,0 +1,170 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Capability (b) delivery understates its CLI/test impact",
+      "description": "Capability (b) ships `/sq:overview` as \"a first-party command in `commands/sq/`\". That directory currently holds exactly 9 files, and `tests/cli/test_install_commands.py` pins that inventory in four places: `EXPECTED_FILES` (a 9-member set asserted with `installed == EXPECTED_FILES`), plus `len(...) == 9` in `test_install_creates_directories`, `test_target_flag_overrides_default`, and `test_get_commands_source_returns_valid_dir`, and the 9-entry `EXPECTED_COMMANDS` map. Adding `overview.md` makes it a 10th file and breaks all four. The Delivery section frames both capabilities as \"skill-level document transforms\" adding \"no machinery,\" and Dependencies cites `[100] CLI command registration` only at headline level \u2014 the document never acknowledges that (b) mutates the pinned command set and therefore requires a coordinated test change (and rides the wheel force-include of `commands/`). This isn't a blocker, but the slice's real change surface is larger than the document states.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Naming-range reservation and \"950+ sanctioned\" overflow are unverifiable and partly self-authorized",
+      "description": "The document's correctness rests on \"the naming convention reserves 940-949\" and \"Overflow into 950+ is sanctioned ... no change to `file-naming-conventions.md`.\" The authority for both claims \u2014 `file-naming-conventions.md` \u2014 lives in the `project-documents/ai-project-guide` git submodule, which is not initialized in this checkout (the directory is empty), so neither the reservation's upper bound nor any permission to exceed it can be confirmed. Only the 940 *start* is corroborated in-repo (`commands/analysis/tech-debt-audit.md`, `.claude/skills/analyze/SKILL.md`). The doc cites no convention text granting the overflow; it asserts the sanction itself. Two compounding facts: (a) `user/analysis/` already mixes review docs at indices 244/303/320/322/323/341 with the 940-942 analyses, so the \"reserved range\" is already shared rather than exclusive; (b) the DEVLOG records that this exact external file (owned by context-forge) has caused frontmatter-drift bugs before. If the convention does not actually bless 950+, generated docs would violate a range controlled by another owner \u2014 the precise failure mode the document is trying to avoid.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Derived, not authored\" principle contradicts the concept-absent degradation path",
+      "description": "Design Goals state the client document \"is derived, not authored ... not a place where new claims about the project appear,\" and Translation rules add \"Derive, never invent. Every claim traces to an input artifact.\" The field-schema table lists Purpose's source as \"Concept Overview / initiative plan.\" Yet the Inputs section declares that when the concept is absent \u2014 explicitly \"the common case ... the tested path\" \u2014 \"the skill degrades gracefully and sources purpose from the initiative plan **plus interview**.\" An interview injects content that is not in any input artifact, which is exactly the \"new claim\" the design goal forbids and which the Purpose Source column omits. The document can't simultaneously hold (b) as purely derivative and interview-driven in its primary path; it must either scope the interview to confirmation of existing artifact content or relax the \"derived, not authored\" rule for the concept-absent case.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No schema/version guard on the external knowledge graph",
+      "description": "Capability 1's preconditions check only that the plugin is installed and `knowledge-graph.json` exists; the Flow then trusts the v2.8.1 shape (`tour[]`, `layers[]`, type-prefixed node `id`s, `meta.json` fields). There is no validation that the graph actually conforms to the expected schema or version, and no defined behavior for a malformed, truncated, or differently-versioned graph. Given the project's \"fail explicitly\" and \"never silent fallback\" principles, a present-but-foreign-schema graph should fail loudly rather than be read on faith. The document pins \"v2.8.1\" descriptively but specifies no compatibility check or drift handling for an upstream-maintained contract that can change under squadron.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`analysis` docType/range reused for a non-analysis artifact",
+      "description": "The document argues capability (b) must not route through the analysis dispatcher because \"nothing about it audits a codebase,\" yet files its output under `docType: analysis` in the codebase-analysis range purely to avoid a gate change. The rationale is acknowledged and pragmatic, but the artifact's stored type/range no longer matches its semantics; the document should state plainly that `analysis` is being used as a convenience bucket rather than its \"codebase analysis\" meaning, so future readers of `cf list` aren't misled.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Audience \"emphasis parameter\" present in one section, deferred in another",
+      "description": "Translation rules state \"Emphasis is a generation parameter; the factual content is identical\" (present tense, as if part of the shipped design), while Resolved Design Decisions says \"An emphasis parameter is added only if real use demonstrates the need\" (deferred). The two sections disagree on whether the parameter exists in this initiative; reconcile the wording so slice design doesn't build a deferred knob.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#resolved-design-decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Capability (b) delivery understates its CLI/test impact",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Naming-range reservation and \"950+ sanctioned\" overflow are unverifiable and partly self-authorized",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Derived, not authored\" principle contradicts the concept-absent degradation path",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No schema/version guard on the external knowledge graph",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "`analysis` docType/range reused for a non-analysis artifact",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Audience \"emphasis parameter\" present in one section, deferred in another",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#resolved-design-decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T13:18:26.238846",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 206585,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1016296,
+  "cached_tokens": 827520,
+  "cache_write_tokens": null,
+  "completion_tokens": 51132,
+  "reasoning_tokens": 48001,
+  "duration_seconds": 1427.5146574173123,
+  "cost_usd": 0.8498479999999999,
+  "cost_basis": "alias_pricing"
+}

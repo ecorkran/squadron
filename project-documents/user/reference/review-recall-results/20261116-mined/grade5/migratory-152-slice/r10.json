@@ -1,0 +1,89 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Mode-set change contradicts the parent plan's \"no regression on k-first path\" exit criterion",
+   "description": "The slice removes `k_first` entirely from the kernel, `ComputeConfig`, `Workload`, and `_NEIGHBOR_MODE_MAP`, and raises a configuration error for existing `k_first` configs. The parent slice plan (140-slices.simulation-scaling.md, slice 152 entry) explicitly states the exit criteria as \"k-nearest TPS at N=200k within 20% of **k-first TPS** at the same N; parity ... preserved; **no regression on k-first path**.\" A plan exit criterion is a concrete requirement (the `k_first` path must still exist and not regress), and the slice makes that criterion unmeasurable by deleting the mode it is written against. Either the plan entry must be amended to state the new mode set and the new comparison baseline (`radius_only`), or the slice must retain `k_first` as a third mode (as its own \u00a7Mitigation Strategies half-suggests: \"ship the two new modes alongside the legacy `k_first` value\"). Note that the design's rationale (\"`k_first` is strictly worse than `k_nearest`\") is also factually shaky: the slice's own headline numbers show `k_first` at 213.9 TPS vs `k_nearest` at roughly 29.7 TPS before this fix \u2014 removing a mode that is ~7\u00d7 faster until the new fix is proven is a behavior/performance regression for the default path, not a cleanup.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:34"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Self-contradictory configuration contract: `k_first` simultaneously removed and retained",
+   "description": "Technical Scope item 7 states `k_first` \"is removed entirely\" and existing `k_first` configs \"raise a clear configuration error\". \u00a7Technical Decisions (\"Default neighbor mode is `k_nearest`\", line 199) and \u00a7Implementation Details (line 349) repeat the removal. But \u00a7Mitigation Strategies (line 433) says: \"Until then, ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning) so the slice can land incrementally; flip the default and remove `k_first` parsing in the final commit.\" These are mutually exclusive contracts for the same config surface, and the slice has a stated sequence (Development Approach step 4: \"Default flip \u2026 Update any tests pinning the previous default\") that depends on which one is true. The design must fix one contract (and its ordering) before implementation, because the \"deprecation warning\" variant also directly contradicts the project's own rule \"Never use silent fallback values. Fail explicitly with errors or obviously-placeholder values\" \u2014 a deprecation warning followed by continued acceptance is a form of silent compatibility path.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough uses a bench CLI that does not exist",
+   "description": "The Verification Walkthrough invokes `python -m migratory.bench parity --backend quadrants-fused --workload mid-flock --neighbor-mode k_nearest` and `python -m migratory.bench run --backend \u2026 --workload \u2026 --neighbor-mode radius_only --ticks 200`. The actual CLI (`src/migratory/bench/cli.py`) exposes only `--workload`, `--backend`, `--workload-dir`, `--results-dir`, `--list-backends`, `--list-workloads` \u2014 there is no `run` subcommand, no `parity` subcommand, and no `--neighbor-mode` flag or `--ticks` flag. `Workload.from_yaml` reads `neighbor_mode` from the YAML only, and `bench/workloads/mid-flock.yaml` and `mid-flock-10k.yaml` do not set it. Every measurement step in the design (criterion 3, the load-bearing criterion 4 gate at N=200k, the 500k/1M headroom probe) therefore has no executable command as written, and the slice's primary success gate cannot be reproduced. The design must specify either a CLI flag addition (with the workload-YAML alternative and where `neighbor_mode` lives for a given N) or per-mode workload YAML files.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:379"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`ConfigurationError` does not exist; the actual config error type is `ConfigError`",
+   "description": "The design requires that configs using `k_first` \"raise a `ConfigurationError` at parse time\". The server config module defines `ConfigError` (`src/migratory_server/config.py:17`) and `Server.__main__` catches `config.ConfigError` specifically to print \"Configuration error: \u2026\" and exit 1. There is no `ConfigurationError` in the codebase. Any new exception type would not be caught by the server's handler, turning a config error into an unhandled traceback \u2014 a regression against the project's explicit-failure convention, which requires the error to surface cleanly. The design should name `ConfigError` (and the equivalent `ValueError` for the bench `Workload` loader, which currently raises `ValueError` for an invalid `neighbor_mode`).",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:199"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`radius_only` as written is not \"identical\" to the slice 150 uncapped sub-branch, and `k_nearest`'s uncapped path is left unspecified",
+   "description": "Technical Scope item 8 says `radius_only` is \"Identical accumulation pattern to the `k_nearest` 'uncapped' sub-branch in the slice 150 kernel \u2014 promoted to a first-class mode\". But the shipped kernel's uncapped branch (`quadrants_fused_kernels.py`, `if max_neighbors <= 0:` under the k_nearest path) is guarded by `neighbor_mode != NEIGHBOR_MODE_K_FIRST` and its counting uses `k_found`; the new `radius_only` mode is defined as a global pipeline mode that ignores `max_neighbors` entirely, while `k_nearest` with a profile whose `max_neighbors <= 0` (uncapped) still exists and is not mentioned anywhere in the rewrite sketch or the success criteria. The design's inner-loop \"AFTER\" sketch shows only a `NEIGHBOR_MODE_RADIUS_ONLY` branch and an `else` (k_nearest) branch \u2014 the uncapped sub-branch inside k_nearest is not shown, not said to be preserved, and its interaction with `heap_idx` semantics (coherent slots) and cell-boundary pruning (which requires `max_neighbors > 0`) is unaddressed. This leaves a live configuration (profiles with `max_neighbors: null`, which `config/default.yaml` documents as \"null/omit = no cap\") behaviorally undefined after the rewrite.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:68"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Coherent reindex is specified to run inside `build_spatial_hash`, but the production path and the bench path call the hash build and the force kernel separately",
+   "description": "The design states \"`run_fused_tick` \u2014 unchanged; it calls `build_spatial_hash` then `fused_force_integrate_kernel`. The reindex is part of the hash build by design, not a third step,\" and the Component Structure section lists `build_spatial_hash` as gaining \"one extra kernel launch\". In the shipped code, however, `run_fused_tick` is not the tick path used by either consumer: `QuadrantsFusedTickRunner.tick_once()` (`quadrants_fused_backend.py`) and `GpuSimulationDriver.step()` (`gpu_driver.py`) each call `build_spatial_hash(state)` and then `fused_force_integrate_kernel(...)` directly, and `run_fused_tick` has no callers outside tests. Placing the reindex inside `build_spatial_hash` happens to cover both real call sites, but the design's stated ownership (\"run_fused_tick \u2026 calls build_spatial_hash\") does not match reality, and the design's Component Structure list omits the two real call sites (`quadrants_fused_backend.py` and `gpu_driver.py`) that will be affected. The design should state the real integration points explicitly, since the \"unchanged\" claim is only true for a function nobody calls.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:98"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "NFR is not restated with a specific target; the slice substitutes a relative-to-`radius_only` gate for the plan's absolute TPS target",
+   "description": "The parent architecture (140-arch) states the tier gates explicitly \u2014 Tier 2: 60 TPS at N=50k on CUDA; Tier 3: 250k on production-class hardware \u2014 and slice 149 restated the Tier 2 NFR with its own 100 TPS gate. Slice 152 touches the same hot path but never restates an absolute TPS target; its load-bearing criterion 4 is a *relative* gate (\"k_nearest TPS at N=200k within 20% of `radius_only` TPS at N=200k\"), and the design explicitly states that beating the 213.9 TPS baseline is a \"sanity check\" that can fail with \"stop \u2014 the reindex itself is too expensive to land\" rather than a pass/fail criterion. The design also identifies N=200k as \"the architecture's Tier 3 target\" (line 17), whereas the architecture places Tier 3 at 250k and states that Tier 3 is production-class hardware while this slice's gate runs on the dev-class box. Two requirements are consequently unmet: no absolute TPS floor is stated for the slice's own target N, and the \"no regression\" property against the shipped baseline (213.9 TPS at N=10k, 53.5\u201377.5 TPS at N=200k S=3/S=5 per slice 149) is asserted informally rather than specified as a criterion with a number.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`profile_index_c` is allocated and reindexed but has no consumer, and the slice's own success criteria never exercise it",
+   "description": "Six coherent fields are added and seven writes are performed per agent per tick in the reindex, but the inner-loop rewrite reads only `_px_c`, `_py_c`, `_vx_c`, `_vy_c`, `_leadership_per_agent_c` and `_coherent_to_original`. `_profile_index_c` is never read by the force kernel (the profile lookup is `_profile_index[i]`, per-agent and original-order, in the outer loop), yet it is allocated, written every tick, and asserted in criterion 1. This is configuration/abstraction nothing uses yet: it costs an extra global write per agent per tick on the very path whose overhead the slice is trying to minimize, and the reindex cost is the slice's own identified risk #1. `profile_index_c` can be dropped from this slice and added later if a consumer appears.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:62"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`leadership_per_agent_c` is reindexed even when leadership is inactive, and `leadership_per_agent` is not mentioned in the coherence contract's read path",
+   "description": "`leadership_per_agent_c` is allocated, reindexed every tick, and asserted in criterion 1, but the force kernel only reads it under `if lead_active != 0` \u2014 and the shipped bench profiles set `leadership_weight: 0.0` for `flocker` and `0.2` for `leader`, so it is active in the bench workload, while the production default profile (`config/default.yaml`, `leadership_weight: 0.0`) leaves it inactive. The slice therefore pays a per-agent-per-tick write for a field that is provably unused in a large fraction of configurations, while the design elsewhere (slice 148's \"leadership block gated on the same flag\") treats that gating as an established invariant. Either gate the reindex of the leadership field on `lead_active` (or state why it must be unconditional) or drop it from this slice.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:62"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`radius_only` is scope creep relative to the parent slice entry, and the plan entry is not updated to match",
+   "description": "The parent plan entry for slice 152 describes a coherent grid with FRNN-style collect-then-sort becoming viable and scopes the work to the reindex plus coherent reads; it does not mention a new `radius_only` neighbor mode, and the slice 150 design explicitly placed \"FRNN-style collect-then-sort\" in a *future* slice. The slice's own Out-of-Scope list correctly excludes FRNN, but `radius_only` \u2014 a new user-facing mode with its own semantics, its own config surface, its own baseline measurements and its own public justification \u2014 is a second product surface added on top of the reindex. The slice also commits to an explicit-failure config error for a removed mode, which is a user-visible API break owned by a performance slice. If `radius_only` is retained, the plan entry (140-slices.simulation-scaling.md, item 13) should be amended to cover the new mode set and the new baseline, since the slice's own default-flip and config-error behavior cannot be landed without the plan acknowledging the API change.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:31"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Heap/eviction correctness gap: no direct test covers coherent-slot heap semantics",
+   "description": "Criterion 1 verifies the reindex's permutation and field-copy invariant, and criterion 2 relies on the existing slice 150 parity test. But nothing in the criteria directly asserts that `heap_idx` stores coherent slots rather than original IDs \u2014 the exact semantic change most likely to silently corrupt selection (Risk 3 acknowledges this and defers to \"the parity test at runtime\" plus a human visual check). The slice already ships a pure-Python heap reference test (`tests/bench/test_heap_selection.py`); a cheap additional assertion that the selected agent set (mapped back through `coherent_to_original`) equals the true k-nearest set at N=64 would close the gap deterministically rather than relying on a 5% aggregate parity tolerance and a visual check.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:355"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`radius_only` mode has no behavioral parity criterion against the CPU reference",
+   "description": "`radius_only` is described as \"the metric/Reynolds-style baseline\" and is offered as a user-selectable mode for metric-flocking demos, but criterion 3 is purely a TPS measurement with \"no pass/fail\", and criterion 2's parity test is specified only for `k_nearest`. A newly shipped user-facing neighbor-selection mode with no correctness criterion against the numpy reference (where uncapped/accept-all-within-radius is the CPU behavior) leaves the metric path's numerical fidelity unverified \u2014 relevant because the architecture's first design goal is \"Preserve behavioral fidelity across scaling tiers\" and \"performance without correctness is worthless\". A parity assertion that `radius_only` matches the numpy reference's uncapped path within the same 5% tolerance would cover this.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357"
+  }
+ ]
+}

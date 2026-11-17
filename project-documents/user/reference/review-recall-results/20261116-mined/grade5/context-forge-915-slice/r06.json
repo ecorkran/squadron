@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Define how legacy shared-file values are actually removed",
+   "description": "`delete(key, 'project')` is defined to route by the key\u2019s classification, so deleting `git.integration_branch` targets `.context-forge.local.toml`. Migration, however, must remove the legacy value from `.context-forge.toml`. The design does not specify an operation that targets that shared file. The collision walkthrough\u2019s `cf config unset git.integration_branch --project` has the same problem: it can leave the stale shared value in place, so the key may still resolve and the check may still warn. Specify a shared-file removal mechanism and use it for migration and cleanup.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Data-Flow"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Ensure existing projects ignore the personal file",
+   "description": "The ignore rule is added only when `cf init` runs. An existing project that upgrades and then runs `cf config set git.integration_branch ... --project` can create `.context-forge.local.toml` without an ignore rule; migration can also create that file. That leaves personal settings at risk of being committed, contrary to the slice\u2019s stated goal. Ensure the rule is installed for existing projects when the personal file is created or migrated, or specify an equivalent upgrade path.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#-gitignore-handling-in-cf-init"
+  }
+ ]
+}

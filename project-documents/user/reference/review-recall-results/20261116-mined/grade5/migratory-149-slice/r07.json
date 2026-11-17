@@ -1,0 +1,26 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Config mechanism for S/cell_size doesn't match the actual bench harness",
+   "description": "The design names three inconsistent mechanisms, none of which matches the code: (1) \"BenchConfig\" \u2014 no such component exists; the harness config surface is the `Workload` YAML loader (`src/migratory/bench/workload.py`), which has a strict required-field schema and no `subdivision_factor` field today (unknown keys are silently ignored, so adding one to YAML without loader changes would do nothing). (2) The walkthrough commands (`scripts/bench.py --config mid-flock-50k --subdivision-factor 3 --ticks 200 --parity-check numpy`) reference a CLI that doesn't exist \u2014 the real entry point is `python -m migratory.bench` with `--workload`/`--backend` only (`src/migratory/bench/cli.py:23-34`); there is no `--ticks` or `--parity-check` flag, and tick counts come from the workload YAML. (3) The claim \"the bench harness passes cell_size at setup; it reads from config\" is inaccurate: `GpuAgentState.setup()` computes `cell_size = max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER` internally (`src/migratory/bench/backends/quadrants_fused_state.py:150`) \u2014 it is not passed in. The design should name the real seam (e.g., a `subdivision_factor` field on `Workload` threaded through `GpuAgentState.setup()` as `max_query_radius / S`, replacing the hardcoded multiplier) and state whether `--subdivision-factor` is a new CLI override or a workload-YAML field. \"Refined after implementation\" does not cover this: the loader/backends touched (runner vs state) determine where the validation code lives.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#component-interactions"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Gate workload `mid-flock-50k` resolves to N=100,000, contradicting the design's N=50k premise",
+   "description": "The design's gate configuration is \"mid-flock-50k workload, S=3, max_neighbors=32\" with A2/A3 measured at N=50k. The checked-in `bench/workloads/mid-flock-50k.yaml` has `n: 100000` while its own description says \"N=50k operating point\" (and its `cluster_centers` at [120,120]/[280,280] with radius 45 look scaled for a 400\u00d7400 world, not 1536\u00d71536). Since `GpuAgentState.setup()` reads `workload.n` directly, A2/A3 as written would be measured at N=100k against a slice-145 baseline recorded at N=50k \u2014 invalidating the \u22655\u00d7 and \u2265100 TPS comparisons. The slice design should either call out the workload correction as in-scope or pin the exact workload definition (N, world size, cluster geometry) the gates run against; the p99-occupancy premise (~5000/cell) the entire speedup model rests on was measured under a specific formation config.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Walkthrough Step 3 cannot reproduce the baseline with the shown commands",
+   "description": "The \"Baseline (S=1, counter-gating)\" and \"Early exit only (S=1, break enabled)\" commands are byte-identical; once the break is merged there is no flag that disables it, so the baseline must come from the recorded slice-145 numbers (force_total \u2248 25.18 ms at N=50k) or from a temporary disable mechanism. A2 permits using recorded numbers, but the walkthrough should say so explicitly rather than implying a fresh same-command baseline run.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#verification-walkthrough"
+  }
+ ]
+}

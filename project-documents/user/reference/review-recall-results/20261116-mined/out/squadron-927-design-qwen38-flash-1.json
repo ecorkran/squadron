@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`aiModel` changes meaning and two new frontmatter keys cross the Context Forge / Amoeba seam with no coordination step",
+      "description": "This initiative's own rule on the artifact frontmatter is explicit: 900's slice-plan entry for 911 Part C states \"artifact frontmatter is the documented boundary with Context Forge review-gating, so adding a field is a cross-tool contract change, not a squadron-local one \u2014 coordinate before settling the schema.\" Slice 919 honored that literally (D6): it measured cf's tolerance of the unknown key, and made \"a cf issue is filed once the key ships\" success criterion 7. Slice 927 adds `diffTruncated` and `requestedModel` and \u2014 more consequentially \u2014 redefines the meaning of an existing key, `aiModel`, from requested-id to answering-id, while asserting the seam matters in its own Value section (\"context-forge gates and Amoeba read the artifact, not squadron's logs\"). D5 performs exactly the reader-verification this rule demands for `verdictSource` (\"grep of context-forge on 20260926 found no reader\") and D13 argues from a contract invariant, but no equivalent check is recorded for `aiModel`, and no success criterion files or announces anything for the new keys. The requirement left unmet: consumers the design names as its justification (CF gate, Amoeba auto-continue) are told nothing that `diffTruncated: true` + `verdictSource: imposed` now implies for them, and the one redefined key has no recorded evidence that anything reading it tolerates the change. The claim that the new meaning is \"the meaning its consumers assumed all along\" is an assumption about another repo, not a verification.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Provides-to-Other-Slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The git-diff-fails-or-comes-back-empty path has no `DiffInjection` value, and would render `diffTruncated: false` on a review that saw no diff at all",
+      "description": "Part A's stated rule is \"measure the diff produced against the diff injected,\" and D2/D3 enumerate two drop paths (file-size truncation; total-budget skip). `review_client.py` has a third: the diff is injected only under `if diff_content:` (line 423), and `_run_git_diff` returns `None` both when `git diff` exits non-zero and on `FileNotFoundError`/`OSError`, and returns `None` when stdout is blank. On that path no `_add_injection` call ever happens, so nothing is recorded for the diff. Under D1's arithmetic (`truncated = injected_chars < total_chars`) the record is either absent or `0 < 0 == false`, so D2's \"the key is always written when a diff was part of the review\" writes `diffTruncated: false` \u2014 and D4's cap cannot fire \u2014 for exactly the failure the slice exists to eliminate: `inputs[\"diff\"]` was present, the model received no diff, and the artifact asserts clean coverage. Note the existing `EmptyDiffError` guard does not cover this: it keys on `_run_git_diff_filenames`, a separate subprocess invocation that can succeed (non-empty file list) while the content call fails, or vice versa. This is the one case in the class Part A defines that the design's decision list does not name, and it needs an explicit value and an SC (either \"no diff reached the model\" as a distinct recorded state, or a loud failure), not an implicit fallthrough.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D3-A-diff-dropped-by-the-total-injection-limit-is-a-truncation-to-zero"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is overweight for a 3/5 maintenance slice; three pieces of named scope can be cut or deferred",
+      "description": "Initiative 900's architecture asks for small, focused, \"lighter-weight given the maintenance nature\" slices. This design carries 13 numbered decisions, a new `review/coverage.py`, a new `models/snapshot.py` module holding one predicate, six new JSON keys, and a live verification pass across four provider profiles. Nothing the plan assigns is dropped, but the following is scope nothing in the slice requires:\n- **D12 (more than one model answered) \u2014 cut.** No observed instance is cited, and on the paths Part C instruments the id is structurally single-valued: `OpenAICompatibleAgent` sends `self._model` for every chunk of every loop turn and for the #92 recovery turn (same agent object), so a second distinct id there is not reachable. `aiModel` = last reported plus the D9 check is sufficient; the plural digest line and the second WARNING can return with a specimen.\n- **`answering_models` as a JSON key and as a list \u2014 defer behind D12.** The plan asks for \"record both (`requestedModel` / `model`)\". A list of one, always-present, is an abstraction nothing uses yet; keep the list internal if convenient, but shipping it as a published key invites consumers on a value whose semantics D12 leaves unsettled.\n- **The `**Diff:**` header line \u2014 cut.** Its two counts already appear in the frontmatter boolean, in JSON, and verbatim in the synthetic finding's body (the D4 example quotes both numbers). The conditional render line, its \"only when truncated\" rule, and its tests buy a human convenience the finding text already provides.\n- **`models/snapshot.py` as a new module \u2014 merge.** The design's own justification (\"it is about model ids, not reviews\") argues for `models/aliases.py`, which already owns model-id semantics and is already imported by `review_client.py`; a one-function module plus its own test file is a boundary no requirement asks for.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D12-More-than-one-model-answered-in-one-run"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D4 uses `or 0` for telemetry counts, which the same document's convention section and the surrounding code both forbid",
+      "description": "D4's successful-call formula is literally `(tool_calls_made or 0) - (failed_tool_calls or 0)`, and the design's own Patterns and Conventions section states \"`is None` checks, never `or 0`, for counts.\" The codebase is emphatic about this (`turn_capture._add` keeps `None` only when neither turn reported; `persistence._render_optional` documents that \"the distinction the `x or 0` idiom destroys\" is load-bearing; the frontmatter telemetry pair uses `is None` deliberately). The semantic choice is defensible \u2014 no-tools-offered and tools-offered-but-unstamped both mean \"could not have read the tail\" \u2014 but collapsing \"not reported\" into zero here is a deliberate exception to the rule the design just restated, and it should be marked as one (including why the tri-state does not need a third branch in this predicate) rather than written in the forbidden idiom.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4-Truncated-and-unread-cap-PASS-to-CONCERNS-dont-fail-the-run"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`VerdictSource.IMPOSED` claims a closed vocabulary 919 defined, while slice 924 has an unmet claim on the same enum",
+      "description": "D5 argues the vocabulary \"stays closed,\" and the reasoning is sound, but two accuracy points: (a) the enum's own docstring in `review/models.py` says \"A closed **two-value** vocabulary (D7), not a reason string,\" and nothing in the design's Implementation Details mentions updating that comment \u2014 after this slice the comment is false; (b) 900-plan slice 924 (not started) already reserves a value for the same enum \u2014 its Part A says the recovery-turn verdict \"must say which value that is rather than letting it read as plain `stated`.\" 927 neither lists 924 as a prerequisite nor notes the interaction, so two unscheduled slices hold open claims on one closed vocabulary. A one-line disposition (924's repair-turn value is orthogonal to IMPOSED because it changes how the verdict was *obtained*, not who set it) would close it.",
+      "file_ref": null,
+      "category": "cross-slice-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D5-VerdictSourceIMPOSED"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter `dependencies: []` / `interfaces: []` contradict the design's own prerequisite and contract sections",
+      "description": "The body's Prerequisites names four landed slices the work genuinely rides on (265/266 telemetry, 918's stamping pattern and Run Digest, 919's `VerdictSource`, 920's SDK pin that makes `AssistantMessage.model` exist), and Interfaces Required names three external shapes; Provides to Other Slices names external consumers of new frontmatter and JSON keys. All three frontmatter fields are empty. This matches the plan entry's own \"Dependencies: none,\" so the understatement originates upstream rather than here \u2014 but 919's frontmatter records `dependencies: [917, 918]` for the same kind of ride-along, so the convention exists in this initiative and is not followed. The gap is a machine-readable one only: a gate or planner reading frontmatter rather than prose sees an unbundled, interface-free slice.",
+      "file_ref": null,
+      "category": "metadata-accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:1-10"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope tracks the plan entry exactly; the plan's delegated decisions are answered, and nothing assigned is dropped",
+      "description": "Part A's \"design picks the minimum that lets a gate decide\" is answered as a boolean in frontmatter with counts in header/JSON and a stated refusal of a speculative threshold gate (D1); Part B's binary choice (force CONCERNS vs fail the run) is decided with a mechanism argument rather than a preference, and the argument is checked against the real consumers \u2014 `ON_CONCERNS` tripping, and the #5 no-verdict-from-severity precedent distinguishing a measured fact about the run from a finding severity; Part C's \"what counts as differs\" rule (D9) is deliberately exact, refuses prefix-guessing, and defers widening to captured live ids instead of inventing forms \u2014 which is the right posture against the 913-style \"drift changed the design\" failure. The Excluded list is the plan's own exclusions plus #137/#138 deferred with the reasons the plan conditioned on, and the one renumbering trap this initiative has hit (912\u2192305, a new policy dressed as maintenance) is explicitly not repeated: 927 records and caps, it does not invent gate policy. Interface parity is structural rather than asserted \u2014 one `ReviewResult`, one `format_review_markdown`, no second path.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Technical-Scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Code-seam claims were accurate against the sources they cite",
+      "description": "Spot-checks the design's decisions depend on all hold: D1's character-vs-byte observation matches `_truncate` (`len(content)`, warning \"Truncated %s (%d bytes)\"); D3's \"no new branch in the budget logic\" matches `_add_injection` returning `False` on budget exhaustion after truncating; D6's description of the renderer \u2014 \"picks exactly one of the findings list, the `fallback_used` not-parsed notice, or the UNKNOWN notice,\" with the findings branch winning on a non-empty list \u2014 matches `format_review_markdown`'s `if result.findings / elif result.fallback_used / elif degraded` chain, and the terminal's parallel degraded messages exist at `cli/commands/review.py:181-198`; D8's placement of the stamp next to `stop_reason` matches both providers' stamping sites (SDK `_translate_and_track` on the `ResultMessage` translation; OpenAI `_stamp_tool_telemetry` before its tools early-return), and the \"existing OpenAI text-message `metadata[\"model\"]` holds the requested id, leave it alone\" caveat matches `translation.build_messages(turn.text, [], self._name, self._model)`; the `TurnCapture` metadata-folding loop D8 folds into is keyed per-metadatum with `is not None` guards, which is the shape \"answering_models append in order, deduplicated\" needs. `_run_git_diff`'s warning-only, `None`-on-failure behavior is the one path in the class the design under-specifies (see the error-handling finding); everything else the design claims about existing code is right.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6-A-synthetic-finding-must-not-hide-a-degraded-parse"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "`aiModel` changes meaning and two new frontmatter keys cross the Context Forge / Amoeba seam with no coordination step",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Provides-to-Other-Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The git-diff-fails-or-comes-back-empty path has no `DiffInjection` value, and would render `diffTruncated: false` on a review that saw no diff at all",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D3-A-diff-dropped-by-the-total-injection-limit-is-a-truncation-to-zero",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is overweight for a 3/5 maintenance slice; three pieces of named scope can be cut or deferred",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D12-More-than-one-model-answered-in-one-run",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "D4 uses `or 0` for telemetry counts, which the same document's convention section and the surrounding code both forbid",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4-Truncated-and-unread-cap-PASS-to-CONCERNS-dont-fail-the-run",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "cross-slice-contract",
+      "raw_category": null,
+      "summary": "`VerdictSource.IMPOSED` claims a closed vocabulary 919 defined, while slice 924 has an unmet claim on the same enum",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D5-VerdictSourceIMPOSED",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "metadata-accuracy",
+      "raw_category": null,
+      "summary": "Frontmatter `dependencies: []` / `interfaces: []` contradict the design's own prerequisite and contract sections",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:1-10",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Scope tracks the plan entry exactly; the plan's delegated decisions are answered, and nothing assigned is dropped",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Code-seam claims were accurate against the sources they cite",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6-A-synthetic-finding-must-not-hide-a-degraded-parse",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T11:12:00.654503",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 127237,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1444269,
+  "cached_tokens": 1240064,
+  "cache_write_tokens": null,
+  "completion_tokens": 35723,
+  "reasoning_tokens": 30714,
+  "duration_seconds": 495.9561898750253,
+  "cost_usd": 0.06602152,
+  "cost_basis": "alias_pricing"
+}

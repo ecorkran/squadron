@@ -1,0 +1,124 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tick cycle places client distribution and log writes inside the tick, contradicting the synchronous-tick rule",
+   "description": "The \"Envisioned State\" tick cycle lists step 5 \"**State distribution** \u2014 Push the committed state to connected clients as snapshots or deltas. Write to the event log if logging is active\" *inside* the tick. The Technical Considerations section then says the opposite: \"run the tick synchronously, then yield to the async event loop for I/O between ticks.\" These cannot both hold. If distribution is awaited inside the tick body, the slowest client (or a log flush) directly stalls the tick budget, which contradicts the stated \"must handle slow or stalled clients without blocking the tick loop\". The implemented server (`src/migratory_server/server.py`) puts logging inside `tick_body`, so the code follows the first reading. Resolve by moving distribution and log flush to a post-tick async fan-out step, and say so explicitly.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envivened-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Current State\" section is factually stale \u2014 the world server already exists",
+   "description": "The document states \"No world server exists. The behavior engine architecture (100-arch) defines the computational core but has no host process.\" The repository contradicts this: `src/migratory_server/` contains `server.py`, `tick.py`, `entities.py`, `simulation.py`, `config.py`, `logging_setup.py`; `300-slices.worldserver-foundation.md` marks slices (300), (301), (302), (303) as complete; and `config/default.yaml` already carries the tick rate, world bounds, entity capacity, profiles, and populations the doc lists as future work. An architecture document whose \"Current State\" is false is a hazard for every downstream reader (including the 500 and 320 initiatives, which are told the world server does not exist). Also note `config/default.yaml` already defines `server.host`/`server.port` for a WebSocket binding that nothing yet binds \u2014 the network layer does not exist.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#current-state"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Ownership conflict: this document assigns the environment layer and logging/replay to the world server, which the initiative plan assigns to initiatives 500 and 320",
+   "description": "The Anticipated Slices list includes \"**Environment layer foundation** \u2014 Terrain generation, resource placement, and the read-only query interface\" and \"**Logging and replay** \u2014 Capture simulation state to a log. Replay a log to reconstruct past simulation runs.\" The initiative plan (`001-initiative-plan.migratory.md`) makes (500) Environment Layer and (320) Logging & Replay *separate initiatives that depend on 300*, and `300-slices.worldserver-foundation.md` restates this for (304): \"The environment layer itself \u2014 terrain, biomes, resources, seasonal logic \u2014 is owned by initiative 500.\" This document asserts the opposite, and its own Overview puts \"environment hosting\" inside the world server's scope. As written, terrain generation and the log format each have two plausible owners and no agreed interface, and 500 \u2192 300 \u2192 500 forms a dependency loop that only the slice plan's deferral note papers over. The document must state, per boundary: who authors terrain/biome data, who authors the log format, and what the server's contract to each is.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Replay determinism is claimed but the inputs needed for it are not specified",
+   "description": "\"The log format supports replay: given a log and the same configuration, the simulation can be reconstructed tick-by-tick.\" Several required inputs are missing or unowned:\n- The configuration surface listed includes an \"environment seed\" but **no spawn seed**, while `EntityManager.spawn_population` uses an unseeded `np.random.default_rng()` (`src/migratory_server/entities.py`). Replaying an initial population therefore requires the logged initial state, not just the config \u2014 which the document never states.\n- \"Same configuration\" is insufficient: the engine code version and the NumPy/BLAS version affect results, and nothing in the proposed log metadata captures them.\n- The precision question is unresolved and load-bearing: 100-arch explicitly defers it (\"the engine should define its internal precision\"), the engine currently stores float64 (`src/migratory/engine/state.py`), the concept specifies Float32Array for transfer, and this document's egress math (\"500K entity positions (12 bytes each)\") silently assumes float32. At float64 the same egress figure is 24 bytes/entity \u2014 240 MB/s per client, double the stated number \u2014 and the \"500K entities \u2248 24MB of state\" figure is off by the same factor.\nDecide precision, add a spawn seed to the configuration surface, and specify what the log header captures.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Tick as transaction\" is asserted but no copy-on-write or commit contract exists between engine and server",
+   "description": "\"Tick as transaction \u2014 Each simulation tick is a discrete, atomic operation: read current state, compute next state, commit.\" The world server's tick cycle correspondingly has separate \"Behavior evaluation\" and \"State commit\" steps. But the two documents disagree on the engine's contract: 100-arch says the engine \"**Returns** the updated state array\", while the implementation mutates `state.positions`/`state.velocities` in place and returns `None` (`src/migratory/engine/tick.py`, `src/migratory/engine/integration.py`). Under the in-place contract there is no read/commit separation \u2014 the engine has already mutated canonical state before the server's \"commit\" step, and a mid-tick exception leaves partially updated state, directly contradicting atomicity and \"Between ticks, the world is consistent and queryable.\" The document never states which contract it assumes. If in-place is intended, say the tick is not a transaction and state what the atomicity guarantee actually is; if a commit is intended, the engine interface and the EntityManager's array ownership must change (the server currently hands the engine its own arrays by reference).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The wire protocol as described cannot accept the future command messages the document promises to keep possible",
+   "description": "\"a minimal framing protocol (tick number, entity count, array layout descriptor) wrapping raw buffers\" plus \"the protocol should not preclude adding them later\" (client-to-server commands). The described frame has no message type, no protocol version, and no error channel. A client command would have to be encoded as a frame with the same header layout, i.e. every deployed client breaks, or the frame is retrofitted with a type byte, i.e. the \"minimal framing\" was never actually designed. The same gap blocks the other future shapes the document itself introduces: aggregate descriptors for distant flocks (\"position, radius, count, heading\") are a different record shape than a per-entity position, and nothing in the framing distinguishes them. Define the envelope now \u2014 type, version, payload \u2014 even if only one message type is ever sent.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Multi-resolution support \"from the start\" is not actually provided by the described entity management, and retrofitting it will change the serialized layout",
+   "description": "\"The key architectural decision now is ensuring the behavior engine's interface and the entity management layer support aggregation and variable-rate ticking from the start.\" The engine side is genuinely prepared (subset-evaluable `tick(..., active_indices)`, spatial index built from the full population). The entity-management side is not, and the document specifies nothing about it:\n- Entity state is a homogeneous SoA (positions/velocities/accelerations/profile_indices) with no discriminator for entity *kind*. An aggregate flock entity (center of mass, heading, dispersion, count) is not representable in it.\n- There is no per-entity variable-rate metadata (phase / next-evaluation tick), so 1/4- and 1/16-rate ticking has nowhere to live.\n- `AgentState` has no room for a tick-phase array, and the wire/log formats would need a new field \u2014 exactly the \"rewrite\" the document claims to avoid.\nConcretely: specify the entity-kind discriminator and the tick-phase array as part of the entity state (or state explicitly, with a rationale, that aggregation will require a state-format change and that the cost is accepted).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "World-boundary semantics are undefined",
+   "description": "\"The world has finite spatial bounds ... These define the simulation's scale and constrain memory allocation.\" Bounds are enforced at configuration/spawn time only (`_validate_spawn_area` in `src/migratory_server/config.py`). Nothing defines what happens when an entity crosses the boundary: wrap, clamp, reflect, or despawn. The integrator clamps velocity magnitude only (`src/migratory/engine/integration.py`), so entities currently drift out of the world indefinitely and the spatial index (`BruteForceQuery`) has no bounds awareness at all. This is not cosmetic \u2014 it changes trajectories, therefore replay fidelity, and it determines whether the \"world bounds\" fed to the environment's terrain/biome coverage are a hard limit or a suggestion. Pick one rule and put it in the tick contract.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "No WebSocket implementation path, and the thread-offload upgrade path is wrong for the current engine",
+   "description": "\"The WebSocket and async I/O story is well-served by asyncio\" and \"offloading the tick to a thread or process (NumPy releases the GIL) becomes the upgrade path.\" Two concrete problems:\n1. asyncio has no WebSocket server. `pyproject.toml` declares only `numpy` and `pyyaml` (plus pytest); there is no `websockets`/`aiohttp`/`uvicorn` dependency, no slice adds one, and the document never names a library or version. \"Trivial either way\" (concept doc) is not true of the WebSocket layer specifically \u2014 framing, backpressure, and per-client send queues are the bulk of the work in slices (305)/(306).\n2. Thread offloading does not help the current hot path. `src/migratory/engine/flocking.py` runs a Python-level `for` loop over agents and calls `query_radius` per agent; the GIL is held throughout, so only NumPy-internal operations release it. A thread would not relieve tick-time blocking of the event loop; a process would (at the cost of copying state arrays each tick, which 100-arch's design does not account for). Either name the concrete library or correct the upgrade path.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "4M-entity / multi-GPU / predictive-rebalancing narrative is out of proportion and out of scope for this initiative",
+   "description": "Roughly a third of Technical Considerations is devoted to a scale tier (1M\u20134M, 4M+) the world server will never host, plus a \"predictive partition rebalancing / temporary aggregation elevation / merge-front\" analysis of group encounters. The initiative plan explicitly assigns this scope to (620) Distribution & Scaling, which it notes \"could expand the product scope 5-fold or more\" and is \"deliberately deferred \u2014 it need not be designed proactively.\" The slice plan for this initiative also explicitly defers it: \"Multi-resolution simulation deferred ... premature for the foundation slice plan.\" The document then contradicts itself by making multi-resolution a \"key architectural decision now.\" Cut the escalation-path narrative (GPU tiers, multi-GPU partitioning, merge-front strategies) to a short pointer to initiative 620, and keep only the tier table's first row (10K\u201350K, the actual operating range) plus the egress scaling observation, which is the one part that constrains this initiative's design. This is exactly the \"avoid premature lock-in\" tradeoff the concept doc describes, inverted into speculative design work the project has no schedule for.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Per-tick failure handling is undefined despite the \"Explicit lifecycle\" principle",
+   "description": "\"Explicit lifecycle \u2014 Server startup, shutdown, and error states are first-class concerns with defined behavior. ... No silent failures, no undefined states.\" The document defines startup config validation (\"Failures should be explicit and immediate\") but never states what happens when a tick fails: a behavioral force raising, the environment layer throwing during `update()`, a client send erroring mid-distribution. Under the current implementation any exception in the tick body propagates out of `asyncio.run` and kills the process (`src/migratory_server/server.py`, `src/migratory_server/tick.py`); combined with in-place engine mutation, a mid-tick exception leaves the world in a half-updated state, violating \"the world is consistent and queryable\" between ticks. Define the per-tick error policy (abort the tick and roll back? skip the tick and count it? crash the server deliberately?) \u2014 this also determines whether a \"commit\" step is needed, which is the same gap as the transaction finding above.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "\"Persist state on shutdown\" is claimed as lifecycle behavior but no persistence capability is planned in this initiative",
+   "description": "The Explicit lifecycle bullet states the server \"knows how to initialize subsystems in order, drain client connections gracefully, and persist state on shutdown.\" No persistence exists: `300-slices.worldserver-foundation.md` lists \"State Persistence and World Save/Load\" only under Future Work (#3), and no slice in the plan writes state to disk. Either remove the claim or state that persistence is deferred and owned elsewhere.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Anticipated Slices list diverges from the slice plan, and client-side spatial culling has no owning slice",
+   "description": "The document lists 7 slices; the slice plan lists 9 plus 6 future-work items. Missing from the document's list: state serialization/protocol (a standalone slice in the plan, because the format serves both clients and logging), client spatial culling (a slice in the plan and the \"first piece of the multi-resolution pipeline on the network side\"), and temporal orchestration (world clock / seasonal parameter). The culling omission is the substantive one: the document devotes a full paragraph to per-client frustum culling as the answer to the egress wall, but nothing in its slice list implements it, so a reader of this document alone would not know it is planned.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Scaling claims are unvalidated and contradicted by the current engine implementation",
+   "description": "\"10K\u201350K entities: Comfortable on a single CPU with NumPy-vectorized spatial hashing\" is asserted with no measurement plan. The current code is not vectorized in the sense 100-arch requires (\"no Python-level per-agent branching, no callbacks into Python during the hot loop\"): `flocking.py` loops over agents in Python per force, and `BruteForceQuery.query_radius` is an O(n) NumPy call per agent, so per-tick cost is O(n\u00b2) with a Python loop overhead on top. At 50K entities this is far outside a 50 ms budget. The architecture's own \"Observable by default\" goal does not cover this, and there is no benchmark or profiling slice. Either mark the numbers as unvalidated hypotheses to be measured, or add a benchmark to the tick-loop slice.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Environment boundary described as read-only, but the slice plan requires server-side environment writes",
+   "description": "\"The environment layer ... provides terrain elevation, biome data, resource locations, and seasonal state to the behavior engine through a read-only query interface.\" The slice plan for (304) requires \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" \u2014 writes to environment state originating from the server. The read-only constraint is stated only for the engine's view, but as written it reads as the server/environment boundary, leaving no defined write path for swarm-intelligence (stigmergy) or for resource depletion. Specify the environment interface as read (query) + write (deposit/update) with the server as the writer.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envivened-state"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Observability goal has no metrics interface or owning slice",
+   "description": "Under graceful degradation: \"warn on overrun, continue at best effort, and provide metrics to diagnose the bottleneck.\" There is no metrics mechanism described (no health/status endpoint, no metrics sink), and `TickMetrics` (`src/migratory_server/tick.py`) is internal-only with no reader. The \"Observable by default\" design goal is therefore unbacked by any component or slice.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Broken cross-reference to the concept document",
+   "description": "\"Related Work \u2014 [001-concept.migratory.md](../project-guides/001-concept.migratory.md)\" points at the initiative plan; the concept document is `000-concept.migratory.md` (100-arch links to it correctly). The frontmatter carries the same error: `dependsOn: [001-concept.migratory, 100-arch.behavior-engine]`. Fix the link and the dependency id.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#related-work"
+  }
+ ]
+}

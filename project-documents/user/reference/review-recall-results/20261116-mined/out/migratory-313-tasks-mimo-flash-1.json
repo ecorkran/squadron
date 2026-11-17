@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "Round-trip test asserts policy match rather than full `ServerConfig` equality",
+      "description": "Success criterion 5 has two halves: (a) `config_to_yaml` emits the policy as a plain string, and (b) reloading the emitted YAML produces an *equal `ServerConfig`*. The task's `test_bounds_policy_yaml_round_trip` covers the reload and asserts the policy matches, which substantively proves the policy field round-trips, but it stops short of asserting whole-config equality. Asserting `reloaded == original` on the `ServerConfig` would cost one line and fully satisfy criterion 5. Non-blocking.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md (Task 1.4)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Shipped-config defaults verified by one-off commands, not a committed regression test",
+      "description": "Success criterion 12 (`default.yaml` and `test.yaml` use `policy: wrap`) is verified in Tasks 4.1/4.2 via inline `python -c` load checks, which satisfies the criterion as written. There is no committed test pinning the shipped configs to `wrap`, so a later accidental edit to those YAML files would only surface in the manual walkthrough (Task 5.2). This is optional hardening, not a gap against the stated criteria \u2014 noted for the record only.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md (Tasks 4.1, 4.2)"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Round-trip test asserts policy match rather than full `ServerConfig` equality",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md (Task 1.4)",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Shipped-config defaults verified by one-off commands, not a committed regression test",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md (Tasks 4.1, 4.2)",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-17T07:40:35.163994",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 8381,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 16374,
+  "cached_tokens": 0,
+  "cache_write_tokens": null,
+  "completion_tokens": 2704,
+  "reasoning_tokens": 2109,
+  "duration_seconds": 85.11872808402404,
+  "cost_usd": 0.0015247400000000001,
+  "cost_basis": "alias_pricing"
+}

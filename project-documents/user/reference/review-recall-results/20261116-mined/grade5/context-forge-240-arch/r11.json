@@ -1,0 +1,68 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Four mutually incompatible definitions of the gate's output contract",
+   "description": "The Overview says the gate \"returns a `pending-review` or `review-failed` recommendation.\" The \"Gate insertion point\" section says it returns `recommendation: \"review\"` and `recommendation: \"blocked\"`. Design Goals says \"The visualizer and runners can act on them without parsing recommendation strings\" because the states are in the `SliceStatus` enum. The Amoeba Runner entry says consumers \"depend on CF returning structured `recommendation` values with a stable vocabulary\" and \"only add new `recommendation` string values.\" These are four different contracts for the same event. In the current code `NextAction.recommendation` is a free-text string with values like `\"Advance to slice 101: name\"` and `\"Continue implementation \u2014 2 tasks remaining\"` (`types.ts`, `WorkflowNavigator.ts`) \u2014 there is no \"stable vocabulary\" today. Amoeba cannot build a switch against `review`/`blocked`/`pending-review`/`review-failed` until the doc picks one mechanism (structured field vs status enum vs string). This is the load-bearing seam of the whole initiative and must be resolved.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Config-driven gate has no path for config values to reach the navigator/checker",
+   "description": "The design says \"the gate lives in the shared `WorkflowNavigator` and `ConsistencyChecker`\" and both surfaces \"inherit it without per-surface work.\" But `WorkflowNavigator.getNext(project: ProjectData)` and `ConsistencyChecker.check(project: ProjectData)` receive only `ProjectData`; neither holds a `ConfigManager`, and all four call sites construct them with no config (`new WorkflowNavigator()` in `cli/src/commands/next.ts`, `status.ts`, `mcp-server/src/tools/workflowTools.ts:154,200`; `new ConsistencyChecker(introspector)` in `check.ts:134`, `workflowTools.ts:256`). Reading `review_enabled`/`review_threshold` therefore requires either editing every construction site (that *is* per-surface work) or undocumented direct TOML reads inside core classes. The doc never states which. Compounding this, the deferred \"flat dotted keys\" option for `review_gates` is not viable as described: `ConfigManager.get()` rejects any key not in `CONFIG_KEYS` and casts values to `string|boolean|number`, and `validateValue()`'s `typeof value !== def.type` check would reject a nested table. Every transition/field combination would need a registered scalar key.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Inherited by both surfaces"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`review_unknown_as` value vocabulary is undefined and internally inconsistent",
+   "description": "Three different values are used for this key with no definition of its allowed set: config example and default are `\"fail\"` (Config keys); Technical Considerations uses `review_unknown_as = \"concern\"` and says UNKNOWN is then \"compared against `review_threshold`\"; \"Slice status extension\" says UNKNOWN \"and `review_unknown_as` treats it as pending\" \u2192 `pending-review`. The threshold vocabulary is also inconsistent: `review_threshold = \"concerns\"` (plural, Config keys/Verdict handling) vs `\"concern\"` (singular, Technical Considerations). The design demands fail-fast validation through `ConfigKeyDefinition.validate`, but no enum is specified, so the decision matrix and its tests (\"all `review_unknown_as` / `review_threshold` combinations\") cannot be written. Whether UNKNOWN maps to a verdict, a status, or a pass/block is left ambiguous.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Verdict handling"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Only one of the three slice-level gates has a designed insertion point",
+   "description": "The config defines four transitions (`pre-slice-plan`, `pre-tasks`, `pre-implementation`, `pre-advance`), and the doc says \"V1 implements only the four slice-level transitions\" \u2014 but `pre-slice-plan` is explicitly initiative-level and deferred, so v1 has three slice-level gates, not four. Yet the only designed branch in `getNext()` is the single one between Priority 5 and 6, using reviewType `code` (i.e., `pre-advance`). No insertion point, reviewType resolution, or rationale is defined for `pre-tasks` or `pre-implementation`. A single `SliceStatus` value (`pending-review`/`review-failed`) also cannot express *which* of three gates fired, so the \"first-class status\" mechanism cannot scale to the configured table without another design decision.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Gate insertion point"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Worktree-scoped config is asserted but not supported by the stack",
+   "description": "\"The `workflow.review_*` keys should be resolvable at worktree scope ... using the resolution chain 180 introduced.\" Initiative 180 introduced worktree-scoped *workflow fields* via `applyWorktreeOverlay` (which rewrites `projectPath` to `wt.worktreePath`), not config resolution. `configPaths.ts` defines only `getProjectConfigPath` (`.context-forge.toml` at `projectPath`) and `getUserConfigPath`; `ConfigManager` resolves project \u2192 user \u2192 default with no worktree tier. Moreover `workflow_check` (`check.ts:120`, `workflowTools.ts:243`) builds its base from `store.getById(id)`, so even the overlay-derived `projectPath` is not universally available for config lookup. The stated extension point does not exist as claimed.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Related Work"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Squadron frontmatter contract does not fit CF's flat parser, and CF's existing review schema is ignored",
+   "description": "`FrontmatterData` is `Record<string, string>` and `frontmatterParser.ts` stores one `key: value` per line. The Squadron contract has `score: float | None` and `criteria: dict[str, float] | None`; a nested `criteria:` block is flattened into meaningless top-level keys and the dict is lost. The claim that CF \"carries `criteria` and `provenance` as opaque fields ... preserved for downstream tools\" is false \u2014 CF only reads and never re-emits review frontmatter. Separately, `frontmatterSchema.ts` already defines a `review` docType schema (`docType`, `project`, `status`, `dateCreated`, `dateUpdated`) with no `verdict`/`score`; the doc says the schema is owned by Squadron 300 and \"CF must not extend or reinterpret this schema,\" without acknowledging CF's existing competing definition.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Frontmatter as cross-project contract"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Verdict/threshold case normalization is unspecified, creating a silent-block path",
+   "description": "The verdict vocabulary is uppercase (`PASS`, `CONCERNS`, `FAIL`, `UNKNOWN`) while config thresholds are lowercase (`pass`, `concerns`), and `parseFrontmatter` returns raw, untrimmed-except-whitespace strings. No normalization rule is stated. An artifact written as `verdict: pass` or `verdict: Concerns` would be \"unrecognized \u2192 UNKNOWN \u2192 review_unknown_as (default fail) \u2192 block\" \u2014 a passing review silently gated. This conflicts with the project convention to \"prefer lenient parsing ... parse the semantic content, not the formatting.\" The decision matrix tests should include case variants of real review frontmatter.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Verdict handling"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "v1 config surface is overweight relative to the single designed gate",
+   "description": "The requirement is to stop `advance` when a review is missing/failing. The design adds three global keys, a nested per-transition `review_gates` table, four transitions, two status enum values, detector changes, and a consistency rule \u2014 while only `pre-advance` is actually designed and the nested-table shape itself is deferred. The per-transition override table and the `pre-tasks`/`pre-implementation` gates have no v1 consumer or insertion point and should be cut or deferred to the slices that implement those transitions; three scalar keys with a single fixed gate would meet v1's requirement.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Config keys"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "\"No 160 interfaces change\" is contradicted by the design",
+   "description": "Related Work states \"240 is purely additive to 160's infrastructure; no 160 interfaces change.\" The design adds a `review` slot to `DocumentDetectionResult` (`types.ts`) and narrows it again in `ConsistencyChecker.safeDetectDocuments`; and scanning \"for the current slice index and configured reviewType\" implies adding a parameter to `detectDocuments` in `IArtifactIntrospector` and `ArtifactIntrospector`. Those are 160 interface changes, not purely additive additions.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#Related Work"
+  }
+ ]
+}

@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`AGENTS.md` output path collides with the reserved filename documented in slice 209",
+      "description": "The slice declares `AGENTS.md` as a written output of `cf setup-ide copilot` and a file to propagate to worktrees. Slice 209 (same parent plan, `project-documents/user/slices/209-slice.ai-agent-consumption-interface.md:127`) explicitly records: \"`AGENTS.md` is a reserved filename \u2014 it's automatically read by Codex, Copilot, Cursor, and other AI tools as 'instructions for coding agents working *within* this repo'\". Writing `AGENTS.md` into the user's project root overwrites or collides with a file many tools treat as authoritative for that repository, and the managed-marker safety check in this slice only guards `.github/copilot-instructions.md` and `AGENTS.md` for the *managed* case \u2014 it will overwrite an existing, user-authored `AGENTS.md` with a `.bak` and no way to recover beyond that one file. The design does not state how the Copilot target avoids clobbering a user's pre-existing `AGENTS.md`, nor does it reconcile with the reservation already recorded by a sibling slice in the same plan. Either drop the `AGENTS.md` write (the parent's own success criterion only requires the \"agent can read `.github/copilot-instructions.md` + `AGENTS.md`\", and `.github/copilot-instructions.md` alone satisfies Copilot), or specify an explicit non-destructive policy (never overwrite an unmanaged `AGENTS.md`; skip and warn).",
+      "file_ref": null,
+      "category": "boundary-violation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Managed-marker safety check covers 2 of the 4 emitted paths",
+      "description": "The sequence specifies: \"Check `.github/copilot-instructions.md` and `AGENTS.md` for managed marker \u2014 If either exists and is not managed: prompt (or skip with `--yes`), backup to `.bak`\". But the target writes four locations: `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/`, and `.github/prompts/` (slice doc lines 36\u201347, 113\u2013114). A user-authored `.github/instructions/my-team.instructions.md` or `.github/prompts/my-flow.prompt.md` is silently overwritten with no prompt and no backup \u2014 a strictly worse safety contract than the Claude path, which the slice claims to match (\"same safety contract as the Claude path\"). This also breaks the stated idempotency guarantee for re-runs, since unmanaged files in those directories would be clobbered on every run. Specify the per-path policy for all four outputs, including whether unmanaged files inside the two directories are left alone, overwritten, or merged.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guides-submodule change is an unversioned external coupling with no compatibility guard",
+      "description": "The design's own Risks section calls the submodule coupling \"the highest-risk coupling\" and says the CLI change \"requires the submodule to be updated and released in sync\" \u2014 but the sequence (lines 88\u2013100) and the Interfaces section specify no version check, no capability probe, and no minimum-guide-version gate. `cf setup-ide copilot` will invoke `bash scripts/setup-ide copilot` against whatever guide version is installed; an older guide that predates the `copilot` case will exit non-zero, and the CLI's generic error (\"setup-ide exited with code {N}\") will not tell the user that the fix is `cf guides update`. `GuideDetector.detect()` already returns the installed guide version (see `packages/core/src/guides/GuideDetector.ts`), so the information needed for a minimum-version or capability check is available and unused. Specify: the minimum guide version that provides the `copilot` backend, the exact error message when the installed guide is too old, and where that constant lives (the CLAUDE.md convention against scattered magic values applies).",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Source-of-truth files for the translation are never located",
+      "description": "The design specifies the frontmatter translation (\"Claude rule files use `paths: string[]` \u2026 Copilot instruction files use `applyTo: \\\"glob1,glob2\\\"`\") and the file layout diagram claims `typescript.instructions.md` comes \"from `.claude/rules/typescript.md`\" and `commit.prompt.md` from \"`.claude/skills/commit.md`\", but it never states where the guide script reads those inputs from. Slice 177 (`project-documents/user/slices/177-slice.ide-setup-command.md:99`) records that the setup-ide script \"auto-detects its rules source directory relative to its own location\", and the existing repository has `.claude/rules/*.md` and `.claude/skills/analyze/SKILL.md` at the *project* root \u2014 not inside the guide submodule. The example skill path in the diagram (`.claude/skills/commit.md`) does not exist in this repository (only `.claude/skills/analyze/SKILL.md`, a directory-style skill with `SKILL.md` inside), so the actual skill\u2192prompt-file mapping (flat `.md` vs. directory-with-`SKILL.md`, and which frontmatter fields carry over to `name`/`description`/`argument-hint`/`agent`/`model`/`tools`) is unspecified. Without this, the \"core translation\" the overview names as the heart of the slice cannot be implemented deterministically, and the parent plan's success criterion \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter\" has no defined input format.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prompt-file frontmatter translation is out of scope in the design but is a named success criterion",
+      "description": "The Files Changed section lists only one guide-side change \u2014 the `copilot` case compiling rules \u2192 `.github/copilot-instructions.md` / `AGENTS.md` / `.github/instructions/` \u2014 and never mentions how skills become `.github/prompts/*.prompt.md`. Yet the overview, the file-layout diagram (lines 45\u201347), the parent's file-mapping table (`200-slices.developer-onboarding.md:191`), and the parent's success criteria all require skills\u2192prompt-file generation with specific frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`). The design must state the skill\u2192prompt mapping and which fields are translated, dropped, or synthesized, otherwise this is an undefined behavior in the primary deliverable.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Worktree propagation copies files but does not define cleanup or partial-failure behavior",
+      "description": "The propagation block for `copilot` copies `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/`, and `.github/prompts/` to each registered worktree, but the design does not specify: (a) whether a worktree's previously generated Copilot files that no longer exist in the root are removed (stale-file drift \u2014 the same staleness problem the existing `propagateToWorktrees` docstring in `packages/cli/src/commands/setup-ide.ts:111-125` calls out for `.claude/`), (b) whether the existing `.claude/`-directory copy loop is reused or a Copilot-specific copy is written (the existing implementation copies *files only*, not nested directories \u2014 so a nested `.github/instructions/sub/x.instructions.md` would be silently dropped unless a recursive copy is specified), and (c) what happens if one worktree path is unwritable \u2014 the existing implementation has no error handling, and the design neither extends nor bounds that.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:103"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Guide-side change is planned in a path the slice cannot directly write",
+      "description": "`project-documents/ai-project-guide/scripts/setup-ide` is a git submodule (`.gitmodules` \u2192 `https://github.com/ecorkran/ai-project-guide.git`), and it is not checked out in this worktree. The slice's \"Files Changed\" list therefore names a file the slice cannot modify in-repo; the change must land in the upstream guide repository and be released before the CLI change is useful. The design should say so explicitly and sequence the work (upstream guide release \u2192 CF CLI release), otherwise the CF-side work ships dark.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test coverage does not include the translation unit, which is the slice's core logic",
+      "description": "The Test Coverage list covers CLI-level behaviors (target validation, managed/unmanaged prompts, propagation, init integration) but has no test for the `paths`\u2192`applyTo` translation itself, nor a test for the skills\u2192prompt-file translation. The parent's success criteria name path\u2192applyTo translation explicitly. Since the translation lives in bash inside the submodule, the slice should at least specify a fixture-based test (real rule file with real frontmatter \u2192 expected `.instructions.md`) run against the guide script, per the CLAUDE.md rule that \"the test fixture must include the actual format that parser will consume in production.\"",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:120"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and layering are correct",
+      "description": "Compilation correctly stays in the guides submodule and CF core keeps only validation, guide detection, safety checks, and worktree propagation \u2014 consistent with slice 177's \"shell out vs. reimplement\" decision and with the parent's \"no new package boundaries / composition over new infrastructure\" note. `packages/core/` and `packages/mcp-server/` are correctly untouched, and `init.ts` genuinely needs no change (verified: `packages/cli/src/commands/init.ts:107-111` already passes a string `--ide` value through to `setupIdeAction`).",
+      "file_ref": null,
+      "category": "boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:68"
+    },
+    {
+      "severity": "PASS",
+      "title": "Additive-only guarantee against Claude files is explicit and testable",
+      "description": "The \"never to `.claude/` or `CLAUDE.md`\" constraint is stated in the overview, repeated in the Not-included list, and is consistent with the parent's dual-write compatibility requirement. Worth a test assertion that `CLAUDE.md` and `.claude/**` are byte-identical after a copilot run, but the boundary itself is correctly drawn.",
+      "file_ref": null,
+      "category": "boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:16"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "boundary-violation",
+      "raw_category": null,
+      "summary": "`AGENTS.md` output path collides with the reserved filename documented in slice 209",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Managed-marker safety check covers 2 of the 4 emitted paths",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Guides-submodule change is an unversioned external coupling with no compatibility guard",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Source-of-truth files for the translation are never located",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Prompt-file frontmatter translation is out of scope in the design but is a named success criterion",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Worktree propagation copies files but does not define cleanup or partial-failure behavior",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:103",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Guide-side change is planned in a path the slice cannot directly write",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Test coverage does not include the translation unit, which is the slice's core logic",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:120",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "boundary",
+      "raw_category": null,
+      "summary": "Dependency direction and layering are correct",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:68",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "boundary",
+      "raw_category": null,
+      "summary": "Additive-only guarantee against Claude files is explicit and testable",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:16",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-17T10:36:56.803454",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 211181,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 592862,
+  "cached_tokens": 474368,
+  "cache_write_tokens": null,
+  "completion_tokens": 51579,
+  "reasoning_tokens": 47290,
+  "duration_seconds": 299.2974139167927,
+  "cost_usd": 0.027681326,
+  "cost_basis": "alias_pricing"
+}

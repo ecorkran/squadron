@@ -1,0 +1,207 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria fully covered",
+      "description": "All ten functional criteria map to tasks: fresh-clone `cf build` + stderr notice + clean stdout (`--json`) \u2192 Tasks 21; `cf guides info` read-only checkout report \u2192 Tasks 12, 24; out-of-sync warning with no action \u2192 Tasks 18, 21; `install --strategy manual` alias with deprecation and `Method: tarball` \u2192 Tasks 8, 7; config-sourced `manual` \u2192 Tasks 5, 6; `cf init --strategy tarball` without `.gitmodules` \u2192 Tasks 26, 27; both `--help` outputs \u2192 Tasks 25, 27; managed line in `cf guides info` + README sentence and strategy section \u2192 Tasks 28, 29, 30; malformed config failing explicitly \u2192 Task 6 (case c). The Design Decisions D1\u2013D10 are each enforced by at least one task (e.g., D10 \u2192 Tasks 10, 13, 15; D6's single-source default \u2192 Tasks 5, 6; D9's one-constant rule \u2192 Tasks 28, 29, 30).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Technical success criteria covered, including the real-git fixture requirement",
+      "description": "The \"real temporary git repo with a submodule\" fixture requirement is handled by Task 9 (three states, skip when git unavailable, reuse of any existing temp-repo helper), with a testable smoke criterion via `git submodule status` prefixes. `ensureCheckout()` branch coverage \u2192 Task 18 (all six branches); `normalizeGuideMethod` rejection \u2192 Task 2; CLI `init --strategy` pass-through \u2192 Task 27; managed line in `guides info` \u2192 Tasks 24/29; MCP accepting both `tarball` and `manual` \u2192 Task 8. The \"no `'submodule'`/`'manual'` literal outside ConfigKeys/alias table\" and \"no unexplained `catch`\" greps are enforced at Tasks 3, 5, 7 and re-confirmed in Task 32.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with sequencing and dependency order",
+      "description": "Every implementation task is followed by its test task (1\u21922, 5\u21926, 7\u21928, 9 fixture\u219212/16/18/21/23/24/27 consumers, 10/11\u219212, 13\u219214, 15\u219216, 17\u219218, 19/20\u219221, 22\u219223, 25/26\u219227, 28\u219229). Cross-part dependencies are clean: Task 20 references Task 19's helper; Task 17 explicitly consumes Task 11's `GuideInfo.checkout` and the Task 15 `init()`; Task 12's tarball case correctly reuses an existing mocked test rather than a git fixture.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers omit the entire Part 1 rename/alias work (Tasks 1\u20138)",
+      "description": "Task 4 ends Part 1's sweep with no commit line, then only Task 6 (silent-catch removal) and Task 8 (alias acceptance) carry commits. Tasks 1\u20133 (the rename itself) and Task 7 (CLI/MCP alias boundaries) have no marker, so a junior implementer following the file may land a single commit after Task 8 (or none until Task 8) covering the rename, `normalizeGuideMethod`, ConfigKeys default sourcing, and the boundary wiring \u2014 a mix of refactor/fix/feat that contradicts the three semantic messages the file itself defines. The project convention (CLAUDE.md: \"Git add and commit from project root at least once per task\") also points the other way. Suggest adding `refactor(core): rename guide strategy manual to tarball` at the end of Task 3 (or Task 4, whose step currently reads \"tests pass\" but whose *named* commit belongs to the sweep, not just the test updates), and a commit after Task 7 (e.g., `feat: normalize guide strategy alias at CLI and MCP boundaries`) so Task 8's existing `feat:` message then closes the feature cleanly.",
+      "file_ref": null,
+      "category": "commit-hygiene",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 27's `--strategy bogus` case reaches past the testable boundary",
+      "description": "`--strategy bogus` failing \"before any install\" depends on commander's option-string validation, but `init.ts` is described as calling `normalizeGuideMethod(opts.strategy)` only at runtime pass-through (Task 26) \u2014 with a plain `<method>` option type and no `.choices()`, commander will pass `bogus` straight to the handler, and the valid-values error would fire only after the init flow has run. The case is traceable to D5's \"rejects anything else with an explicit error naming the valid values,\" so it isn't a gap, but as written a junior implementer may find the test cannot pass without adding validation Task 26 never asks for. Either add one step to Task 26 (validate via `normalizeGuideMethod` before any install side effect) or adjust Task 27's wording to test the handler-level rejection.",
+      "file_ref": null,
+      "category": "test-scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:369"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 21's `outOfSync()` expectation assumes fixture state can be mutated in place",
+      "description": "Task 9's fixture creates three states in separate clones, while Task 21 pairs `outOfSync()` with `cf build` in the same test file as a \"registered project\" scenario. This is doable (register the `outOfSync()` host path, or flip the checkout in a `cloned()` fixture as the design's walkthrough step 2 does), but the task states neither. Not blocking \u2014 the design walkthrough itself prescribes `git checkout HEAD~1` inside the submodule \u2014 but a clause naming the state to set up would keep the test deterministically completable.",
+      "file_ref": null,
+      "category": "test-feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:303"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No NFR or load-test dimension exists to cover",
+      "description": "The slice restates no NFR (Review Resolution F006 explicitly closes this as \"no action\") and is synchronous CLI/MCP work with no performance or throughput criterion, so the absence of any `tests/load/` task or CI wiring task is correct, not a gap.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task 32 closes the loop",
+      "description": "Full build+test, the design's Verification Walkthrough steps 1\u20134 run against the local dist (correctly noting the global `cf` is the published build) with output recorded in DEVLOG, re-confirmation of both literal greps, and `/tmp` cleanup (step 5) \u2014 this gives the slice an end-to-end acceptance gate that none of the per-task tests alone provide.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Functional success criteria fully covered",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Technical success criteria covered, including the real-git fixture requirement",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Test-with sequencing and dependency order",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "commit-hygiene",
+      "raw_category": null,
+      "summary": "Commit markers omit the entire Part 1 rename/alias work (Tasks 1\u20138)",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-scope",
+      "raw_category": null,
+      "summary": "Task 27's `--strategy bogus` case reaches past the testable boundary",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:369",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-feasibility",
+      "raw_category": null,
+      "summary": "Task 21's `outOfSync()` expectation assumes fixture state can be mutated in place",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:303",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR or load-test dimension exists to cover",
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 32 closes the loop",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-17T12:23:11.117113",
+  "model": "qwen/qwen3.8-27b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 47426,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-27b",
+  "answering_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 55319,
+  "cached_tokens": 35840,
+  "cache_write_tokens": null,
+  "completion_tokens": 14312,
+  "reasoning_tokens": 12232,
+  "duration_seconds": 48.6175959170796,
+  "cost_usd": 0.037953360000000005,
+  "cost_basis": "alias_pricing"
+}

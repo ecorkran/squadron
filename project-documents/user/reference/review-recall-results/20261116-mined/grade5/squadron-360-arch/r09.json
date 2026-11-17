@@ -1,0 +1,68 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Graph extraction cannot support the promised analysis",
+   "description": "The flow extracts project metadata, layers, tour, and selected nodes, but not `edges[]`; the output nevertheless promises dependency observations and entry points. The graph contract also does not establish that languages, frameworks, and dependencies are present in the fields being extracted. Grepping sections of JSON is not a reliable way to preserve object boundaries or resolve node IDs across formatting variants.\n\nSpecify structured extraction and the evidence needed for each output claim. Where the graph lacks that evidence, mark the result unknown rather than presenting an inferred dependency or entry point as fact.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 1: Comprehension \u2192 Planning Artifacts"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Staleness detection will routinely mischaracterize the graph",
+   "description": "Comparing `meta.json`\u2019s analyzed commit directly to `HEAD` misses uncommitted source changes, while committing the generated graph and metadata itself advances `HEAD` and makes a fresh graph appear stale. Commit distance also cannot always be calculated: the recorded commit may be unavailable in a shallow clone or on a divergent history.\n\nDefine how dirty source files, unavailable or divergent commits, and commits containing only graph artifacts are reported. Provenance should distinguish \u201ccurrent,\u201d \u201cdrift detected,\u201d and \u201cfreshness unknown,\u201d rather than equating a commit mismatch with codebase drift.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Flow"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Repeated comprehension runs can overwrite the protected concept",
+   "description": "Every run writes the same `000-concept.{project}.md`, yet its `User-Provided Concept` section must remain verbatim and may already contain human-authored material. The design specifies neither existing-concept detection nor a safe update or refusal policy. Analysis files receive new indices, but the concept does not.\n\nDefine behavior for an existing concept: preserve its protected section, avoid silently replacing other human edits, and make the proposed changes distinguishable from a new draft.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Outputs"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The overview\u2019s source and presentation rules conflict",
+   "description": "With no concept, the inputs section allows purpose to come from an interview, while the translation rules require every claim to trace to an input artifact and the design goal calls the document derived rather than authored. The schema still requires problem, audience, and approach, whose listed sources are the missing concept. It also requires YAML frontmatter while saying frontmatter \u201cnever appear[s].\u201d\n\nChoose whether interview responses are permitted evidence, define how they are recorded and attributed, and specify explicit unknowns for unavailable fields. Clarify that frontmatter is present in the markdown artifact even if excluded from a client rendering.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability 2: Planning Artifacts \u2192 Client-Facing Document"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Status translation can overstate progress",
+   "description": "The example translates \u201cstatus draft\u201d to \u201cin progress,\u201d although a draft plan is not evidence that implementation has begun. The example also uses `draft`, which the output conventions say the frontmatter gate rejects. The checked-in initiative plan combines checkboxes with status fields\u2014for example, initiative 100 is checked but marked `in_progress`\u2014so the overview needs a defined authority when signals differ.\n\nSpecify status precedence and a representation for ambiguous or unsupported progress; do not turn document maturity into implementation progress.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Translation rules"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "New analysis artifacts collide with audit discovery",
+   "description": "The proposed overview and comprehension filenames match the existing audit harness\u2019s broad `*-analysis.*.md` glob in `src/squadron/metrology/audit.py`. `find_audit_file` selects the newest matching file, not necessarily a tech-debt audit. If another analysis artifact is written during an audit, the harness can select it and fail on its missing findings block instead of capturing the audit.\n\nMake audit discovery identify the audit output specifically, and cover concurrent or intervening analysis writes. Merely reusing `docType: analysis` does not preserve the existing consumer\u2019s assumptions.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Index overflow is declared without a collision policy",
+   "description": "The architecture says to use remaining 900-band slots beyond 949 while also acknowledging that the band is heavily used and subdivisions may need revision. It does not define how to select an index across document types and existing files, what happens when the range is exhausted, or how simultaneous runs avoid selecting the same slot. Declaring overflow sanctioned here does not update the project naming convention.\n\nDefine an allocation and collision policy consistent with the convention, including exhaustion and existing-file behavior, before directing both capabilities to consume the shared range.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Dispatcher and pack upgrades can be out of sync",
+   "description": "The dispatcher is installed under `sq`, while the skill is copied separately into the `analysis` prefix. Existing users can therefore update the dispatcher without updating the pack, or update the pack while retaining an older dispatcher. In particular, an installed analysis pack can lack `understand` even though the dispatcher advertises it.\n\nSpecify upgrade instructions and distinguish \u201cpack absent\u201d from \u201cpack installed but skill missing,\u201d including the remedy to reinstall or update the pack. Test the version-skew paths as well as a fresh install.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Delivery"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Graph and metadata failures have no defined boundary",
+   "description": "The design handles a missing graph but not malformed JSON, missing or changed fields, unresolved node references, absent metadata, or an upstream version changing the graph shape. Because the plugin is independently maintained, treating a partial extraction as a complete structural picture risks producing confident planning artifacts from incomplete data.\n\nDefine the minimum supported contract and fail or mark affected outputs unknown when it is not met. Include representative upstream-format fixtures, including partial and malformed inputs, rather than relying on the stated v2.8.1 shape alone.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+  }
+ ]
+}

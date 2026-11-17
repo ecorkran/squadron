@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 6's informational-event step is self-contradictory",
+      "description": "The step says to \"continue the loop without yielding it to the caller as a raw SDK type \u2014 let it flow to translation as normal.\" These two clauses are mutually exclusive: `_skip_unparseable` yields *to* the code that calls `translate_sdk_message` (agent.py `_handle_query_mode`/`_handle_client_mode`), so an event not yielded never reaches translation. Choosing \"don't yield\" makes Task 4's translation branch dead for query/client paths and contradicts the design's D6 (\"an informational one becomes observable rather than dropped\") and the Data Flow diagram (\"informational path continues to translation\"); choosing \"yield\" contradicts the literal wording of the step (and D4's \"must not reach translation\" parenthetical, which conflicts with D6 in the parent design itself). No test pins this behavior either way \u2014 Task 10's new `allowed_warning` test (no raise, no throttle increment, stream continues) passes under both readings \u2014 so the ambiguity would ship unverified. The step should state one behavior explicitly: yield the informational event after the rejected check so it flows to translation.",
+      "file_ref": null,
+      "category": "spec-ambiguity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers at Tasks 6 and 9 sit on a failing test suite",
+      "description": "The test-with pattern is violated for the two load-bearing implementation tasks, leaving intermediate commits red:\n\n- After **Task 6** removes the `is_rate_limit_event(exc.data)` special case (line ~62), `test_a_rejected_rate_limit_event_reaches_the_backoff` (tests/providers/sdk/test_agent.py:648) fails: its `MessageParseError(\"...rate_limit_event\", {...status: \"rejected\"})` fabrication is now skipped as an unknown type instead of re-raised, so no backoff fires. The Task 6 commit marker (line 66) lands here, with no test task until Task 10.\n- After **Task 9** deletes `install_rate_limit_parser_shim`, the four shim tests it imports (`test_the_shim_*`, tests/providers/sdk/test_agent.py:695-763) fail with ImportError. The Task 9 commit marker (line 89) also lands red; the suite only goes green again at Task 10/13.\n\nThe suite does not fail any *task's* success criteria (none of Tasks 6/9/10 require a green run until Task 10's `Run` step), but commit markers are supposed to sit at working, tested points. Fix: split Task 10 so the `MessageParseError`/`RateLimitEvent` rewrites immediately follow Task 6, and fold the four shim-test deletions into Task 9 (where the mechanism they test is deleted).",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:66"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 9's success check greps only `src/`, while Success Criterion 2 also names `tests/`",
+      "description": "Criterion 2 requires no `install_rate_limit_parser_shim` symbol in `src/` **or `tests/`**, and walkthrough step 1 greps both (`grep -rn \"install_rate_limit_parser_shim\" src tests`). Task 9's success criteria grep only `src`. The `tests/` half is covered indirectly \u2014 Task 10 deletes the four shim tests and the Task 13 full-suite run would error on any residual import \u2014 but adding `tests` to Task 9's grep would make the criterion directly verifiable and match the walkthrough.",
+      "file_ref": null,
+      "category": "verification-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:83-89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No test asserts the WARNING-log half of Success Criterion 3",
+      "description": "Criterion 3 requires that a `rejected` event \"triggers backoff: `RateLimitStats.throttles` increments **and a WARNING is logged naming the attempt number**.\" Tasks 3/10/11 assert sleeps, stats, and retry counts, but no task adds a log assertion (no `caplog` usage exists in tests/providers/sdk/test_agent.py today), and Task 15's forced-throttle observation confirms the WARNING in only one of the three dispatch paths. The logging code itself is unchanged existing behavior, so this is thin rather than absent \u2014 but a one-line `caplog` assertion in Task 10 or 11 would close criterion 3 at the unit level.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Commit:` markers are rendered as checklist sub-items, not plain lines",
+      "description": "All 13 commit markers use the `- [ ] Commit: ...` checkbox form rather than plain lines. Placement is otherwise sound (present at working points across the file, absent from Task 12/14/15, not bunched at the end). This likely reflects the project convention in CLAUDE.md (\"Each item and subitem should have a `[ ]` checkbox\"), which conflicts with the plain-line marker format \u2014 worth a project-level decision, not a blocker.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3 allows placement in a new test module but its run command hardcodes `test_agent.py`",
+      "description": "Task 3 permits adding the classification tests to \"a new focused test module if preferred,\" but its `Run:` step executes `uv run pytest tests/providers/sdk/test_agent.py -q -k ...`, which would pass vacuously if the tests were placed elsewhere. Minor: pinning the location (keep them in `test_agent.py`) removes the trap.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:37-44"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "spec-ambiguity",
+      "raw_category": null,
+      "summary": "Task 6's informational-event step is self-contradictory",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit markers at Tasks 6 and 9 sit on a failing test suite",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:66",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "verification-coverage",
+      "raw_category": null,
+      "summary": "Task 9's success check greps only `src/`, while Success Criterion 2 also names `tests/`",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:83-89",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No test asserts the WARNING-log half of Success Criterion 3",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "`Commit:` markers are rendered as checklist sub-items, not plain lines",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "Task 3 allows placement in a new test module but its run command hardcodes `test_agent.py`",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:37-44",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-17T06:56:01.874283",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 143659,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 183668,
+  "cached_tokens": 148864,
+  "cache_write_tokens": null,
+  "completion_tokens": 37375,
+  "reasoning_tokens": 35222,
+  "duration_seconds": 247.14083566702902,
+  "cost_usd": 0.008710828,
+  "cost_basis": "alias_pricing"
+}

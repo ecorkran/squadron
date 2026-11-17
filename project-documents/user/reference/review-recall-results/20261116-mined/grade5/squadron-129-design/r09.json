@@ -1,0 +1,12 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Bound and clean up the Codex auth runtime on every path",
+   "description": "The design introduces runtime I/O for login, logout, and account lookup, but its explicit timeout and disconnect handling is incomplete for those paths. `codex.login_timeout_s` bounds only `handle.wait()`; it does not bound runtime startup or the initial `login_chatgpt()` / `login_chatgpt_device_code()` call. The account timeout covers status and post-login confirmation, but no timeout is specified for logout. The turn failure table handles a transport close during a turn, but does not say how disconnects or SDK errors during login/logout are surfaced. Finally, cancellation specifies `handle.cancel()` but does not state that the `AsyncCodex` runtime is shut down in a `finally` path for login/logout. Specify timeout, disconnect/error behavior, and runtime cleanup for each auth operation so these new I/O paths cannot hang or leave an orphaned subprocess.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn"
+  }
+ ]
+}

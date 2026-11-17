@@ -1,0 +1,26 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Backward-incompatible profile/state changes break `migratory_server` source call sites, but no task covers them",
+   "description": "Task 2.1 adds `leadership_weight` and `momentum_weight` as required, no-default fields, and task 1.1 adds the `leadership` array. Task 2.2 then updates test call sites (with a catch-all \"search for `BehavioralProfile(` across `tests/`\" that correctly sweeps `test_entities.py:27` and `test_simulation.py:65`), but no task updates the two **source** call sites the change breaks:\n\n1. `build_profiles()` at `src/migratory_server/simulation.py:18-27` constructs `BehavioralProfile` with only the six existing fields. Once 2.1 lands, every call raises `TypeError`. This is exercised by existing tests (`tests/test_simulation.py:28-45` calls `build_profiles` directly; `tests/test_server.py:265-275` builds a `SimulationManager` through server startup), so task 2.2's verify step (\"all existing tests still pass\") and task 6.1's full-suite gate cannot both be satisfied. The requirement left unmet is the slice's Technical Requirement that \"all affected tests are updated within this slice\" plus Verification Walkthrough step 1 (\"all tests green\"). Fixing it also forces a design decision the plan should surface explicitly: `ProfileConfig` (`src/migratory_server/config.py:51-59`) has no herding fields, so `build_profiles` cannot pass them without extending `ProfileConfig` (and its validation) or defaulting them \u2014 and CLAUDE.md forbids silent fallback values, so the choice should be a named subitem, not an improvisation.\n2. `EntityManager.spawn_population()` at `src/migratory_server/entities.py:135-149` merges state arrays by manually concatenating `positions`, `velocities`, `accelerations`, and `profile_indices`. After task 1.1, `AgentState.create(n, ...)` allocates `leadership` of shape `(n,)` for the batch, but the merge never concatenates it \u2014 leaving `state.leadership` at length 0 while `count` grows. No current test catches this (placeholder/flocking forces never read `leadership`), so the suite stays green while the slice's own invariant (\"1D array of shape (N,)\") is silently violated; `LeadershipForce` indexing `state.leadership[neighbors]` on a server-spawned population would then fail or misindex. Task 1.2's subitem claiming tests \"should work without changes\" is accurate for `AgentState.create()` call sites (verified: `tests/conftest.py:31`, `tests/test_forces.py:23`, `tests/test_flocking.py:33`), but it does not cover this src-side merge.\n\nFix: add a subitem to 1.1/1.2 for the `spawn_population` merge, and a subitem (or a small task in Section 2) for `ProfileConfig` + `build_profiles` plus the `test_simulation.py`/`test_server.py` fallout, before the 2.3 commit point.",
+   "location": "src/migratory_server/simulation.py:18-27"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Vectorization requirement from the slice is not restated in the force implementation tasks",
+   "description": "The slice's Technical Requirements state \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\" (`102-slice.herding-and-leadership.md:395`), but tasks 3.1 and 4.1 never mention it; their per-agent bullets (\"Compute speed\u2026\", \"Get neighbor leadership values\u2026\") are consistent with the vectorized-within-neighborhood pattern used by `src/migratory/engine/flocking.py:31-46`, so risk is low, but a junior could satisfy every listed verify step with an inner per-neighbor Python loop and still check the task off. Adding one subitem per force (\"vectorize over neighbors within each agent; no inner Python loop\") makes the requirement traceable.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-133"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Commit checkpoints are checkbox tasks rather than plain `**Commit**:` markers \u2014 acceptable under project convention",
+   "description": "There are no plain-line `**Commit**:` markers (which the file-format check treats as optional), and no marker is missing where it matters: all six commit tasks carry semantic messages (`feat:`/`test:`/`docs:` per CLAUDE.md's commit types) and are placed only after the section's tests pass. The checkbox formatting diverges from the plain-line marker form but follows the project-wide mandate that every task item be a `[ ]` checkbox, so no change is needed.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-53"
+  }
+ ]
+}

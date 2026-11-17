@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Add coverage for the architecture aggregate rule",
+   "description": "Task 12 tests `plan-status-vs-entries`, but the slice design\u2019s success criteria also name `arch-status-vs-plans`. The walkthrough and other tasks do not test that rule with an all-checked-or-deprecated plan, so its stated behavior is not verified. Extend the ConsistencyChecker tests to cover the architecture rule as well.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verify the unindexed entry\u2019s fallback index and description",
+   "description": "Task 5 checks the unindexed entry\u2019s status, `isChecked`, and `indexSource`, but not its actual fallback index, name, or parsed rationale. The design requires the unindexed form to parse equivalently, including the description. Assert those values so a dropped or incorrectly parsed description or fallback index cannot pass.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The CLI test does not verify the displayed deprecated label",
+   "description": "Task 10 asserts JSON `status: 'deprecated'` and `isNext: false`, but the success criterion says `cf list slices` renders the existing `\u2298 deprecated` display. JSON status does not verify the table rendering. Add an assertion against the table output, or otherwise explicitly verify that rendered label.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Remove the redundant `derivedStatus` initializer change",
+   "description": "Task 9\u2019s extra initializer edit is justified as a fallback when `detectDocuments` throws. In the current `sliceListAction`, that failure is caught and sets `derivedStatus` to `'degraded'`; the initializer is not used for that path. The required plan-line signal belongs in the `deriveEntryStatus()` call. Drop the initializer edit and its inaccurate justification to keep the task within the slice\u2019s stated scope.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Keep the WorkflowNavigator test next to its implementation task",
+   "description": "Task 8 changes `WorkflowNavigator.resolveEntryStatus`, but its direct regression test is task 11, after the CLI implementation and integration test. Move task 11 directly after task 8 so that this implementation is tested at its working point; it does not depend on the CLI tasks.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Merge the three small parser implementation tasks",
+   "description": "Tasks 2\u20134 make small, related edits to the same parser and `parseSlicePlan()` flow: accept `~`, assign deprecated status, and update the aggregate count. They are not independently tested or useful working points; task 5 tests them together. Merge them into one parser implementation task followed immediately by task 5.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  }
+ ]
+}

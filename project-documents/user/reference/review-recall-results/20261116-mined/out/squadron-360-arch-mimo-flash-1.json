@@ -1,0 +1,188 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Generated filenames drop the `.{project}` token and are swallowed by the metrology audit glob",
+      "description": "Capability 1 writes `{index}-analysis.codebase-comprehension.md` and Capability 2 writes `{index}-analysis.overview.md` \u2014 both omit the `.{project}` segment that the existing convention uses (`940-analysis.tech-debt-audit.md`, and `analysis/nnn-analysis.{project-name}.md` per `commands/analysis/tech-debt-audit.md:81`). `src/squadron/metrology/audit.py:57` locates audit files with the glob `project-documents/user/analysis/*-analysis.*.md`, which **matches** `943-analysis.overview.md` (the `*` absorbs `overview`). Worse, `find_audit_file()` selects `max(fresh, key=mtime)` \u2014 a comprehension or overview document written into a *third-party* repo just before a noise-floor run would be picked up as \"the audit file this run wrote,\" and `parse_audit_findings` would then fail or, if the new document ever contains a findings-shaped block, persist wrong data under a fresh run id. The metrology artifact pattern (`audit.py:72`, `\\d+-analysis\\..+\\.md`) also classifies these files as \"audit's own output\" and exempts them from dirty-worktree refusal \u2014 treating non-audit documents as measurement artifacts. Either restore the `.{project}` token (still matching the glob, so this doesn't fix the glob collision \u2014 it's the `metrology` glob itself that needs a narrowing rule, e.g. `*-analysis.{project}.md`), or state explicitly in Output Conventions how these filenames avoid being consumed by `find_audit_file`.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Index allocation is underspecified and collides with two existing independent allocators",
+      "description": "The doc asserts \"the naming convention reserves 940-949\" and then sanctions \"overflow into 950+\" and \"remaining slots in the 900 band as needed,\" but never specifies how `{index}` is chosen (scan the directory? next after highest? per-run counter?). Three problems:\n\n1. **Two independent allocators share one space.** `tech-debt-audit.md:81` tells the model \"nnn starts at 940\" \u2014 the skill picks its own number conversationally, while this doc's skills pick \"next per run.\" Nothing reconciles them; two concurrent or interleaved runs can emit the same index. This is exactly the class of CLAUDE.md rule (\"never scatter comparison values across code\u2026 changing a value should require editing exactly one place\") the design leaves violated at the convention level.\n2. **Overflow collides with maintenance indices.** The 900 band already holds maintenance slices and their review artifacts in sibling directories (`902-review`, `904`, `908`, `909`, `911`, `913` \u2014 and `user/analysis/` itself contains `244-review`, `303-review`, `341-review`, `320`-`323` files). \"Take remaining slots in the 900 band as needed\" has no conflict-avoidance rule against these.\n3. **The reserved-range claim is unsourced in-repo.** The cited authority (`file-naming-conventions.md`) lives in the `ai-project-guide` submodule, which is empty in this worktree \u2014 I could not verify that 940-949 is actually reserved, only that the tech-debt skill says \"starts at 940 (analysis range).\" If the reservation is real, cite it; if it's inferred from prior art, say so.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Initiative-plan candidates \u2014 the third declared output \u2014 have no path, name, or docType",
+      "description": "The Outputs section specifies exact paths and frontmatter for two of the three artifacts (\"`000-concept.{project}.md` \u2014 `docType: concept`\" and \"`{index}-analysis.codebase-comprehension.md` \u2014 `docType: analysis`\") but the third, \"Initiative-plan candidates\u2026 written only on explicit confirmation,\" names no file. Candidates are the only output that crosses into the commitment-document namespace (`001-initiative-plan.{project}.md` and its neighbors), so the naming/index rule there is the *most* consequential one to pin down \u2014 do they land inside the existing initiative plan, a new numbered plan file, or a proposal file under `analysis/`? Deferring this to slice design is fine; leaving it entirely unstated is not, because \"written on confirmation\" is meaningless without a destination.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capability (b) delivery breaks hardcoded install tests, and the Dependencies section misattributes [100]",
+      "description": "Two concrete problems in the Delivery/Dependencies claims:\n\n- The doc states capability (a) requires \"a new pack file plus three edits to `commands/sq/analysis.md`\u2026 no installer, manifest, or CLI change\" (true \u2014 `install.py` copies all `*.md` and `_install_prefix` globs the source dir), but says nothing about capability (b). Adding `commands/sq/overview.md` **will break `tests/cli/test_install_commands.py`**: `EXPECTED_FILES` asserts the installed set equals exactly 9 files (`assert installed == EXPECTED_FILES`), and three further tests assert `len(...glob(\"*.md\")) == 9`. This is a known-hardcoded-count test suite; the delivery plan should name the required test updates or the doc's implicit \"no machinery changes\" framing is misleading for (b).\n- **Dependencies lists `[100] \u2014 CLI command registration for any command surface.`** Both capabilities ship as markdown files under `commands/` that `sq install-commands` copies wholesale; neither registers a Typer subcommand (compare `app.py:60`, which registers `install-commands` itself). The `[100]` dependency is spurious \u2014 and if some part of (b) *does* require CLI registration, the doc never says what it is. As written the dependency is either wrong or hiding an undescribed mechanism.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Client document must carry gated internal frontmatter while its own translation rules forbid internal vocabulary",
+      "description": "Output Conventions requires every generated file to pass the frontmatter gate (`docType: analysis`, a `status` enum value, per `src/squadron/documents/schema.py`), and Translation rules demand: \"Slice indices, phase numbers, initiative indices, and **docType frontmatter never appear**.\" These are in direct tension for the artifact most likely to be handed to a client *as a markdown file* (PDF conversion is explicitly \"downstream, not squadron's responsibility\"). The overview file will open with `docType: analysis / status: complete / project: \u2026` \u2014 internal taxonomy \u2014 for a reader the doc describes as needing \"no explanation\" of squadron vocabulary. The doc needs to say whether the strip rule applies to the frontmatter block (if so, the file fails the gate) or only to the body (if so, the deliverable as-shipped still leaks internal vocabulary, and that's an accepted cost worth stating).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Read discipline assumes line-oriented JSON that may not match the actual artifact",
+      "description": "\"Grep for the needed section before reading; never load the whole file into context\" only works if `knowledge-graph.json` is pretty-printed. If upstream serializes compactly (common for generated JSON), every grep returns the entire multi-MB file as one line \u2014 the discipline silently fails. Since the whole Capability 1 read path rests on this, slice design should verify the actual serialization format of v2.8.1's output, or specify an extraction step (`jq`-style field projection) instead of grep.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Commit distance\" in the staleness warning is undefined when the recorded hash is not an ancestor of HEAD",
+      "description": "Step 1 requires reporting drift \"including the commit distance\" between `meta.json`'s `gitCommitHash` and `HEAD`. After a rebase or history rewrite the recorded hash is unreachable from HEAD and `git rev-list --count A..HEAD` yields a meaningless number. The warning path needs a defined behavior for the unreachable-hash case (e.g., \"history rewritten since analysis \u2014 distance unavailable\"), otherwise the most stale graphs get the most confident-looking warning.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Generated filenames drop the `.{project}` token and are swallowed by the metrology audit glob",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Index allocation is underspecified and collides with two existing independent allocators",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Initiative-plan candidates \u2014 the third declared output \u2014 have no path, name, or docType",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Capability (b) delivery breaks hardcoded install tests, and the Dependencies section misattributes [100]",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Client document must carry gated internal frontmatter while its own translation rules forbid internal vocabulary",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Read discipline assumes line-oriented JSON that may not match the actual artifact",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "\"Commit distance\" in the staleness warning is undefined when the recorded hash is not an ancestor of HEAD",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T07:07:49.235125",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 43,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 210514,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1128625,
+  "cached_tokens": 640160,
+  "cache_write_tokens": null,
+  "completion_tokens": 54202,
+  "reasoning_tokens": 50595,
+  "duration_seconds": 635.7536491253413,
+  "cost_usd": 0.04626195,
+  "cost_basis": "alias_pricing"
+}

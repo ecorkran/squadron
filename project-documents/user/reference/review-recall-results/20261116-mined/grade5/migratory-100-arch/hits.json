@@ -1,0 +1,110 @@
+{
+ "case": "migratory-100-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work links `200-arch.world-server-foundation.md`. At `09dd31b` the repo holds `300-arch.worldserver-foundation.md` and no 200-arch file. **VALID** (minor): contradicts repo. Needs: doc (file list). Raised by the original review (F-1; the review also says the slice plan has the same link).",
+   "hits": {
+    "r01": [
+     8
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [
+     11
+    ],
+    "r06": [
+     8
+    ],
+    "r07": [
+     18
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [
+     10
+    ],
+    "r10": [
+     5
+    ],
+    "r11": [],
+    "r12": [],
+    "r13": [
+     10
+    ],
+    "r14": [
+     0
+    ],
+    "r15": [
+     12
+    ],
+    "r16": [
+     10
+    ],
+    "r17": [
+     9
+    ],
+    "r18": [
+     6
+    ],
+    "r19": [
+     9
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Envisioned State says the narrow interface is \"tick the simulation forward, query agent state, register/remove agents\", while the same section says the engine is stateless between ticks and all state lives in the arrays the caller passes. There is nothing in the engine to register into. **VALID**: self-contradiction. Needs: doc alone. Raised by the original review. The response removed the phrase and gave lifecycle to the world server (as 300-arch already did).",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [],
+    "r03": [
+     5
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     3
+    ],
+    "r08": [],
+    "r09": [],
+    "r10": [
+     9
+    ],
+    "r11": [],
+    "r12": [
+     3
+    ],
+    "r13": [
+     7
+    ],
+    "r14": [
+     12
+    ],
+    "r15": [
+     2
+    ],
+    "r16": [
+     2
+    ],
+    "r17": [],
+    "r18": [
+     0
+    ],
+    "r19": []
+   }
+  }
+ ],
+ "note": "Borderline: r14 finding 12 counted for F2 (register/remove not engine-owned); r14 finding 13, r09 finding 5, r08 finding 2, r17 finding 6, r19 finding 2 not counted (statelessness vs in-place/spatial index, no register/remove contradiction). r05 finding 11 and r08 finding 0 counted for F1 though they bundle other broken refs."
+}

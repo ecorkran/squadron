@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "New ConfigManager I/O path has no enumerated failure handling; existing catch would silently swallow it",
+      "description": "The design is careful to enumerate failure modes for the other two reads it depends on (`parseFrontmatter` \"never throws\" at line 79, `detectDocuments` never throws), but the third \u2014 `ConfigManager.get(key)` \u2014 can throw. Verified in `packages/core/src/config/ConfigManager.ts` (`readToml`): only `ENOENT` is caught; a malformed `.context-forge.toml` makes `smol-toml.parse` throw out of `get`. The design's data flow (lines 143\u2013168) calls `resolveGateConfig(config)` with no stated handling, and the gate is specified to live inside `deriveSliceStatus()`, whose existing `catch { return base; }` (WorkflowNavigator.ts) would convert a config-read failure into a silent `no-active-slice` status \u2014 a wrong recommendation with no error surfaced. This violates both the arch's fail-fast principle and the project rule against silent fallback values. The design must state the handling strategy explicitly (e.g., log at ERROR and skip the gate, or surface the config error) rather than inheriting the blanket catch implicitly.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Invalid `review_threshold`/`review_unknown_as` values are unvalidated on the read path; arch fail-fast requirement not restated",
+      "description": "The arch states: \"Fail-fast on configuration errors. An invalid `workflow.review_threshold` value \u2026 is a config error surfaced immediately, not a silent pass or silent block. The `validate` hook in `ConfigKeyDefinition` is the enforcement point.\" Verified: `ConfigManager.get()` never runs `enum` or `validate` checks \u2014 `validateValue` is invoked only from `set()` (`ConfigManager.ts:145`). So a hand-edited TOML value like `review_threshold = \"bogus\"` reaches `resolveGateConfig`/`evaluateVerdict` as-is, and the TD-2 matrix has no row for an unrecognized threshold token \u2014 behavior is undefined at exactly the point the arch forbids silent pass/block. The design should restate the NFR-equivalent requirement and specify what `resolveGateConfig` does with a token outside `{pass, concerns}` / `{fail, concerns, pass}` (explicit error, not a default).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1: `reviewGate.ts` is a standalone pure module"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "TD-7 example recommendation strings contradict the arch's stable `review`/`blocked` vocabulary and defer the consumer contract to implementation",
+      "description": "The arch specifies the gate output as `{ recommendation: \"review\", \u2026 }` and `{ recommendation: \"blocked\", \u2026 }` (arch \"Gate insertion point\"), and its Related Work section says Amoeba \"depends on CF returning structured `recommendation` values with a stable vocabulary.\" The slice plan likewise says the branch returns \"`review`/`blocked` recommendations.\" The design states this correctly in the Overview, TD-3, and \"Provides to Other Slices\" \u2014 but TD-7's own examples put prose in the `recommendation` field (`'Review required before advancing'`, `'Blocked: review verdict does not clear threshold'`) and close with \"Exact strings finalized in implementation.\" If implemented as the TD-7 example shows, the vocabulary runners route on is unfixed and prose-valued, breaking the arch's consumer contract. The design should pin `recommendation` to exactly the tokens `review`/`blocked` (prose belongs in `rationale`/`summary`) and drop the \"finalized in implementation\" hedge for those two values.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Rationale contract omits the arch's explicit requirement to name the parse failure for an unreadable review file",
+      "description": "The arch's \"File-read failure modes\" entry requires: \"The rationale returned to the caller names the parse failure explicitly.\" The design's rationale contract (TD-7, line 268) requires only the review type (plus verdict + threshold for `review-failed`), and line 79 frames a read failure as simply \"no `verdict` present\" \u2014 which would produce a rationale indistinguishable from a legitimately verdict-less file. `parseFrontmatter`'s contract (verified) collapses read errors, malformed YAML, and absent frontmatter into `{ found: false, data: {} }`, so at minimum the rationale for a present-but-`UNKNOWN` artifact must state that frontmatter is missing or unparseable, per the arch. Add that requirement to TD-7.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:268"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pre-slice-plan routing depends on an unstated interaction with getNext's `no-active-slice` early-return guard",
+      "description": "The arch-gate `pending-review` status only reaches the reserved `review-gate` branch because that branch sits *after* the `slice.status === 'no-active-slice'` guard returns early \u2014 i.e., `deriveSliceStatus`'s no-active-slice path must return `pending-review` (escaping the guard, and also skipping `detectFirstRunContext`'s FR-3b \"Advance to Phase 3\" recommendation) for the arch boundary to recommend `review`. The mechanism works, but the design states only \"extend the no-active-slice / pre-slice-plan path\" without spelling out this guard interaction, and at that boundary `SliceStatus.name` is `''`/`index` null while TD-7's rationale template assumes \"Slice NNN.\" Worth one clarifying sentence plus a walkthrough step for the `arch` boundary (the demo covers only pre-advance and pre-tasks).",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Surface path naming for MCP call sites is off by one directory",
+      "description": "The component table writes `mcp-server/src/tools/workflowTools.ts`; the verified path is `packages/mcp-server/src/tools/workflowTools.ts` (and `cli/src/...` is `packages/cli/src/...`). The count and identification of the four call sites are correct \u2014 only the path prefix is. Fix so task breakdown doesn't chase non-existent paths.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:94"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New ConfigManager I/O path has no enumerated failure handling; existing catch would silently swallow it",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Invalid `review_threshold`/`review_unknown_as` values are unvalidated on the read path; arch fail-fast requirement not restated",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1: `reviewGate.ts` is a standalone pure module",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "TD-7 example recommendation strings contradict the arch's stable `review`/`blocked` vocabulary and defer the consumer contract to implementation",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Rationale contract omits the arch's explicit requirement to name the parse failure for an unreadable review file",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:268",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Pre-slice-plan routing depends on an unstated interaction with getNext's `no-active-slice` early-return guard",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Surface path naming for MCP call sites is off by one directory",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:94",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "against": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-241-slice"
+  },
+  "timestamp": "2026-11-17T07:32:53.446944",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 27,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 243447,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 430768,
+  "cached_tokens": 386912,
+  "cache_write_tokens": null,
+  "completion_tokens": 57949,
+  "reasoning_tokens": 55263,
+  "duration_seconds": 1248.1026109997183,
+  "cost_usd": 0.013891164000000001,
+  "cost_basis": "alias_pricing"
+}

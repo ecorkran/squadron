@@ -1,0 +1,103 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Output contract contradicts itself across Capability 1 and Output Conventions",
+   "description": "Capability 1 Outputs (`...:148-153`) writes three different artifact shapes: `project-documents/user/project-guides/000-concept.{project}.md` with `docType: concept`, `project-documents/user/analysis/{index}-analysis.codebase-comprehension.md` with `docType: analysis`, and initiative-plan candidates with no path or docType. Output Conventions and Resolved Design Decisions (`...:333`) instead state that \"Both capabilities write to the existing `project-documents/user/analysis/` directory with the existing `docType: analysis`\" and that output location/docType is \"existing `user/analysis/` directory and `docType: analysis`, in the 940-949 reserved range.\" `docType: concept` is a real enum member in `src/squadron/documents/schema.py`, but it is not `analysis`, it is not in `user/analysis/`, and it has different frontmatter requirements under `cf validate frontmatter`. Slice design cannot implement generated artifacts without a single enumerated contract: path, docType, required frontmatter, status, index source, and whether each artifact is written or merely proposed.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Index policy claims no convention change while sanctioning 950+ overflow",
+   "description": "Output Conventions says \"No new directory, no new docType, and no change to `file-naming-conventions.md`\", reserves 940-949, then says \"Overflow into 950+ is sanctioned\" and generated documents take \"remaining slots in the 900 band as needed.\" Resolved Design Decisions (`...:333`) again claims the 940-949 range with \"No new convention, no gate change.\" That is a convention change by fiat, and the repo already uses the 900 band for `project-documents/user/architecture/900-arch.*`, `project-documents/user/slices/901-...` through `915-...`, `project-documents/user/tasks/901-...` through `915-...`, and `project-documents/user/analysis/940/941/942-analysis.tech-debt-audit.md`; the initiative plan says 900+ is reserved for cross-cutting maintenance and refactoring. There is no deterministic allocator: \"incrementing per run\" does not say increment per artifact or per invocation, how `000-concept` and candidate documents participate, what happens with `{index}-analysis.overview.{topic}.md`, how concurrent runs avoid collisions, how existing files are parsed, or what happens after 999. Project rules forbid silent fallback values; \"take remaining slots\" is exactly a silent directory-scan fallback with no explicit failure mode.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-256"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Generated filenames collide with the metrology audit harness's discovery glob",
+   "description": "The proposed `{index}-analysis.codebase-comprehension.md`, `{index}-analysis.overview.md`, and `{index}-analysis.overview.{topic}.md` all match `src/squadron/metrology/audit.py`'s `_AUDIT_FILE_GLOBS`: `project-documents/user/analysis/*-analysis.*.md` and `analysis/*-analysis.*.md`. `find_audit_file()` selects the newest fresh match by mtime, and `run_audit()` reads that file into `parse_audit_findings()`; a file without the tech-debt-audit findings block produces `AuditBlockMissingError` and persists nothing. A concurrent `/sq:analysis understand` or `/sq:overview` write can therefore be mistaken for the audit instrument's output, turning an unrelated document into a failed measurement run. The architecture says generated docs are \"like the existing `940`/`941`/`942` tech-debt-audit series\" but provides no discriminator, subrange, frontmatter marker, or exclusion rule to keep the two artifact classes separate.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Plugin-installed precondition contradicts \"graph is data\" and has no detection mechanism",
+   "description": "Architectural Principles says \"Graph is an input, not a dependency\" and squadron reads `knowledge-graph.json` as data, but Flow step 1 requires \"Verify the plugin is installed and `knowledge-graph.json` exists,\" and the Principles also say \"If the plugin is absent or the graph is missing, squadron reports what to run and stops.\" Non-Goals says the skill \"detects absence and instructs\" while squadron does not drive Claude Code's plugin system. No detection mechanism is specified: no plugin registry path, no marketplace config key, no `${CLAUDE_PLUGIN_ROOT}` contract, no `/plugin list` equivalent, and `config.json`/`meta.json` only prove a prior run, not current plugin installation. A valid graph copied into a repo would be rejected if the plugin is absent; a missing plugin plus missing graph would instruct the user to run `/understand`, which is precisely the command that is absent. Either plugin presence is a real runtime dependency with an explicit detection contract, or the check must be removed and graph validity made the only precondition.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Grep for the needed section\" is not a JSON parsing strategy",
+   "description": "Read discipline instructs the skill to \"Grep for the needed section before reading; never load the whole file into context\" and then extract `project`, `layers[]`, `tour[]`, and filtered file-level `nodes[]`. `knowledge-graph.json` is structured JSON; a minified single-line graph defeats line-oriented grep entirely. This repo already contains a one-line structured JSON sample at `project-documents/user/reference/repowire-probe-sample.json`, so the failure shape is concrete, not hypothetical. Grep cannot reliably select array members by `type`, validate node IDs, join `tour[].nodeIds[]` to `nodes[]`, or reject a partial/corrupt graph. No schema validator, streaming reader, `jq`/Python extraction contract, fixture from the actual plugin output, or behavior for missing `tour[]` is specified. CLAUDE.md requires lenient semantic parsing of structured text and real-format test fixtures; \"grep the JSON\" violates that convention and leaves the largest input file unbuildable.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Staleness handling omits git failure modes, provenance schema, and state model",
+   "description": "Flow step 1 requires comparing `meta.json.gitCommitHash` to `HEAD`, reporting \"commit distance\", letting the PM choose proceed/refresh, and recording the warning in \"the generated document's provenance\". No algorithm is given for distance when the hash is not in the current history (force-push, rebase, shallow clone, branch switch), when `git rev-list` fails, when `HEAD` is detached, when the worktree is dirty, or when `meta.json` is missing/malformed. `lastAnalyzedAt` and `analyzedFiles` are listed in the Output Contract table but never used. \"Provenance\" has no field name, body section, or list of artifacts that carry it; an arbitrary new frontmatter key may conflict with `cf validate frontmatter`'s per-docType schema. The proceed/refresh choice is interactive but has no parameter grammar, persisted state, or resumable decision record. Project rules require explicit failure over silent fallback; the design instead says \"warn and offer\" without defining what happens when the drift cannot be measured.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-135"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Capability 2 cannot derive its field schema from the real plan and contradicts its own audience rule",
+   "description": "Inputs make `001-initiative-plan.{project}.md` required and `000-concept.{project}.md` optional, calling the no-concept case \"the tested path\". The field schema then sources Purpose/Problem/Audience/Approach from \"Concept Overview / initiative plan\", \"Concept Problem & Motivation\", \"Concept Target Users\", and \"Concept Solution Approach\"; with no concept, four of nine fields have no source. \"sources purpose from the initiative plan plus interview\" introduces a capability-2 interview with no question set, answer storage, or field-level unknown/flagging rule, conflicting with \"Derive, never invent\" and \"Never fabricate intent\". The actual `project-documents/user/project-guides/001-initiative-plan.squadron.md` frontmatter declares `source: user/project-guides/001-concept.squadron.md`, not `000-concept.{project}.md`; that path is also absent, while Capability 1 writes `000-concept.{project}.md`, so neither path satisfies the plan's declared source. The plan encodes status twice in single-line checklist entries and inconsistently: 100 and 140 are `[x]` but `Status: in_progress`, 900 is `[x]` but `Status: not_started`, and 340 has no status. No precedence rule is given for \"Initiative statuses\", no parser is specified for checklist prose, and \"Strip internal vocabulary... initiative indices never appear\" makes \"Roadmap... dependency-driven ordering\" impossible without an unnamed mapping from `[100, 140]` to themes. Translation rules also say \"Emphasis is a generation parameter\", while Resolved Design Decisions says an emphasis parameter is added only if real use demonstrates the need; no `$ARGUMENTS` grammar exists for it.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:197-221"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Generated frontmatter and status assignment are unspecified against the actual gate",
+   "description": "The document lists enum members (`complete`, `in_progress`, `not_started`, `deprecated`, `deferred`) and says `draft` is rejected, but never says which status each generated artifact receives. A freshly generated, unreviewed `000-concept` cannot honestly be `complete`; `not_started` for a written document is ambiguous; an overview derived from an `in_progress` plan needs a defined mapping. The same section uses \"Initiative 140 status draft\" as a translation example even though `draft` is an invalid status \u2014 a hallucination trap under CLAUDE.md and a silent mapping from an invalid input value to \"in progress\" instead of an explicit error. The pre-commit gate is `.githooks/pre-commit` \u2192 `sq events fire commit` \u2192 `src/squadron/events/builtin/frontmatter_gate.py` \u2192 `cf validate frontmatter`, not just the five-value enum in `src/squadron/documents/schema.py`; slice 172 records that CF checks per-docType required fields for `concept`, `analysis`, etc. Existing `940-analysis.tech-debt-audit.md` includes `project`, `topic`, `dateCreated`, `dateUpdated`, `status`, and `model`. The architecture never provides the full frontmatter block for concept, comprehension analysis, overview, or initiative-plan candidates, nor a legal place for the required staleness provenance.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Delivery omits concrete command-install and test changes",
+   "description": "Capability (a) says adding `understand` requires \"a new pack file plus three edits to `commands/sq/analysis.md` ... and no installer, manifest, or CLI change\"; capability (b) says it ships as a first-party command in `commands/sq/`. In this stack those are markdown slash-command files installed by `sq install-commands`, not Typer registrations. `src/squadron/cli/commands/install.py` copies every `*.md` under `commands/sq/` and removes stale destination files, while `tests/cli/test_install_commands.py` hard-codes `EXPECTED_FILES`/`EXPECTED_COMMANDS` for exactly nine files and asserts `len(...) == 9` in three tests; `EXPECTED_COMMANDS` also asserts each file contains a specific `sq ...` subcommand string. Adding `commands/sq/overview.md` breaks those tests unless the fixtures are updated, and adding `commands/analysis/understand.md` changes the bundled analysis pack receipt/install surface. Dependencies says \"[100] \u2014 CLI command registration for any command surface\", but no Python CLI command or entry point is described; the actual change is command markdown plus install/test fixtures. CLAUDE.md requires build after changes, so these omitted updates are load-bearing.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Delivery"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Working-tree hygiene edits a tracked file with no parsing or failure contract",
+   "description": "Flow step 2 and Working-tree hygiene require \"Ensure `.gitignore` contains an entry ... idempotently\" for `.understand-anything/.trash-*/`, while Design Goals says \"Leave the working tree clean.\" `.gitignore` is a tracked source file in this repo; editing it without committing dirties the worktree, and the generated concept/analysis/overview artifacts do the same. No rule is given for missing `.gitignore`, no trailing newline, CRLF, comments, equivalent existing patterns with/without trailing slash, negation patterns, global excludes, write-permission failure, or concurrent edits. A naive exact-line grep would silently skip valid variants or append duplicates, violating CLAUDE.md's lenient structured-text parsing rule and \"never use silent fallback values\" rule. The architecture also does not say who owns the mutable change, whether the skill stops with an explicit error, or how the change reaches a commit.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Working-tree hygiene"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Initiative-plan candidates defer the hard part to \"complexity clustering\"",
+   "description": "Outputs says candidates are \"proposed initiatives derived from layer boundaries and complexity clustering\", \"offered for PM review\", and \"Written only on explicit confirmation\"; Non-Goals repeats that squadron does not silently author a commitment document. There is no clustering algorithm, complexity threshold, ranking rule, evidence-to-node-ID trace, candidate schema, output path, docType, frontmatter, or state model for the already-specified user choice and resumption after interruption. \"Never fabricate intent\" says structure cannot supply purpose, yet candidate initiatives are prescriptive claims derived from structure; Open Questions for Slice Design defers reuse of the `[INFERRED]` convention from `user/reference/analyze-codebase-prompt.md`, which is the only mechanism named for separating known facts from inference. This is \"step 3: magic happens\" on a load-bearing deliverable from the initiative plan, not a detail slice design can fill without redefining the artifact.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:148-153"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Future pipeline integration has no composable transform interface",
+   "description": "Non-Goals says \"If pipeline integration is wanted later, it is a separate initiative built on the action protocol.\" The current design is two markdown skills with interactive interviews, filesystem discovery, `.gitignore` mutation, 900-band index allocation, and user choices; there is no headless transform contract, parameter schema, structured result, error model, or machine-readable provenance. A future `ActionResult`-producing pipeline action cannot reuse these skills without rearchitecting them into a callable core, because `src/squadron/pipeline/actions/` requires code-level actions and the architecture explicitly forbids \"runtime machinery to the engine\". The same gap creates duplication: both capabilities must allocate indices, write YAML frontmatter, parse planning docs, handle unknowns, and record provenance, but one lives in the bundled `analysis` pack and one in `commands/sq/`, with no shared contract. CLAUDE.md requires programming to interfaces, clear separation, and DRY; copy-pasted markdown instructions across two command surfaces will drift. Either define a shared document-transform contract now, or remove the claim that pipeline actions can be layered on later without rework.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Non-Goals"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "External guide dependency is unresolved in this checkout",
+   "description": "Interview scope derives its question set from \"the concept guide's own section list\" and \"flag unknowns explicitly\" rule; Output Conventions relies on `file-naming-conventions.md` for the 940-949 range and on the frontmatter gate's fixed enum. Both guides live under `project-documents/ai-project-guide/`, which `.gitmodules` declares as a submodule and `list_files` shows empty in this checkout. The architecture never states whether the skills require the submodule to be initialized, how they resolve it, or what happens when it is absent. A skill that emits `docType: concept` cannot know required section names/fields from this document alone; `src/squadron/documents/schema.py` only defines enum values, not the concept template. Project rules forbid silent fallback values, so \"use the guide\" without an explicit resolution/failure contract is an unresolved external dependency.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Interview scope"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Architecture is overweight for two markdown transforms; cut unused extension mechanisms",
+   "description": "CLAUDE.md's first principle is \"Always resist adding complexity.\" The initiative needs two document transforms, but the architecture adds a nine-field client schema, audience emphasis discussion, topic-suffixed overview variants, 950+ overflow policy, a 900-band re-cut note, commit-distance/provenance machinery, a six-row upstream output contract, prior-art retention policy, and a future pipeline-action extension claim. Cut or defer the mechanisms with no current consumer: `{index}-analysis.overview.{topic}.md` variants, the \"emphasis is a generation parameter\" extension point, 950+ overflow and the 900-band re-cut discussion, `config.json` / `intermediate/scan-result.json` / `.understandignore` rows in the Output Contract table (the Flow never reads them), and the future pipeline-action claim; reduce staleness to an explicit hash-mismatch warning until distance and provenance fields are defined. Keep both capabilities and the artifact types the initiative plan names, but use one fixed output path per artifact type and one shared frontmatter/index contract. The current mechanism count forces slice design to solve convention changes, parser design, state management, and CLI test updates before a single transform can be implemented.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md"
+  }
+ ]
+}

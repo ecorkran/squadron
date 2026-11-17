@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A successful tool call does not establish diff coverage",
+   "description": "The cap is bypassed by **any** successful tool call, even one unrelated to the omitted diff. That does not support the stated claim that a PASS means the model saw the whole diff or read the omitted files, nor the slice plan\u2019s exception for a model that read files. Retain the cap unless the available telemetry establishes relevant coverage, or narrow the artifact\u2019s guarantee and explicitly address how the plan\u2019s coverage requirement is met.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Deduplicating model IDs loses the final answering model",
+   "description": "First-seen-order deduplication cannot identify the last model when a run reports A, then B, then A: the resulting list is `[A, B]`, so D12 assigns B to `aiModel` even though A answered last. Preserve the last observed model separately from the distinct-model list, including across the recovery turn, so substitution reporting and metrology identify the correct judge.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:103-105"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Synthetic finding omits the required location",
+   "description": "The design explicitly omits `location` from the synthetic finding, but slice 904\u2019s artifact contract requires a location on **every** finding and uses `unverified` when no specific location is known. Supply `location: unverified` rather than creating an exception to the contract used for finding identification and deduplication.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152"
+  }
+ ]
+}

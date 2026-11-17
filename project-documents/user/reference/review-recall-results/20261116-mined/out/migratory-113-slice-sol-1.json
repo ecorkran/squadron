@@ -1,0 +1,147 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Density feedback can read capped counts",
+      "description": "The final hook receives `filtered_counts` after the unchanged cap step. Slice 112\u2019s **Tick Integration** explicitly reassigns that variable to capped counts. Consequently, capped populations can appear sparse even when clustered, violating slice 113\u2019s plan requirement that dispatch use pre-cap density. Capture the density scalar before capping, and test that changing `max_neighbors` does not change dispatch for identical query results.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:149-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Neighbor-set equality does not establish deterministic tick parity",
+      "description": "The design requires bit-exact position equality but permits different neighbor ordering and validates query parity using sets. Floating-point reductions can change with ordering; capped selection can also differ when equal-distance candidates arrive in different orders. Backend choice then introduces dependence on dispatcher history, contrary to the HLD\u2019s tick-determinism goal and the spatial-swap parity requirement.\n\nSpecify canonical reduction ordering and tie-breaking, or another mechanism that guarantees parity. Test forced backend switches with uncapped rows and capped distance ties, rather than treating backend correctness as eliminating this risk.",
+      "file_ref": null,
+      "category": "determinism",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421-431"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dispatcher feedback is an undeclared engine dependency",
+      "description": "The HLD requires spatial strategies to remain replaceable behind well-defined interfaces. The engine instead discovers and invokes a dispatcher-specific method absent from `SpatialQuery`. This creates a second, implicit contract, despite the claim that the wrapper preserves the protocol abstraction.\n\nDefine a small explicit feedback contract or collect density inside the wrapper\u2019s batch-query delegation. Either approach should preserve standalone backend support without teaching the tick pipeline an undocumented capability.",
+      "file_ref": null,
+      "category": "architectural-boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty active subsets have no density-update policy",
+      "description": "The proposed calculation divides by `n_active`. An empty active subset is valid under the subset-evaluable tick contract and is explicitly covered by the batch-query dependency. No handling is specified for this case; division can fail or introduce a non-finite signal.\n\nDefine an explicit policy, such as retaining the previous density and selection when no agents were evaluated, and test the integrated feedback path with an empty subset.",
+      "file_ref": null,
+      "category": "edge-cases",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Performance requirements omit the parent scale target",
+      "description": "The HLD targets tens of thousands of agents at full behavioral fidelity on one CPU process. This slice changes the default spatial strategy but states verification only around 2,500 agents and does not restate that architectural target.\n\nRestate the target and specify representative scale validation or explicitly identify the remaining gap. Also correct the `O(1)` feedback claim: summing the supplied counts array is `O(n_active)` unless an already-computed scalar is passed. Cached data does not make a reduction constant-time.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:337-380"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Density feedback can read capped counts",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:149-159",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "determinism",
+      "raw_category": null,
+      "summary": "Neighbor-set equality does not establish deterministic tick parity",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421-431",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-boundaries",
+      "raw_category": null,
+      "summary": "Dispatcher feedback is an undeclared engine dependency",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "edge-cases",
+      "raw_category": null,
+      "summary": "Empty active subsets have no density-update policy",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-116",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Performance requirements omit the parent scale target",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:337-380",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T05:30:07.726785",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 61436,
+  "cached_tokens": 56832,
+  "cache_write_tokens": null,
+  "completion_tokens": 870,
+  "reasoning_tokens": 180,
+  "duration_seconds": 61.423250457737595,
+  "cost_usd": 0.0235912,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "One-step REFLECT velocity-flip test cannot pass with the stated setup",
+   "description": "Task 3.4 specifies `test_reflect_policy_flips_velocities_at_edges`: place an agent at `(99, 50)` with velocity `(10, 0)`, step once, assert `vx < 0`. Verified against `src/migratory/engine/tick.py` \u2192 `integrate()` (`positions += velocities * dt`), velocity is first clamped to the profile's `max_speed` and the position advances by only `v * dt`. With the `dt=0.05` used throughout `tests/test_simulation.py` (and a typical `max_speed` of 5), one step moves x from 99 to ~99.25 \u2014 it never crosses `width=100`, so `_apply_reflect` does not fire and `vx` stays positive. The task omits `dt` and hard-codes the 99 start, so a junior following it literally with the file's normal `dt` writes a test that fails with no obvious cause. The task must specify a `dt` large enough that `v*dt > 1` (and a `max_speed` that does not clamp it away), or start the agent closer to the edge.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:231"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Call-site file list in Task 3.5 is inaccurate",
+   "description": "Task 3.5 names `tests/test_clients.py` as a file that may construct `SimulationManager` and need `world_bounds=...`, but a grep of `tests/` shows no `SimulationManager(` in that file. The actual direct-construction sites outside `test_simulation.py` are `tests/test_force_builder.py:201` and `tests/test_repulsor_integration.py:53`; the latter is not named in the explicit list (the \"or any other file\" catch-all does cover it). Task 3.4 likewise warns only about `test_simulation.py`, where ~20 constructor sites exist. Correcting the enumeration would keep a junior from scanning the wrong file.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:241"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`**Commit:**` markers use checkbox format",
+   "description": "All five markers are written as `- [ ] **Commit:** ...`. The review convention treats commit markers as plain lines, never checkboxes. This does match the repository's own CLAUDE.md (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\"), so this is a convention conflict rather than an authoring defect; noting it for awareness only. Placement is otherwise correct.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Full-suite run is specified three times",
+   "description": "`pytest` (whole suite) is invoked in Task 3.5, again in Task 5.1, and again as Step 2 of the Task 5.2 walkthrough. Success criterion SC13 needs one full regression run; the repetition is mild over-testing for an Effort 2/5 slice and could be collapsed into the Section 5 verification.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:239"
+  }
+ ]
+}

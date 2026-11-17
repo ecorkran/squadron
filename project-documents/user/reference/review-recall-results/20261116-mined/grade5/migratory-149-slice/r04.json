@@ -1,0 +1,33 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Cell-subdivision candidate estimate overstates the reduction",
+   "description": "The stated estimate that `S=3` reduces candidates from 45,000 to about 5,000 counts the lower occupancy per cell but not the larger scan: the kernel visits 49 cells rather than 9. Under the document\u2019s own occupancy assumptions, that is about `49 \u00d7 (5000/9) \u2248 27,200` candidates, not 5,000. With counter-gating, that implies roughly a 1.65\u00d7 reduction rather than the suggested 9\u00d7. Correct the estimate and explain what measured scan behavior is expected to make subdivision worthwhile.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 2 \u2014 Configurable Cell Subdivision"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Verification commands cannot isolate the interventions",
+   "description": "The \u201cbaseline\u201d and \u201cearly exit only\u201d commands both run `S=1`, and the \u201ccell subdivision only\u201d and \u201cboth interventions\u201d commands both run `S=3`. No option disables early exit or restores counter-gating, so the walkthrough cannot produce the stated comparisons. Define how to run the counter-gated variant or explicitly use a recorded slice 145 baseline artifact and revise the experiment descriptions accordingly.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Verification Walkthrough"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Cell size must account for per-profile query radii",
+   "description": "Slice 145 describes per-profile `query_radius` values and sets cell size from `max_query_radius`. This design instead says `cell_size = query_radius / S` without specifying that the configured radius is the maximum across profiles. If any profile\u2019s radius exceeds the value used to size the cells, scanning only `\u00b1S` cells can omit valid neighbors and violate the behavioral-fidelity goal. Define the subdivision using the maximum supported radius, or specify a per-agent scan bound.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 2 \u2014 Configurable Cell Subdivision"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The preserved A7 seam is bypassed at the cap",
+   "description": "Option A checks the cap and breaks before calling `get_neighbors_first_k`, then describes the seam as unreachable after the break. That prevents a future distance-ranked selector from examining candidates after the first `k` have been accepted, despite the slice plan assigning this work to the existing neighbor-selection seam and slice 145\u2019s A7 requirement to preserve it as a swap point. Keep the seam operational for the planned swap, or revise the claim that this implementation preserves that interface.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 1 \u2014 Early Exit at Neighbor Cap"
+  }
+ ]
+}

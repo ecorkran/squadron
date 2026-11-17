@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "No CHANGELOG entry task for a new user-facing command",
+      "description": "Task 6 (\"Docs and full validation\") covers only the README command table plus build/lint/test. Nothing in the breakdown adds a `CHANGELOG.md` `[Unreleased]` entry, yet this slice introduces a brand-new user-facing CLI command (`cf validate design`), the guide's Phase 6 completion checklist names \"Update CHANGELOG.md in project root\" as a required step (`project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:388`), and every comparable feature slice in this repo carries a CHANGELOG task (923 Task 19, 924 Task 11, 925 Task 31, 926 Task 21, 928 Task 21, 929 Task 8, 930 Task 11, 934 Task 9). The command would ship unannounced. The same task should also run `cf check` (Phase 6 completion step 2), which no task currently does \u2014 note that `pnpm test` does not run the consistency checker, so the new design/tasks documents and the new command are never checked for consistency.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox items, not `**Commit**:` lines",
+      "description": "The commit checkpoints are written as `- [ ] **Task 2C: Commit** \u2014 \\`feat(core): add slice design heading validator\\``. The Phase 6 prompt instructs the implementer to \"Commit at each checkpoint marked in the task file (look for lines starting with `**Commit**:`)\" \u2014 no line in this file starts with that token, so the documented lookup finds nothing. Every other task file in the repo writes the marker as `**Commit**: <message>` (e.g. `934-tasks.stable-default-worktree-marker.md` Task 9, `923-tasks...` Tasks 5/9/16). Placement here is correct \u2014 each marker sits after its implementation *and* test task, and the two conditional markers are properly marked \"only if \u2026 changed files\" \u2014 so only the marker format needs to change to `**Commit**: \u2026` for the checkpoints to be discoverable.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"unreadable file\" exit-2 condition has no test",
+      "description": "Task 3 implements the readability check (\"exists, is a regular file and is readable\"), and Task 3T/4T cover missing file, directory-as-file, missing template, and template with no required markers \u2014 but no case exercises a path that exists, is a regular file, and yet cannot be read. The design lists \"unreadable\" as its own exit-2 condition in the Functional Requirements, so a single chmod-000 fixture would close the set; slice 934 used the same read-only-file trick for an equivalent path.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The doctype frontmatter message has no defined home",
+      "description": "Task 3 defines `DesignValidationResult` as `path`, `pass`, `missing`, and optional `reason: 'doctype'` \u2014 no message field \u2014 while Task 4 requires the CLI to print \"the frontmatter message\" for `reason: 'doctype'`. The exact string the design mandates (`frontmatter must declare 'docType: slice-design' (see file-naming-conventions.md)`) therefore has to be defined in one place, but neither task says where. Defining it as a core export next to the `'doctype'` constant keeps it from drifting from the design's documented output and satisfies the \"never scatter comparison values\" rule.",
+      "file_ref": null,
+      "category": "API-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parity-sweep fixes are directed into already-completed test tasks",
+      "description": "Task 5 says a parity difference that turns out to be a bug should be \"fix[ed] and add[ed] a test in the matching test task's file\". By the time Task 5 runs, Tasks 2T/3T/4T are finished and checked off, so the new test lands outside the test-with pairing and the checked-off checklist no longer matches the file's contents. Having Task 5 append a numbered follow-up task (e.g. \"Task 5.1\") keeps the pairing intact and the file self-consistent.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion in the slice design maps to a task",
+      "description": "The mapping is complete and traceable. Functional Requirements: PASS/exit 0 and FAIL/`missing:`/exit 1 \u2192 Task 4 + Task 4T; doctype message \u2192 Task 3 (`reason: 'doctype'`) and Task 4T; multiple files checked in order with exit 1 \u2192 Task 3 and Task 4T; the six exit-2 conditions (no args, missing/non-regular/unreadable file, missing/unreadable template, template with no required headings) with empty stdout including under `--json`, plus the \"valid file before a missing one\" case \u2192 Task 3 (preflight), Task 4 (`handleError(err, 2)`), Task 3T and Task 4T; the `--json` contract \u2192 Task 4 and Task 4T; the template read from the invoking checkout's guide \u2192 Task 4 and Task 4T's worktree case. Technical Requirements: the unit-test list (case, whitespace, HTML comments, parentheticals, placeholder prefix, level mismatch, fenced block, CRLF) maps one-to-one onto Task 2T's bullets; the real-template file test (non-empty required list including `## Overview` and `### Verification Walkthrough`) is Task 3T's second bullet; the real-slice-design command test is Task 4T's first bullet; build/lint/full-suite and the ~300-line limit are Task 6. The Integration Requirement (the guide can repoint and remove the script) is correctly left as a post-release action in the Context Summary rather than a task. No task lacks a criterion behind it \u2014 no scope creep.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pairing and proportionality are sound",
+      "description": "Dependencies are respected and there are no cycles: Task 1 (the path constant) precedes Task 4, Task 2 precedes Task 3 precedes Task 4, and each implementation task is immediately followed by its own test task (2\u21922T, 3\u21923T, 4\u21924T), satisfying the test-with pattern rather than batching tests at the end. Commit markers fall at working, tested points rather than after every task. Proportionately, ~11 substantive tasks covering three new source files and three new test files in a ~125-line single task file (well under the guide's ~450-line guidance) matches the size of the slice; no task file split is warranted, and the steps that look implementation-prescriptive (the normalization list in Task 2) are verbatim transcriptions of the design's own \"Heading normalization\" and \"Line handling\" sections rather than new decisions.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "No CHANGELOG entry task for a new user-facing command",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox items, not `**Commit**:` lines",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The \"unreadable file\" exit-2 condition has no test",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "API-contract",
+      "raw_category": null,
+      "summary": "The doctype frontmatter message has no defined home",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Parity-sweep fixes are directed into already-completed test tasks",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every success criterion in the slice design maps to a task",
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pairing and proportionality are sound",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-17T10:41:41.225717",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 52,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 421008,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1009326,
+  "cached_tokens": 767744,
+  "cache_write_tokens": null,
+  "completion_tokens": 105073,
+  "reasoning_tokens": 101128,
+  "duration_seconds": 490.5394690828398,
+  "cost_usd": 0.055014758,
+  "cost_basis": "alias_pricing"
+}

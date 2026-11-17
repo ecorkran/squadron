@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Non-text content-block mapping has no test and the fake server cannot produce it",
+   "description": "The slice design's Result mapping rules (slice design line 137) require that \"Non-text blocks are noted by type in the content, not dropped silently\" \u2014 part of the same slice-909 silent-no-op family as the empty-result rule. Task 4.2 implements this, but Task 3.1's fake server enumerates only four tools (`echo`, `fail`, `sleep`, `empty`), all of which emit text or zero blocks, so Task 5's bridge tests can never exercise a non-text block. Success criterion 2 (\"maps results per the Result mapping rules\") therefore leaves this rule unverified. Fix is small: add one fixture tool returning a non-text block (e.g. an `ImageContent` or mixed-content tool) and one assertion in `tests/tools/test_mcp_bridge.py` that the type is named in `ToolResult.content`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:109"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Success criterion 6's non-SDK model dispatch demo (walkthrough \u00a74) is deferred by design",
+   "description": "SC6 requires both a live `cf_workflow_status` smoke (covered by Task 8.2 and Task 9.1 step 2) and a dispatch with a tool-capable non-SDK model calling `cf_build_context` (walkthrough \u00a74). Task 9.3 explicitly records that step 4 runs from a standard terminal (the `sq run` CLAUDECODE guard refuses inside Claude Code) and \"remains open alongside 263's demo\". This is a documented, justified deferral of a manual acceptance step rather than an untracked gap \u2014 recorded here so the open item is visible at review time. No task change required.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:292"
+  }
+ ]
+}

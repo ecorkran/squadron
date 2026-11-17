@@ -1,0 +1,26 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Force execution paths are not fully specified",
+   "description": "The design defines per-agent and bulk force protocols, says tick prefers bulk implementations, and requires tests exercising both paths (line 248). However, `tick()` accepts only `list[BulkForce]`, with no adapter or selection mechanism for per-agent forces.\n\nDefine how reference forces enter the pipeline without introducing per-agent execution into the vectorized hot path. A simple explicit reference adapter would satisfy the testing requirement without implicit dispatch.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-152"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Neighbor contracts leave subset mapping and deterministic replacement ambiguous",
+   "description": "`BulkForce` receives `neighbor_lists` and `active_indices`, but the design does not specify whether neighbor lists are population-indexed or active-subset-indexed. The spatial protocol also leaves self-inclusion and result ordering undefined.\n\nThese details matter to subsequent behavioral forces and slice 105\u2019s requirement that replacing the spatial implementation preserve identical behavioral output. Specify list indexing, self-neighbor handling, and deterministic ordering or normalization so force implementations do not depend on undocumented brute-force behavior.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:138-175"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Preserve the parent\u2019s full-fidelity scale target",
+   "description": "The parent architecture\u2019s \u201cEfficient large-scale evaluation\u201d goal specifies **tens of thousands of agents at full behavioral fidelity on a single CPU process**. This slice touches the relevant state, force, and spatial interfaces but restates only vectorization requirements; its spatial discussion targets hundreds of agents.\n\nRestate the architectural target and distinguish it from this slice\u2019s deliberately limited brute-force baseline. Keep spatial optimization in slice 105, while making clear that the foundation\u2019s interfaces must support the eventual target.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:244-248"
+  }
+ ]
+}

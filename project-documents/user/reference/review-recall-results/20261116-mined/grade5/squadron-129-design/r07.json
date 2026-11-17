@@ -1,0 +1,61 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The design targets `sq model list`, a command that does not exist in the CLI it edits",
+   "description": "The discoverability surface is named `sq model list` in six places \u2014 Technical Scope (line 37), D9 (112), Sub-part B surfaces (173), Provides to Other Slices (180), Integration Requirements (205), Verification Walkthrough steps 1 (211) \u2014 and `cli/commands/models.py` is listed as an edited file (line 70). The registered command is `sq models list` (`models_app` added with `name=\"models\"`, with a `list` subcommand); there is no `model` command group. Slice 928 found exactly this and fixed it: \"`commands/sq/review.md` and `commands/agents/sq-review/SKILL.md` tell the model to run `sq model list`, which does not exist \u2014 the command is `sq models list`.\" The requirement this leaves unmet is the slice's own verification walkthrough and its user-facing hint text: a walkthrough step that invokes a nonexistent command cannot be executed, and a README/marker sentence repeating it propagates the known-bad invocation the project just corrected. Fix the name throughout the design, including wherever the marker text or README section will quote it, before task breakdown.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:170-174"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`logout` is a new runtime-spawning I/O path with no enumerated failure mode or timeout bound",
+   "description": "The Data Flow section puts `sq auth logout` in the list of the only three places that spawn the app-server subprocess (line 82), so logout is `login.py` doing an `AsyncCodex` enter \u2192 `logout()` \u2192 teardown, over a real subprocess and RPC. The failure-mode table covers the turn path exhaustively and covers login (`wait()` never completes \u2192 `codex.login_timeout_s`, handle cancelled) and status (`account()` hang \u2192 `codex.account_timeout_s`, WARNING, never fail the command), but has no row for logout: runtime fails to start during logout, `logout()` raises or hangs, transport closes mid-call, or the command is interrupted. None of the three D7 keys bounds it (`account_timeout_s` is scoped to \"runtime start + `account()`\", `login_timeout_s` to `handle.wait()`). The requirement this leaves unmet is the enumeration rule the design otherwise satisfies \u2014 every new I/O path with a named handling strategy \u2014 and the consequence is concrete: a hung or erroring logout either blocks the terminal indefinitely or exits with an unwrapped SDK traceback, and there is no test row for it (Technical Requirements lists logout with no failure variant, line 199). Add the row(s) and name the bound.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-136"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`ExtraRequirement` is a general cross-provider interface with exactly one implementer and no consumer outside this slice",
+   "description": "D9 introduces a third new abstraction in `providers/base.py` \u2014 a `runtime_checkable` Protocol with `missing_extra_hint()` \u2014 so that \"`sq model list`\" and `sq doctor` can ask *any* provider, \"lets any provider with an optional dependency surface an install hint to `sq model list` without CLI changes\" (line 180), while the frontmatter records that no planned slice consumes it. Codex is the only provider in the registry with an optional dependency; the other extras-adjacent case (serve/fastapi) is deferred 907 work that this slice does not touch. The plan asked for less: \"when the package is missing, the error names the exact extra install command; `sq doctor` gets a Codex row; `sq model list` marks `openai-oauth` aliases that need the extra.\" A lighter shape meets that requirement with no new base-layer interface: both surfaces already call `resolve_codex_runtime()`, which is the D2 single definition of \"what is missing and how to fix it\" \u2014 model-list and doctor can consume the resolver's result and the hint string defined once in `runtime.py` (Patterns and Conventions, line 139) directly. Defer the Protocol to the slice that adds the second extra-bearing provider, at which point its shape is testable against two implementers instead of one. Note the counter-consideration: D9's version is the one that avoids the profile-name string check 128 bans, so if the Protocol stays, it should stay \u2014 the concern is that the abstraction is being built before any consumer exists, not that the dispatch is wrong. Everything else in the design is proportionate (`CodexRuntime` collapses three duplicate callers; the three D7 keys each bound a distinct new path).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Remediation text outside README still names the now-wrong install path, contradicting the slice's own value claim",
+   "description": "The Value section promises \"A missing piece is named at the point of failure with the exact command to fix it,\" and Part B is scoped as \"discoverability.\" Technical Scope and Sub-part B name only the README Codex section (lines 37, 174), but the wrong remedy lives in three other places that a Codex user actually reads, all carrying `npm i -g @openai/codex` today: the onboarding doc (`docs/QUICKSTART.md`, two occurrences, including inside a sample doctor transcript), `sq setup`'s install table, and `sq doctor`'s existing `codex CLI` row `fix_hint` \u2014 a row this design deliberately keeps (line 172). After this slice the bundled binary arrives through the extra, so for a subscription user those hints are not merely stale, they are the opposite of the recommended path (the design's own D1/D2 reasoning says the npm install is no longer needed), and they undercut the missing-piece-named-at-failure goal in the two highest-traffic onboarding surfaces. The gap to close is a scope decision, not necessarily code: either bring those three hint strings into the slice (they are one-line edits to values defined once per site) or record explicitly, in Special Considerations, that they are deferred and to which slice \u2014 the current text leaves it undecided.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:23-28"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`pyright clean` is required while `providers/codex/agent.py` sits in the type-check exclusion list",
+   "description": "Technical Requirements mandate \"`ruff format`, `ruff check`, `pyright` clean,\" but `pyproject.toml` currently carries `exclude = [\"src/squadron/providers/codex/agent.py\"]` under strict mode, and the design never mentions it even though it rewrites that file and adds a second module using SDK types (`login.py`, line 67). The exclusion exists because the old GitHub SDK was untyped \u2014 the reason the tech-debt audit (F050) flags it as a risk of \"silently widening to mask unrelated type errors\" \u2014 and the design states the new SDK ships generated typed models (`GetAccountResponse`, `ChatgptAccount`, `TurnResult`, `ThreadTokenUsage`, `ReasoningEffort`), which is precisely the premise under which the exclusion should be re-examined. The requirement left unmet is a verifiable, stated one: \"pyright clean\" is ambiguous when a file this slice owns is excluded from the check, and a new untyped-boundary module may need the same treatment. Name the outcome in the design \u2014 remove the exclusion, or keep it with the specific cause recorded \u2014 so the implementer does not decide it silently.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:196-201"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`validate_credentials()` behavior with the extra absent is not restated",
+   "description": "The design says `validate_credentials` never spawns the runtime and checks \"importability and file presence only,\" and the Technical Requirement forbids further reference to `codex_app_server`. It does not say what the boolean returns when `openai_codex` is not importable \u2014 today it returns `False` via a swallowed `ImportError`, which slice 907 accepted as correct for a capability probe. A one-line statement of the post-port behavior (still `False`, and therefore which surfaces do *not* get the install hint) would remove the only ambiguity on that path.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The extra's version ceiling is an open packaging decision embedded in user-facing text",
+   "description": "D1 carries `codex = [\"openai-codex>=0.159.3,<1\"]` while Special Considerations defers the ceiling to the PM because the SDK is 0.x with a moving generated surface. That is a properly flagged decision rather than a TBD on an I/O path, and the design hedges it well (one real-types test that fails loudly on drift, line 200). Worth confirming the ceiling before the install-hint string is frozen, since the hint the user is told is the constraint they will hit.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The parent's subprocess-initialization guidance is the SDK path's; the Codex equivalent is restated rather than inherited",
+   "description": "`100-arch.orchestration-v2.md` states the 20-30s Claude subprocess initialization cost and the \"warm pool / instance reuse rather than per-message creation\" instruction, and the slice plan records warm-pool as deferred (104). That NFR belongs to the `claude-agent-sdk` provider, not this path, so there is nothing to restate verbatim. The design nonetheless carries the equivalent constraint with specifics: one spawn per `CodexAgent`, never per message, spawning confined to three enumerated call sites, hang bounded by `codex.turn_timeout_s`, startup duration logged at DEBUG, and an explicit reason for setting no latency target. That is the right treatment of a numeric NFR inherited from a sibling provider's design consideration.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Collision remediation instructs `cf config unset --project`, which cannot reach the stale shared copy under the design's own delete routing",
+   "description": "The Delete rule (line 89) states delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to,\" meaning `cf config unset git.integration_branch --project` deletes only from `.context-forge.local.toml` (the personal file, per `CONFIG_KEYS[key].scope === 'personal'`). But the collision-semantics paragraph (line 146) tells the user that after a `migrate-personal` skip, \"clearing it is a separate, explicit `cf config unset <key> --project`,\" and verification step 9 (line 259) makes this a success criterion: \"confirm `cf check` is clean again.\" As specified, that unset deletes the developer's *personal* value (destroying the preference the design just said must not be overwritten) and leaves the stale shared-file copy in place, so `cf check` still reports the finding and step 9 cannot pass. The design must reconcile the two: either route `unset --project` for personal keys to delete from both project files (documented as an explicit exception, like `migrate-personal`), add a flag/targeting for the shared file, or change the remediation instruction. This is the one documented failure-recovery path that contradicts the mechanism it depends on.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Placement of the `cf init` gitignore step relative to the `--lite` gate is unspecified, but the walkthrough requires it to run in lite mode",
+   "description": "The Component Structure entry says only \"`init.ts` \u2014 ensures `.context-forge.local.toml` is gitignored.\" In the actual `init.ts`, all setup steps (guides, commands, IDE) sit inside an `if (!opts.lite)` block, and nothing in the design says whether the gitignore write runs inside or outside that gate. The verification walkthrough (steps 1\u20133) runs `cf init --lite` in an empty directory and then asserts `cat .gitignore` contains the line \u2014 which only holds if the step runs outside the lite gate. An implementer placing it alongside the other setup steps would break a stated success criterion. The design should say explicitly that the gitignore append runs unconditionally (before/independent of the `!opts.lite` setup block), and clarify the stated failure handling (\"aborts `cf init`\") given that every other failure in that region of `init.ts` is warn-and-continue, not abort.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:64"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Line 32 claims reuse of an existing personal-ignore gitignore pattern that does not exist",
+   "description": "The Technical Scope bullet says the gitignore addition is \"reusing the pattern already used for personal ignores,\" but the design's own `.gitignore` section (line 159) and a repo-wide grep of `packages/cli` and `packages/core` both confirm there is no gitignore-writing logic anywhere today. Line 159 is correct; line 32's justification is dead and should be dropped so it doesn't send an implementer looking for a nonexistent helper.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Existing already-initialized projects get no path to gitignore coverage for the new personal file",
+   "description": "The gitignore write lives only in `cf init`, which matches the slice plan entry's wording (\"`cf init` should ensure the personal-scope file is covered by `.gitignore`\"), so this is not a plan deviation. Worth noting for the record: on a project initialized before this slice, the first `cf config set git.integration_branch ... --project` creates an un-gitignored `.context-forge.local.toml`, and neither the new `personal-config-in-shared-file` check nor anything else flags that state \u2014 the file can be committed silently until someone re-runs `cf init`. If the design wants its stated value (\"prevents personal settings from being silently committed\") to hold for existing projects, the natural lightweight extension is for the same `ConsistencyChecker` rule (or `cf init` re-run guidance in its message) to note the missing gitignore line; if deliberately left out, a sentence saying so would close the question.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157"
+  }
+ ]
+}

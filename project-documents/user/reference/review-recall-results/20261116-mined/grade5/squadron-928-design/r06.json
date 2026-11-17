@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Receipt naming is not collision-free across packs, targets, and scopes",
+   "description": "The formula `base + target suffix + scope suffix` can give different installs the same receipt name. For example, an AGENTS install of `analysis` and a Claude install of `analysis-agents` both produce `analysis-agents.toml`. Installing one can overwrite the other\u2019s receipt, so later listing or uninstalling may act on the wrong install. The stated exclusion covers collisions with Squadron-owned names, but not collisions between arbitrary pack names and target/scope suffixes. Define an unambiguous naming scheme or reject collisions before writing a receipt.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D5"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Shared Codex skill names can overwrite another pack\u2019s files",
+   "description": "AGENTS skills from all packs land in the shared skills root, but the design excludes skill-name collisions without defining how installs detect or handle them. Two packs\u2014or a pack and an existing skill\u2014can provide the same directory name. The later install could overwrite files while both receipts refer to the same path; uninstalling either could then remove files the other install expects to own. Specify a collision check and fail-without-overwrite behavior, or another explicit ownership strategy for this new shared destination.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D3"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Partial install failures have no recovery strategy",
+   "description": "The design requires validation to complete before writing, but does not specify what happens if writing the skill files fails partway through, or if receipt creation fails after the files are written. In either case, files could remain without a usable receipt, despite receipts being the stated authority for what Squadron owns. Define cleanup or rollback behavior for these failures and how the command reports any partial state.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data-Flow"
+  }
+ ]
+}

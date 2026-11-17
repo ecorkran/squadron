@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Core scope and component boundaries align with the slice plan",
+      "description": "The three implementation parts map cleanly to the parent slice plan. Provider agents observe model metadata, `TurnCapture` folds it upward, the review client applies review policy, persistence owns the artifact contract, and CLI and pipeline paths consume the same `ReviewResult`. The deferred ordering/stat work, file-body truncation, default changes, and issue #114 remain outside the slice as required.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Architecture"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The degraded-parse notice is applied to the wrong state",
+      "description": "D6 treats `fallback_used` as equivalent to \u201cfindings were not parsed\u201d and directs the renderer to show that notice whenever `fallback_used` is set. The established contract is broader: `fallback_used` also covers a missing summary where findings were parsed and the verdict was derived. In that state, the proposed notice would falsely claim that no findings could be extracted; prepending the synthetic finding makes the contradiction worse. D6\u2019s cited PASS-with-fallback-but-no-findings case is also not the normal parser state for PASS. Preserve distinct facts\u2014such as original finding count and verdict provenance\u2014and select the notice and its wording from those facts.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6 \u2014 A synthetic finding must not hide a degraded parse"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The synthetic finding can misattribute a derived PASS to the model",
+      "description": "D4 applies to every `PASS` and its synthetic finding states that \u201cthe model\u2019s own verdict was PASS,\u201d while Technical Scope describes the input as a \u201cstated PASS.\u201d A PASS can instead be derived after a summary parse loss. In that case no model-stated PASS exists, and replacing `verdict_source` with `IMPOSED` removes the only remaining indication that the original PASS was derived. The coverage cap can still apply, but the artifact must describe the original verdict accurately\u2014for example, as a derived or recovered PASS\u2014and preserve that provenance in the digest or finding text.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A successful tool call is not evidence that the omitted diff was read",
+      "description": "The parent slice plan permits an unchanged verdict when the model \u201cdid read files,\u201d but D4 uses any successful aggregate tool call as that condition. A successful `Glob`, `Grep`, or `Read` of an unrelated file does not establish that the omitted diff was reviewed, and the available telemetry does not record which tool ran or what it inspected. Consequently, the design\u2019s central guarantee that PASS means the model saw the whole diff or read files with its tools is not actually established. The coverage rule should use evidence of successful relevant file reads, or the artifact guarantee and rule must be weakened accordingly.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The unreported-model fallback contradicts the consumed aiModel contract",
+      "description": "D11 keeps the requested id in `aiModel` when the provider reports no answering model, with the \u201cnot reported\u201d caveat appearing only in the body\u2019s Run Digest. Frontmatter is the machine-consumed artifact contract, and metrology reads `aiModel` directly; JSON consumers can distinguish the empty `answering_models` list, but frontmatter consumers cannot. Such runs therefore continue to be pooled under the requested identity, which does not satisfy Part C\u2019s goal of recording the model that answered. The artifact needs a machine-visible \u201cnot reported\u201d state or an always-present requested/answering representation; using `requestedModel` for this would conflict with its reserved substitution-only meaning.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D11 \u2014 Not reported: keep the requested id, say so in the artifact"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Core scope and component boundaries align with the slice plan",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The degraded-parse notice is applied to the wrong state",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6 \u2014 A synthetic finding must not hide a degraded parse",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "The synthetic finding can misattribute a derived PASS to the model",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "A successful tool call is not evidence that the omitted diff was read",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "The unreported-model fallback contradicts the consumed aiModel contract",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D11 \u2014 Not reported: keep the requested id, say so in the artifact",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T10:24:40.286157",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 268212,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1811402,
+  "cached_tokens": 1542257,
+  "cache_write_tokens": null,
+  "completion_tokens": 63255,
+  "reasoning_tokens": 60660,
+  "duration_seconds": 441.7213065419346,
+  "cost_usd": 0.049958174,
+  "cost_basis": "alias_pricing"
+}

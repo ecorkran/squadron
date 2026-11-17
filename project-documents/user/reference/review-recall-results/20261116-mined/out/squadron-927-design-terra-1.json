@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A successful tool call does not establish diff coverage",
+      "description": "The cap is bypassed by **any** successful tool call, even one unrelated to the omitted diff. That does not support the stated claim that a PASS means the model saw the whole diff or read the omitted files, nor the slice plan\u2019s exception for a model that read files. Retain the cap unless the available telemetry establishes relevant coverage, or narrow the artifact\u2019s guarantee and explicitly address how the plan\u2019s coverage requirement is met.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deduplicating model IDs loses the final answering model",
+      "description": "First-seen-order deduplication cannot identify the last model when a run reports A, then B, then A: the resulting list is `[A, B]`, so D12 assigns B to `aiModel` even though A answered last. Preserve the last observed model separately from the distinct-model list, including across the recovery turn, so substitution reporting and metrology identify the correct judge.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:103-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Synthetic finding omits the required location",
+      "description": "The design explicitly omits `location` from the synthetic finding, but slice 904\u2019s artifact contract requires a location on **every** finding and uses `unverified` when no specific location is known. Supply `location: unverified` rather than creating an exception to the contract used for finding identification and deduplication.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "A successful tool call does not establish diff coverage",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "Deduplicating model IDs loses the final answering model",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:103-105",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Synthetic finding omits the required location",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T13:15:35.058110",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 46982,
+  "cached_tokens": 38272,
+  "cache_write_tokens": null,
+  "completion_tokens": 484,
+  "reasoning_tokens": 62,
+  "duration_seconds": 42.78255424974486,
+  "cost_usd": null,
+  "cost_basis": null
+}

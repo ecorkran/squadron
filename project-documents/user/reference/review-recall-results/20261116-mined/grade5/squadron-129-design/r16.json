@@ -1,0 +1,33 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The `codex` extra is being introduced twice with conflicting content",
+   "description": "D1 declares `codex = [\"openai-codex>=0.159.3,<1\"]` and says it \"Replaces the stale pyproject comment about GitHub installs.\" But slice 907 (Optional Dependency Split, status `deferred`) already owns the `[codex]` extra: its task T2.4 adds `codex = []` (PyPI rejects direct URL references, so it is an *empty* placeholder with a comment carrying the manual GitHub install command), and its success criteria assert that empty entry. Today's `pyproject.toml` still carries 907's comment block, and 907 remains deferred rather than superseded. When 129 lands, the `codex` extra exists in the tree twice \u2014 907's placeholder plus 129's populated list \u2014 with no note in either direction recording the conflict. The requirement left unmet: a single source of truth for the extra's definition, and a coherent deferral record for 907. The design should either record that 907 is superseded (or that 129's extra fulfills its `codex` half) or defer the pyproject change until 907's status is settled.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The OPENAI_API_KEY fallback verification exceeds the scope the slice plan assigned to this slice",
+   "description": "The slice plan entry (129, part C) assigns: interactive login, device-code, `auth.json` as the only store, `sq auth status` showing email/plan, and `sq auth logout`. It says nothing about the `OPENAI_API_KEY` fallback in `OAuthFileStrategy`. The design, however, adds a first implementation task \u2014 Development Approach step 0, \"Verify the `OPENAI_API_KEY` fallback against the real runtime \u2026 before porting anything\" \u2014 with a two-branch outcome (keep-and-label the fallback, or remove it from `is_valid`/`active_source`/`get_credentials`/`setup_hint`), gated on a live probe with a real ChatGPT account. That is scope beyond the plan entry: a behavioral change to credential resolution for API-key users (currently `is_valid()` returns True for a key-only environment \u2014 verified in `src/squadron/providers/codex/auth.py`) plus a prerequisite external dependency the plan does not name. The rationale is legitimate (it prevents a silent-fallback false \"authenticated\"), but per the slice-plan alignment criteria, scope the plan entry did not assign should be either (a) added to the plan entry, or (b) named as cuttable/deferrable so a PM decision records the expansion. As written, the design silently widens the slice.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`codex.turn_timeout_s` default (1800 s) is designed in, but the version pin is deferred to the PM",
+   "description": "D7 registers `codex.turn_timeout_s` with a concrete default of 1800 s \"beside `cf.mcp_timeout_s`\" (the existing precedent, verified in `config/keys.py`), which correctly centralizes the default at the config layer. In the same D1, the dependency spec ships with `openai-codex>=0.159.3,<1` while the upper bound is explicitly \"not decided here \u2026 PM to say whether to cap.\" The asymmetry is defensible \u2014 a cap on a moving 0.x surface is a risk posture, 1800 s is an engineering choice with stated rationale \u2014 but it means implementation can begin with a dependency range whose final form is not the design's. No action required beyond the PM decision the design already names.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`sq auth status` row enrichment is async, but the current command is a synchronous typer function",
+   "description": "The \"Status\" data flow appends account email/plan via `account()`, which runs `AsyncCodex` (runtime start + RPC, bounded by `codex.account_timeout_s`) \u2014 an async I/O path with its own enumerated failure row. The shipped `auth_status()` in `src/squadron/cli/commands/auth.py` is a synchronous function (strategies' `is_valid()`/`active_source` are sync). The design does not state how the async call is driven (e.g., `asyncio.run` in the command vs. an async command), and the \"byte-for-byte unchanged\" criterion for other profiles constrains the refactor. Small mechanism, but it is the one place the design's own failure-mode machinery (account timeout/cancel) has to be reached from the CLI layer, so it should be one sentence in the API Contracts section.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#api-contracts"
+  }
+ ]
+}

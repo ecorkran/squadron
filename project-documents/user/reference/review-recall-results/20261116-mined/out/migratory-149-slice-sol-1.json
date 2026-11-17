@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Benchmark commands cannot distinguish the interventions",
+      "description": "The baseline and early-exit commands are identical, as are subdivision-only and combined commands. No revision selection or early-exit toggle distinguishes them. Consequently, this walkthrough cannot establish A2\u2019s \u22655\u00d7 improvement against the counter-gated baseline. Specify a baseline revision and reproducible comparison procedure; a permanent runtime toggle is unnecessary.",
+      "file_ref": null,
+      "category": "validation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:160-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shared cell sizing is ambiguous for multiple profiles",
+      "description": "Slice 145 defines per-profile query radii and sizes the shared spatial grid using `max_query_radius`. This design instead derives its shared cell size from unspecified `query_radius`, while fixing traversal reach at S cells. Choosing a smaller profile\u2019s radius would omit valid neighbors for larger-radius profiles, violating behavioral fidelity. Explicitly retain `cell_size = max_query_radius / S` and include a mixed-radius correctness case.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The assigned seven-neighbor benchmark is missing",
+      "description": "The parent plan\u2019s slice 149 entry explicitly identifies the seven-neighbor operating point as a benchmark target. This design specifies only `max_neighbors=32` gate runs. Add a measured seven-neighbor run alongside the existing stress configuration; it need not introduce another performance gate.",
+      "file_ref": null,
+      "category": "scope-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "validation",
+      "raw_category": null,
+      "summary": "Benchmark commands cannot distinguish the interventions",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:160-178",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Shared cell sizing is ambiguous for multiple profiles",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-67",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope-coverage",
+      "raw_category": null,
+      "summary": "The assigned seven-neighbor benchmark is missing",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-17T05:29:58.675946",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 50364,
+  "cached_tokens": 48768,
+  "cache_write_tokens": null,
+  "completion_tokens": 365,
+  "reasoning_tokens": 0,
+  "duration_seconds": 48.25609991699457,
+  "cost_usd": 0.011718800000000001,
+  "cost_basis": "alias_pricing"
+}

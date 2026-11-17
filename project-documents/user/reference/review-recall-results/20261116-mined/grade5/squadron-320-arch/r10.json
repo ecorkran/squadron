@@ -1,0 +1,75 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "No durable, stable identity for a judge result to attach a human sample to",
+   "description": "The keystone assumes a human verdict \"attaches unambiguously to the specific persisted judge result being checked,\" but 300's persistence provides no stable, durable result identifier, and the architecture's own principles forbid 320 from fixing that. Two concrete conflicts: (1) The human-facing record \u2014 the markdown review file written by `format_review_markdown`/`save_review_result` (`src/squadron/review/persistence.py`) \u2014 has a fixed filename (`{index}-review.{review_type}.{slice_name}.md`) with **no date and no run_id**; re-running the same judge on the same slice **overwrites** it via `path.write_text`, orphaning any prior human sample. (2) The run-state JSON (`src/squadron/pipeline/state.py`) does carry run_id+step_name+iteration+score, but `StateManager.prune(..., keep=10)` deletes the oldest completed/failed runs per pipeline, so a referenced judge result vanishes within ~10 runs, and these files live in per-user `~/.config/squadron/runs/` \u2014 not the repo \u2014 which cannot satisfy the doc's own cross-project join requirement. So the two substrates each lack what the keystone needs (one has score but no identity and gets clobbered; the other has identity but is pruned and single-machine). Because the Architectural Principle \"Read-side over 300's write path ... does not modify ... the result models' write semantics\" blocks 320 from adding a durable id to the write path, the first slice will discover it must either violate the non-goal or abandon \"attach unambiguously.\" The doc should either relax the read-side commitment or explicitly require result identity as a coordinated 300/140 change rather than treating it as a settled \"read and annotate\" premise.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Keyed by judge configuration\" is not derivable from what 300 persists (no template version)",
+   "description": "The Comparability consideration states measurements must identify \"judge configuration (template identity/version, model)\" and that reports must not blend across incompatible configurations, and calls the granularity \"a slice-design question.\" But the thing it is *fixed* at the architecture level is not currently constructible. `ReviewTemplate` (`src/squadron/review/templates/__init__.py`) has **no version field** \u2014 a template revision mutates content under the same name with no trace. Worse, `load_all_templates` silently lets `~/.config/squadron/templates/*.yaml` **override built-ins by the same name**, so two operators on two machines can label identical template names as different configurations with no persisted discriminator. The persisted markdown review emits `reviewType` (the template name) and `aiModel`, but **not** provenance (`persistence.py` comment: \"provenance is never emitted here\") and not the effective thresholds. So \"keyed by judge configuration is fixed here\" is a commitment the existing write path cannot honor \u2014 this is not a granularity choice a slice can make later; it requires the doc to name which configuration signals (content hash? a new version field? effective thresholds?) must be captured at sample time, on the 320 side, since 300 does not emit them.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The threshold 320 mutates is part of the judge configuration but is excluded from comparability identity",
+   "description": "There is a self-referential inconsistency between two commitments. \"Calibration feeds the gates\" moves a judge's `pass_floor`/`concerns_floor` (resolved in `src/squadron/pipeline/actions/judge.py` from template + step override) from advisory toward auto-gate. But the judge verdict the human spot-checks is *derived from the score by that threshold*. Change the threshold and the same score yields a different PASS/CONCERNS/FAIL, so recorded judge-vs-human agreement is only comparable within a threshold regime. Yet the Comparability principle lists the configuration identity as \"template identity/version, model\" \u2014 **omitting the effective threshold**, which is precisely the variable this initiative mutates. Accumulated agreement samples will therefore silently blend across threshold regimes, the exact failure mode the principle is written to prevent. The architecture must state that the effective thresholds are part of the metrology key (and are captured at sample time, since they are not persisted today).",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#design-goals"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Dispersion \"machinery exists\" is overstated \u2014 multi-sample is unbuilt and fan_out reducers drop per-branch scores",
+   "description": "The Dispersion consideration asserts \"the execution machinery exists \u2014 300's multi-sample option and 140's fan_out.\" Neither claim holds against the actual stack. Multi-sample judging (N runs reduced via median) is **not implemented** \u2014 it is item 1 of 300's *Future Work* in `300-slices.eval-actions-llm-as-judge-scoring.md`, unchecked `[ ]`, deferred by name; a grep of `src/` for `multi_sample`/`n_samples`/`median` returns nothing. `fan_out` does exist (`FanOutStepType`), but its registered reducers (`src/squadron/pipeline/intelligence/fan_in/reducers.py`) serialize branch `action_results` with only `action_type/success/outputs/verdict` \u2014 **score, criteria, and provenance are dropped**. Since 300 produces a numeric score (and the doc wants judge-vs-judge *dispersion*), the existing fan-out path cannot surface the per-branch scores dispersion needs; a `collect`/`first_pass` reducer discards them. So dispersion measurement requires both a new multi-sample mechanism (explicitly outside \"No change to the judging path\") and a reducer change (140 territory). The doc should not lean on machinery that is deferred/unbuilt as though it were available.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "One of the three calibration levels has no judge and cannot get one without breaking a non-goal",
+   "description": "The Overview and \"Measured trust per artifact level\" fix calibration at the grain \"(tasks-vs-slice, slice-design-vs-arch, arch-vs-concept).\" Only the first two have judge templates (`src/squadron/data/templates/judge-tasks-vs-slice.yaml`, `judge-slice-vs-arch.yaml`); 300's slice 302 deliberately built just those two design-phase judges. There is **no arch-vs-concept judge** (nor the \"arch-concept-vs-initiative-blurb\" level the initiative plan names). 320's whole read-only premise is that it \"measures and configures; it does not re-architect the write path\" and \"No change to the judging path\" \u2014 yet authoring the third judge is a change to the judging path that 300 scoped out. As written, a third of the stated per-level calibration target is unmeasurable, and the doc presents all three levels as if populated. It should either mark arch-vs-concept as explicitly out of the measured set for this initiative, or acknowledge that a 300-scope template addition is a prerequisite dependency, rather than assuming the level exists to be calibrated.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#overview"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The cheap sampling ergonomics are statistically opposed to the graduation decision they feed",
+   "description": "The doc flags that \"which results are *offered* for sampling (random, disagreement-triggered, escalation-triggered)\" is a slice decision \"with statistical consequences,\" but it never connects that bias to the decision being made. The cheapest capture \u2014 sampling escalation-triggered/near-threshold calls (the ones the operator naturally sees at a checkpoint) \u2014 draws almost exclusively from the boundary region. The calibration output, however, is used to decide whether a judge \"graduates from advisory to auto-gate,\" which is a claim about the *routine*, comfortably-passing calls that a boundary-biased sample barely touches. A minimum-evidence floor (which the doc does require) controls n, not selection bias; you can have plenty of near-threshold samples and still have zero evidence about auto-gate safety. The architecture should state that the sampling design must be stratified so the graduation decision is made on evidence from the same population it governs, or the loop closure will be biased exactly where it matters.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The second oracle (tech-debt baseline + pre-emption) is overweight for the evidence the initiative says will exist",
+   "description": "Two of the five slices (tech-debt-audit baseline harness, pre-emption prompt & delta) exist chiefly to \"prove the metrology can detect an intervention's effect.\" But the doc's own Honest-statistics and Attribution considerations concede there will be \"a handful of projects in the audit baseline\" and that the pre-emption result is \"an observational before/after, not a controlled experiment... credible directional signal, not causal proof.\" An uncontrolled count of LLM-authored, run-to-run-non-deterministic findings across a handful of projects will not rise above noise, so the second oracle does not actually resolve the Motivation's claim (\"without a quality baseline, 'squadron produces good code' remains anecdote\") \u2014 it replaces one anecdote with a slightly larger one. Against CLAUDE.md's \"resist adding complexity; ensure it is truly necessary,\" the pre-emption slice and arguably the whole code-quality oracle are speculative, self-justifying scope with no load-bearing consumer (unlike judge calibration, which feeds 300's real gates). Defer the code-quality oracle and its intervention to a follow-on so the keystone that calibrates an instrument people actually gate on lands first.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#anticipated-slices"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"One metrology shape, reporting layer built once\" is an unproven abstraction over two dissimilar oracles",
+   "description": "The Envisioned State commits that the two oracles \"share one metrology shape \u2014 capture oracle verdicts, persist them queryably, report agreement/trend at the meaningful grain \u2014 so the reporting layer is built once.\" But the data are structurally different: the judge oracle is per-run, joins to persisted judge results on a 0\u2013100 scale at an artifact level against a per-sample human, and its reliability is the *subject* of measurement; the audit oracle is cross-project, normalizes prose findings into (category, location, severity) counts, and \u2014 per the doc's own Normalizing consideration \u2014 has \"the same reliability questions as the judges,\" i.e. it needs its *own* calibration sub-problem, not shared agreement code. A single \"agreement/trend\" interface with two customers this divergent is likely to leak one oracle's assumptions into the other or degenerate into configuration nothing uses. The doc should justify the shared surface concretely (what exact operations coincide) or treat the audit as its own reporting shape rather than asserting \"built once.\"",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Data-integrity semantics of the human sample are unspecified",
+   "description": "Recording is framed as \"one cheap step,\" happening inline. Given that the entire initiative's value is honest statistics, the architecture is silent on the mutability of the sample set: what happens on duplicate captures, a mis-keyed attach, a corrected/withdrawn verdict, or a human sample taken after the judge result was re-run (see the overwrite issue above). CLAUDE.md's \"never use silent fallback / fail explicitly\" applies to a metrology record \u2014 a silently-wrong or silently-duplicated sample poisons the agreement number it is used to loosen a gate. These states should be named as design constraints even if resolved at slice design.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Hard runtime dependency on 340's analysis pack is not reflected in the dependency list",
+   "description": "The code-quality oracle runs the `tech-debt-audit` skill shipped in 340's analysis pack (and consumed only after `sq skills install analysis` copies it to `~/.claude/commands/analysis/tech-debt-audit.md`; 344's `understand-anything` was descoped, so `tech-debt-audit` is the sole skill). The `dependencies:` frontmatter is `[100, 140, 300]` and 340 appears only in Related Work. The baseline harness has a real runtime dependency on 340's pack being installed and available \u2014 worth declaring or noting explicitly. (The doc's handling of 280 as \"candidate relationship, not assumed,\" and the initiative plan's \"Independent of 280,\" is consistent and appropriately hedged \u2014 no finding there.)",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#related-work"
+  }
+ ]
+}

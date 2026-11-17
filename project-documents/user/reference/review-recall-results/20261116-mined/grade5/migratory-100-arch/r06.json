@@ -1,0 +1,68 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The tick contract does not define state ownership or atomicity",
+   "description": "The document says `tick()` returns updated state and is stateless, but also gives the engine a state-query and agent registration/removal interface. The world server assigns lifecycle ownership to its `EntityManager` and requires a read-compute-commit transaction. The existing `tick()` instead mutates the supplied arrays and returns `None`. This leaves consumers unable to know whether the old state remains available or whether a failed tick can partially modify canonical state. Specify ownership, mutation, snapshot semantics and failure behavior, and align the integration with that contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Environmental behavior has no usable input or output contract",
+   "description": "The engine is supposed to evaluate terrain, resources, threats and seasonal parameters, but neither `tick()` nor the proposed force interface specifies how environmental queries reach force evaluation. The existing `BulkForce` protocol has no environment argument. Stigmergic swarms also require agents to deposit markers, while the architecture permits only read-only environmental access and returns only agent state. Define a batched environment input and a post-tick effect or event output, with ownership of writes and their ordering.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reduced-rate ticks lack elapsed-time and visibility semantics",
+   "description": "An active subset alone does not implement the promised 1/4- and 1/16-rate simulation. A periodically evaluated agent needs an appropriate elapsed interval, and neighbors need a defined position between evaluations. Otherwise it moves too slowly or is observed at a stale position; applying a larger global `dt` also incorrectly advances any full-rate agents in the same call. Define per-agent or per-batch elapsed time, interpolation or prediction ownership, and which positions the full-population query observes.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural-Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Replay determinism is not specified across spatial implementations",
+   "description": "Same-state determinism is insufficient for the promised replay and interchangeable spatial indexes. Hash-grid and brute-force queries can return neighbors in different orders, changing floating-point reductions; radius-boundary inclusion, self-exclusion, force order, precision and tie-breaking for target selection are also unspecified. Define the required determinism scope and canonical ordering or comparison rules, including whether replay is guaranteed across implementations and platforms.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design-Goals"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The bulk interface does not resolve the NumPy hot-loop bottleneck",
+   "description": "The architecture requires tens of thousands of agents without Python-level per-agent work, but specifies queries \u201cfor each active agent\u201d without a batched neighbor representation or performance budget. The existing `tick.py` performs a Python query loop, and `flocking.py` loops over agents separately for each force using a list of variable-length arrays. Replacing only the spatial index will not remove that overhead or make the force path GPU-compatible. Define a batched query/neighbor layout and benchmark the complete force-and-integration tick at target densities and rates.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Archetypes require agent state and interaction rules not represented by profiles",
+   "description": "Leadership by experienced individuals, territorial home ranges and coordinated pursuit require distinctions or state beyond positions, velocities and a shared profile index. The document also identifies heterogeneous predator\u2013prey neighborhoods but leaves the interaction-rule representation and target-selection semantics unspecified. Define the minimum per-agent attributes and profile-pair rules needed for these behaviors, including how they are initialized, updated and serialized; weights alone cannot identify an individual\u2019s home or a shared target.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned-State"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Numerical failure and invalid-state handling are unspecified",
+   "description": "The architecture discusses integration stability but does not define behavior for coincident agents, invalid profile indices, non-finite forces or invalid timesteps. This is consequential in the current stack: `SeparationForce` divides by squared distance, so two distinct agents at the same position can produce NaNs that propagate into state. Specify validation and bounded-force or zero-distance behavior, and whether a numerical failure aborts the tick without committing state.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Aggregates cannot be treated as ordinary neighbor indices",
+   "description": "The document proposes presenting aggregate entities through the same neighbor-query interface, but ordinary neighbors are indices into individual-agent arrays. An aggregate\u2019s count, dispersion and heading have different force semantics: treating it as one point loses population effects, while expanding it defeats aggregation. Define a distinct aggregate query/result representation and the forces that consume it, or explicitly defer that interface until its semantics are designed.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical-Considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Current-state claims and the world-server reference are stale",
+   "description": "The document says no engine exists and lists the spatial abstraction as future work, but `src/migratory/engine/` and `src/migratory/spatial/` already contain the tick, flocking forces and query protocol. Its related-work link names `200-arch.world-server-foundation.md`, while the available file is `300-arch.worldserver-foundation.md`. Update the baseline and link so architectural decisions can be reconciled with the implemented interfaces rather than treated as greenfield work.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Current-State"
+  }
+ ]
+}

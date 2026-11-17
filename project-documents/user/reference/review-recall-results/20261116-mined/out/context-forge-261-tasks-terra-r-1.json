@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Load test and CI gate are missing",
+      "description": "The slice restates a target of under one second of detection overhead on a local disk. Task 3T tests the walk caps, but the breakdown explicitly omits a load test. Add a load test in `tests/load/` covering the target and a CI task that gates on it.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes",
+      "description": "Task 2C and the other commit markers are checkbox tasks. Convert them to plain `**Commit**:` lines, retaining them at the existing tested checkpoints.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests omit required outcomes",
+      "description": "The slice requires `renderAdoptionFacts` tests for every outcome. Task 8T covers brownfield, adoption-in-progress and not-evaluated, but does not specify adoption-closed, already-planned or greenfield. Add cases for those outcomes.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "State tests depend on the user's configuration",
+      "description": "Task 2T expects a missing project config to yield an empty state, but `ConfigManager.get` falls back to user configuration. Isolate the user config in these tests and the integration fixtures so a developer\u2019s `adoption.state` cannot change their results.",
+      "file_ref": null,
+      "category": "test-reliability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:72-76"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Load test and CI gate are missing",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Renderer tests omit required outcomes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-reliability",
+      "raw_category": null,
+      "summary": "State tests depend on the user's configuration",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:72-76",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T13:50:53.400910",
+  "model": "openai/gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 471,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6.1-terra",
+  "answering_models": [
+    "openai/gpt-6.1-terra"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 117564,
+  "cached_tokens": 85162,
+  "cache_write_tokens": null,
+  "completion_tokens": 1832,
+  "reasoning_tokens": 1160,
+  "duration_seconds": 46.236019500065595,
+  "cost_usd": 0.0458201,
+  "cost_basis": "alias_pricing"
+}

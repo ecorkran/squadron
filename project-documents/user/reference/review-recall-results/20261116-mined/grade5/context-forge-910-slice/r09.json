@@ -1,0 +1,61 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Behavior-preservation claim lacks coverage evidence",
+   "description": "The parent requires refactoring slices to \"have test coverage verifying preserved behavior before and after the change\" (900 line 37). The slice relies on the full suite as the guard (lines 19 and 85) and on per-file test runs (lines 87-91). It gives no evidence that the swept lines are executed by a passing test. The largest exposure is the 36 sites in `ConsistencyChecker`, spread across about 15 rule functions. Passing test counts do not show that those branches are covered.\nFix: record a per-file coverage baseline for the six swept files before the sweep, and confirm each swept rule function is exercised by a passing test. Add characterization tests for any that are not.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The zero-match success criterion cannot pass as written",
+   "description": "The verification gate has three problems:\n- `grep -roE` runs without `-n`, so its output has no line numbers. The filter `grep -v 'introspection/types.ts:[3-6]:'` therefore matches nothing, and the four literals in the `STATUS` definition still count.\n- `types.ts` also holds the `SliceStatus.status` `'complete'` literal, which TD-3 (lines 104-106) deliberately leaves in place. Even with a working filter, the criterion returns non-zero.\n- The walkthrough (lines 149-151) uses a different command with no filter and expects 11 remaining matches (4 + 3 + 4). The two gates disagree.\n\nThe line-number filter is also fragile. Define one command that excludes the `STATUS` definition by name, state the exact expected residual, and make the criterion match it.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Scope counts do not reconcile",
+   "description": "The `types.ts` row says 5 sites, \"of 8 total; 4 are the STATUS definition\". That leaves 4 literals, not 5. Per TD-1, the three `inferredStatus` literals are retyped rather than swept, and TD-3 excludes the `SliceStatus` `'complete'`, so `types.ts` contributes no sweep sites. The migration steps (lines 87-91) sum to 4 + 4 + 13 + 3 + 36 = 60, but the \"~65 across 6 files\" total at line 41 is 65. The 5 extra sites belong to no step. The walkthrough (line 151) also expects \"SliceStatus.status (4)\", while line 49 describes one `'complete'` member.\nFix: recount with the corrected grep and publish one per-file list that both the steps and the total reference.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:35"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Consumer impact of widening `inferredStatus` is asserted, not enumerated",
+   "description": "Line 84 says no consumer outside `packages/core` is affected and no public API changes. Line 120 says the slice provides nothing downstream. But widening `TaskFileResult.inferredStatus` from three members to four changes the type every consumer sees. Slice 911 (complete) types its `taskInferredStatus` input as `NormalizedStatus`, fed from `parseTaskFile` (911 line 79), so at least one consumer exists that this doc does not name. Any exhaustive switch or `Record`-keyed map over the field would fail to compile on the new member. Slice 241 flags the same effect for its own STATUS change (241 line 420). The doc also does not say whether `TaskFileResult` is exported from the package entry point.\nStep 1 (line 87) names only \"Build\", and the first full `pnpm -r build` is in step 6 (line 92). A consumer break would surface after five steps.\nFix: enumerate the `inferredStatus` consumers, state whether the type is public, and make step 1 a full monorepo build.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Frontmatter dependencies and interfaces are incomplete",
+   "description": "`dependencies: [241]` omits slice 912. The baseline counts are stated as \"post-912\" (line 29), and the test baseline depends on that state. Slice 912 is complete, so the dependency is already satisfied, but the record does not show it. `interfaces: []` also conflicts with the body: \"Interfaces Required\" (line 62) names `STATUS` from `types.ts`. Planners and tooling read this frontmatter, so it should match the body: `dependencies: [241, 912]` and an interface entry for `STATUS`.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:6-7"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Design is overweight for a mechanical sweep",
+   "description": "The change is a find-and-replace of literals with no new components, abstractions or behavior change. The design still repeats itself:\n- The file list appears three times: the Technical Scope table (lines 31-39), the Component Structure table (lines 70-78) and the migration steps (lines 87-91). Keep one.\n- The `ProjectModelBuilder.ts` row (lines 39, 74) changes nothing. Remove it.\n- The Migration Plan's Source and Destination bullets (lines 82-84) and the Implementation Details patterns (lines 112-114) restate Technical Scope and the Value section.\n- The exclusion rationale appears in full in Excluded (lines 47-50) and again in TD-2 and TD-3 (lines 100-106). Keep one.\n- The manual `cf status` and `cf list slices` spot-check (lines 160-164) adds nothing the test run does not cover, since equality holds by construction (line 19). Cut it.\n- The Value section (lines 21-23) restates the CLAUDE.md principle. One sentence is enough.\n\nCutting these would shorten the document substantially without losing a requirement. Keep the Excluded list, TD-1, and the typo spot-check at line 153, since those carry the decisions and the compile-time check.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Deferred items have no receiving slice, and the cited F005 does not resolve",
+   "description": "The `ConsistencyChecker` file-size split is deferred to \"other slices\", but none is named, and the parent's anticipated slices (900 lines 42-46) do not include one. The deferral cites \"912 code review (F005)\" (lines 52 and 129). The only F005 under `project-documents` is a different finding, a type-debt row in analysis 941. The 912 slice doc does not contain it. Either give the path to the actual review, or correct the citation. Name an owner for the split, or record that it is unscheduled.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:126-129"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "WorkflowNavigator import is left as an assumption",
+   "description": "Step 4 says `WorkflowNavigator` \"likely already imports STATUS ... confirm\". That decides whether the step adds an import, so it should not be left open. Slice 241 TD-6 says its new code references `STATUS`, so the answer can be checked now and written into the step.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:90"
+  }
+ ]
+}

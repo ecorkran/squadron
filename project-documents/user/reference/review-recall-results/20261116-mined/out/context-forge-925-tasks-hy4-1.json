@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Config-sourced `manual` alias has no defined delivery path or CLI test",
+      "description": "Description: The criterion \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" is only partially covered. Task 5 says \"Choose one return shape (e.g. `{ method, deprecatedAlias?: string }`) and use it for both the CLI flag and the config path\", but `install()` (`packages/core/src/guides/GuideManager.ts:31-48`) returns `InstallResult` (`packages/core/src/guides/types.ts:10-16`), and the CLI flag path bypasses `resolveStrategy()` via `strategyOverride || await resolveStrategy()`. No task adds alias data to `InstallResult`, yet Task 7 (line 135) requires `guidesInstallAction()` to print the config-path warning \"when Task 5's return shape reports an alias\". Task 6 asserts \"the alias is reported\" without naming an observable, Task 8's CLI tests exercise only `--strategy manual`, and walkthrough step 3 uses `cf init --strategy manual`, not config. Pin the shape in `types.ts`/`InstallResult` and add a config-path CLI test to Task 8.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:108-114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New public constants/types have no barrel-export task",
+      "description": "Description: Tasks 10, 17, 28 add `SubmoduleCheckoutState`, `CHECKOUT_STATE_LABELS`, `GUIDE_INIT_TIMEOUT_MS`, `EnsureCheckoutResult`, and `GUIDE_MANAGED_NOTICE` to `types.ts`; Tasks 22, 24, 28, 29 consume them from CLI/MCP (`showStatus()`, `guide_status`, and `guides.test.ts` \"import the constant\"). Only Task 1 mentions export wiring, and only for `normalizeGuideMethod()` through `guides/index.ts` \u2192 `@context-forge/core/node`. `packages/core/src/index.ts:12` exports guide types as `type`-only, so value constants also need a value export in the root barrel. Without an explicit export step, the CLI/MCP typechecks required by Tasks 20 and 22 fail. Add one step covering both barrels and all new symbols.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/src/guides/index.ts:3-17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timeout remediation relies on a regex that does not exist",
+      "description": "Description: Task 13 states \"the `/timed out/i` pattern already matches\" (repeated in design D10, slice line 135). `packages/core/src/guides/gitExec.ts:20-30` contains `/connection timed out/i`, `/etimedout/i`, and similar, but no `/timed out/i`, so a message like \"git ... timed out after 60 seconds\" will not match and `withNetworkErrorHint()` (line 43) returns it unchanged. Task 14 requires the rejection to contain `GUIDE_OFFLINE_REMEDIATION`, so that test will fail until the pattern (or the message) is changed \u2014 and no task in this breakdown adds `/timed out/i` to `NETWORK_ERROR_PATTERNS`. Name that step in Task 13.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:211-214"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Real-git fixture reuse is unplanned and every consumer suite is fully mocked",
+      "description": "Description: Task 9 places the fixture under `packages/core/tests/guides/helpers/`, but Tasks 18, 21, 23, 24 reuse it from `GuideManager.test.ts`, `build.test.ts`, `prompt.test.ts`, `setup-ide.test.ts`, `contextTools.test.ts`, and `guideTools.test.ts` \u2014 separate packages with no declared test-fixture dependency. Those suites mock away what the fixture needs: `packages/cli/tests/commands/build.test.ts:9-21` replaces `@context-forge/core/node` with four exports (no `GuideManager`), `setup-ide.test.ts` mocks `node:fs`, and `packages/mcp-server/tests/contextTools.test.ts:17-43` mocks core/node. The design's premise (\"existing guide tests already create temp repos\") is false: `packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts:8-14` mocks `fs` and `gitExec` entirely. Also, Task 11 makes `detect()` throw on `checkSyncStatus() === 'error'`, while `packages/core/tests/guides/GuideDetector.test.ts:32` defaults `gitExec` to reject \u2014 the three existing submodule detect tests (lines 68, 92, 205) will throw, and Task 12 does not plan their update. \"All existing tests pass\" is therefore unmet without an explicit harness-rework task before Task 18.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Call-site enumeration misses the earliest guide read in `cf prompt get`",
+      "description": "Description: Task 20's own rule is that every non-test `PROMPT_FILE_RELATIVE_PATH` hit gets an `await ensureGuideReady(...)` before the read, yet the enumerated sites are only `build.ts:78`, `prompt.ts:60/116`, and `setup-ide.ts:106`. That grep also returns `packages/cli/src/utils/phaseShorthand.ts:22`, which `cf prompt get` invokes through `resolvePhaseInput()` at `packages/cli/src/commands/prompt.ts:114` \u2014 before the line-116 insertion point \u2014 so the prompt file read there throws ENOENT on a fresh clone before auto-init runs. D3 also requires the same grep in `packages/mcp-server/src`; Task 22 has no grep step and does not say whether `generateContext()` (shared with `template_preview` at `packages/mcp-server/src/tools/contextTools.ts:220`) carries the check. Move the guard above line 114 and add the MCP grep to Task 22.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:291-301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Rename sweep verification cannot catch remaining user-facing `manual` strings",
+      "description": "Description: Task 3's success criterion is `grep -rn \"'manual'\" packages/core/src` returning only the alias entry and the `ConfigKeys` enum. The design's \"Rename sweep\" list (slice line 171) omits `packages/core/src/guides/strategies/SubmoduleStrategy.ts:45` (\"Use --strategy clone or --strategy manual instead.\"), and the quoted `\"manual\"` in error text at `CloneStrategy.ts:34` and `SubmoduleStrategy.ts:39` cannot match a single-quoted grep pattern even if left unchanged. Task 7's grep covers only CLI/MCP sources. These are user-facing messages, so D5's \"canonical value used internally and in all output\" and the technical criterion \"no `'manual'` literal outside the alias table and enum\" would be unmet while Task 3 reports success. Use a case-insensitive `manual` search, list all message sites, and exclude only genuine English uses (`storagePaths.ts:51`, `update.ts:175`).",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:85-93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unresolved return/result shapes make downstream test tasks non-independent",
+      "description": "Description: Several contracts are left as \"choose one\"/\"pick one\" decisions that later test tasks must assume. Task 22 requires a `notices: string[]` \"on the tool result without changing the primary payload shape\", but `context_build`/`prompt_get` return `textResult()` \u2014 plain text with no payload (`packages/mcp-server/src/tools/contextTools.ts:14,165,299`) \u2014 while Task 7's `guide_install` adds `notices` inside `jsonResult()`'s JSON text; Task 23 says \"no `notices` key (or empty array \u2014 pick one and assert it)\"; and Task 22's \"one shared shape\" grep criterion has no task creating the shared helper. Separately, Task 15 declares `init(operationPath: string)` with a hard-coded `GUIDE_INIT_TIMEOUT_MS` and then requires `sync()` to call it \"without the timeout: pass the timeout as an `init()` option\" \u2014 a different signature. Pin the shared MCP result shape and the `init(path, opts?)` contract before their test tasks.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-325"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Over-split tasks and one oversized validation task",
+      "description": "Description: 32 tasks / ~426 lines is mostly driven by the required impl\u2192test pairs, but a few splits are avoidable. Task 10 (effort 1, type declarations) has no independently verifiable outcome \u2014 \"Success criteria: typecheck passes once Task 11 populates the field\" \u2014 so it cannot be completed or reviewed on its own; merge 10+11. Tasks 28+29 (one constant, one print, two one-line assertions) and 30+31 (README + CHANGELOG/DEVLOG) could each be one task. Task 32 (effort 2) bundles a full monorepo build/test, four manual walkthrough steps against real git/GitHub, DEVLOG edits to the entry created in Task 31, three greps, `/tmp` cleanup, and the final commit; split the live walkthrough out or defer it to the design's verification section. None of these merges drops a success criterion.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-186"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern, sequencing, and commit placement are sound",
+      "description": "Description: Implementation tasks are immediately followed by their tests (1/2, 3/4, 5/6, 7/8, 11/12, 13/14, 15/16, 17/18, 20/21, 22/23, 25-26/27, 28/29), and the inline commit instructions sit at tested points (Tasks 4, 6, 8, 12, 14, 16, 18, 21, 23, 24, 27, 29, 31, 32) \u2014 not after every task and not only at the end. Dependencies run one way (types \u2192 detection/init \u2192 call sites \u2192 init/help \u2192 notice/docs) with no circular dependency. There are no plain `**Commit**:` markers, which the review rules explicitly allow.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:96-154"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep; no NFR restatement, so no load-test/CI gating task is needed",
+      "description": "Description: Every task traces to D1\u2013D10, the Functional/Technical criteria, or docs/verification; none adds an excluded item (default change, vendored README stub, CI checkout config, out-of-sync auto-correction, clone-strategy changes). The slice records F006 \"no NFR restatement\", so no `tests/load/` task is required, and with no load-test task there is no missing CI gating task. Task 32's full `pnpm -r build && pnpm -r test` is the correct validation point for the \"all existing tests pass\" criterion.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md:247"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Config-sourced `manual` alias has no defined delivery path or CLI test",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:108-114",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "New public constants/types have no barrel-export task",
+      "location": "packages/core/src/guides/index.ts:3-17",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "Timeout remediation relies on a regex that does not exist",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:211-214",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Real-git fixture reuse is unplanned and every consumer suite is fully mocked",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-173",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Call-site enumeration misses the earliest guide read in `cf prompt get`",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:291-301",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Rename sweep verification cannot catch remaining user-facing `manual` strings",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:85-93",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "Unresolved return/result shapes make downstream test tasks non-independent",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-325",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Over-split tasks and one oversized validation task",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-186",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Test-with pattern, sequencing, and commit placement are sound",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:96-154",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No scope creep; no NFR restatement, so no load-test/CI gating task is needed",
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md:247",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-17T10:09:11.473392",
+  "model": "tencent/hy4",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 44,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 658649,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4",
+  "answering_models": [
+    "tencent/hy4"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 1017759,
+  "cached_tokens": 880000,
+  "cache_write_tokens": null,
+  "completion_tokens": 166329,
+  "reasoning_tokens": 161290,
+  "duration_seconds": 1698.6395959579386,
+  "cost_usd": 0.283836753,
+  "cost_basis": "alias_pricing"
+}

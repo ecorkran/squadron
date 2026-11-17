@@ -1,0 +1,19 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Bit-exact parity claim conflicts with acknowledged neighbor-order divergence",
+   "description": "The architecture document (100-arch.behavior-engine.md:34) makes tick determinism a core principle. The slice's unit-test plan compares neighbor output \"as sets\" because \"order within a row may differ for grid\" (Testing Strategy), yet Implementation Notes step 5 requires \"bit-exact position equality against brute-force-only over N ticks\" in the integration test. CSR-native force evaluation (slice 111) sums per-row via `np.add.reduceat`; a different neighbor order changes floating-point summation order, so bit-exact parity across a mid-run backend switch is not guaranteed by anything in the design. The design should state explicitly whether cross-backend FP-order divergence exists and, if so, replace the \"bit-exact\" criterion with an appropriate tolerance \u2014 otherwise the integration test is specified to fail for reasons that are not a dispatcher bug.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#implementation-notes"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is documented as operator-selectable but absent from the config surface",
+   "description": "The \"Brute as Initial Backend\" decision says the initial backend is made configurable \"so an operator running a scattered-start scenario can choose grid-first,\" and the class signature exposes `initial_backend`. But `SpatialConfig` defines only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band` \u2014 there is no YAML field for the initial backend, and no validation rule for it. Either add the field to `SpatialConfig` or remove the claim that operators can choose it; as written, the design promises a knob the specified config surface does not deliver. (The hardcoded `\"brute\"` in `_build_spatial` also contradicts the \"no magic defaults\" project convention unless it is surfaced at the config level.)",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#server-configuration"
+  }
+ ]
+}

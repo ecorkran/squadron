@@ -1,0 +1,19 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checklist items, not plain lines",
+   "description": "The review criteria require `**Commit**:` markers to be plain lines, never checkboxes. All five commit markers (Tasks 2C at line 71, 3C at line 94, 4C at line 117, 5C at line 126, 6C at line 134) are written as `- [ ] **Task N C: Commit** \u2014 ...`, i.e. checklist items that a task-checker could tick as an ordinary subtask, plus they use the `**Task 2C: Commit** \u2014` form rather than the `**Commit**:` marker form. Placement itself is correct (after each implementation+test pair, conditional on file-changing tasks 5 and 6, not after every task and not only at the end); only the plain-line format is missing. Note AGENTS.md mandates checklist format for task files, so if that convention is intended to override, this resolves to a NOTE \u2014 but as the criteria are written, these should be uncheckboxed plain lines.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Exact `docType` failure message string is not pinned in any task",
+   "description": "The design's API Contracts fix the human-readable string `frontmatter must declare 'docType: slice-design' (see file-naming-conventions.md)` (slice design, API Contracts block). Task 3 only defines `reason: 'doctype'`, and Task 4 says \"the frontmatter message for `reason: 'doctype'`\" while pointing at \"the design's API Contracts\" collectively; Task 4T asserts \"frontmatter message\" without an exact-string check. A junior implementer following only the task file could paraphrase the wording. Suggest Task 4 name the literal string (or say \"verbatim from the design's API Contracts example\") and Task 4T assert it exactly.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:101"
+  }
+ ]
+}

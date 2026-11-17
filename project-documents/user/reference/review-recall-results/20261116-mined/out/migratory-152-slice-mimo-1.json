@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Mode-set overhaul exceeds plan scope and drops the plan's k-first exit criteria",
+      "description": "The plan entry (140-slices.simulation-scaling.md:56) scopes slice 152 to the coherent reindex with exit criteria \"k-nearest TPS at N=200k within 20% of k-first TPS at the same N \u2026 no regression on k-first path.\" The design instead deletes `k_first` entirely, adds a new `radius_only` mode, flips the default to `k_nearest`, and adds `ConfigurationError` handling (lines 67, 179, 199, 349) \u2014 none of which the plan entry assigns \u2014 while dropping the \"no regression on k-first path\" criterion and rebasing the performance gate onto `radius_only` (criterion 4, line 358). The rationale for retiring `k_first` is coherent, but the plan is the scope authority for this slice; deleting a mode the plan assumes survives and re-basing its acceptance gate requires a plan update first. Relatedly, the Component Structure claim at line 93 (\"No file outside the GPU compute path is touched\") is true only if the mode-set change is cut: that change edits `migratory_server.config` and `migratory.bench.workload` (line 349), outside the GPU compute path. Cutting the mode-set change to a follow-up slice would leave this slice exactly the plan's scope and make line 93 accurate.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "FRNN collect-then-sort \u2014 named by the plan as this slice's k-nearest mechanism \u2014 is deferred",
+      "description": "The plan entry (140-slices.simulation-scaling.md:56) states \"With coalesced reads, k-nearest via FRNN (collect all within radius R, then partial-sort the small candidate set per thread) becomes viable at scale\", and slice 150's own implementation plan lists \"Phase 2 \u2014 FRNN + small-set sort\" as part of the coherent-grid solution. The design explicitly defers FRNN collect-then-sort to \"the most likely follow-up slice\" (lines 75, 187, 458) and keeps the slice 150 max-heap. This is deferral of scope the plan entry assigns here \u2014 and the design concedes the consequence at line 358 and verification step 4: the load-bearing gate (`k_nearest` within 20% of `radius_only`) can fail purely because \"the heap is evicting on most candidates \u2026 the FRNN follow-up slice is the correct response, not a fix to this slice.\" A slice whose own acceptance gate can fail with no in-slice remedy has the wrong scope boundary: either FRNN belongs in this slice, or the plan entry must be updated to scope it out and restate a gate the shipped mechanism can actually meet.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Contradictory `k_first` config handling and undefined default when the TPS gate is unmet",
+      "description": "Line 199 states `k_first` \"is no longer accepted \u2026 raise a `ConfigurationError` at parse time \u2026 No silent migration \u2014 this is an explicit-failure boundary\", and line 67 removes it \"entirely from the kernel.\" But the Mitigation Strategies (line 433) say to \"ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning)\". These cannot both hold: if the kernel has no `k_first` path, parsing it with a warning is exactly the silent fallback the project conventions forbid (\"Never use silent fallback values. Fail explicitly\"); if `k_first` remains functional during incremental landing, \"removed entirely\" is false and the five-step commit plan (lines 437\u2013447) contains no deprecation phase. Separately, the default is specified only for the case where criterion 4 passes (\"`k_nearest` as default once the TPS gate is met\", lines 67, 197, 349); since the design acknowledges the gate can fail (line 358), the default of `{radius_only, k_nearest}` when it fails is unspecified. Finally, line 55 claims \"collapsing three `neighbor_mode` values to two\" while line 67 and slice 150's record (`neighbor_mode: k_first | k_nearest`) both show two values existed \u2014 the \"three\" figure is wrong (the uncapped sub-branch is keyed on `max_neighbors`, not a mode value).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tier throughput NFRs neither restated nor gated; Tier 3 misstated as N=200k",
+      "description": "The fused tick this slice modifies carries the architecture's throughput NFRs: 60 TPS at N=50k (Tier 2 \u2014 140-slices Future Work #1 and slice 148's exit criteria \"\u226560 TPS at N=50k mid-flock-density\") and the Tier 3 milestone at N=250k (140-slices \u00a7Scaling Tier Milestones; 140-arch Envisioned State). The design calls N=200k \"the architecture's Tier 3 target\" (line 17) and \"our current Tier 3 milestone of 200k\" (line 44) \u2014 both misstate the architecture \u2014 and restates no absolute throughput target at any tier N. Its gates are relative (`k_nearest` within 20% of `radius_only`, line 358) plus one absolute anchor at N=10k only (criterion 3, vs the 213.9 TPS baseline). A symmetric slowdown of both modes \u2014 e.g., reindex-pass overhead per tick \u2014 would pass every criterion while eroding the Tier 2 NFR on the touched path. Restate the tier NFRs with specific targets and add an absolute TPS floor at the Tier 2 operating point (N=50k).",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependency status claim not corroborated by the document record",
+      "description": "\"Slice 150 is shipped on `main` as of 2026-05-05\" is contradicted by the record in the documents under review: slice 150's frontmatter reads `status: in_progress`, plan 140 checks (150) off as incomplete, and slice 150's exit criterion 3 (TPS regression \u2264 20% at N=10k) is recorded as unmet (\"still ~88% regression\"). The repo may differ from the docs, but if (150) has not shipped, this slice's declared prerequisite is not in place and the claim should be corrected or the docs updated.",
+      "file_ref": null,
+      "category": "dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification steps reference workload entries the design never scopes",
+      "description": "Verification step 5 (lines 398\u2013400) and success criterion 3 (N=1M `radius_only` baseline) require `mid-flock-500k` and `mid-flock-1M` workload entries, but the Technical Requirements (line 367) and Special Considerations (line 452) only scope the `mid-flock-200k` registry addition. Name the 500k/1M entries alongside 200k in the implementation notes so the walkthrough is executable as written.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:399"
+    },
+    {
+      "severity": "PASS",
+      "title": "Core reindex design aligns with the plan entry and architectural layering",
+      "description": "The `coherent_reindex_kernel` + inner-loop rewrite matches exactly what the plan entry assigns: a post-sort reindex of `px, py, vx, vy, profile_index, leadership` into cell-sorted order (plan 152 entry), with slice 150's heap, delta correction, and cell-boundary pruning retained unchanged and the spatial-hash kernels untouched. Dependency direction is correct (152 \u2192 150 per the plan), the change stays within the GPU fused-tick layer the architecture exempts from the `SpatialQuery`/`BulkForce` boundary, state management is sound (tick-scoped coherent fields, originals remain canonical, idempotent per-tick regeneration), and the slice introduces no new I/O paths or message types requiring failure-mode enumeration. The coherent-reindex-over-gather-on-read decision is documented with a proportionate rejected alternative.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Architecture"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Mode-set overhaul exceeds plan scope and drops the plan's k-first exit criteria",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "FRNN collect-then-sort \u2014 named by the plan as this slice's k-nearest mechanism \u2014 is deferred",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:75",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Contradictory `k_first` config handling and undefined default when the TPS gate is unmet",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Tier throughput NFRs neither restated nor gated; Tier 3 misstated as N=200k",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "dependency",
+      "raw_category": null,
+      "summary": "Dependency status claim not corroborated by the document record",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Verification steps reference workload entries the design never scopes",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:399",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core reindex design aligns with the plan entry and architectural layering",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Architecture",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-17T06:47:24.142421",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 82815,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 248814,
+  "cached_tokens": 194176,
+  "cache_write_tokens": null,
+  "completion_tokens": 24362,
+  "reasoning_tokens": 21387,
+  "duration_seconds": 444.18508966686204,
+  "cost_usd": 0.045739174,
+  "cost_basis": "alias_pricing"
+}

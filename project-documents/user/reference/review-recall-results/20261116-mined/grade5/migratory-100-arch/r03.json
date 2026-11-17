@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "An active subset does not define reduced-rate simulation",
+   "description": "The tick advances only active agents, but no contract specifies elapsed simulation time for agents evaluated every fourth or sixteenth tick. Using the base timestep makes those agents move four or sixteen times slower; using a larger timestep leaves their neighbor-visible positions stale between evaluations. The world-server design also expects interpolated positions. Specify whether force evaluation and integration have separate schedules, who advances inactive positions, and which timestamp neighbor queries observe.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-agent neighbor queries leave the vectorized hot path undefined",
+   "description": "The design requires bulk NumPy computation and eventual GPU execution without Python callbacks, but describes querying neighbors separately for each active agent. It never defines how variable-length neighborhoods become bulk force inputs. A Python list of per-agent arrays preserves the very iteration and allocation costs the goals prohibit; an unrestricted dense pairwise array introduces quadratic memory consumption. Define a batched neighborhood representation, its mapping to active indices, and its allocation strategy before treating `BulkForce` as a GPU-compatible boundary. Validate the CPU target with representative densities, not renderer throughput.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:85-99"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Agent-specific behavioral state has no representation",
+   "description": "Shared profile weights cannot by themselves identify an individual's home-range center, distinguish experienced leaders within one herd, or identify which pack shares a hunting target. The stated arrays contain positions, velocities, and profile indices, while all state is supposed to arrive through those arrays. Define the additional per-agent attributes and group/target references, including their initialization and removal semantics. Otherwise these behaviors require hidden state or one-off profiles that conflate species configuration with individual identity.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:72-91"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Stigmergy has no feedback path and disappears from delivery scope",
+   "description": "Swarm intelligence is an explicit fidelity goal, and the envisioned behavior depends on paths reinforced through use. However, the environment interface is read-only, the tick returns only agent state, and the anticipated slices contain no swarm implementation or environmental feedback work. The slice plan separately defers swarm intelligence, leaving the architecture's assigned scope undelivered. Retain an explicit swarm slice and define a tick output for environmental deposits, with ownership and application timing; merely querying existing trails cannot produce reinforcement.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47-115"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Spatial backend replacement has no determinism contract",
+   "description": "Brute-force, spatial-hash, and KD-tree queries can return the same neighbors in different orders. Floating-point force reductions can then differ and produce diverging trajectories. Radius-boundary inclusion, self-exclusion, target-selection ties, and reduction ordering are unspecified. Define these semantics and distinguish reproducibility within one backend from numerical equivalence across backends or devices. Purity alone does not establish the claimed replay and regional-agreement guarantees.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31-45"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Stateless computation conflicts with lifecycle ownership and leaves commit semantics unclear",
+   "description": "The engine is described as a stateless function receiving arrays, yet its public interface also registers, removes, and queries agents. The world-server architecture assigns lifecycle and canonical state ownership to the server instead. Clarify whether these engine operations are merely array utilities or introduce a second owner. Also specify whether tick mutates its input or produces separate next-state buffers: the server's read\u2013compute\u2013commit transaction cannot preserve canonical state after an exception if the engine has already partially mutated it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62-81"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Aggregate neighbors cannot be substituted for point agents without new semantics",
+   "description": "Presenting an aggregate through the same neighbor interface does not establish how forces consume its population count, dispersion, or spatial extent. A flock center can lie outside a query radius while part of the flock lies inside; treating it as one point also changes cohesion, alignment, and separation weighting. Define aggregate query inclusion and force-contribution semantics, including how double counting is prevented during transitions between individual and aggregate representations. Otherwise this extension requires changing both spatial queries and force implementations despite the promised replaceability.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+  }
+ ]
+}

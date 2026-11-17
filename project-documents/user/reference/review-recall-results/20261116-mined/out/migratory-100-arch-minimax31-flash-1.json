@@ -1,0 +1,350 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Broken cross-document link: `200-arch.world-server-foundation.md` does not exist",
+      "description": "The \"Related Work\" section links to `200-arch.world-server-foundation.md`. The actual file is `300-arch.worldserver-foundation.md` (confirmed by directory listing of `project-documents/user/architecture/`). The same wrong path is duplicated in `project-documents/user/architecture/100-slices.behavior-engine.md:43`. Both the architecture doc and its slice plan point readers at a dead reference \u2014 the one document the engine's interface requirements are derived from is unreachable by the stated path. (Note the index in `300-slices.worldserver-foundation.md:3` uses the correct `300-arch.worldserver-foundation.md`, so the naming convention is 300-band for the world server, not 200-band.) Fix the link in both files.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick contract is stated three different ways: \"returns the updated state array\" vs. stateless in-place mutation",
+      "description": "The \"Envisioned State\" step 5 says \"**Returns the updated state array**,\" but the surrounding prose says \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it. This makes the tick function testable in isolation: feed in state, get back state.\" The implemented `tick()` in `src/migratory/engine/tick.py` mutates `state` in place and returns `None` \u2014 neither of the two descriptions. This is not cosmetic: \"returns the updated state array\" implies a copy-and-return contract (safe for snapshotting, replay, and multi-threaded readers), while in-place mutation means a caller holding a reference observes the mutation immediately and cannot retain a pre-tick snapshot without copying. The world server's tick cycle is specified as \"read current state, compute next state, **commit**\" (300-arch, \"Tick as transaction\"), which is a copy-then-commit model, and replay/logging needs to capture state at a tick boundary. The engine document must pick one contract and state it explicitly \u2014 currently a consumer reading only this document would write `new_state = engine.tick(state)`.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Support tens of thousands of agents at full behavioral fidelity\" contradicts the specified per-agent Python loop",
+      "description": "Design Goal 4 promises tens of thousands of agents \"at full behavioral fidelity on a single CPU process\" and states \"The hot loop must be structured for vectorized computation over arrays of agent state, not object-by-object iteration.\" But the engine's own hot loop is explicitly object-by-object: `src/migratory/engine/tick.py` builds a `neighbor_lists` list by iterating `for idx in eval_indices` and calling `spatial.query_radius()` per agent (an O(n) NumPy op each, so O(n\u00b2) total), and each force in `src/migratory/engine/flocking.py` (`CohesionForce`, `SeparationForce`, `AlignmentForce`) loops `for list_idx, agent_idx in enumerate(eval_indices)` with per-agent Python. Slice 101 explicitly chose this: \"Use a Python-level loop over active agents with vectorized NumPy operations *within* each agent's neighborhood computation.\" So at 10K agents the engine does ~10K Python iterations \u00d7 3 force passes \u00d7 20 ticks/s, each doing small NumPy calls with high per-call overhead \u2014 this will not reach the stated goal, and the `Technical Considerations` section admits SoA \"needs validation against the actual force computation patterns\" without ever stating the acceptance criterion. The document asserts a performance target and a structural requirement that the planned implementation directly violates, with no benchmark, no target tick budget in ms, and no statement of which layer (spatial query vs. force loop) is the dominant cost at 10K. Either add a measurable performance target (agents/tick, ms/tick at N agents) and a validation slice, or lower the stated goal to what the design actually achieves.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"no archetype-specific code paths\" goal is contradicted by the force-per-archetype registry design",
+      "description": "Design Goal 2 states \"All behavioral variation comes from parameterized profiles, not from archetype-specific code paths. Adding a new species or creature means defining a new profile, not writing new simulation logic.\" But the architecture's own slice plan creates a new code path per archetype: slice 102 \"Extend the force model with leadership tendency\u2026\", slice 103 \"Inter-profile force interactions: flight response, hunt/pursuit behavior, target selection\", slice 104 \"Home-range attraction, neighbor avoidance at distance.\" Each of these is a new `BulkForce` class registered into the `forces` list \u2014 i.e. new simulation logic per archetype, exactly what the goal forbids. The `forces: list[BulkForce]` injection mechanism (implemented in `src/migratory/engine/forces.py` and `src/migratory_server/simulation.py`) makes the registry the composition point, and archetype identity leaks into code rather than data. This matters concretely: the world's `BehavioralProfile` in `src/migratory/engine/profile.py` now carries `cohesion_weight`/`separation_weight`/`alignment_weight` as *required* fields, so a predator profile must specify a meaningless `cohesion_weight`, and every future archetype adds another mandatory field to every profile \u2014 the profile stops being data and becomes a union of all archetypes' parameters. The document should either (a) state that archetypes require code (a force module) plus a profile, and reword the goal, or (b) specify a mechanism (e.g. a profile-declared force spec / weighted force registry keyed by profile) that actually delivers data-only archetype variation.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `Force` per-agent protocol is never described in the architecture, but every force implementation depends on it",
+      "description": "The architecture names the force model generically (\"force vectors accumulated from multiple sources\") and the \"GPU compute path\" bullet specifies \"bulk array-in/array-out operations with no Python-level per-agent branching,\" implying a single bulk interface. But `src/migratory/engine/forces.py` defines *two* protocols: `Force` (per-agent: `__call__(agent_idx, state, neighbors, profile) -> 2D vector`) and `BulkForce` (full-population array). The `Force` protocol is what `src/migratory/engine/flocking.py` conceptually mirrors, and the slice design says \"The tick loop **prefers the bulk variant when available**\" \u2014 but `tick()` in `src/migratory/engine/tick.py` has no such branch; it only accepts `list[BulkForce]` and would fail at runtime if a per-agent `Force` were passed. The architecture document never mentions the per-agent protocol at all, so there is no specified contract, no decision about whether it survives, and no error-handling story for a mismatched force type. The document claims the engine \"exposes well-defined interfaces\" \u2014 the force interface is the most-used interface in the system and it is not one of them.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile data cannot actually flow from configuration into the engine \u2014 the shipped server path drops every force weight",
+      "description": "The architecture's \"Profile as data\" principle says profiles \"can be serialized, loaded from configuration, and swapped at runtime.\" In the shipped code, `src/migratory_server/config.py`'s `ProfileConfig` has only `name`, `max_speed`, `query_radius` \u2014 no force weights \u2014 and `src/migratory_server/simulation.py`'s `build_profiles()` constructs `BehavioralProfile(max_speed=..., query_radius=...)` with no weights. Since `BehavioralProfile` requires all six fields with no defaults (a deliberate \"fail explicitly\" choice per project guidelines), `build_profiles()` as written raises `TypeError` against the current `BehavioralProfile` dataclass. `config/default.yaml` likewise carries no weights. The architecture treats the profile schema as an open \"design challenge\" (\"Defining the right set of profile parameters is a design challenge, not an implementation one\") while the actual pipeline that must deliver it is already broken and unaddressed by any slice. The architecture needs to own the profile schema (field set, units, per-archetype applicability) and specify how it is validated and loaded \u2014 including whether zero-weight or absent-weight fields are legal \u2014 because every archetype slice depends on it.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Inter-archetype interaction rules are called a \"combinatorial dimension\" but no interaction model is specified",
+      "description": "\"Inter-archetype interactions\" is listed as a Technical Consideration: \"an elk herd member's separation force from a nearby wolf is qualitatively different from its separation force from another elk. Profile-to-profile interaction rules add a combinatorial dimension to the parameter space.\" But no model is proposed, no slice owns it, and the design goal \"no archetype-specific code paths\" makes an N\u00d7N interaction matrix impossible to express as data without an explicit rule schema. Slice 103 is where this must land, yet the architecture gives it no guidance and the \"Anticipated Slices\" entry (\"Predator-prey dynamics \u2014 Inter-profile force interactions: flight response, hunt/pursuit behavior, target selection\") describes three distinct mechanisms (a repulsion modification, a pursuit attraction, and a target-selection state machine) without reconciling them against \"Forces, not decisions.\" Target selection in particular is a decision over time, not a force \u2014 the architecture should state how a stateful decision (e.g. \"this wolf is hunting that elk\") is represented without introducing the state machine the principles forbid.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment query interface is named as an engine input surface but never specified or assigned",
+      "description": "\"Environment as input surface \u2014 The engine queries environmental state (terrain elevation, resource locations, threat zones, seasonal parameters) through a read-only interface.\" The \"Envisioned State\" tick step 1 says the engine \"Receives the current agent state array, **environmental context**, and an optional active-agent subset,\" but the environment context is absent from every signature in the document, from the `Technical Considerations` list, and from the Anticipated Slices (no environment-facing force slice exists). Grepping `src/` confirms zero environment code \u2014 the engine has no environment seam at all. Meanwhile the behavior engine's own slice plan defers swarm intelligence (106) and migration (107) to a future Environment Layer initiative, and 300-slices defers environment integration to slice 304. So the architecture names an interface that has no owner, no shape, no consumer, and no slice \u2014 while simultaneously making the environment a load-bearing input of the tick signature. Either specify the environment context interface (query shape, per-agent vs. per-region, how a force reads it) and assign it a slice, or remove it from the tick signature description and keep environment access entirely inside force implementations.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism goal is stated but the deterministic inputs (RNG, tick count, dt source) are never specified",
+      "description": "\"Tick determinism \u2014 Given the same state and inputs, a tick produces the same outputs. This enables replay, debugging, testing, and eventual distribution.\" No input to the tick is currently non-deterministic (no RNG in the engine), so the goal is trivially satisfiable today \u2014 but the document never says where non-determinism is permitted to enter (e.g. randomized profile sampling, stochastic jitter in forces, `np.random` inside a force), and the world server's replay design (\"logging only the initial state plus any non-deterministic inputs\u2026 is sufficient\") depends on the engine's contribution to that set being zero and explicit. Concretely, `src/migratory_server/entities.py`'s `spawn_population()` accepts an optional `rng: np.random.Generator` and defaults to `np.random.default_rng()` \u2014 an unseeded system entropy source \u2014 so population layout is currently not reproducible. The architecture should state the determinism contract explicitly: which subsystems may introduce randomness, and that the engine itself must be free of it (or accept an injected, seeded generator), so that replay is achievable without a rewrite.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU-compatibility constraints are imposed on the hot loop without a consumer, inverting the project's \"avoid premature optimization\" rule",
+      "description": "\"The engine's force interface should remain compatible with eventual GPU offload: bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop.\" These are hard constraints on every future force implementation, adopted for a capability that is (a) not in the concept's v1, (b) assigned to initiative 620 which the initiative plan explicitly says \"is acknowledged but deliberately deferred \u2014 it could expand the product scope 5-fold or more,\" and (c) listed as Future Work #2 in the world server slice plan (\"Risk: High. Effort: 4/5\"). Meanwhile the actual force implementation (`src/migratory/engine/flocking.py`) already violates the \"no Python-level per-agent branching\" rule \u2014 it loops per agent and calls `state.positions[neighbors]` (fancy indexing, a gather) per agent, which is exactly the pattern a GPU kernel would forbid. So the constraint is stated, violated by the only implementation, and unjustified. Recommend cutting the GPU-compat clause to a single sentence (\"keep force implementations expressed as whole-array operations where practical; GPU offload is future work under initiative 620\") and dropping \"no dynamic allocation\" / \"no callbacks into Python\" as unqualified hot-loop rules.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregation interface support is designed into the engine's contract for a feature owned by a different initiative",
+      "description": "\"the engine may need to evaluate forces between individually-simulated agents and nearby aggregates, which the world server would present through the same neighbor query interface.\" This is the load-bearing extension point for multi-resolution simulation, and it has a real design problem: the `SpatialQuery` protocol in `src/migratory/spatial/interface.py` returns `NDArray[np.intp]` \u2014 agent indices into the population arrays \u2014 and every force indexes `state.positions[neighbors]`, `state.velocities[neighbors]`. An aggregate entity is not an agent and has no row in those arrays, so it cannot be expressed through the existing neighbor-query return type without either (a) reserving phantom rows in the state arrays for aggregates (polluting the agent state with non-agents), or (b) changing the neighbor return type to a richer record (id + position + velocity + aggregate payload), which invalidates every force and every spatial index implementation. The architecture does not acknowledge this: it asserts the existing interface \"must function correctly\" for aggregates. The engine's own slice plan defers this to future slice 108 (dependencies: World Server multi-resolution implementation) \u2014 meaning the extension point will be designed when the consumer exists, at which point the force interface breaks. Either specify the neighbor-record type now (a small, concrete change to the protocol) or explicitly state that slice 108 is expected to change the force interface and identify which forces must be rewritten.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integration method and precision are left undecided in a document claiming tick determinism",
+      "description": "\"Tick rate and integration stability \u2014 Fixed-timestep integration is essential for determinism and replay\u2026 Euler integration is simplest but can produce energy drift at high force magnitudes; Verlet or semi-implicit Euler may be needed for stability.\" \"May be needed\" is not a decision, yet the integrator is baked into the engine's core and every downstream slice depends on it. The implementation chose semi-implicit Euler (`src/migratory/engine/integration.py`), but the architecture does not. This matters because semi-implicit Euler is *not* Verlet: it is time-reversible only in the symplectic sense and its energy behavior differs from Verlet, so a future switch to Verlet (needed for stable long-range migration trajectories) changes trajectories and invalidates the regression baselines the slice plan relies on for slice 105. Similarly, \"The engine's state arrays must be serializable\u2026 the engine should define its internal precision\" \u2014 the implementation chose float64 (`src/migratory/engine/state.py`), while the concept specifies Float32Array for transfer; the architecture leaves the internal precision explicitly open while asserting \"the internal array format should either be directly serializable (e.g., raw Float32 buffers) or have a zero-copy serialization path.\" These are exactly the \"load-bearing decisions deferred\" that the review is meant to catch: pick semi-implicit Euler + float64 internal with an explicit float32 conversion at the server boundary, and state that changing them is a breaking change requiring baseline regeneration.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The engine's stated \"narrow interface\" includes agent registration/removal that the engine does not own and the server does not use",
+      "description": "\"At the system level, the engine presents a narrow interface: tick the simulation forward, query agent state, register/remove agents.\" But the \"Scope\" paragraph says the engine \"does not own persistence, networking, or rendering,\" and 300-arch says \"The server assigns entity IDs, allocates space in the state arrays, and removes entities when appropriate. The behavior engine operates on whatever entities the server provides \u2014 it does not manage the entity lifecycle itself.\" Registration/removal is therefore a server responsibility, and the server implements it in `src/migratory_server/entities.py`'s `EntityManager` (`spawn_entity`, `remove_entity`), not in the engine. The engine's `AgentState.add_agent`/`remove_agent` (`src/migratory/engine/state.py:78-97`) exist only as internal helpers. Listing \"register/remove agents\" as part of the engine's system-level interface contradicts the scope statement and the world server's ownership model, and would give a consumer the impression that the engine manages entity lifecycle \u2014 which the world server forbids during behavior evaluation (\"entity additions and removals must not occur during behavior evaluation\"). Correct the interface list to: tick forward, accept state, expose neighbor queries.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The document prescribes a component (`AgentState`) as an owned container while the engine's statelessness principle forbids it",
+      "description": "\"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it.\" But `AgentState` is a mutable class with `add_agent`/`remove_agent` methods that resize its arrays via `np.concatenate`/`np.delete` (`src/migratory/engine/state.py:78-97`). Those are O(n) copies per agent \u2014 catastrophic if called per tick, and the class provides no capacity/preallocation contract despite the world server's \"entity capacity\" concept and its pre-allocation requirement (300-arch: \"Entity capacity determines array pre-allocation sizes\"). The architecture says nothing about agent-state allocation strategy, and the implemented `AgentState` has no preallocated capacity, no free-list, and no stable-index guarantee \u2014 while `EntityManager.remove_entity()` in `src/migratory_server/entities.py` performs an O(n) index remap of every entity ID after each removal. The architecture should specify the array lifecycle: fixed capacity with a swap-remove or free-slot policy, stable entity-index semantics, and who owns capacity (server, per 300-arch). As written, the engine's \"state representation\" is a load-bearing decision with an undefined implementation strategy.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`accelerations` is a dead array carried in every state container",
+      "description": "`AgentState` allocates and maintains an `accelerations: N\u00d7DIMS float64` array (`src/migratory/engine/state.py:51`), but no code ever writes to it \u2014 grep confirms it is only allocated, concatenated, and deleted. At the world server's 4M+ entity ambition that is 64MB of dead memory (and 256MB at 12M), and it is a serializable-state field that will be written to every snapshot and every client frame. The architecture's \"Data-oriented agent state\" principle lists only \"positions, velocities, profile indices\" \u2014 the extra array is an implementation artifact that has leaked into the state contract without a consumer.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"Efficient large-scale evaluation\" goal cites two unvalidated external benchmarks",
+      "description": "The goal is supported by \"2000+ agents \u2026 at 120fps with single-draw-call rendering\" from the Three.js prototype \u2014 a *rendering* benchmark that says nothing about simulation cost, and at 2000 agents, 1\u20132 orders of magnitude below the stated tens-of-thousands target. The prototype is also explicitly a browser script that combined simulation and rendering, so its tick cost is not comparable. The document's \"Current State\" section is candid that the prototypes \"confirm that the parametric boid model produces convincing collective behavior and that the rendering pipeline can handle the agent counts we're targeting,\" but the agent counts in the prototype (2000) are not the counts in the goal (tens of thousands). The evidence cited does not support the target.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:44"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Broken cross-document link: `200-arch.world-server-foundation.md` does not exist",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Tick contract is stated three different ways: \"returns the updated state array\" vs. stateless in-place mutation",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Support tens of thousands of agents at full behavioral fidelity\" contradicts the specified per-agent Python loop",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:44",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The \"no archetype-specific code paths\" goal is contradicted by the force-per-archetype registry design",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The `Force` per-agent protocol is never described in the architecture, but every force implementation depends on it",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Profile data cannot actually flow from configuration into the engine \u2014 the shipped server path drops every force weight",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:52",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Inter-archetype interaction rules are called a \"combinatorial dimension\" but no interaction model is specified",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Environment query interface is named as an engine input surface but never specified or assigned",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:54",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Determinism goal is stated but the deterministic inputs (RNG, tick count, dt source) are never specified",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "GPU-compatibility constraints are imposed on the hot loop without a consumer, inverting the project's \"avoid premature optimization\" rule",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Aggregation interface support is designed into the engine's contract for a feature owned by a different initiative",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Integration method and precision are left undecided in a document claiming tick determinism",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:93",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The engine's stated \"narrow interface\" includes agent registration/removal that the engine does not own and the server does not use",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:81",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The document prescribes a component (`AgentState`) as an owned container while the engine's statelessness principle forbids it",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "`accelerations` is a dead array carried in every state container",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The \"Efficient large-scale evaluation\" goal cites two unvalidated external benchmarks",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:44",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-17T10:47:05.628487",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 50,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 243737,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 587426,
+  "cached_tokens": 470656,
+  "cache_write_tokens": null,
+  "completion_tokens": 57392,
+  "reasoning_tokens": 50771,
+  "duration_seconds": 541.0167142497376,
+  "cost_usd": 0.029269942,
+  "cost_basis": "alias_pricing"
+}

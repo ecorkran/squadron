@@ -1,0 +1,40 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Backend ordering can change tick results",
+   "description": "Neighbor-set equivalence does not establish behavioral parity. The design permits different neighbor ordering between backends; floating-point reductions can therefore differ, and slice 112\u2019s nearest-neighbor cap can choose different neighbors when distances tie. This also conflicts with the proposed bit-exact integration test and slice 105\u2019s behavioral-parity goal. Specify the required ordering and tie-breaking behavior, then test capped and uncapped ticks across backend switches and replay from the same inputs.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:327-335"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Live tuning is promised but not designed",
+   "description": "The slice plan assigns operators the ability to tweak the crossover **live**, but the design only defines startup YAML configuration and immutable dispatcher construction. It does not specify how a running dispatcher receives updated thresholds or when an update takes effect. Define that path and its validation, or retain the live-tuning requirement in this slice rather than treating a configuration-file change as sufficient.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:166-204"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Empty active subsets leave density undefined",
+   "description": "The signal divides by `n_active` without specifying behavior when the active subset is empty. Empty subsets are relevant to the architecture\u2019s subset-evaluable tick contract. Define whether the dispatcher retains its previous selection and skips recording on an empty tick, and cover that case in integration tests.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-116"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Valid hysteresis settings can prevent grid selection",
+   "description": "Validation allows `hysteresis_band >= grid_threshold_mean_neighbors`. Since density is non-negative and switching to grid requires `m < t - h`, such configurations can never switch from the default brute backend to grid. Reject that combination or explicitly define and document it as an intentional brute-only configuration.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:198-202"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The default crossover is not supported by the cited evidence",
+   "description": "The design calculates about 132 neighbors for a uniform distribution in the stated world, yet also expects a uniform expansion at the same population and bounds to fall below 10. The cited regime comparison does not establish that the proposed threshold selects the faster backend. Since adaptive dispatch becomes the default to capture both performance wins, specify measured density and timing at the crossover and use the sweep results to select or revise the default before claiming that outcome.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  }
+ ]
+}

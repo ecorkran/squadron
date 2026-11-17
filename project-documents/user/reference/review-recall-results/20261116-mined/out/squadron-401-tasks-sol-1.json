@@ -1,0 +1,147 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 2 cannot reach its required passing checkpoint",
+      "description": "Task 2 expands `SnapshotMetric` while restricting `PythonAdapter.metrics` to four metrics, then requires the suite to pass unchanged. However, `tests/metrology/snapshot/test_python_length.py:60` asserts that the adapter declares every enum member. Update that assertion alongside the transitional declaration, preserving length-value expectations. Otherwise the first implementation checkpoint necessarily fails.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:43-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Python complexity fixture contradicts the counting definition",
+      "description": "The required fixture scores **7**, not 6: baseline 1, `if`, `elif`, `and`, comprehension `for`, comprehension `if`, and `except`. This contradiction originates in slice criterion 3 and is repeated here. Reconcile the fixture and expected score with D2 before implementation.",
+      "file_ref": null,
+      "category": "acceptance-criteria",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:63-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplication scalability requirement lacks load testing and CI gating",
+      "description": "D3 explicitly requires linear time and memory growth. Task 11 tests small examples and a lowered token ceiling, neither of which validates scalability. Add a proportional load test under `tests/load/` covering increasing token volumes, followed immediately by an explicit CI-wiring task that gates on it.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:114-142"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit checkpoints use checkbox items instead of markers",
+      "description": "Commit instructions throughout the file use `- [ ] Commit:`. Replace these with plain `**Commit**:` lines at tested checkpoints. Most implementation/test pairs already provide sensible checkpoint locations; additional commits after every task are unnecessary.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional scope and dependency ordering are substantially covered",
+      "description": "Functional criteria 1\u20134 map to Tasks 3\u201315; 5\u20139 to Tasks 16\u201326; 10 to Tasks 10\u201311; 11 to Tasks 26 and 29; and 12 to Tasks 7\u20139 and 29. Technical and integration requirements map to the fixture, documentation, and validation tasks. Tests generally immediately follow implementation, with no circular dependencies or material scope creep identified.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 2 cannot reach its required passing checkpoint",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:43-46",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "acceptance-criteria",
+      "raw_category": null,
+      "summary": "Python complexity fixture contradicts the counting definition",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:63-65",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Duplication scalability requirement lacks load testing and CI gating",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:114-142",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit checkpoints use checkbox items instead of markers",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Functional scope and dependency ordering are substantially covered",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-17T05:27:37.025901",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 63038,
+  "cached_tokens": 61312,
+  "cache_write_tokens": null,
+  "completion_tokens": 678,
+  "reasoning_tokens": 0,
+  "duration_seconds": 52.53714254172519,
+  "cost_usd": 0.0163632,
+  "cost_basis": "alias_pricing"
+}

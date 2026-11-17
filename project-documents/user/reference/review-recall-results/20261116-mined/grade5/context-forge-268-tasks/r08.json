@@ -1,0 +1,19 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox items and several tasks share one commit",
+   "description": "Commit lines are written as checklist items (`- [ ] Commit: \\`...\\``) rather than the plain `**Commit**:` marker form, so tooling scanning for the plain marker will not detect them. This is explained by AGENTS.md's \"checklist format for all task files\" rule, so no change is required. Placement is otherwise exemplary: nine commits spread across verified-working, tested points (2.3, 3.2a, 3.7, each of 4.1\u20134.4, 5.1, conditional 6.3) \u2014 never only at the end, never after every sub-task. The grouped commits (3.1\u20133.2 \u2192 3.2a; 3.3\u20133.6 \u2192 3.7) technically deviate from AGENTS.md's \"commit at least once per task,\" but the file states the compile-coupling reason for each grouping, which serves the stronger semantic-commit principle.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The typecheck-expectation note in section 3 is self-contradictory about `cli`",
+   "description": "The section intro says \"Between 3.4 and 3.6, only `mcp-server` typecheck is expected to fail. `cli` passes once 3.5 is done.\" These two sentences conflict for the 3.4\u21923.5 stretch: after 3.4 changes the core signature and rebuilds `dist/`, `cli/src/commands/build.ts:84` still passes a second argument, so `cli` typecheck also fails until 3.5 \u2014 contradicting \"only `mcp-server`.\" The intent (cli recovers at 3.5, mcp at 3.6) is recoverable and each task carries its own success criteria, so this cannot misroute work, but tightening the sentence to \"after 3.4 both `cli` and `mcp-server` typecheck fail; `cli` passes once 3.5 is done, `mcp-server` once 3.6\" would prevent a needless debugging detour by a junior implementer.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  }
+ ]
+}

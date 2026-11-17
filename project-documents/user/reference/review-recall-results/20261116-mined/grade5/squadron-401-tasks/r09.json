@@ -1,0 +1,47 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 2's \"suite passes unchanged\" gate is unachievable as written",
+   "description": "Task 2 replaces `PythonAdapter.metrics = frozenset(SnapshotMetric)` (confirmed at `src/squadron/metrology/snapshot/python_adapter.py:105`) with an explicit four-metric set, while adding four members to the enum. `tests/metrology/snapshot/test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`, so once `SnapshotMetric` has eight members that assertion is false by construction. Task 2's Success line \u2014 \"the full `tests/metrology/` suite passes unchanged\" \u2014 therefore contradicts itself, and Task 2 says nothing about touching that test. A junior implementer hits a red gate with no sanctioned route and is likely to either revert the metrics change (which is the one thing that prevents `take_snapshot` from raising, per the DEVLOG \"Surprise\" note) or hand-edit a test outside any listed task. Fix: state the assertion edit inside Task 2 (\"update `test_adapter_declares_its_metrics_and_pb2_conventions` to the explicit set\"), or restate the gate as \"the suite passes after that one assertion update.\" The same file also shows `TypeScriptAdapter` already declaring an explicit set, so only the Python assertion is affected (`test_typescript_length.py:42` uses a `not in` check and survives).",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success Criterion 10's \"other metrics are unchanged\" clause has no test",
+   "description": "The slice design's criterion 10 reads \"`duplicated_lines` as `tool_failed` with a WARNING naming the count and the ceiling, **and its other metrics are unchanged**\", and the failure-mode table's row 2 carries the same claim (\"Other metrics are unaffected\"). Task 10 implements it and Task 11 asserts `tool_failed` plus the WARNING over the pure `measure_duplication` function with a whitespace test tokenizer, so there are no other metrics in scope to compare. Tasks 13/15 exercise duplication through the adapters but never trip the ceiling, and Task 26's snapshot-level tests don't either. The slice's own Technical Requirement (\"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table\") is therefore only half-satisfied for that row. Cheap close: one adapter-level case (Task 13 or Task 15) with `DUPLICATION_MAX_TOKENS` monkeypatched down, asserting file length, function length, complexity and lint are byte-identical to the same run without the ceiling.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:118-141"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No load test for the duplication pass's restated memory/throughput bound",
+   "description": "The slice restates a resource NFR in D3: \"~133 bytes per token, measured on 20261023 at squadron's size: 0.95M Python tokens gave 120 MiB\u2026 a repo ten times squadron's size needs over 1 GiB\u2026 `DUPLICATION_MAX_TOKENS = 4_000_000` (about 530 MiB)\". `project-documents/ai-project-guide/project-guides/rules/python.md:57` requires a `tests/load/` test asserting latency, throughput or resource bounds for code on the environment-layer path, and CI gating for slices touching it. The task breakdown has no `tests/load/` task: Task 11's ceiling case lowers the constant via monkeypatch, which proves the branch exists but never validates the constant at realistic scale \u2014 which is precisely what 4M tokens and the 133 bytes/token figure claim. The walkthrough (Task 29, steps 1\u201310) also has no scale step. Add one load task over squadron- or context-forge-sized input asserting the token count and a memory/time bound against the D3 figures. If that task is added, it needs a paired CI wiring task so the gate is explicit rather than implied \u2014 the current breakdown leaves no such hook.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 26's both-languages coverage case needs a stated report source",
+   "description": "\"a Python+TypeScript repo with a fresh report covering files of both languages gives present coverage for each\" requires one Cobertura report holding entries for both ecosystems, but the Task 18 fixtures are single-producer (coverage.py covers `src/squadron`, Istanbul covers the scratch TS project). Either say the test composes a small hand-written two-`<source>` report, or split the case into \"Python present via the coverage.py fixture; TypeScript present via the Istanbul fixture\". Task 24 already covers the mismatched-language half at unit level (\"a reading with none of the language's files gives empty `per_file` and every file in `tool_ignored_files`\"), so only the adapter-level positive case is under-specified.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:254"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Commit markers are checklist items; placement is sound",
+   "description": "The markers are written as `- [ ] Commit: \u2026` rather than plain `**Commit**:` lines. That matches AGENTS.md (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\") and the precedent in 400's task file, so I record it as convention reconciliation, not a defect. Substantively the placement is right: Tasks 3, 5, 8, 10, 12, 14, 16, 19, 21, 23, 25 (implementation) have no commit and their following test task does \u2014 one commit per tested unit, not one per task and not all deferred to the end.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 1 is a single-checkbox task",
+   "description": "Branch creation from the target with one success line could sit as the first step of Task 2 without loss. 30 tasks against ~10 new modules, two captured real-report fixtures, an XML reader, a rolling-hash window pass, a freshness check, preflight validation, render, docs and a ten-step walkthrough is proportionate for this slice; Task 10 (Effort 4) is the heaviest single task but is coherent as one module and is fully covered by Task 11's eight cases, so I am not asking for a split.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Ceiling/MemoryError failure mode never asserts that other metrics are unchanged",
+   "description": "The ceiling test in Task 11 calls `measure_duplication` directly and asserts only the signal (`tool_failed` + WARNING naming count and ceiling); the MemoryError test likewise asserts only the signal. But Functional SC 10 requires \"its other metrics are unchanged,\" the slice's failure-mode table states \"Other metrics are unaffected\" for this row, and the Technical Requirement says \"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table.\" No task adds an adapter/snapshot-level test asserting that file length, function length, lint and type counts remain present when duplication is `tool_failed` due to the token ceiling or `MemoryError` (Task 13's \"function length is unaffected\" assertion covers a different failure \u2014 tokenize errors \u2014 not this one). Add an assertion at the adapter level (e.g., in Task 13 or Task 26) that the co-located metrics are still present in this failure case.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138-139"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox items rather than plain lines",
+   "description": "Every commit checkpoint is written as `- [ ] Commit: ...` (e.g., lines 46, 68, 156), whereas the review convention calls for plain `**Commit**:` lines, never checkboxes. Their *placement* is correct \u2014 they sit at working, tested points (implementation paired with its test task), not after every task and not only at the end. Note this conflicts with AGENTS.md's \"each item and subitem should have a `[ ]` checkbox,\" so this is recorded as informational rather than a demanded change; if the `**Commit**:` convention governs, convert the markers to plain lines.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

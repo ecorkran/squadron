@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`compute_delta`/`is_within_floor` are attributed to 323 but are 324's, and 324 is not declared a dependency",
+   "description": "403 lists under \"Prerequisites\" \u2014 \"**323 (complete):** `baseline_report`, `compute_delta` and `is_within_floor` for the audit section\" (line 73, restated at 236 and 326). Only `baseline_report` is 323's; it lives in `src/squadron/metrology/audit_report.py`. `compute_delta` and `is_within_floor` live in `src/squadron/metrology/audit_delta.py`, which 324's design (`audit_delta.py`) owns, and 323 explicitly excludes (\"The pre-emption prompt and any delta report \u2192 324\"; \"does not report a before/after delta \u2014 all of that is 324\"). The frontmatter `dependencies` lists only `[400, 402]` and 324 is never named. So a consumed interface is mis-attributed to the wrong slice and the slice that actually provides it is missing from the dependency list. The functions exist in the tree so implementation isn't blocked, but the provenance/dependency record is wrong.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:73"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Audit-section value depends on runs and floors existing at the exact boundary commits; the precondition and floor commit-keying are not addressed",
+   "description": "D8 says the audit figure \"reuse[s] 323's `compute_delta` \u2026 The baseline is the latest run at `before_sha` and the new run is the latest at `after_sha`, under the same `audit_prompt_hash`. If either is missing, the section says which.\" `compute_delta(baseline: ProjectBaseline, new_run: AuditRun)` compares two commits, so 403 must *construct* a `ProjectBaseline` from the before-runs \u2014 not shown. More importantly, nothing in the architecture creates audit runs or noise floors at a slice's arbitrary boundary commits: runs are operator-invoked (`audit run`) at whatever commit is checked out, and the noise floor is keyed to a `323`-pinned commit via `(project_id, commit_sha, audit_prompt_hash)` (`_floor_key` in `audit_report.py`). With \"no pipeline snapshot hook,\" runs/floors at `before_sha`/`after_sha` will usually be absent, so the audit section (a core deliverable \u2014 the plan's \"LLM-sourced numbers are shown against their noise floor\") typically degenerates to \"no audit run at \u2026\". The design never states this precondition, nor how the floor is looked up when its commit differs from `after_sha`, leaving the section's real-world behavior under-specified.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Cross-reference \"(D4)\" for the `read_snapshot_config` split points at the wrong decision",
+   "description": "Line 78 says \"400's `preflight`, split so that config reading \u2026 can run without the clean-tree check (D4).\" D4 is \"`slice-ranges` persists ranges ahead of need\"; the export/config decision is D5. The split itself is real (lines 91, 130, 214) and consistent, so this is a wrong anchor, not a missing mechanism \u2014 but a reader jumping to D4 won't find the config split.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:78"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`take_snapshot_at` \"sharing `_measure_all`\" leaves the export's file-set and config injection unspecified",
+   "description": "The component table says `take_snapshot_at` sits \"beside `take_snapshot`, sharing `_measure_all`.\" In `src/squadron/metrology/snapshot/take.py`, `_measure_all` calls `resolve_files(repo_root, exclusions)` (git `ls-files`) and builds `AdapterContext` from a `PreflightResult` (clean-tree checked). The export data flow (lines 125\u2013135) instead sources the file list from \"the archive's member names\" (a `git archive` tar has no `.git`) and reads config via `read_snapshot_config` (no clean-tree preflight). Reusing `_measure_all` therefore requires it to accept a precomputed file list and a config source rather than derive both from a git checkout \u2014 a real change that the design states as \"sharing\" but does not specify. Low impact, but it's the load-bearing seam of the export path.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:94"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"401 is not a prerequisite\" means 403-taken boundary snapshots are skipped and must be retaken if 401 lands after 403",
+   "description": "403 treats 401 as optional (\"not a prerequisite \u2026 If 401 is implemented after 403, it inherits the `environment_root` rule\"). But 401's own Compatibility section states that 400/403-era snapshot records \"lack the four metrics, fail `LanguageSnapshot`'s every-metric validation, and are skipped by `_iter_records`\" and that \"403 reads only snapshots taken by 401 or later.\" So any boundary snapshots 403 already persisted before 401 ships become unreadable and must be retaken (403's `ensure_snapshot` would re-measure them). The plan orders 401 before 403, so this is an implementation-ordering cost rather than a design flaw, but the interaction isn't acknowledged in 403 \u2014 worth a line so the retake is expected rather than surprising.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+  }
+ ]
+}

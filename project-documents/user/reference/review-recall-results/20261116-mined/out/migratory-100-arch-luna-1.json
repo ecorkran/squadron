@@ -1,0 +1,146 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The tick contract omits environmental input required by the stated archetypes",
+      "description": "The envisioned tick receives environmental context, and swarm agents are said to respond to environmental stigmergy. But the specified `tick()` signature and `BulkForce` protocol accept only agent state, profiles, neighbors, and `dt`; neither provides an environment query or environmental data. As written, the interface cannot implement the stated swarm behavior or the broader attraction/repulsion from resources and threats without an unplanned API change.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The proposed bulk-force interface is not a credible vectorized or GPU boundary",
+      "description": "`BulkForce` receives `list[NDArray[np.intp]]` neighbor lists and `list[BehavioralProfile]`, which are Python containers of variable-sized per-agent data. The document also says the tick queries neighbors for each active agent and prefers bulk forces, while requiring no Python-level per-agent branching or callbacks for GPU offload. Those contracts conflict: building and consuming ragged neighbor lists requires Python-side work, and returning a full-population N\u00d72 force array for subset ticks adds allocation/bandwidth even though only active rows are integrated. Define the actual bulk data representation and active-row semantics before treating this protocol as vectorization- or GPU-ready. The project\u2019s Python 3.12/NumPy stack makes this a concrete concern, not just a future GPU detail.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reduced-rate evaluation has undefined stale-neighbor semantics",
+      "description": "Subset ticks leave inactive agents unchanged, but active agents query positions and velocities for the full population. The design does not say how inactive agents\u2019 stale state is advanced or interpreted between evaluations. That matters directly to the stated variable-rate strategy: active agents may react to neighbors whose positions, velocities, and force contributions are out of date. Specify whether inactive agents are extrapolated, whether queries use timestamps/ages, or whether the world server supplies a predicted state view; otherwise subset evaluation is only an API shape, not a defined simulation behavior.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Engine ownership and state lifecycle are contradictory",
+      "description": "The engine is described as stateless between ticks with all state in arrays passed to it, yet the system-level interface says it supports \u201cregister/remove agents,\u201d and the state design assigns add/remove resizing to `AgentState`. The architecture does not identify whether lifecycle belongs to the world server or the engine, nor how profile-index references and spatial-index contents remain valid when arrays resize. This is especially consequential because the related world-server architecture assigns entity creation, removal, and array allocation to its `EntityManager`; the boundary needs one consistent owner.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The architecture carries extensive scale machinery before validating the initial design",
+      "description": "The document makes subset ticking, aggregate-neighbor support, zero-copy serialization, and GPU-compatible force interfaces foundational, while the initial implementation is an exploratory single-process NumPy engine and even its first spatial strategy may be brute force. Several of these mechanisms depend on unresolved semantics (for example, interactions with aggregates and reduced-rate agents) and impose interface complexity now. Defer aggregate support and GPU constraints until measurements and a working CPU implementation establish the required boundary; keep the first engine contract focused on full-population ticks and a replaceable spatial-query interface.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The tick contract omits environmental input required by the stated archetypes",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The proposed bulk-force interface is not a credible vectorized or GPU boundary",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Reduced-rate evaluation has undefined stale-neighbor semantics",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Engine ownership and state lifecycle are contradictory",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The architecture carries extensive scale machinery before validating the initial design",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-17T05:32:06.932845",
+  "model": "gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6-luna",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 39822,
+  "cached_tokens": 37120,
+  "cache_write_tokens": null,
+  "completion_tokens": 973,
+  "reasoning_tokens": 178,
+  "duration_seconds": 40.69025166705251,
+  "cost_usd": 0.0011279,
+  "cost_basis": "alias_pricing"
+}

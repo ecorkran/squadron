@@ -1,0 +1,19 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Any successful tool call is treated as proof of diff coverage",
+   "description": "The cap is skipped after any successful tool call, even if the model never used a tool to read the omitted diff. That leaves the design\u2019s stated goal\u2014preventing a clean PASS when code was not reviewed\u2014unmet. Keep the PASS-to-CONCERNS cap unless the design can establish that the omitted content was actually read.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Provider model-field assumptions are inconsistent",
+   "description": "The required interface says `ChatCompletionChunk.model` is present on every streamed chunk, while D8 says to use the last non-empty value and D11 defines behavior when no model is stamped. Specify which absence cases are valid and how the provider handles them; otherwise the contract and fallback behavior are unclear.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:57-58"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Contradictory descriptions of how integration treats inactive agents",
+   "description": "Line 152 explains the full-population `BulkForce` return shape as keeping integration simple: \"add force to velocity for all, but only active agents have non-zero forces.\" This contradicts the rest of the design: data flow step 6 (line 91) says \"`AgentState` mutated in place for active agents only. Inactive agents' state is untouched,\" and line 215 says integration \"applies only to those agents. Implemented via NumPy fancy indexing.\"\n\nThis is not just a wording difference. If integration literally runs over the full population (velocity update, `max_speed` clamp, then `position += velocity * dt` for all agents), inactive agents would still have their positions advanced by their existing velocities \u2014 violating the functional requirement that \"`tick()` with `active_indices` updates only the specified agents; all others are unchanged\" (line 242) and the multi-resolution contract the architecture relies on. The doc should state one mechanism (fancy-indexed integration over `active_indices` only) and remove the \"for all\" phrasing.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"No per-agent loops in the hot path\" criterion conflicts with the per-agent neighbor query design",
+   "description": "The technical requirement at line 247 states \"No Python-level per-agent loops in the hot path \u2014 force accumulation and integration use NumPy vectorized operations.\" However, the `SpatialQuery` protocol only offers a single-position `query_radius` (lines 165\u2013168), and data flow step 3 (line 88) says \"For each *active* agent\" a query is issued. Building the `neighbor_lists: list[NDArray[np.intp]]` consumed by `BulkForce` therefore requires a Python-level loop over active agents inside `tick()` \u2014 and the parent architecture explicitly notes that \"neighbor finding typically dominates tick cost.\"\n\nEither the criterion should be narrowed to say neighbor lookup is intentionally per-agent at this stage (hundreds of agents, brute force), or the design should describe how queries are batched. As written, the slice's own design does not satisfy its own stated technical requirement. This also matters for slice 105, which swaps the implementation \"behind the existing query interface\" \u2014 the interface as specified cannot remove the per-agent call loop.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:247"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No contract for invalid `active_indices` input",
+   "description": "The subset-evaluable tick is this slice's headline interface and is consumed by five downstream slices and eventually the world server, but the doc specifies no behavior for malformed `active_indices`: out-of-range indices, negative indices, or duplicates. With NumPy fancy indexing, out-of-range values raise `IndexError` (explicit, good), but duplicates in `active_indices` have implementation-defined effects on `+=` updates and could silently double-count or drop force contributions depending on how integration is written.\n\nProject conventions require failing explicitly rather than silently. One sentence \u2014 e.g. \"indices must be unique and in range; violations raise `ValueError`/`IndexError` before any state mutation\" \u2014 would close the gap. Similarly unspecified: behavior when `state.profile_indices` references a profile index beyond `len(profiles)`, and whether `dt <= 0` is rejected.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Tick Function Signature"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`accelerations` array is declared but unused by any path in this slice",
+   "description": "`AgentState` includes `accelerations` (N\u00d72 float64) at lines 35 and 96, but the data flow, integration math (semi-implicit Euler updates velocity directly from force), force protocols, and tests never read or write it. The parent architecture's state list is \"positions, velocities, profile indices\" \u2014 no accelerations. Either name what writes/reads this array or drop it; carrying an unwritten N\u00d72 array in the foundation state container invites later slices to assume semantics that were never defined.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Integration section is mis-indented and renders as code, not a heading",
+   "description": "From line 205 (\"    ### Integration: Semi-Implicit Euler\") through line 215, the entire integration subsection is indented four spaces, which Markdown renders as an indented code block attached to the preceding paragraph rather than an `H3` heading with body text. The content is fine; dedent the block so the section heading, math, and fancy-indexing note render as intended.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205"
+  }
+ ]
+}

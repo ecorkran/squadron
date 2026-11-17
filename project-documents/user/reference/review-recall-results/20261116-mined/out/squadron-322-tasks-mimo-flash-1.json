@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Runtime-drawn-model limitation not specified in any task's `model_dimension_note`",
+      "description": "The slice design's success criterion states: \"the **runtime-drawn-model limitation is stated where the recommendation is produced** (asserted: the note is present in output, including `--json`)\", and the design's per-recommendation note section requires that \"Where a step draws its model at runtime (a 180 pool), the note states that the threshold **cannot** track the drawn model \u2014 the recommendation does not apply to that step.\"\n\nT9's `model_dimension_note` bullet (line 147) only requires the config-time model+threshold pairing half of the criterion; the drawn-model/180-pool sentence is absent from T9, from T10's content assertions (which only assert the note is non-empty), and from T16's CLI assertions. A junior implementer building exactly to this breakdown will ship a note that satisfies every task checklist but silently omits half of an explicitly asserted success criterion. Add the drawn-model sentence to T9's note spec and a content assertion to T10 (and ideally T16's `--json` check).",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed `judge:` block failure-mode row is claimed covered but exists in no task",
+      "description": "The design's Failure Modes table has a row: malformed `judge:` block \u2192 \"fall back to `resolve_thresholds`' documented merge; **flag the target**; WARNING naming the template; test: malformed judge block \u2192 flagged, not silently defaulted.\"\n\nThe Coverage Check (line 287) asserts this row is \"inherited from `resolve_thresholds`, exercised in T8\". Reading T8 (lines 129\u2013141), its five bullets cover direction bands, floor gating, unversioned refusal, and registered/unregistered template reads \u2014 there is no malformed-block test. T7's `read_current_thresholds` spec likewise only handles the unregistered \u2192 `None` + WARNING case; it never specifies the flag-the-target/WARNING behavior for a malformed block. Either add a malformed-fixture test to T8 (plus the flag/WARNING step to T7) or correct the coverage claim \u2014 as written, the breakdown overstates coverage of a design-required failure row.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's numbered precedence list is self-contradictory as literally ordered",
+      "description": "T7 specifies `classify_direction` \"in this precedence order\" with step 1 = `n < floor \u2192 INSUFFICIENT_EVIDENCE` and step 4 = `match_rate <= tighten_rate \u2192 TIGHTEN` that is \"reachable even if `n < floor`\". Taken as a literal ordered cascade \u2014 which is how the list is presented \u2014 step 1 always fires first for below-floor cells, making step 4 unreachable for `n < floor` and directly violating the task's own success criterion (\"a below-floor cell with low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\") and the design's \"tightening is not floor-gated\" rule.\n\nThe prose after the list tries to reconcile this (\"checked first only for the loosening path\"), but a junior AI implementing the numbered order mechanically will get it wrong, and the resolution is buried in parentheticals. Rewrite the precedence so the ordering itself is correct \u2014 e.g. (1) unversioned \u2192 `INSUFFICIENT_EVIDENCE`; (2) `match_rate <= tighten_rate` \u2192 `TIGHTEN` (floor-ungated); (3) `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`; (4) `match_rate >= graduate_rate` \u2192 `GRADUATE`; (5) else `HOLD` \u2014 and drop the contradictory annotations. (Note: the design's own Direction Bands table has the same row-order tension, so the task is faithfully reproducing a design flaw \u2014 but a task's job is to be unambiguous at implementation time.)",
+      "file_ref": null,
+      "category": "spec-ambiguity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Context Summary's \"Suggested order\" misnumbers the task ranges",
+      "description": "The Context Summary says \"graduation + offers (T9-T12), then CLI shells + config keys (T13-T16)\". Actual task numbering: T9/T10 are `recommend_thresholds` (the recommendation report), T11/T12 are the graduation registry, T13/T14 are residual offers, T15/T16 are CLI, and config keys are T5/T6 (deliberately sequenced early). The body of the task file follows the design's order correctly; only this summary sentence is stale and could mislead a reader about where config keys belong.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A `**Commit**:` marker after all 17 tasks",
+      "description": "Every task ends with a `**Commit**:` line. The markers are plain lines (correct format) and each sits after a tested unit thanks to the test-with pairing, so none is premature \u2014 but placement is mechanical rather than at genuinely working points. This is acceptable as-is; consolidation (e.g., only after each implement+test pair, which is in fact what happens) is already effectively satisfied, so no action is required.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria \u2192 task traceability",
+      "description": "Cross-referenced all seven Functional Requirements, four Technical Requirements, two Integration Requirements, and all eleven Failure Modes rows: advisory/no-mutation \u2192 T9/T10/T16; floor refusal with n+floor stated \u2192 T7/T8/T15; non-empty residual offers \u2192 T13/T14; version identity + unversioned refusal \u2192 T7/T8; version-scoped graduation \u2192 T11/T12/T13/T14; threshold-edit-preserves-key regression \u2192 T1/T2 (both directions, including through `derive_judge_config_id`); 300/321 unmodified \u2192 T17; surface-agnostic parity \u2192 T16; config keys defined once \u2192 T5; store envelope extended without migration \u2192 T11. The only untraced items are the two gaps flagged above. No scope-creep tasks found \u2014 everything in the breakdown maps to a design requirement, and explicitly-deferred items (automatic threshold mutation, gating, 300 write-path field, 323/324) are correctly absent.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern",
+      "description": "T1\u2192T2, T3\u2192T4, T5\u2192T6, T7\u2192T8, T9\u2192T10, T11\u2192T12, T13\u2192T14, T15\u2192T16 are all implement-then-immediately-test pairs; T5 (config keys) precedes every task that reads them; the hash fix precedes all evidence-accumulating work per the design's stated order; T17 is the terminal validation gate. No circular or violated dependencies. No load-test NFR is restated by this slice, so no `tests/load/` task or CI-gating task is required.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Runtime-drawn-model limitation not specified in any task's `model_dimension_note`",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Malformed `judge:` block failure-mode row is claimed covered but exists in no task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "spec-ambiguity",
+      "raw_category": null,
+      "summary": "T7's numbered precedence list is self-contradictory as literally ordered",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Context Summary's \"Suggested order\" misnumbers the task ranges",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "A `**Commit**:` marker after all 17 tasks",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria \u2192 task traceability",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T07:08:30.386344",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 28980,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 100295,
+  "cached_tokens": 67392,
+  "cache_write_tokens": null,
+  "completion_tokens": 9150,
+  "reasoning_tokens": 7038,
+  "duration_seconds": 188.01615716703236,
+  "cost_usd": 0.0040559540000000005,
+  "cost_basis": "alias_pricing"
+}

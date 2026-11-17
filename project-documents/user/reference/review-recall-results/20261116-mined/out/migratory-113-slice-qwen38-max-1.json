@@ -1,0 +1,261 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Density signal is specified as post-cap at the call site, contradicting the pre-cap requirement the slice's core decision depends on",
+      "description": "Three places in the doc state the signal must be **pre-cap**: the Value section (\"the density signal for dispatch reads the CSR's raw `counts` output from the previous tick \u2014 not anything capped\", :27), the signal definition (\"recorded from the CSR `filtered_counts` (post-`exclude_self`, **pre-cap**)\", :116), and Non-Risks (\"The dispatcher decision uses pre-cap density, so the cap cannot perturb backend selection\", :409).\n\nBut both pseudocode blocks call `spatial.record_density(filtered_counts)` *after* the cap step (:154 \u2192 :159, and :247 \u2192 :251). Under slice 112's canonical tick ordering \u2014 which this slice labels \"unchanged\" \u2014 step 6 reassigns those very names: `filtered_flat, filtered_counts = apply_neighbor_cap(...)` (112-slice, \"`tick.py` Integration\"). So the specified call passes the **capped** counts.\n\nThe consequence is not theoretical. Walkthrough step 5 runs `test.yaml` with `max_neighbors=1` (:376). With capped counts, `mean_neighbors_per_agent \u2264 1.0`, which is always below `t - h = 8.0`, so the dispatcher switches to grid at tick 2 and never returns. Step 5's own expectations (\"`brute_selected` dominates\" at steady state, \"dispatcher flips at least once\") would fail, and the production default would degrade to the static grid backend that perf journal Entry 4 measured at 6\u20137 TPS versus brute-force's ~9 TPS in the herd regime.\n\nNo planned test catches this: the dispatcher unit tests feed mocked density sequences (:428), and the integration test also \"injects a mocked density sequence\" (:421), so neither exercises the real `tick.py` wiring. Fix by naming a distinct pre-cap variable in both pseudocode blocks (capture it at step 3, before step 4), and add a tick-level test that asserts the value handed to `record_density` is unaffected by `max_neighbors`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:150-160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`record_density` has no defined behavior for empty input, and the failure mode is silent",
+      "description": "`mean_neighbors_per_agent = counts.sum() / n_active` is undefined when `n_active == 0`. Slice 112 set the project precedent for this exact input (\"`apply_neighbor_cap` must handle `n_active == 0` and `total_edges == 0` explicitly \u2014 both are valid inputs and must early-return\"), and empty-subset ticks are a supported engine input (slice 100's subset-evaluable tick; `SimulationManager.step()`'s zero-entity early return protects only the server path, not direct `tick()` callers).\n\nThe doc enumerates an \"empty\" distribution for *output parity* tests (:366) but says nothing about `record_density`'s degenerate input. Left unhandled it either raises `ZeroDivisionError` mid-tick or yields `nan`; because every comparison against `nan` is False, the switching rule silently freezes on the current backend with no error and no log \u2014 a silent-fallback failure the project guidelines explicitly forbid. State the handling (early return leaving selection unchanged) and add it to the unit-test list at :344.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`isinstance(adaptive, SpatialQuery)` success criterion requires the protocol change the slice excludes",
+      "description": "The functional requirement \"`isinstance(adaptive, SpatialQuery)` returns `True`\" (repeated at :366 and :430) is not satisfiable against the `SpatialQuery` definition established by slice 100, which is a plain `class SpatialQuery(Protocol)` with no `@runtime_checkable` decorator (100-slice, \"Spatial Query Protocol\"). Slice 100 also chose protocols specifically to \"allow duck-typing without inheritance\". Nothing in the reviewed documents shows `SpatialQuery` as runtime-checkable \u2014 the only `@runtime_checkable` protocol in the set is `EnvironmentLayer` in slice 500.\n\nMeanwhile :47 excludes \"Changes to the `SpatialQuery` protocol \u2014 the dispatcher implements the existing interface without modification.\" Either the criterion is unachievable as written, or it needs an unstated interface change. Resolve by dropping the `isinstance` assertions in favor of the duck-typed method-signature conformance tests the doc already lists, or by explicitly adding `@runtime_checkable` to the protocol and recording that as an in-scope change.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:328"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The out-of-protocol `hasattr` hook can fail open, and the observability the verification depends on is out of scope",
+      "description": "`tick.py` gains a duck-typed call to a method that is deliberately *not* on the `SpatialQuery` protocol. The engine's hot path therefore branches on a concrete strategy's extra capability \u2014 a hidden dependency that no type or protocol check can catch. If the hook is ever renamed, moved, or skipped by a future `tick.py` refactor, adaptive mode degrades to a static `initial_backend=\"brute\"` server with no error, no warning, and no observable difference except lost TPS. That is precisely the silent-fallback pattern the project guidelines prohibit, and the doc offers no guard against it.\n\nCompounding this, walkthrough step 5 verifies the loop is closing via \"the `grid_selected` count in the dispatcher's log output\" and \"`brute_selected` dominates\" (:377-379), but no logging, counters, or switch events appear in Included (:35-43) or in Success Criteria (:326-344). The verification step depends on an artifact the slice never commits to building. Add an explicit requirement \u2014 a switch log line or backend-selection counters on `AdaptiveSpatial`, plus one test asserting the real `tick()` path calls `record_density` (not a mocked injection) \u2014 so a broken feedback loop is detectable rather than silent.",
+      "file_ref": null,
+      "category": "layering",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Full-suite backend pinning and the \"652 tests under each backend\" criterion are unspecified and conflict with other stated requirements",
+      "description": "Walkthrough step 2 defers the mechanism entirely (\"Whether pinning happens via env var or a test fixture is an implementation detail\"), but the mechanism is the hard part. `MIGRATORY_SPATIAL_BACKEND` appears nowhere else in the project documents, and the engine package has no config layer to read it. Many existing tests construct a backend directly rather than through `server.py` (e.g. slice 100's verification scripts and slice 101's flocking tests both instantiate `BruteForceQuery()`), so an env var honored only at the server construction site cannot pin them.\n\nThe criterion also collides with two other statements in this doc: \":343 \u2014 `HashGridQuery` and `BruteForceQuery` source files and tests are unchanged\" (pinning existing tests requires touching their fixtures), and :335's \"652 tests\" \u2014 the count slice 112 recorded for the engine suite, while `spatial.backend` is server-side config in a separately-counted suite (slice 304 reports 354). Finally, step 2 defers to \"documented determinism caveats in the hash grid\" that this slice never documents; slice 105 records only that intra-row ordering may differ, which is a set-equality caveat, not a tick-trajectory one.\n\nName the mechanism (a `conftest.py` fixture that swaps the constructed backend), state which suites it applies to, and either inline the determinism caveats or cite where they live.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:353-359"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parity contract between backends is stated three different ways, and the dispatcher's cross-tick state is not accounted for in the determinism claim",
+      "description": "The doc gives three incompatible parity targets: \"bit-exact position equality against brute-force-only over N ticks\" in a test that \"exercises both backends in one run\" (:421); \"behavioral parity against the brute-force-only baseline\" (:41); and \"identical, modulo documented determinism caveats in the hash grid\" (:358). Slice 105 establishes that grid and brute-force rows may differ in order, and slice 111's force reductions are order-independent only in the mathematical sense \u2014 `np.add.reduceat` over a permuted row is not bit-identical in float64. Any ULP difference then compounds through integration into the next tick's positions and the next density reading. \"Bit-exact across a run that switches backends\" is therefore not a safe acceptance bar; state the actual tolerance (set-equality per tick, `np.allclose` on trajectories, or bit-exact only while the selection is unchanged).\n\nSeparately, the architecture's \"Tick determinism\" goal is phrased as *same state and inputs \u2192 same outputs*, and 100-arch states \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it, including the spatial index.\" `AdaptiveSpatial` carries inter-tick state (`_mean_neighbors`, current selection) that is not in any array and is not part of the tick input. That is defensible \u2014 the caller owns the spatial index \u2014 but the slice should say so explicitly, since slice 307 relies on tick-by-tick state comparison as its determinism-verification mechanism and the adaptive default (:186) changes production behavior for every existing config.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Backend identity strings and the `initial_backend` knob are not centralized, and the risk mitigation for `initial_backend` references config that does not exist",
+      "description": "The set `{\"adaptive\", \"grid\", \"brute\"}` is written out independently in the `SpatialConfig` comment (:173), the `_validate_spatial` rule (:200), the `_build_spatial` mapping (:234-238), the success criteria (:333), and the `initial_backend` constructor default (:89). Project guidelines require such values be defined once (enum/constant) and referenced everywhere; the doc names no single definition.\n\nRelated inconsistencies: the wiring snippet passes `threshold=..., hysteresis=...` while the declared constructor takes `threshold_mean_neighbors` and `hysteresis_band` (:87-88 vs :238); `initial_backend` is typed against the same string set but is absent from `SpatialConfig`, from the YAML surface, and from validation \u2014 yet the risk mitigation at :400 assumes an operator can set `initial_backend: grid`, and :301 says \"Make it configurable.\" As specified, that mitigation is unreachable. Either add the field to `SpatialConfig` (with validation against the shared constant set) or drop the operator-facing claim and describe it as a construction-time parameter only.\n\nAlso worth fixing while here: the constructor types `grid: HashGridQuery, brute: BruteForceQuery` concretely, which undercuts the \"pluggable dispatcher pattern \u2026 future backends slot into `AdaptiveSpatial` \u2026 with no protocol change\" claim at :313 \u2014 a third backend changes this signature. Typing both against `SpatialQuery` costs nothing and makes the claim true.",
+      "file_ref": null,
+      "category": "config",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:172-176"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two different defaults for `hysteresis_band`",
+      "description": "The constructor defaults `hysteresis_band` to `0.0` (:88) while `SpatialConfig` defaults it to `2.0` (:175). The doc explains the intent (\"A reasonable default lives in the config layer rather than hardcoded in the dispatcher\", :138), but a `0.0` constructor default means any non-server caller \u2014 including the unit tests this slice mandates \u2014 silently gets hysteresis disabled, which is the flip-flop mode the Risk section names as the primary technical risk. Consider making the constructor parameter required (no default) so the single authoritative default lives in config, per the guideline against scattered magic defaults.",
+      "file_ref": null,
+      "category": "config",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Throughput targets are relative and stop well below the architecture's scale NFR",
+      "description": "The slice does restate throughput targets with numbers (expansion \u2265 Entry 5 baseline, steady state ~16\u201317 TPS, average \u2265 brute-force-only, no dispatcher-induced worst-case spike), which is good. They are, however, all *relative to the current backend* and measured at N=2500 on a 300\u00d7300 world. The parent architecture's efficiency goal is \"tens of thousands of agents at full behavioral fidelity on a single CPU process,\" and the world-server architecture states the tick budget and overrun behavior at 20\u201360 Hz. This slice's own risk section concedes the threshold \"may not work for 10000 entities on a 1000\u00d71000 world\" (:404) without a corresponding measurement. Adding one absolute target \u2014 e.g. hold the 20 Hz budget through the expansion phase at N=2500, and report the tick-budget margin at the largest N the harness can run \u2014 would tie the perf journal entry back to the stated NFR instead of only to the previous backend.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:374-380"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches slice-plan entry (113) and the architecture's pluggable-spatial-query principle",
+      "description": "Everything the plan entry assigns is present: an `AdaptiveSpatial` wrapper implementing `SpatialQuery` that owns both backends and routes `query_radius_batch`; `mean_neighbors_per_agent` from the previous tick's CSR as the density proxy; threshold plus hysteresis; a `spatial` config section with `backend: adaptive|grid|brute` defaulting to `adaptive` and exposed `grid_threshold_mean_neighbors` / `hysteresis_band`; and the `HashGridQuery` implementation with its 35 regression tests preserved intact. The orthogonality claim about slice 112 is carried through correctly at the design level (the cap is untouched, and the decision is meant to read pre-cap density \u2014 see the FAIL finding for the call-site defect). Dependencies and direction are right: the slice consumes (100)/(110)/(111) and the server's `world_bounds`/`profiles`, and nothing in the engine reaches upward into `migratory_server`. This also realizes 100-arch's \"Pluggable spatial queries \u2026 the interface must support replacement with grid, KD-tree, or GPU-accelerated alternatives without changing the engine,\" and revives slice 105 exactly as its deferral note prescribed (\"re-evaluate after \u2026 an adaptive-dispatch strategy\").",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:35-53"
+    },
+    {
+      "severity": "PASS",
+      "title": "Mechanism count and effort are proportionate; speculative scope is explicitly deferred rather than built",
+      "description": "The slice adds one class, one frozen config dataclass with three fields, one guarded call in `tick.py`, and one construction-site helper \u2014 matching the plan's 3/5 effort. The heavier options are named and rejected with reasons rather than half-built: KD-tree backend, per-agent dispatch, runtime threshold learning, multi-resolution grids, and a protocol change for `record_density`. The alternatives analyses (wrapper vs. branching in `tick.py`; mean-neighbors vs. max-cell-count vs. fill-ratio vs. wall-clock probing; hysteresis vs. moving average) are the right depth for a decision that reverses a deferred slice, and the deviation from perf journal Entry 4's `max(cell_counts)` suggestion is justified on both noise and encapsulation grounds. Minor trims are available if the doc needs shortening \u2014 the \"Data Flow (Unchanged for Consumers)\" block (:242-253) restates the tick pseudocode at :150-160, and \"Cell Size Derivation (Unchanged from Slice 105)\" (:213-219) restates slice 105 \u2014 but neither is heavy enough to flag on its own.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:45-53"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Density signal is specified as post-cap at the call site, contradicting the pre-cap requirement the slice's core decision depends on",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:150-160",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`record_density` has no defined behavior for empty input, and the failure mode is silent",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "`isinstance(adaptive, SpatialQuery)` success criterion requires the protocol change the slice excludes",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:328",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "layering",
+      "raw_category": null,
+      "summary": "The out-of-protocol `hasattr` hook can fail open, and the observability the verification depends on is out of scope",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Full-suite backend pinning and the \"652 tests under each backend\" criterion are unspecified and conflict with other stated requirements",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:353-359",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Parity contract between backends is stated three different ways, and the dispatcher's cross-tick state is not accounted for in the determinism claim",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "config",
+      "raw_category": null,
+      "summary": "Backend identity strings and the `initial_backend` knob are not centralized, and the risk mitigation for `initial_backend` references config that does not exist",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:172-176",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "config",
+      "raw_category": null,
+      "summary": "Two different defaults for `hysteresis_band`",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Throughput targets are relative and stop well below the architecture's scale NFR",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:374-380",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope matches slice-plan entry (113) and the architecture's pluggable-spatial-query principle",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:35-53",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Mechanism count and effort are proportionate; speculative scope is explicitly deferred rather than built",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:45-53",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T14:08:55.143978",
+  "model": "qwen/qwen3.8-max-0902",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 277622,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-max-0902",
+  "answering_models": [
+    "qwen/qwen3.8-max-0902"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 814201,
+  "cached_tokens": 721408,
+  "cache_write_tokens": null,
+  "completion_tokens": 69013,
+  "reasoning_tokens": 63405,
+  "duration_seconds": 1735.6645056251436,
+  "cost_usd": 0.780016,
+  "cost_basis": "alias_pricing"
+}

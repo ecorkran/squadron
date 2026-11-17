@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Architecture boundaries and backend-deferral strategy are well aligned",
+      "description": "The design correctly ships NumPy-only and defers Numba/Quadrants/CUDA, matching the plan's \"Standalone against NumPy at first\" and the architecture goal that NVIDIA \"must not be required for development or demonstration below 250k.\" It keeps the harness engine-only (no world-server/wire), preserves `tick()` verbatim per slice 140, and uses a registry so future backends are additive. The three formation regimes and per-phase breakdown align with the plan entry and the \"bottleneck moves\" principle. No boundary violations.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:27-34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-force timing \u2014 assigned to this slice by the plan \u2014 is deferred to slice 142",
+      "description": "The parent plan's entry for 141 explicitly scopes \"per-tick timings broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration).\" The design makes `force_total` a single aggregate and pushes per-force resolution to slice 142. Slice 142's own plan entry only calls for implementing and benchmarking a cohesion `@ti.kernel` \u2014 it does not assign building per-force instrumentation. Dropping scope assigned to this slice leaves 142 to either build the instrumentation itself or benchmark without the resolution its design says it needs. Either keep per-force breakdown here (even as an optional field populated by the NumPy backend) or get the scope formally moved to 142.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Workload schema example uses 3D coordinates while the engine is 2D",
+      "description": "The authoritative `mid-flock` YAML example uses `world_size: [200.0, 200.0, 200.0]` and 3-element `cluster_centers`, but the engine is 2D (`DIMS = 2` in `src/migratory/__init__.py`) and `AgentState` allocates `(n, DIMS)` arrays. The task breakdown for this same slice (T23\u2013T25) already uses 2-element vectors (`[400.0, 400.0]`), confirming the design example is stale. Since workload YAML is the cross-slice contract future slices will copy, a schema example that cannot load against the engine is a real integration defect. Correct the example (and the schema prose) to 2D, or state the dimensionality rule explicitly.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:360-369"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integration-point descriptions reference engine symbols that do not exist",
+      "description": "The design claims profile names \"resolve ... to the existing `BehavioralProfile` constructors used in `config/default.yaml`\" and that \"the harness does not invent new profiles.\" But `config/default.yaml` defines only one profile (`\"default\"`); there are no `flocker`/`leader` presets, so the harness necessarily invents them. Likewise, force names are said to \"resolve to module-level singleton instances ... (e.g. `flocking.cohesion_force`),\" yet the engine defines force *classes* (`CohesionForce`, etc.) with no such module-level singletons. These are hidden dependencies: the design points consumers at symbols that aren't there, while leaving the actual profile values and force wiring unspecified. State plainly that the bench owns a small local registry of concrete `BehavioralProfile`/`BulkForce` instances and record their values, so downstream slices have a real contract to rely on.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:391-400"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Restated NFR value from slice 140 is wrong (50 \u00b5s vs 10 \u00b5s)",
+      "description": "The design cites slice 140's micro-benchmark as \"`from_numpy_state` < 50 \u00b5s.\" Slice 140's actual Performance NFR and success criterion are **< 0.01 ms (10 \u00b5s)** at N=3,500 \u2014 a 5\u00d7 tighter target. Misstating a prerequisite slice's performance contract in the design is misleading and could lead a future reader to accept a materially slower construction. Correct the figure to match slice 140.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:106-110"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Architecture boundaries and backend-deferral strategy are well aligned",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:27-34",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-force timing \u2014 assigned to this slice by the plan \u2014 is deferred to slice 142",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Workload schema example uses 3D coordinates while the engine is 2D",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:360-369",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Integration-point descriptions reference engine symbols that do not exist",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:391-400",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Restated NFR value from slice 140 is wrong (50 \u00b5s vs 10 \u00b5s)",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:106-110",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-17T08:08:46.150098",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 204068,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 655118,
+  "cached_tokens": 568064,
+  "cache_write_tokens": null,
+  "completion_tokens": 48353,
+  "reasoning_tokens": 46310,
+  "duration_seconds": 313.68213437497616,
+  "cost_usd": 0.010668406000000002,
+  "cost_basis": "alias_pricing"
+}

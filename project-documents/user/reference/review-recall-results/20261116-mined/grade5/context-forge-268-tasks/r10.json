@@ -1,0 +1,26 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers are written as checklist items rather than plain `**Commit**:` lines",
+   "description": "Commit points appear as `- [ ] Commit: \u2026` (3.2a, 3.7, 4.1\u20134.4, 5.1) and as a checkbox task at 2.3, instead of plain `**Commit**:` lines. The placement itself is right \u2014 each sits immediately after a passing test/typecheck success criterion, section 3 deliberately groups commits at 3.2a and 3.7 rather than after every task, and section 6's conditional commit is a tested point. This is a formatting deviation only; AGENTS.md's checklist convention for task files is arguably the reason for the shape.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 3.6's `integrationSetup.ts` step does not name removal of the `ContextToolOptions` import",
+   "description": "3.6 says \"drop the `squadronProbe` option and its doc comment\" for `mcp-server/tests/helpers/integrationSetup.ts`, but that file also imports `type ContextToolOptions` (line 9) and annotates `createIntegrationClient(options?: ContextToolOptions)` \u2014 the type 3.6 deletes outright. A literal reading leaves a dangling import. The task's success criterion (`pnpm --filter @context-forge/mcp typecheck` passes) catches it, so it self-corrects; naming the import explicitly would remove the ambiguity.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "6.2's grep list omits the `AdoptionStateWrites` type name",
+   "description": "The 6.2 grep includes `adoptionStateWrites` (lowercase, the option name) but case-sensitive grep will not match the `AdoptionStateWrites` type defined in `adoptionResolver.ts`. No actual orphan can survive \u2014 4.1 deletes the defining file and 3.3/3.6 remove both importers (`CoreServiceFactory.ts`, `contextTools.ts`) \u2014 but the check list does not itself prove it. Adding `AdoptionStateWrites` to the 6.2 pattern would make the verification complete rather than incidental.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+  }
+ ]
+}

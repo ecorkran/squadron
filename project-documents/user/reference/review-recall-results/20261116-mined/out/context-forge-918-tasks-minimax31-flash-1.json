@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The unindexed fixture example does not use a parseable format",
+      "description": "Task 1 specifies `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` without the required bold name. `PLAN_UNINDEXED_RE` requires the `**Name**` form, so this line will still be silently dropped and Task 5 cannot produce two deprecated entries. Use a fixture such as `7. [~] **Feature Epsilon without explicit index** \u2014 cut for scope.` and state the expected sequential fallback index explicitly.",
+      "file_ref": null,
+      "category": "test-fixture",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Extending the shared fixture invalidates tests that Task 5 does not update",
+      "description": "Adding an unindexed entry to `sample-slice-plan.md` also changes the sort order: the first fallback entry receives index `1` and sorts before the existing explicit entries. Consequently, the current positional assertions for `entries[0]` and `entries[2]`, the \u201cevery entry indexSource: explicit\u201d assertion at lines 126-128, and the total-count assertion in `packages/core/tests/introspection/ArtifactIntrospector.test.ts:49-52` will fail. Task 5 updates only the parser test's total/completed count. Use separate indexed and unindexed deprecated fixtures, or enumerate and update every affected assertion; the final regression should preserve the complete pre-existing entry objects, not only `status` and `isChecked`.",
+      "file_ref": null,
+      "category": "test-regression",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/slicePlanParser.test.ts:8-128"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Task 8 does not account for the safe-wrapper type signature",
+      "description": "There are two relevant `Pick<SlicePlanEntry, ...>` signatures: `resolveEntryStatus` and `resolveEntryStatusSafe`. If only the first is widened to include `status`, `resolveEntryStatusSafe` still accepts an entry without `status` and passes it to the widened function, causing a TypeScript build error. The task's statement that the only caller passes a full `SlicePlanEntry` is therefore inaccurate. Task 8 must direct the implementer to widen both signatures or otherwise preserve the status field through the safe wrapper.",
+      "file_ref": null,
+      "category": "type-safety",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:692-740"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `arch-status-vs-plans` success criterion has no corresponding task",
+      "description": "The slice design explicitly requires both `plan-status-vs-entries` and `arch-status-vs-plans` not to false-positive for a complete plan whose remaining entry is `[~]`. Task 12 covers only `plan-status-vs-entries`. Add the corresponding architecture-status case: an architecture frontmatter marked complete paired with a plan whose entries are all checked or deprecated must produce no `arch-status-vs-plans` finding.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:716-855"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Worktree-filtered MCP results still omit deprecated entries from `completedSlices`",
+      "description": "After parsing, the MCP `introspection_slice_plan` tool recalculates `completedSlices` from `isChecked` alone when a worktree index range is applied. A deprecated entry is therefore included in `totalSlices` but not `completedSlices`, violating the success criterion that checked-or-deprecated plans have equal counts. The task breakdown needs an implementation task to count deprecated entries in this filtered path and a corresponding MCP test.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/introspectionTools.ts:106-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The parser implementation is split into over-granular, non-green intermediate tasks",
+      "description": "Tasks 2-4 are three small edits to one parser, while the fixture and all tests are deferred until Task 5. Completing Task 1 alone already invalidates existing assertions, and Tasks 2-4 do not independently leave the suite green. Merge Tasks 1-5 into one parser implementation-and-test task, or place focused tests immediately after each implementation step. This would reduce the 13-task breakdown without reducing required coverage.",
+      "file_ref": null,
+      "category": "task-scoping",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 9 adds an ineffective fallback initializer",
+      "description": "The proposed deprecated initializer is overwritten on every successful path by the `deriveEntryStatus` assignment, while the catch path explicitly assigns `degraded`. Consequently, the initializer does not serve as the claimed fallback when `detectDocuments` throws. Cut this substep, or define and test a distinct degraded/fallback behavior if that is actually required.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/slice.ts:91-127"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "test-fixture",
+      "raw_category": null,
+      "summary": "The unindexed fixture example does not use a parseable format",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "test-regression",
+      "raw_category": null,
+      "summary": "Extending the shared fixture invalidates tests that Task 5 does not update",
+      "location": "packages/core/tests/introspection/slicePlanParser.test.ts:8-128",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "type-safety",
+      "raw_category": null,
+      "summary": "Task 8 does not account for the safe-wrapper type signature",
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:692-740",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The `arch-status-vs-plans` success criterion has no corresponding task",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts:716-855",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Worktree-filtered MCP results still omit deprecated entries from `completedSlices`",
+      "location": "packages/mcp-server/src/tools/introspectionTools.ts:106-122",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "task-scoping",
+      "raw_category": null,
+      "summary": "The parser implementation is split into over-granular, non-green intermediate tasks",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Task 9 adds an ineffective fallback initializer",
+      "location": "packages/cli/src/commands/slice.ts:91-127",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-17T10:48:27.429238",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 438006,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1176317,
+  "cached_tokens": 981638,
+  "cache_write_tokens": null,
+  "completion_tokens": 106540,
+  "reasoning_tokens": 103824,
+  "duration_seconds": 688.9833480417728,
+  "cost_usd": 0.053434391,
+  "cost_basis": "alias_pricing"
+}

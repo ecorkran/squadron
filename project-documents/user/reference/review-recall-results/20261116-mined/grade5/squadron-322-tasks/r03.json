@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model limitation not specified in any task's `model_dimension_note`",
+   "description": "The slice design's success criterion states: \"the **runtime-drawn-model limitation is stated where the recommendation is produced** (asserted: the note is present in output, including `--json`)\", and the design's per-recommendation note section requires that \"Where a step draws its model at runtime (a 180 pool), the note states that the threshold **cannot** track the drawn model \u2014 the recommendation does not apply to that step.\"\n\nT9's `model_dimension_note` bullet (line 147) only requires the config-time model+threshold pairing half of the criterion; the drawn-model/180-pool sentence is absent from T9, from T10's content assertions (which only assert the note is non-empty), and from T16's CLI assertions. A junior implementer building exactly to this breakdown will ship a note that satisfies every task checklist but silently omits half of an explicitly asserted success criterion. Add the drawn-model sentence to T9's note spec and a content assertion to T10 (and ideally T16's `--json` check).",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Malformed `judge:` block failure-mode row is claimed covered but exists in no task",
+   "description": "The design's Failure Modes table has a row: malformed `judge:` block \u2192 \"fall back to `resolve_thresholds`' documented merge; **flag the target**; WARNING naming the template; test: malformed judge block \u2192 flagged, not silently defaulted.\"\n\nThe Coverage Check (line 287) asserts this row is \"inherited from `resolve_thresholds`, exercised in T8\". Reading T8 (lines 129\u2013141), its five bullets cover direction bands, floor gating, unversioned refusal, and registered/unregistered template reads \u2014 there is no malformed-block test. T7's `read_current_thresholds` spec likewise only handles the unregistered \u2192 `None` + WARNING case; it never specifies the flag-the-target/WARNING behavior for a malformed block. Either add a malformed-fixture test to T8 (plus the flag/WARNING step to T7) or correct the coverage claim \u2014 as written, the breakdown overstates coverage of a design-required failure row.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T7's numbered precedence list is self-contradictory as literally ordered",
+   "description": "T7 specifies `classify_direction` \"in this precedence order\" with step 1 = `n < floor \u2192 INSUFFICIENT_EVIDENCE` and step 4 = `match_rate <= tighten_rate \u2192 TIGHTEN` that is \"reachable even if `n < floor`\". Taken as a literal ordered cascade \u2014 which is how the list is presented \u2014 step 1 always fires first for below-floor cells, making step 4 unreachable for `n < floor` and directly violating the task's own success criterion (\"a below-floor cell with low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\") and the design's \"tightening is not floor-gated\" rule.\n\nThe prose after the list tries to reconcile this (\"checked first only for the loosening path\"), but a junior AI implementing the numbered order mechanically will get it wrong, and the resolution is buried in parentheticals. Rewrite the precedence so the ordering itself is correct \u2014 e.g. (1) unversioned \u2192 `INSUFFICIENT_EVIDENCE`; (2) `match_rate <= tighten_rate` \u2192 `TIGHTEN` (floor-ungated); (3) `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`; (4) `match_rate >= graduate_rate` \u2192 `GRADUATE`; (5) else `HOLD` \u2014 and drop the contradictory annotations. (Note: the design's own Direction Bands table has the same row-order tension, so the task is faithfully reproducing a design flaw \u2014 but a task's job is to be unambiguous at implementation time.)",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:112"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Context Summary's \"Suggested order\" misnumbers the task ranges",
+   "description": "The Context Summary says \"graduation + offers (T9-T12), then CLI shells + config keys (T13-T16)\". Actual task numbering: T9/T10 are `recommend_thresholds` (the recommendation report), T11/T12 are the graduation registry, T13/T14 are residual offers, T15/T16 are CLI, and config keys are T5/T6 (deliberately sequenced early). The body of the task file follows the design's order correctly; only this summary sentence is stale and could mislead a reader about where config keys belong.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "A `**Commit**:` marker after all 17 tasks",
+   "description": "Every task ends with a `**Commit**:` line. The markers are plain lines (correct format) and each sits after a tested unit thanks to the test-with pairing, so none is premature \u2014 but placement is mechanical rather than at genuinely working points. This is acceptable as-is; consolidation (e.g., only after each implement+test pair, which is in fact what happens) is already effectively satisfied, so no action is required.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  }
+ ]
+}

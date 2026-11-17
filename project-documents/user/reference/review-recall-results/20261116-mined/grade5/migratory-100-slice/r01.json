@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Restate the engine\u2019s scale target and set an acceptance target",
+   "description": "The parent architecture targets tens of thousands of agents at full behavioral fidelity on a single CPU process. This slice covers the core tick and neighbor-query path, but describes the brute-force implementation as acceptable at \u201chundreds-of-agents\u201d scale and gives no measurable performance acceptance target or explicit boundary for deferring the parent target to slice 105. State how this foundation relates to the parent scale target and what performance is expected from this slice.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Spatial Query Protocol"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Reconcile scalar neighbor queries with the no-per-agent-loop requirement",
+   "description": "The tick design queries neighbors once for each active agent, while `SpatialQuery.query_radius` accepts only one position per call. That entails per-agent query calls in the hot path, but the technical requirements say there should be no Python-level per-agent loops. Specify how the query path meets that constraint, or revise the interface or requirement so the intended boundary is clear.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Data Flow"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Make the claimed GPU-facing bulk-force interface compatible with the parent constraint",
+   "description": "The design calls `BulkForce` a \u201cfuture GPU boundary,\u201d but its inputs include Python lists of variable-length neighbor arrays and profile objects. The parent architecture\u2019s GPU path calls for bulk array-in/array-out operations without dynamic allocation. As written, this interface does not establish that compatibility; define a representation that can support the stated boundary, or defer the GPU-compatibility claim.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Force Protocol"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Cut or defer unused state and force mechanisms",
+   "description": "The state includes an `accelerations` array, but the described tick and integrator update velocity directly from forces and assign no role to that array. Likewise, the tick accepts only `BulkForce`, leaving the per-agent `Force` protocol and `ConstantDriftSingle` outside the simulation path. Remove these unused elements from this slice, or specify the requirement and integration path that needs them.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#State Management"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Subdivision limit adds an unsupported configuration constraint",
+   "description": "The design hard-rejects subdivision factors above 8 based on a speculative auxiliary-memory risk. The parent architecture says memory is not a roadmap constraint, and the slice plan calls for configurable subdivision with S=1 by default and S=3 for bench runs, but sets no maximum. Defer this arbitrary cap unless measurements show it is necessary; otherwise it adds policy and validation beyond the slice\u2019s stated need.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#Intervention 2 \u2014 Configurable Cell Subdivision"
+  }
+ ]
+}

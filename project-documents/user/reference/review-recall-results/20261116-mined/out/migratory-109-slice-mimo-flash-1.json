@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Prescribed profile-weight list comprehension contradicts the slice's defining constraint and its own verification grep",
+      "description": "The \"Per-Agent Profile Weight Vectorization\" section prescribes `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` (line 133) built \"once per force call\" \u2014 i.e., a Python per-agent loop executed inside `BulkForce.__call__`, 5\u00d7 per tick. This directly contradicts:\n- Success criterion line 198: \"No Python-level per-agent loops in any `BulkForce.__call__` implementation (the defining constraint)\".\n- Verification step 4 (line 223): the grep pattern `for.*eval_indices` matches line 133's own comprehension, so the walkthrough's \"Should return no matches\" fails out of the box.\n- The Overview claim (line 27) of \"constant Python overhead, regardless of agent count\": this is O(n) Python work per force per tick, which grows at the architecture's target scale (100-arch line 36: \"tens of thousands of agents\").\n\nThe architecture also prescribes the right fix for the GPU path (100-arch, Technical Considerations): \"index-based dispatch: profile interaction parameters stored in lookup tables that GPU kernels index into.\" Build a per-profile weight LUT of shape `(n_profiles,)` once and gather with `weights = lut[state.profile_indices[eval_indices]]` \u2014 a fully vectorized `np.take`, zero Python iteration, satisfying both the constraint and the grep.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture scale NFR not restated and verification exercises only n=100",
+      "description": "The parent architecture's \"Efficient large-scale evaluation\" goal states a specific target \u2014 \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" (100-arch.behavior-engine.md:36) \u2014 and the world server architecture sets the operating range at 10K\u201350K entities (300-arch:97). This slice is the one that directly serves that NFR, yet no success criterion or verification step restates the target: Verification Walkthrough step 2 (line 215) measures only the default 100-agent config against the 50ms budget, and the Technical Requirements (lines 196-201) contain no agent-count threshold. The slice's headline claim \u2014 cost independent of \"agent count or clustering density\" (line 27) \u2014 is therefore asserted but never tested at the architecture's scale. Add a criterion restating the tens-of-thousands target, plus a verification that measures force-computation-only time at ~10K agents (force-only timing isolates this slice from the brute-force spatial query, which remains 105's scope).",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#success-criteria"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Never dereferenced\" invariant contradicts the representative code example; mask duplicates counts",
+      "description": "Line 80 states padded `-1` entries are \"never dereferenced thanks to `mask`\", but the representative cohesion example (lines 110-113) gathers with the full padded array first \u2014 `state.positions[neighbor_data.indices]` dereferences `-1`, which wraps to the last row (agent n-1's state) \u2014 and only zeroes those entries afterward via the mask. Numerically correct as written, but fragile: any future force that consumes gathered values before applying the mask silently reads a real agent's state, and the documented invariant gives false assurance. Additionally, `mask` is fully derivable from `counts` (`arange(max_neighbors) < counts[:, None]`), so `indices`/`counts`/`mask`/`-1` encode the same validity information three ways. Clarify the actual invariant (\"padded entries are dereferenced at gather but must be masked before any use\") or drop the redundant field, per CLAUDE.md's \"resist adding complexity.\"",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "NeighborData hard-codes homogeneous-neighbor semantics while architecture flags heterogeneous neighbors as a future breaking-change risk",
+      "description": "The architecture (100-arch:100) warns that aggregate neighbors \"have a fundamentally different shape from individual agents\" and that interfaces \"must be designed from the start to accommodate heterogeneous neighbor types, or aggregate support will require a breaking change.\" `NeighborData.indices` can only express indices into individual-agent SoA arrays, so when slice 108 (aggregation) lands, this structure will need extension \u2014 and the slice's \"Provides to Other Slices\" section presents `NeighborData` as the template future forces consume without noting that extension point. The spatial query interface itself is correctly left unchanged here, so this is not a violation, but a one-line note that `NeighborData` must eventually admit non-index neighbor descriptors would prevent 108 from being surprised by a second breaking change to the `BulkForce` signature.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-184"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "Prescribed profile-weight list comprehension contradicts the slice's defining constraint and its own verification grep",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Architecture scale NFR not restated and verification exercises only n=100",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "\"Never dereferenced\" invariant contradicts the representative code example; mask duplicates counts",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "NeighborData hard-codes homogeneous-neighbor semantics while architecture flags heterogeneous neighbors as a future breaking-change risk",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-184",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-17T07:37:02.167527",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 31812,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 67304,
+  "cached_tokens": 44288,
+  "cache_write_tokens": null,
+  "completion_tokens": 8923,
+  "reasoning_tokens": 7295,
+  "duration_seconds": 126.58558679185808,
+  "cost_usd": 0.003170356,
+  "cost_basis": "alias_pricing"
+}

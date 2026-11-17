@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Residual-offer discovery depends on a nonexistent 320 capability",
+   "description": "T13 requires finding persisted, unsampled judge results but says to reuse an existing 320 result-discovery surface. None exists: `MetrologyStore.list_samples` only enumerates records that are already sampled, while `capture.resolve_target` resolves one caller-supplied target rather than enumerating results. The proposed fallback to \u201cstore-recorded samples only\u201d cannot find an unsampled result and therefore contradicts the functional requirement that a graduated config with unsampled results produce offers. Add an explicit task for a production result-discovery/indexing surface that returns path, exact `JudgeConfigId`, and content identity, then make T13 depend on it. T13 is also too broad and should be split into result discovery/indexing and offer selection/lapse policy.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Fresh metrology commands would read an empty template registry",
+   "description": "T7 resolves current thresholds through `get_template`, but `get_template` only reads an in-memory registry. That registry is populated by `load_all_templates`, which is currently called by review and pipeline paths\u2014not by a fresh `sq metrology recommend` process. Unless a task adds registry initialization, the production CLI will treat every built-in template as unregistered and return no current thresholds. Add explicit initialization to the metrology flow and a CLI test using a fresh process or otherwise proving that the real template registry is loaded, rather than relying only on manually registered test fixtures.",
+   "location": "src/squadron/review/templates/__init__.py:163-166"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Required step-threshold and runtime-model caveats are absent",
+   "description": "The slice includes both the template `judge:` block and step-level `judge` overrides as recommendation targets, and its functional criteria explicitly require the runtime-drawn-model limitation to be stated where recommendations are produced. T7 deliberately passes `None` for the step override, while T9\u2019s required note only says the recommendation is for this template/model and that model and threshold must be chosen together. No task detects a runtime-drawn model or states that the threshold cannot track the drawn model. Add an output contract and test for the step-override/runtime-pool limitation; if a specific step override cannot be resolved without step context, the recommendation must say so explicitly rather than silently presenting only the template value.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "Malformed judge thresholds have neither handling nor a test",
+   "description": "The slice\u2019s failure-mode table requires malformed nonnumeric floors to be flagged without silently defaulting or crashing. `resolve_thresholds` converts values with `float()` and therefore raises `TypeError` or `ValueError`. T7 only defines handling for an unregistered template, and T8 has no malformed-block case despite the coverage checklist claiming that it does. Add an explicit catch-and-warning behavior to the threshold-read task, define how the unresolved target is represented, and add the missing malformed-block regression test.",
+   "location": "src/squadron/pipeline/actions/judge.py:41-57"
+  },
+  {
+   "i": 4,
+   "severity": "FAIL",
+   "title": "The offer API cannot represent the required lapse and skip states",
+   "description": "`OfferTarget` contains only a path, judge configuration, and reason, and T13 declares `select_residual_offers` as returning `list[OfferTarget]`. That representation cannot distinguish an exhausted graduation from a lapsed graduation, nor report the count of pruned targets, both of which are required observable outcomes. T13 says to \u201creturn enough information\u201d or have the CLI re-derive it, but no task defines such an API and no existing320 surface performs the required current-result comparison. Define a result/report type containing offers plus per-configuration state and skipped/pruned counts, or specify a separate status API, before implementing T13/T15.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`graduate` does not define which hash-versioned cell is current",
+   "description": "After a prompt or model edit, an `AgreementReport` can contain cells sharing the same template name and model but carrying different `template_content_hash` values. T15 says only to filter by template/model/level and then construct the full identity, but does not specify which matching cell wins. Selecting a stale high-agreement cell could record a graduation for obsolete evidence and undermine the version-scoping criterion. Define current-version selection explicitly, such as requiring the cell\u2019s hash to match the currently resolved template hash, and test a store containing both old and new hash versions.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Idempotent graduation updates lack a record-update contract",
+   "description": "T11 makes `write_graduation` generate and return a record ID, but `GraduatedConfig` has no record ID and neither `find_graduation` nor `list_graduations` exposes the envelope ID needed to update an existing file. T15 nevertheless requires re-graduation to update the evidence snapshot in place while retaining one record. Specify either a stable graduation record ID or an idempotent store update operation in T11, then exercise that operation in the registry tests as well as the CLI test.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Direction precedence is internally contradictory",
+   "description": "T7\u2019s first precedence rule says `n < floor` immediately yields `INSUFFICIENT_EVIDENCE`, but its later rule requires the same below-floor cell with a low match rate to reach `TIGHTEN`. The slice design has the same tension between its ordered table and its prose that tightening is not floor-gated. T8 protects the low-n/low-match case, but the implementation instructions remain impossible to follow literally. Rewrite T7 as one total precedence order and provide a truth-table test covering low-n plus low-match, unversioned plus low-match, and every boundary combination.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Residual-rate policy is under-specified and conflicts with the non-empty guarantee",
+   "description": "T5 does not specify defaults or valid ranges, T13 does not define how a fractional rate is rounded, and T14 expects exactly two selections from four without defining deterministic ordering. A floor operation or random sample can also return an empty list, contradicting the stated non-empty guarantee; at a configured rate of zero, the guarantee is impossible. Specify the accepted rate range, default, deterministic selection order, rounding rule, and the conditions under which the non-empty guarantee applies.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Commit markers are not consistently placed at tested working points",
+   "description": "A marker appears after every task. More importantly, implementation-task markers such as those in T1, T3, T5, T7, T9, T11, T13, and T15 occur before their immediately following test tasks, so they mark untested implementation points rather than working, tested points. Remove those premature markers and retain semantic markers only after validated implementation/test pairs or other genuinely tested checkpoints.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  }
+ ]
+}

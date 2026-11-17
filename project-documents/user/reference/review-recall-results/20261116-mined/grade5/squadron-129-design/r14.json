@@ -1,0 +1,33 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Discoverability surface names `sq model list`, which is not the command",
+   "description": "The design specifies the model-list marker and its verification against `sq model list` (lines 37, 82, 112, 173, 180, 205, 211, 223). Slice 928 explicitly established the opposite: \"`sq model list` \u2026 does not exist \u2014 the command is `sq models list`\" and fixed it \"in both command trees\" (928-slice...md:24, :44). Source confirms: `src/squadron/cli/app.py:55` registers the app as `name=\"models\"` and `src/squadron/cli/commands/models.py:193` defines `@models_app.command(\"list\")` \u2014 the real command is `sq models list`. The verification walkthrough step (\"`sq model list` \u2192 `codex-agent` and `codex-spark` marked\") cannot pass as written, and the README instruction would name a non-existent command. The slice-plan entry carries the same stale name, but the design is where the executable surface is defined. Rename throughout to `sq models list`.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:37"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Logout and pre-auth CLI paths have no enumerated failure modes",
+   "description": "The \"Failure Modes \u2014 Codex Turn\" table (lines 116\u2013135) is thorough for the turn path \u2014 hang, timeout, transport closed mid-turn, server busy, auth rejected, empty response, absent usage, teardown \u2014 and the login `wait()` and `account()` paths each get a row and a timeout key (D7, lines 107\u2013109). But two new I/O paths the design itself introduces are uncovered:\n\n- **`sq auth logout`** spawns the runtime per the design's own statement (\"Spawning is confined to three places \u2014 a Codex turn, `sq auth login/logout`, and `sq auth status`\", line 82) and calls `AsyncCodex.logout()` (line 54, D3). There is no row for: runtime fails to start, `logout()` raises, hang (no `codex.logout_timeout_s` in the D7 table), or transport close. Success criterion \"\u2026`sq auth logout openai-oauth` removes the login\" (line 192) and walkthrough step 8 assert the happy path only.\n- **`sq auth login`/`logout` when `openai_codex` is not installed.** The install-hint row is scoped \"at `create_agent`\" (line 118). The Value section promises \"A missing piece is named at the point of failure with the exact command to fix it\" (line 24), but the login/logout path through `login.py` is never stated to route through `resolve_codex_runtime()` or its hint \u2014 `resolve_codex_runtime()`'s described callers are agent, provider, and doctor (D2/D9).\n\nAdd rows (and, for logout, a timeout bound) covering these, or state explicitly that logout reuses the turn-path handling and the `ExtraRequirement` hint.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure-Modes-\u2014-Codex-Turn"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "D1 pins `<1` while calling the upper bound undecided",
+   "description": "D1's spec string is `codex = [\"openai-codex>=0.159.3,<1\"]` \u2014 a decided cap \u2014 but the same bullet says \"the upper bound is a PM call\" and Special Considerations (line 231) says \"not decided here \u2026 PM to say whether to cap.\" One of the two must go: either keep `<1` and drop the open question, or leave the spec as `>=0.159.3` until the PM decides. As written the implementer has both a bound and a statement that the bound is not decided.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Architecture auth-model handling is sound; the deferred edit is acceptable",
+   "description": "The dedicated section correctly identifies that `InteractiveLogin` is net-new relative to `100-arch.orchestration-v2.md`'s \"Squadron does not attempt to unify authentication\" (arch line 243) and argues it unifies nothing: it is an optional capability with one implementer, credentials stay in `~/.codex/auth.json`, and the CLI dispatch is capability-based (`isinstance`), consistent with slice 128's capabilities-over-identity rule. I verified the argument against the architecture text and find no layer violation or dependency inversion \u2014 `providers/auth.py` gains a Protocol, `cli` depends on it, `providers/codex/auth.py` implements it, and nothing in `core` learns about credentials. Deferring the arch sentence until a second provider adopts interactive login is proportionate.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship-to-the-architecture's-auth-model"
+  }
+ ]
+}

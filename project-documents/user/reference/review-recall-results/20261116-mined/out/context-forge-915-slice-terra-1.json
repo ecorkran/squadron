@@ -1,0 +1,147 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Collision remediation deletes the wrong value",
+      "description": "When migration finds different values in both files, it leaves both intact and directs the user to run `cf config unset <key> --project` to clear the shared copy. But the specified delete routing targets the **personal** file for a personal key (line 89). The command would remove the developer\u2019s preferred value and expose the stale shared value through fallback. Define an explicit way to remove the shared copy without deleting the personal value, and correct the collision walkthrough at line 259.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:144-146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing projects can write an unignored personal file",
+      "description": "The plan requires personal settings to stay out of commits, but the design adds the ignore rule only during `cf init`. An existing project that upgrades and runs `cf config set ... --project` can create `.context-forge.local.toml` without rerunning init, leaving it available to be committed. Define how existing projects receive or are warned about the required protection before personal values are written.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:30-33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Gitignore presence check does not establish effective protection",
+      "description": "A substring or simple line check can mistake a comment or a negated rule for effective coverage; a later negation can also override an earlier matching line. The resulting file may not be ignored despite init reporting success. Specify a check and update strategy that establishes effective Git ignore behavior, and address an already-tracked personal file, which an ignore rule alone cannot protect.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Migration recovery assumes writes cannot damage existing data",
+      "description": "Write-personal-then-delete-shared protects the source key only if a failed write leaves the destination file intact. The design reuses the existing write helper but does not establish that a partial write, disk-full error, or interruption cannot truncate the personal file and lose other settings; the same issue applies while rewriting the shared file. Specify a safe replacement strategy and recovery behavior for failures during either write.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough cannot reach its expected migration state",
+      "description": "Step 1 creates a personal value, but step 4 leaves that file untouched and expects a different shared value to win. The specified precedence instead returns the personal value, and migration subsequently skips the differing collision rather than moving it. Reset the personal value before testing fallback and migration, then retain a separate collision test.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-253"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Collision remediation deletes the wrong value",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:144-146",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Existing projects can write an unignored personal file",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:30-33",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Gitignore presence check does not establish effective protection",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Migration recovery assumes writes cannot damage existing data",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-150",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification walkthrough cannot reach its expected migration state",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-253",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T13:16:32.195661",
+  "model": "gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-terra",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 37457,
+  "cached_tokens": 35072,
+  "cache_write_tokens": null,
+  "completion_tokens": 737,
+  "reasoning_tokens": 79,
+  "duration_seconds": 48.19589975010604,
+  "cost_usd": null,
+  "cost_basis": null
+}

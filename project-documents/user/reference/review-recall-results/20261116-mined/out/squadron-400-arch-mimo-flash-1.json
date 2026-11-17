@@ -1,0 +1,170 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The \"one category vocabulary\" claim collides with the category values the codebase actually produces",
+      "description": "The Design Goal \"One category vocabulary\" and Envisioned State (\"Review templates emit categories from the same closed vocabulary the audit uses\") assume review findings can be bucketed into `AuditCategory`'s nine code-debt dimensions. Three concrete producers can't be: (1) the document review templates \u2014 `arch.yaml` instructs categories `consistency, completeness, feasibility, technology, abstraction, extension-points, dependencies, antipattern, other` \u2014 an evaluation-dimension vocabulary with no coherent mapping to `architectural-decay`/`test-debt`/`security-hygiene`; nearly everything funnels to `other`, which the audit deliberately reserves as a signal that the vocabulary doesn't fit (`models.py` AuditCategory docstring: \"a rising other share is evidence the vocabulary does not fit\"), so document-review pollution corrupts that signal. (2) Machine-generated findings injected into reviews: `review/coverage.py` emits `COVERAGE_CATEGORY = \"review-coverage\"`, `review/task_gate.py` emits `\"merge-step\"`. (3) `ReviewResult.structured_findings` defaults `category=f.category or \"uncategorized\"` (`review/models.py:401`). The document only discusses model-authored categories (\"raw string kept beside it and `other` as the honest fallback\"); it never decides whether document reviews and built-in synthetic findings enter the rollup, are excluded, or get their own escape hatch. The Technical Considerations \"third copy\" discussion extends the sync test to review templates but doesn't address that the copies are for *different* vocabularies across template families. Decide the ingestion boundary (code reviews only? synthetic findings excluded?) before the normalization slice starts.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-slice before/after depends on boundary snapshots that no planned slice delivers",
+      "description": "Envisioned State defines the headline rollup: \"A slice's before and after is the snapshot at its fork point against the snapshot at its merge.\" But Technical Considerations (\"When snapshots are taken\") makes CLI-on-demand \"the baseline\" and presents automatic fork/merge pipeline capture as an open option with a failure mode \u2014 and none of the five Anticipated Slices contains that pipeline action. With only on-demand snapshots, per-slice before/after reduces to \"the operator remembers to run two commands per slice, at exactly the fork point and merge commit,\" which the document never states as the required workflow. Either the rollup slice needs the pipeline capture slice as a dependency, or Envisioned State must say per-slice deltas are unavailable without manual boundary snapshots. As written, the rollup capability and the snapshot-timing decision are inconsistent.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dirty-tree policy left as an unresolved either/or, and the ambiguity is load-bearing for 420",
+      "description": "Architectural Principles: \"A dirty working tree is either refused or recorded with an explicit dirty marker.\" That is a silent deferred decision, and it decides whether the designed extension point works. Envisioned State says \"420 reads snapshots ... to score implementation replays,\" and per the initiative plan 420's replay runs \"in an isolated worktree with test execution\" \u2014 replay output is by nature uncommitted work. If snapshots refuse dirty trees (the stricter reading, consistent with \"measures a commit\"), 420 cannot snapshot replay output at all and the extension point needs re-architecture (e.g., snapshotting a worktree-created commit, which also collides with \"Records key on 320's `ProjectId`\" since a replay worktree's git remote/identity derivation is its own problem). If snapshots record dirty markers, comparability rules for dirty snapshots are undefined. Pick one and state what 420 gets.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Project-declared limits have no mechanism, and the keystone's flagship case reports \"no limits set\"",
+      "description": "Principle \"Limits come from the project\" requires the snapshot to read \"limits the project declares in its own config\" \u2014 but no config key, file, or schema is named anywhere, and Current State says squadron's own limits are \"Stated in prose in CLAUDE.md and the review rules. No tool reads or checks them.\" The keystone slice is \"proven on Python against squadron itself,\" so on day one the flagship measurement (300-line files, 50-line functions \u2014 the document's opening complaint) either reports \"no limits were set\" or requires editing squadron's config first, which sits awkwardly against the Design Goal \"gets a full baseline from one command, without editing the project's config files.\" The AGENTS.md rule that comparison values are defined once and centralized applies directly here: the limits declaration point is a load-bearing interface that the document defers without marking as a slice decision.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review findings' commit attribution uses `reviewedSha`, whose semantics in this codebase misattribute in-flight reviews",
+      "description": "Envisioned State: \"An ingest step reads review files into the store as normalized finding records tied to project, commit and slice where known.\" The commit on a review file is `reviewedSha` (`review/persistence.py:resolve_reviewed_sha` = `git rev-parse HEAD` at review time). The gate-loop semantics are documented in `src/squadron/review/addressed/screens.py:55-60`: \"round N is uncommitted, HEAD is the prior round's commit \u2014 round N's own SHA is not recordable there: the evidence is written before the commit that contains it.\" So findings about round N's changes carry the *previous* commit's SHA \u2014 ingest will pool them under a commit that does not contain the reviewed code, and per-slice rollup counts them against the wrong side of the fork/merge comparison. The document's \"where known\" hedge doesn't cover this; it needs to state which commit a review finding binds to (commit-containing-the-artifact resolved at ingest time? reviewedSha as-is with a recorded caveat?) before the normalization slice builds on it.\n\n### [CONCENT] The adapter contract's core requirement \u2014 cross-tool metric agreement \u2014 is asserted, not designed\n\n\nThe first Technical Consideration says the contract \"has to define each metric well enough that adapters agree on what they report\" and notes that \"cyclomatic complexity is computed differently by different analyzers.\" That equivalence problem *is* the keystone slice's hard part (ruff's complexity vs radon vs lizard disagree on function boundaries, ternaries, early returns; \"function length\" depends on what counts as a function; duplication tokenizing rules vary wildly), and the document supplies no direction \u2014 not one tool is named for any language, including Python, which the slice list makes mandatory (\"proven on Python\"). Deferring *which* language ships second is fine; deferring the semantic definition of every metric the record stores means the keystone slice has no contract to implement, only an aspiration. At minimum the document should fix a canonical definition per metric (counting rules, function-boundary rule) so adapters can be tested against a fixture, the way 323 pinned its vocabulary with a sync test.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The determinism design goal is not true of coverage",
+      "description": "Design Goals: \"Every snapshot metric gives the same value on the same commit with the same tool versions.\" Coverage depends on the dependency environment, test flakiness and platform \u2014 same commit, same coverage-tool version, different numbers. The Technical Considerations treat coverage as optional/absent-with-reason, which handles unavailability but not variance when it *is* taken. Narrow the claim to the static metrics or record environment identity alongside coverage.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The \"one category vocabulary\" claim collides with the category values the codebase actually produces",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Per-slice before/after depends on boundary snapshots that no planned slice delivers",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Dirty-tree policy left as an unresolved either/or, and the ambiguity is load-bearing for 420",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Project-declared limits have no mechanism, and the keystone's flagship case reports \"no limits set\"",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Review findings' commit attribution uses `reviewedSha`, whose semantics in this codebase misattribute in-flight reviews",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The determinism design goal is not true of coverage",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-17T07:05:38.484831",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 140146,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 483072,
+  "cached_tokens": 271744,
+  "cache_write_tokens": null,
+  "completion_tokens": 34354,
+  "reasoning_tokens": 30947,
+  "duration_seconds": 390.28268170915544,
+  "cost_usd": 0.021504728,
+  "cost_basis": "alias_pricing"
+}

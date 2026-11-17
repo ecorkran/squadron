@@ -1,0 +1,33 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Selection method and acceptance contract diverge from the slice plan",
+   "description": "The plan assigns this slice FRNN-style candidate collection and partial sorting, a k-nearest comparison against `k_first` at N=200k, and no regression on the `k_first` path. This design retains the heap and defers FRNN to a later slice, changes the performance gate to compare `k_nearest` with `radius_only`, and removes `k_first`. Align the design with the assigned plan contract, or update the plan before treating these changes as this slice\u2019s deliverable.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Technical-Decisions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Unassigned mode and benchmark scope expands the slice",
+   "description": "The plan assigns coherent reindexing to support k-nearest search, not a new `radius_only` mode or a claim that the work remains unfinished until it approaches published 16M-agent results. The additional mode, removal of the existing mode, and 500k/1M probes add interface and validation work beyond that assignment. Defer `radius_only` and the 500k/1M and 16M-reference obligations unless the plan is explicitly expanded to include them.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Technical-Scope"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The relevant absolute throughput target is not restated",
+   "description": "The architecture sets a Tier 2 target of 60 TPS at N=50k on CUDA. This slice changes the fused GPU path and makes `k_nearest` the default after its gate, but its criteria use a relative comparison at N=200k and do not state whether the default path preserves the 60 TPS target at N=50k. Restate the applicable target and verify the `k_nearest` path against it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Success-Criteria"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Uncapped k-nearest behavior is left undefined",
+   "description": "Slice 150 supports `max_neighbors <= 0` as an uncapped path. This design defines `radius_only` as uncapped, but does not specify what happens when an existing configuration uses `neighbor_mode: k_nearest` with `max_neighbors: 0`. Define whether that configuration is rejected, migrated, or handled as uncapped; otherwise this mode change leaves existing configuration behavior ambiguous.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Inner-loop-rewrite-in-fused-force-integrate-kernel"
+  }
+ ]
+}

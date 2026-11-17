@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "PR-keyed persistence cannot carry the reviewed head sha or a PR identity",
+   "description": "The \"Base semantics\" bullet promises \"The head sha recorded in the artifact is what was reviewed\" and a review posted after the head moved \"must say so\"; \"PR identity is a value... every downstream consumer, including persistence and posting, keys on that record.\" But the save path a new `sq review pr` would call, `save_review_result` in `src/squadron/review/persistence.py`, hardcodes `reviewed_sha=resolve_reviewed_sha(\".\")` and takes a `SliceInfo`, building the filename from `slice_info['index']` and `slice_info['slice_name']`. It exposes no parameter for the PR record's head sha. `format_review_markdown` fills `slice:` from `slice_info[\"index\"] if slice_info else 0` and emits the title `# Review: {type} \u2014 slice 0`, with `project: unknown`. So a PR review would record the operator's HEAD as `reviewedSha` (wrong even in the scratch worktree, since `resolve_reviewed_sha(\".\")` reads process cwd, not the review cwd), and fabricate `slice: 0` \u2014 a silent placeholder the project's conventions forbid. This also breaks `sq review resolve`, which reads `reviewedSha` in `resolve_review_diff_base`. The document says integrity/persistence \"apply unchanged\"; they must be changed, and that change is not scoped.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"PR metadata as prompt inputs\" has no mechanism in the template system",
+   "description": "The Envisioned State requires \"PR metadata (title, body, linked issues, unresolved review threads)... available to the prompt as additional inputs.\" The code review template uses `prompt_builder: squadron.review.builders.code.code_review_prompt`, which reads only `cwd`, `diff`, `files`, `diff_exclude_patterns`; extra keys in `inputs` never reach the rendered prompt. The alternative `prompt_template.format(**inputs)` mode only substitutes placeholders declared in YAML. `_inject_file_contents` in `review_client.py` skips any value that is not an existing file path (it injects real files, the diff, and CLAUDE.md only), so string metadata is dropped there too. There is no \"clearly delimited data\" injection primitive to implement \"never as instructions\" (Technical Considerations). Satisfying this feature means changing the builder's shape (contradicting \"One review engine... no second reviewer\" and Related Work's \"Initiative 100... reused; none changed in shape\") or adding a template (a second reviewer by another name). The document picks neither, leaving its headline PR-context feature unspecified.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Rules degradation outside a planned project is mis-stated and silent",
+   "description": "\"Rules outside a planned project\" claims the review \"runs with the template's rules and language auto-detection only, and says so, rather than silently reviewing with no conventions.\" In `src/squadron/review/rules.py`, both template rules (`get_template_rules`, reading `review.md` / `review-code.md`) and language auto-detection (`load_rules_frontmatter` / `match_rules_files`) require a `rules_dir`. `resolve_rules_dir` returns `None` in a repo with no `rules/` or `.claude/rules/`, and `load_review_rules(template, None, ...)` returns `None` with no log \u2014 nothing \"says so.\" The only conventions that reach the prompt in that case are CLAUDE.md, injected separately by `_inject_file_contents`. So a PR review in an unplanned repo runs with neither template rules nor language auto-detection, while the design asserts it does and that the degradation is observable.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Doctor's \"gh authenticated, host reachable\" checks break the pure-check contract",
+   "description": "\"Doctor and setup\" says \"sq doctor gains checks for the host adapter (gh present, authenticated, host reachable)\" and Envisioned State says doctor \"reports whether that implementation is usable.\" `src/squadron/cli/commands/doctor_checks.py` declares \"no network, no subprocesses\" for every check, and `run_all_checks` deliberately pre-resolves its one subprocess-dependent input (`git_hooks_path`) in `doctor.py` and passes it in. `gh auth status` is a subprocess and `gh api` a network call; neither can be a pure check. The document neither adjusts that boundary nor says where the resolved values come from. It also leaves severity unspecified: `doctor()` exits 1 on any `MISSING`, while \"Setup does not install gh; it reports its absence\" and PR features are opt-in, so gh absence must be non-fatal (a WARN), a distinction the design doesn't make.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The adapter protocol has no operation for idempotent comment updates",
+   "description": "\"Host behind a protocol\" enumerates every hosting interaction: \"resolve a PR, fetch its head, read its threads, post a comment, create a PR, identify the operator.\" But Technical Considerations requires \"A repeated `--post` on the same PR must not stack comments. The comment is marked so squadron can find and update its own prior comment.\" Finding and updating a previously posted summary requires listing/updating a *posted comment*; the protocol has no such operation. \"read its threads\" is the review-thread surface (the same source as the \"unresolved review threads\" used as prompt metadata), a different GitHub object from the issue comment a summary is posted as. Without a protocol-level \"list/update/delete my comment\" operation, idempotency can only be implemented with `gh`-specific calls outside the adapter, contradicting \"no hosting call lives in the review package\" and \"The protocol must not leak `gh`-specific shapes.\"",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design Goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Latest saved review\" for `sq pr create` has no lookup and cannot work for PR-keyed artifacts",
+   "description": "`sq pr create` is specified to gather \"the latest saved review,\" and the body must carry real \"review provenance.\" No such lookup exists. `locate_review(index, review_type, cwd)` in `src/squadron/review/resolution_evidence.py` matches `{index}-review.{type}.*.md`, requires an integer index, and raises `ResolutionError` when several reviews match rather than selecting a latest one \u2014 and it has no concept of a PR-keyed artifact. Since \"Persistence takes a target, not a slice\" deliberately removes the slice index from PR reviews, a PR-based `sq pr create` cannot locate its review through this path at all. The document treats \"the latest saved review\" as an available input without defining the lookup, ordering, or disambiguation, which is exactly the seam that decides whether PR-body provenance is grounded or invented.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  }
+ ]
+}

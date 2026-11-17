@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Migration plan omits the agents-tree drift guard as a consumer of the analysis-skill move",
+   "description": "Line 182 lists the move's consumers as `DELIVERIES[AGENTS].bundle_subdirs`, `bundled_skill_names`, and \"the fixtures in `tests/cli/test_install_commands.py` and `tests/skills/test_targets.py`,\" and line 184 claims existing tests for those commands \"pass without edits other than the moved fixture paths.\" That is not true for the most load-bearing test on this path: `tests/cli/test_install_commands.py::_claude_twins()` pairs every file under the Claude `bundle_subdirs` (`sq/`, `analysis/`) with `commands/agents/<sub>-<stem>/SKILL.md` via `_agents_root() = get_commands_source()/\"agents\"`, and `test_every_claude_command_has_an_agents_twin` / `test_openai_yaml_mirrors_disable_model_invocation` read the analysis skills from exactly that location \u2014 not from fixtures. Moving `analysis-understand/` and `analysis-tech-debt-audit/` to `commands/analysis/agents/` breaks both tests, and the fix requires teaching the 925 drift guard (whose docstring calls the two trees \"a bijection\") to search a second root \u2014 an edit the design never schedules, in step 2 (\"D4 move \u2026 confirm criterion 7\") or anywhere else. D4 (line 132) similarly asserts \"Nothing else reads `commands/analysis/` recursively\" and enumerates runtime readers, but does not acknowledge the test-side resolver whose whole job is finding these skills in the old location. Secondary, same claim: `check_skill_packs`'s signature must change to loop targets, while `tests/cli/test_doctor_checks.py:406-433` call it as `check_skill_packs(commands_dir=\u2026, cwd=\u2026)` \u2014 either those tests change or the design must state that `commands_dir` still overrides the per-target root resolution. Add both to the migration consumer list so the \"behavior preserved\" claim is accurate.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182-184"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "D8's \"like commands\" analogy does not hold at the `run_all_checks` call site",
+   "description": "`check_skill_packs` is to iterate `_command_targets_to_check(None)`, but command rows get their targets from `run_all_checks(ide=\u2026)` (setup passes its selected target; `doctor_checks.py:631` loops `_command_targets_to_check(ide)`). Hardcoding `None` inside the skill-pack check means `sq setup --ide codex` shows only the Claude skill-pack row unless the Codex CLI happens to be on PATH at that moment \u2014 a weaker form of \"per target, like commands\" than the section title claims. The choice is stated, not hidden, and skill-pack rows are indeed not setup-table keys, so this is likely fine; but the design should say explicitly that setup's skill-pack view is deliberately doctor's default view rather than setup's target, so the asymmetry with the command rows is a decision and not an oversight.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "\"one line each\" understates the `sq model list` fix",
+   "description": "Each named file carries three occurrences of `sq model list`, not one: `commands/sq/review.md` lines 60, 112, 158 and `commands/agents/sq-review/SKILL.md` lines 82, 134, 180. The fix is trivial either way, but \"one line each\" (and success criterion 9's \"both `review` command files say `sq models list`\") invites an implementer to change only the first hit and leave two stale references per file. Correct the count so the sweep is complete.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24"
+  }
+ ]
+}

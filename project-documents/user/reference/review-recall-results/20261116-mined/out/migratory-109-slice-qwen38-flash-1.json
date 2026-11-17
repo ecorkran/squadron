@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Root-cause attribution for the overrun is asserted, not measured, and the path the architecture calls dominant is excluded",
+      "description": "The Value section states the slice \"fixes observed tick overruns\" (50ms budget, ~10-15ms overrun at 100 agents / `query_radius: 50.0`) and attributes the overrun entirely to per-agent loops in force accumulation. The parent architecture asserts the opposite priority: `100-arch.behavior-engine.md:90` \u2014 \"In boid-style simulations, neighbor finding typically dominates tick cost. The engine's performance ceiling is largely set by how fast it can answer 'which agents are within radius R'\". The slice explicitly leaves that path unchanged: `tick.py:48-52` still runs a Python loop of `n` `query_radius()` calls (each an O(N) scan plus `np.where(...).astype(...)` allocation), and `BruteForceQuery.build()` still copies the whole position array per tick; both are deferred to 105 (`109-\u2026md:41-45`). Nothing in the doc apportions the measured 10-15ms between the query loop and force accumulation. Add a profile split (e.g. `cProfile`/`timeit` of step 3 vs step 4 vs query loop at the default config) so the value claim and the \"ticks stay within 50ms\" criterion (`:215`) are falsifiable; if the query loop is a material share, say so and state the residual overrun the slice will *not* fix.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unbounded `max_neighbors` is the slice's principal failure mode and is not handled; verification runs only at n=100 while the architecture's NFR is tens of thousands",
+      "description": "The memory analysis stops at \"At n=100 with max_neighbors~100, the padded array is ~80KB \u2014 trivial\" and defers 100K+ as \"future work \u2026 behind the same `NeighborData` interface\". But `config/default.yaml:13` already declares `entity_capacity: 10000`, and the parent NFR (`100-arch.behavior-engine.md:36`) is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" \u2014 precisely the regime where the design has no strategy. At n=10K with a dense cluster the padded arrays alone are ~800MB (`indices`) + 100MB (`mask`), and every force gathers `(n_active, max_neighbors, 2)` float64 temporaries (~1.6GB each) \u2014 five forces per tick. The doc enumerates no failure mode for this path (no cap, no blocked/chunked gather over agent groups, no `max_neighbors` ceiling, no memory guard). The scale NFR is also not restated anywhere with a target; the only runtime check is a 5-minute eyeball at 100 agents. Fix: state the NFR (\"force accumulation at n=10K clustered must stay under X ms / Y MB\"), and pick one bounded mechanism \u2014 the standard boid cap-K-nearest-per-agent, or block the outer axis so temporaries are `(block, max_k, 2)` \u2014 noting that both are also what makes the shape GPU-dispatchable.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Row-space of `NeighborData` (eval-order vs population-order) is never defined, so the pseudocode contradicts the `BulkForce` output contract",
+      "description": "`NeighborData.indices` is shaped `(n_active, max_neighbors)` with \"real neighbor indices for active agent `i`\" (`:78-82`), i.e. rows are in *eval* order while the values inside are *population* indices. Every current force also writes `result[agent_idx]` into a full-population N\u00d72 array with zeros for inactive agents \u2014 the contract documented in `forces.py:28-41` and `100-slice.agent-state-and-tick-function.md` (\"Return array is always full-population sized (N\u00d72) with zeros for non-active agents\"). The vectorized sketch never bridges the two spaces: it uses `self_positions`, `weights[:, None]`, `counts` with no stated derivation, and no step that scatters per-row results back to population indices (`result[eval_indices] = row_forces`). `eval_indices` is passed to `build_neighbor_data()` (`:95`) but the dataclass has no field to carry it to the consumers. This is the single highest-risk under-specification in the doc: with an `active_indices` subset, an implementer who assumes population-order rows gets silently wrong forces (and the \"zero neighbors \u21d2 zero force\" argument at `:170-172` does not cover the subset case). Specify whether `indices` is `(n_active, \u2026)` or `(n, \u2026)`, require `NeighborData` to own `eval_indices` (or the full-population row mapping), and state the scatter-back step once in the shared pattern.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:103-125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`-1` padding is dereferenced by the very gather the design shows; \"never dereferenced thanks to mask\" is incorrect",
+      "description": "The doc claims \"padded with `-1` (never dereferenced thanks to `mask`)\", but the cohesion pattern at `:111` is `state.positions[neighbor_data.indices]` \u2014 a NumPy advanced-indexing gather that *does* read row `-1` (last agent) for every pad slot; it is only neutralized by the following `neighbor_pos[~neighbor_data.mask] = 0.0`. The load-bearing invariant (mask-zeroing must happen between gather and every reduction, and again after any distance computation in Separation before `dist_sq` divides) is nowhere stated as an invariant; if an implementer drops or reorders it, results silently pick up the last agent's state instead of failing. Worse, for Separation the gathered garbage rows produce garbage distances before the radius filter, and coincident padded rows can yield `0/0`. Two acceptable fixes, both cheap: pad with `0`/self and mask, or pad with `-1` and *state* the mask-before-reduce invariant explicitly plus a test that fails if it is violated. Also note `neighbor_pos[~mask] = 0.0` relies on the gather returning a copy \u2014 worth one sentence, since the same pattern applied to a view would corrupt agent state.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The profile-weight vectorization pattern violates the slice's own \"defining constraint\", and the verification step cannot detect it",
+      "description": "The Technical Requirement is \"No Python-level per-agent loops in any `BulkForce.__call__` implementation (the defining constraint)\" (`:198`), and `100-arch.behavior-engine.md:102` additionally forbids \"callbacks into Python during the hot loop\" for the GPU boundary. Yet the shared pattern for all five forces builds weights with `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` \u2014 a Python comprehension over every agent, dereferencing `list[BehavioralProfile]` dataclass objects, executed once *per force* (\u22485\u00d7 per tick), and the doc waves at it (\"At higher n, profile weights can be precomputed per tick if needed\"). This is the exact object-by-object iteration the architecture prohibits, it grows to 5\u00d7n Python iterations per tick as n rises, and it is the natural thing a reviewer would call a violation. Resolve it now, not conditionally: build a `(P, F)` weight table (or per-field `(P,)` arrays) from `profiles` once per tick in `tick.py` / a helper, then index it with `profile_indices[eval_indices]` \u2014 which is also literally the architecture's stated GPU resolution (\"lookup tables that GPU kernels index into\"). The grep check at `:223` (`for.*agent_idx|for.*eval_indices|for.*list_idx`) will not catch this loop even if it is left in place, so the check needs to target the real pattern.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Protocol change silently invalidates the existing 103 design and is not reflected in the slice plan's dependency graph",
+      "description": "`interfaces: [103-predator-prey-dynamics, 105-spatial-query-optimization]` (`:8`) and \"future force implementations (predator-prey, territorial) consume this instead of raw lists\" (`:178`) assert forward compatibility with slices that specify the opposite contract. `103-slice.predator-prey-dynamics.md` (also `not_started`, and *complete* on the matrix interaction design) states \"No changes to tick()\" and \"Forces receive the same `(state, neighbor_lists, profiles, active_indices)` arguments\", and its Technical Requirement is \"one Python loop over active agents, NumPy within each neighborhood\" \u2014 the pattern this slice forbids. Slice 104 and 105 have no design docs at all. The parent plan (`100-slices.behavior-engine.md:47`) gives 109 dependencies on 101/102 only and records no ordering constraint between 109 and 103/104, so whoever builds 103 after 109 lands will write against a protocol that no longer exists. The slice should (a) name the rebase explicitly \u2014 103's force sketches and its detection-radius filter must be rewritten as masked gathers over `NeighborData`, which is actually *easier* with padded arrays and worth saying \u2014 and (b) request the plan record 109\u2192103/104 ordering (or 109-before-103) so the conflict is visible at plan level.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:150-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The equivalence criterion is unachievable where the current loops hold epsilon guards; the risk section names only SeparationForce",
+      "description": "Success requires \"numerically identical output (within float64 tolerance)\" to the loop versions, tested with `atol=1e-12` (`:258`) and no `rtol`. Two gaps. First, the current loops contain threshold branches that must be reproduced branch-free, and the doc analyzes only `SeparationForce` (`:231`): `LeadershipForce` skips when `sum(neighbor_leadership) < 1e-10` (`herding.py:76-78`) \u2014 a `np.maximum(leadership_sum, eps)` denominator gives a wildly *different* (huge) result, not zero; `MomentumForce` returns zero when `speed < 1e-10` (`herding.py:36-37`); `SeparationForce` skips when no neighbor is inside `separation_radius` and divides by `dist_sq`, which is `0/0` \u2192 `nan` for coincident agents; `CohesionForce`/`AlignmentForce` use `np.mean` on a `(k,)` array versus `sum/max(counts,1)` on a padded `(max_k,)` row, so pairwise-summation order changes in the last bits. Enumerate each guard in the design with its branch-free equivalent (`np.where` masking to force exact zero) and add a coincident-agent case, then restate the criterion as a tolerance policy (`atol` **and** `rtol`, plus \"exact zero preserved for the guarded cases\") rather than \"numerically identical\". Second, determinism *within* the new implementation (`100-arch.behavior-engine.md:34`, replay/debugging) is untouched by reordering but should be asserted as its own criterion, since that is the guarantee that actually matters for the world server.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:190"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Internal inconsistencies in force classification and scope boundaries",
+      "description": "(a) `:33` and `:190` call Cohesion/Separation/Alignment/Leadership/Momentum \"all five **neighbor-dependent** forces\", while `:121-125` and `:201` correctly note `MomentumForce` uses no neighbor data \u2014 Momentum is a per-agent vectorization, and its equivalence test must not require `NeighborData`. (b) `:44` lists `WorldBoundsRepulsor`, `ConstantDrift`, `VelocityDrag` under **Excluded**, but `:162-164` and step 8 (`:252`) require changing their signatures to accept `NeighborData`; they are in scope for the protocol change even though their math is untouched. Rewording both bullets costs nothing and prevents an implementer from skipping the three call sites (and the type checker).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The GPU rationale is overstated and the \"GPU-ready\" provided item has no consumer",
+      "description": "The architecture places GPU force offload at the 1M+ tier with hard constraints \u2014 \"no dynamic allocation, no callbacks into Python during the hot loop\" (`100-arch.behavior-engine.md:102`) \u2014 and no GPU slice exists. This design allocates fresh padded arrays plus five `(n_active, max_neighbors, 2)` gathers per tick with a shape that changes every tick, which is not directly dispatchable. The padded choice is still correct on CPU-simplicity grounds alone; make that the primary justification and downgrade the GPU claim to \"layout does not preclude a later transfer\" rather than advertising \"GPU-ready data layout\" as something provided to other slices. That also trims the CSR/COO comparison (`:140-148`) to its load-bearing part. Related scope that can be cut or deferred: the full-tick old-vs-new integration test (`:260`) duplicates the per-force equivalence tests and requires keeping the whole loop implementation as a second source of truth.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:179"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Update all callers\" does not enumerate the stale `neighbor_lists` contracts in docs and module guidance",
+      "description": "The Included bullet covers \"all callers and tests\". Actual `neighbor_lists` signature references beyond the five forces and `tick.py`: `src/migratory/engine/repulsor.py:20` (extension-pattern pseudo-code and the \"Implement `BulkForce` here / register in `force_builder.py`\" recipe), `src/migratory_server/force_builder.py` (registry that constructs all five forces), and completed slice docs `304-slice.environment-layer-integration.md:210` and `314-slice.repulsor-framework.md:114`. The repulsor extension recipe is the one other slice will actually follow, so it should be named as a deliverable of this slice, not left to rot.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:37"
+    },
+    {
+      "severity": "PASS",
+      "title": "Boundaries, dependency direction, and NFR restatement are correct",
+      "description": "`NeighborData` + `build_neighbor_data()` live in `engine/neighbors.py`, adjacent to their consumers, with the spatial layer explicitly kept padding-agnostic (`:168`, `:184`); `SpatialQuery` and `BruteForceQuery` are untouched, so the architecture's \"pluggable spatial queries\" and \"internal representation replaceable behind interfaces\" principles hold, and dependency direction stays engine\u2192spatial. The tick-budget NFR is restated with a concrete target (50ms at `tick_rate: 20`, `:23`/`:215`) and the parent-architecture hot-loop quote is cited verbatim as the requirement being satisfied (`:25`). Frontmatter `parent: user/architecture/100-slices.behavior-engine.md` is the slice-plan document and is correct as given. The scope matches the plan entry's assignment (five forces + protocol + tick wiring + equivalence tests, ~3/5) \u2014 nothing the plan owes this slice has been dropped.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:166-168"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Root-cause attribution for the overrun is asserted, not measured, and the path the architecture calls dominant is excluded",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Unbounded `max_neighbors` is the slice's principal failure mode and is not handled; verification runs only at n=100 while the architecture's NFR is tens of thousands",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Row-space of `NeighborData` (eval-order vs population-order) is never defined, so the pseudocode contradicts the `BulkForce` output contract",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:103-125",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`-1` padding is dereferenced by the very gather the design shows; \"never dereferenced thanks to mask\" is incorrect",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:74",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The profile-weight vectorization pattern violates the slice's own \"defining constraint\", and the verification step cannot detect it",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Protocol change silently invalidates the existing 103 design and is not reflected in the slice plan's dependency graph",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:150-164",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The equivalence criterion is unachievable where the current loops hold epsilon guards; the risk section names only SeparationForce",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:190",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Internal inconsistencies in force classification and scope boundaries",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:33",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The GPU rationale is overstated and the \"GPU-ready\" provided item has no consumer",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:179",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "\"Update all callers\" does not enumerate the stale `neighbor_lists` contracts in docs and module guidance",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:37",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Boundaries, dependency direction, and NFR restatement are correct",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:166-168",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-17T11:57:20.489377",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 221367,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 473047,
+  "cached_tokens": 425472,
+  "cache_write_tokens": null,
+  "completion_tokens": 57248,
+  "reasoning_tokens": 51894,
+  "duration_seconds": 720.4601259171031,
+  "cost_usd": 0.04042489,
+  "cost_basis": "alias_pricing"
+}

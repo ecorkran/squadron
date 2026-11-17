@@ -1,0 +1,26 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Required field with no default\" contradicts \"the 400 tests pass unchanged\"",
+   "description": "D5 defines `AdapterContext.environment_root` as \"a required field with no default\" (line 211), yet the Development Approach asserts that in place `environment_root == repo_root` and \"the 400 tests pass unchanged\" (also stated as \"the only contract change\" at line 324). These cannot both hold: `AdapterContext` is constructed directly by shared test helpers (e.g. `make_context` in `tests/metrology/snapshot/builders.py` and `context()` in `test_python_length.py`) as well as by `take.py`. A required field with no default makes those constructor calls raise `TypeError` before any assertion runs, so the tests cannot pass unchanged. The design under-specifies this integration change and hides a dependency on test scaffolding. Give `environment_root` a default of `repo_root` (which is the correct in-place value and satisfies the unchanged-tests claim), or explicitly list the constructor sites that must be updated.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:389"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`report history`'s first-parent ordering is not owned by any specified module",
+   "description": "The Component Structure says `history_report.py` (with `slice_report.py`/`project_report.py`) does \"No git and no store writes beyond what ensure_snapshot and record_slice_ranges do.\" But the `report history` contract (line 298) requires snapshots \"ordered by the target's first-parent history,\" with off-line commits detected and counted \u2014 that is a git-log walk. The injected dependencies named for reports are store, resolver and `ensure_snapshot`; `resolve_slice_landings` resolves per-slice landings, not a full first-parent ordering of the target. No module is assigned to produce that ordering, and the stated \"No git\" boundary contradicts it wherever it lands. Name the component that owns the first-parent walk (e.g. a resolver helper in `git_utils` or an injected ordering function passed into `history_report`) and reconcile it with the \"No git\" claim.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:98"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Export-equals-in-place criterion is over-broad relative to coverage-at-export",
+   "description": "Line 216 and success criterion 5 (line 336) state that a clean-HEAD export gives the same JSON as an in-place snapshot apart from `measured_at`. D6 (line 224) and 401's contract state that coverage at an export is always absent (`report_missing`/`coverage_not_configured`) because a fresh export has no coverage report. When a project has `metrology.coverage_report` configured and a fresh report present, the in-place snapshot carries present coverage while the export does not, so the two differ by more than `measured_at` \u2014 the criterion as written would fail. The walkthrough happens to scope the check to 400's config (no coverage key, line 365), so the behavior is understood, but the universal criterion and its test should be qualified to \"with no coverage report configured\" (or to exclude coverage metrics) to stay consistent with D6.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:216"
+  }
+ ]
+}

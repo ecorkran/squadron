@@ -1,0 +1,26 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "TypeScript coverage counts are missing fixture-level verification",
+   "description": "Task 20 checks that the Istanbul fixture parses and has version `0.1`, but not that its per-file `coverable_lines` and `covered_lines` match the report. Task 24 checks coverage-measurement behavior and the provider-limit text, but does not assert the Istanbul report\u2019s line counts. This leaves Success Criterion 7\u2019s present TypeScript coverage insufficiently verified; add a line-count assertion using the real fixture.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:20"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Two tasks exceed the slice\u2019s proportional scope",
+   "description": "The 30-task plan is unusually prescriptive for this slice. Tasks 18 and 29 require creating and removing a scratch Vitest project, capturing real reports, and running a ten-step live walkthrough across multiple repositories, then recording results in the design. Keep real-report fixtures as required by the technical criteria, but trim the walkthrough to the checks not already covered by focused tests; avoid requiring extensive implementation mechanics such as the specific capture project setup unless needed to exercise the parser.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Core implementation and tests are generally sequenced together",
+   "description": "The plan pairs complexity, duplication, coverage parsing/freshness/measurement, and rendering with follow-up tests, and includes commit markers at working points. The later walkthrough and final validation follow implementation. No circular dependency is apparent.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Informational events are both skipped and sent to translation",
+   "description": "Task 6 says to continue without yielding an informational `RateLimitEvent`, but also says to let it flow to translation. Without yielding, it cannot reach translation. This also leaves unclear how Task 4\u2019s translation branch relates to the design\u2019s D4 instruction to skip informational events in `_skip_unparseable`. Clarify which paths should expose informational events and align the task instructions and tests with that behavior.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Tests are separated from the implementations they verify",
+   "description": "The implementation in Task 6 is not followed by its test task until Task 10, and Tasks 7\u20138 are not followed by their test task until Task 11. This breaks the test-with pattern and delays feedback on the load-bearing dispatch changes. Move or split the corresponding tests so they immediately follow the implementation they exercise.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checked off and overused",
+   "description": "The `Commit:` entries are written as checklist items (`- [ ] Commit:`), rather than plain `**Commit**:` lines, and appear after nearly every task. Use plain markers at meaningful working, tested points, consolidating them instead of prescribing a commit after each task.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Verification tasks duplicate test runs",
+   "description": "Task 12 runs `test_provider.py` and `test_audit_cli.py` separately, while Task 13\u2019s `tests/providers` and `tests/metrology` run already covers those files; Task 13 then runs the full suite as well. Remove the redundant invocation in Task 12 and record its no-change observation in Task 16; consider whether the overlapping regression commands in Task 13 are all needed.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  }
+ ]
+}

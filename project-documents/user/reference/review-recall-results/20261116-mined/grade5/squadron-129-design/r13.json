@@ -1,0 +1,19 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Runtime startup and authentication operations can hang indefinitely",
+   "description": "The turn timeout covers only `thread.run`, not subprocess startup, `initialize`, or `thread_start`. Likewise, the login timeout covers only `handle.wait()`, while login initiation and logout have no stated bound. A hung runtime or peer disconnect during these operations can therefore leave a review or auth command stuck despite the design\u2019s stated hang protection. Specify timeout, disconnect, cleanup, and error behavior for startup, thread creation, login initiation, logout, and teardown.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80-84"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Missing-extra reporting conflates package and binary failures",
+   "description": "`missing_extra_hint()` promises either an install hint or `None`, but it uses `resolve_codex_runtime()`, which also raises when the SDK is installed and neither binary is available. The design does not say how model list or doctor handles that exception. This leaves their required clean operation and accurate diagnostics unspecified for the installed-package/missing-binary case. Separate the package-missing signal from runtime resolution failure, and specify how each surface reports the latter.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112-112"
+  }
+ ]
+}

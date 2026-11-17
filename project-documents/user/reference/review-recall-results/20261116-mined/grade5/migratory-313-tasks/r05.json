@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Completion state contradicts unchecked boxes and missing Task 3.4 deliverables",
+   "description": "Frontmatter says `status: complete`, but every checkbox in the file is `- [ ]` (grep for `- [x]` returns nothing), violating the CLAUDE.md rule to check off completed work \u2014 the sibling `314-tasks` file does check its boxes. More substantively, Task 3.4's deliverables are absent from the repo: there is no `TestBoundsPolicyIntegration`, no `test_open_policy_does_not_call_enforcement`, and no 50-tick `OPEN`/`WRAP`/`REFLECT` integration tests anywhere in `tests/` (greps for `TestBoundsPolicyIntegration`, `apply_bounds_policy`, and `BoundsPolicy` show `tests/test_simulation.py` contains no bounds-policy tests at all). That leaves slice success criteria 10 (OPEN path verified not to call enforcement) and 11 (multi-tick integration assertions) unverified despite the \"complete\" status. Either check off the completed items and add the missing integration tests, or correct the frontmatter status and record the deviation.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3.1 requires `world_bounds`; implementation is optional with a silent fallback",
+   "description": "Task 3.1 (line 186) and the slice design both specify `world_bounds` as a **required** keyword argument, with success criterion \"`SimulationManager(...)` requires `world_bounds`\". The implemented signature is `world_bounds: WorldBoundsConfig | None = None` with a fallback to `entity_manager.world_bounds`. Consequently the success criterion is not satisfiable as written, and Task 3.4's premise \u2014 \"Update any existing `SimulationManager(...)` constructions ... (they will fail otherwise)\" \u2014 is moot (existing constructions in `tests/test_simulation.py` indeed do not pass it, and still work). The task file should be updated to document the optional-with-fallback decision (and adjust 3.4/3.5 accordingly), or the code should be brought back to the slice's required-parameter design.",
+   "location": "src/migratory_server/simulation.py:64-76"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain lines",
+   "description": "All five commit markers (lines 96, 179, 249, 286, 325) are written as `- [ ] **Commit:** ...`. Review convention requires `**Commit**:` markers as plain lines, never checkboxes, and the project's own pattern in task files 301\u2013307 uses plain `**Commit**:` lines. Their placement is otherwise correct \u2014 each sits at a working, tested point immediately after the section's test/verify task \u2014 so only the checkbox form needs fixing.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "SC5 round-trip depends on `_serialize_for_yaml`, which no task tracks",
+   "description": "Task 1.4 covers success criterion 5 with `test_bounds_policy_yaml_round_trip` (present at `tests/test_config.py:207`), but no task step covers the `_serialize_for_yaml` helper that converts `StrEnum` instances to plain strings before `yaml.dump` \u2014 the slice assumed serialization would happen automatically because `StrEnum` subclasses `str`. If that helper was introduced by this slice, it is untracked implementation scope; if it predates it, the behavior is nonetheless only guaranteed by the test. Either way the test provides coverage, so this is informational.",
+   "location": "src/migratory_server/config.py:657-670"
+  }
+ ]
+}

@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Environment reaches forces by constructor injection, not through `engine.tick()`",
+   "description": "- `100-arch:64` says the engine \"receives the current agent state array, environmental context, and an optional active-agent subset.\" `500-arch:52` and `:81` say the server passes the environment query interface to `engine.tick()`. Slice plan `300-slices:27` says \"Pass environment context to SimulationManager and engine.tick().\"\n- The design's per-tick flow (`:100-107`) and `step()` (`:180-187`) call `tick(state, profiles, spatial, dt, forces)` with no environment argument. Instead, `:200-216` gives forces the environment at construction and says this \"requires no changes to the BulkForce protocol.\" The design never acknowledges that it departs from the contract all three parents specify.\n- The departure also hides a tick input. `300-arch:35` and `:39` require pure tick functions with explicit inputs so that logging and replay work (`:92`). An environment captured in a closure is an input replay cannot see.\n- Required before implementation: either pass the environment (or its query) to `tick()` as the engine architecture specifies, which is a 100-band signature change and must state how forces receive it, or have the PM amend the architecture to adopt constructor injection. If the first option is chosen, the `environment` property and the `TerrainResistance` illustration go too (see the proportionality finding).",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:100-107"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The `step()` body contradicts the design's own zero-entity rule",
+   "description": "- The second `step()` body returns early on `count == 0` before `post_tick()`. But `:291` and `:408` say `post_tick()` must run with zero entities so trail decay continues.\n- The design has two conflicting `step()` bodies. `:176-190` is correct (it guards only `tick()`). `:272-288` is not. Implemented as written, trails would stop decaying whenever no agents exist.\n- Keep one definition (the `:176-190` form) and delete the other.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:276-288"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Post-tick writes are not wired, and the plan's assigned scope is silently narrowed",
+   "description": "- Slice plan `300-slices:27` assigns \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" to this slice. The design calls `post_tick()` with no arguments (`:105`, `:190`) and names no source for `trail_deposits` or `threat_mutations`.\n- `500-arch:104` says the engine returns threat mutations alongside updated agent state. `500-arch:56` defines `post_tick(trail_deposits, threat_mutations)`. The design never says what `tick()` returns or how those values reach `post_tick`.\n- The Excluded list (`:42-48`) does not mention this item. Either specify the plumbing (empty pass-through values are acceptable) or add it to Excluded with a reason and have the PM update the plan.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:105"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Grid resolution and layer selection config are deferred against the plan and the architecture",
+   "description": "- Plan `300-slices:27` assigns \"seed, grid resolution, layer selection\" to this slice's YAML config. The design keeps seed and defers the other two (`:48`, `:153`).\n- `500-arch:137` says \"the server expects to configure environment via YAML (seed, grid resolution, layer selection).\" `500-arch:39` and `:133` make grid resolution configurable per layer per instance. The design's reason, that resolution \"belongs to the layers themselves,\" contradicts those lines.\n- Either add the keys now (validated, with unknown layer names failing explicitly), or have the PM change the plan and `500-arch`. Do not drop them silently.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:153"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The environment seed silently defaults to 42, against the explicit-configuration principle",
+   "description": "- `300-arch:47` lists environment seed among \"explicit configuration, not hard-coded defaults.\" This design makes the whole `environment` section optional and substitutes `seed=42` (`:151`, `:250`, and verification step 2 at `:373`).\n- The 303 design took the opposite stance for profiles: a missing key is a validation error, not a hard-coded default (`303 design`, Special Considerations). Project rules also prohibit silent fallback values.\n- Require the seed at startup, and raise a config error if it is missing. Update verification step 2.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:151"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "World origin is hard-coded to (0, 0), against the architecture's configurable origin",
+   "description": "- `500-arch:39` says bounds come from \"origin and bounds from configuration,\" and `500-arch:131` says origin is \"configurable \u2026 set per instance at startup via configuration.\" The `build_world_bounds()` helper hard-codes `origin_x=0.0, origin_y=0.0` (`:160-166`).\n- The justification at `:169` and `:409` is that the server config has no origin. That is circular: the config lacks the field because this design did not add it.\n- Add `origin_x` and `origin_y` to `WorldBoundsConfig` with the same explicit-config treatment as the seed, or have the PM amend `500-arch`.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:157-169"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Seasonal parameter has duplicate state and a hard-coded 0.0 labeled \"mid-season\"",
+   "description": "- `_seasonal_parameter` (`:119`) is listed as state but is never read. `step()` takes the value per call with a default of `0.0` (`:176`, `:272`). That is two sources of truth, one of them dead.\n- On the 0\u20131 seasonal cycle (`300-slices:35`), 0.0 is the cycle origin, not \"mid-season\" as `:198` says. A silent default at a call site is the pattern project rules prohibit.\n- Make the parameter required on `step()`, delete the attribute, and have the server pass one named placeholder constant that slice 308 replaces. Correct the description.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:198"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`environment` is treated as optional, and the design's own rationale contradicts that",
+   "description": "- `:220` says the environment is always present to avoid `if environment is not None:` checks, and keeps `Environment | None` \"for backward compatibility.\" But `step()` has two such checks (`:177`, `:189`). The design's own `:407` says every `step()` call must change, so `:410`'s claim that existing tests \"continue to work without modification\" is false for `step()` callers. The optional type buys nothing.\n- Make `environment` a required constructor argument. Test constructors can pass `layers={}`.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:220"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Speculative API and illustrative future code exceed what this slice needs",
+   "description": "- The `TerrainResistance` block is marked \"not built here.\" The `SimulationManager.environment` property (`:216`, `:268-270`) exists so `server.py` can pass the environment to forces, but this slice passes `forces=[]` (`:310`).\n- The Value section (`:27`) claims \"environment-aware forces enabled,\" which this slice does not do. `:46` excludes them.\n- Cut the illustration and the property. If the FAIL fix passes the environment through `tick()`, the property has no reason to exist. Keep the section to a couple of sentences.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The tick-budget NFR is not restated, and environment cost is not measured",
+   "description": "- The slice adds `pre_tick` and `post_tick` to every tick. `300-arch:78` sets target rates of 20\u201360 Hz and overrun behavior against the tick budget. `300-arch:90` requires metrics \"to diagnose the bottleneck.\"\n- The success criteria (`:341-357`) restate neither the budget (1/tick_rate, i.e. 50 ms at 20 Hz or about 16.7 ms at 60 Hz) nor any measurement of environment time. The 303 design measured engine tick time separately; this design does not extend that.\n- Restate the budget, and measure environment duration separately (DEBUG log or metric, consistent with 303).",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:341-357"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The 303 and 304 designs disagree on who owns environment-driven forces",
+   "description": "- 303 Excluded says \"Environment-driven forces \u2014 slice 304.\" 304 Excluded (`:46`) says \"Environment-aware behavioral forces \u2014 behavior engine initiative (100).\" The plan (`300-slices:27`) does not assign forces to 304, so 304's exclusion is correct and 303's pointer is stale.\n- Correct the 303 note in a docs commit so the handoff is consistent.",
+   "location": "project-documents/user/slices/303-slice.behavior-engine-integration.md:44"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The parent plan still says `environment.update()`; the design correctly uses `pre_tick`/`post_tick`",
+   "description": "- `500-arch:72` and `:137` flagged the `update()` reference for alignment. This design adopts the two-phase interface (`:100-107`), which matches `500-arch:54-58`. The plan entry at line 27 still says `environment.update()`. Update it when this design is accepted.",
+   "location": "project-documents/user/architecture/300-slices.worldserver-foundation.md:27"
+  }
+ ]
+}

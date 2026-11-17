@@ -1,0 +1,54 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success criterion 6's `cf_build_context` half is deferred without a test or owner",
+   "description": "The slice's criterion 6 says \"a dispatch with a tool-capable non-SDK model can call `cf_build_context` and receive assembled context (walkthrough \u00a74)\". Task 9.3 records walkthrough step 4 as open alongside 263's demo, which is defensible given the `CLAUDECODE` guard, but the deferral is recorded as a prose note rather than an unchecked checklist item with an owner and a trigger. Every other deferral in this repo's task files is an unchecked `- [ ]` box (263's task 11 does exactly that), so this one degrades a stated success criterion to a parenthetical remark that a close-out reader can miss. Recommend making walkthrough step 4 an explicit open checklist item (mirroring 263's task 11) so criterion 6's second half is visibly unmet rather than silently deferred.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 8's availability gate is underspecified for the \"no CF project\" case",
+   "description": "Task 8.1 says the module-level gate should \"attempt to launch the configured `cf.mcp_command` server (or detect a launchable command)\" and skip on failure, but does not say what happens when the server launches successfully yet `cf init` was never run in the checkout \u2014 the CI workflow does run `cf init --lite --no-ide` (`.github/workflows/ci.yml`), so a launched server can still fail at `workflow_status` for a different reason (no CF project in CWD). That failure would surface as an ordinary test failure rather than a skip, which is a false alarm in CI. The gate should distinguish \"server not launchable\" (skip) from \"server launchable but CF state unavailable\" (also skip, with a reason naming the missing CF project) \u2014 the design's Security section makes CWD-resolved project identity load-bearing, so this distinction matters.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 5.2's process-death assertion depends on an unspecified fixture capability",
+   "description": "Task 5.2 requires asserting the server child process is gone after the timeout, and offers two implementation hints (\"capture the child PID via the fake server printing it to a temp file at startup, or scan for the fixture's command line\"). The fixture spec in Task 3.1 lists only `echo`, `fail`, `sleep`, `empty` \u2014 none of which emits a PID. A junior implementer following Task 3 literally would build the fixture without PID reporting and then discover at Task 5 that the fixture must change. Task 3.1 should include the PID-reporting capability (or Task 5.2 should drop the alternative and name the single mechanism) so the fixture and its consumer stay consistent.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 6.3's config read has no stated `cwd`, so the bound project config is not consulted",
+   "description": "The config manager's `get_config(key, cwd=\".\")` resolves project-level `.squadron.toml` relative to `cwd` and user-level config relative to `~/.config/squadron/`. Task 6.3 says to read `cf.mcp_command` and `cf.mcp_timeout_s` \"through the config manager at execute time\" but does not say which `cwd` is passed. The factory-bound `cwd` is the natural choice and is the same value the tools jail to, but the omission means an implementer may pass nothing and silently read the wrong project's `.squadron.toml` \u2014 the exact silent-fallback class CLAUDE.md forbids. Task 6.3 should state that the read uses the factory-bound cwd.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Tasks 1 and 2 are split below the useful granularity",
+   "description": "Task 1 adds two config keys; Task 2 adds two assertions about their defaults. Both are single-line-scale changes with the same file, and the split buys two commits of near-identical content. Merging them into one task (\"Config keys for the bridge\" plus its tests) would keep the commit history readable without losing coverage. This is a minor proportion point, not a defect \u2014 the test-with pattern (implementation then test) is otherwise respected throughout.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 7's scope is the largest in the file but remains within a reviewable size",
+   "description": "Task 7 covers registration, schema inspection, per-tool argument mapping, executor behavior, and the pipeline-surface check in one task. It maps cleanly onto the design's success criteria 1 and 2 and to a single test module, so it is defensible; if it proves large in practice, the natural split is 7.1\u20137.2 (mapping) from 7.3\u20137.4 (behavior and pipeline surface), both still following the descriptor implementation in Task 6.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 9's merge step is a phase boundary rather than a reviewable code change",
+   "description": "Task 9.4 merges the slice branch into the configured target. This is a repository-state action, not a code change with testable content; it is correctly placed at close-out and the branch-retention rule (do not delete) is stated. No action needed.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+  }
+ ]
+}

@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Design fully implements the slice plan entry within architectural bounds",
+      "description": "Every element of slice plan entry 129 maps to a design decision: port to `openai_codex` with bundled-binary-first/PATH fallback (D2), `codex = [\"openai-codex>=0.159.3,<1\"]` extra replacing the stale pyproject GitHub-install comment (D1, matches the current `pyproject.toml` comment), effort via `ReasoningEffort` closing #171 with `applies_effort=True` (D5), per-turn usage mapped to `TokenUsage`/`RunTelemetry` (D6), the missing-extra error + doctor row + model-list marker + README (Part B), and `sq auth login --device-code` / `logout` / `status` with account email/plan (Part C). The architecture's multi-provider requirements (register at import, self-contained credential resolution, no core-engine changes) are respected: no squadron token store is added, `~/.codex/auth.json` remains the Codex runtime's store, and all new machinery lives in the provider/CLI layers. The `InteractiveLogin` addition is correctly characterized as an additive optional capability relative to the Authentication Patterns section, with a documented trigger for updating that section if a second provider adopts it. Anti-pattern cleanup from slice 128 is preserved: capability dispatch via `isinstance` rather than profile-name or auth-type string checks, and D8 removes the silent `final_response or \"\"` fallback in favor of an explicit `ProviderError`, consistent with AGENTS.md's no-silent-fallback rule.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq model list` marker path does not specify handling for aliases whose profile or provider cannot be resolved",
+      "description": "D9 states that `sq model list` \"resolves each alias's profile through `ensure_provider_loaded` + `get_provider` and tests `isinstance(provider, ExtraRequirement)`\". Both lookups can raise for inputs outside this slice's control: user aliases in `~/.config/squadron/models.toml` may reference a profile name that does not exist (`get_profile` raises `KeyError`), and user profiles in `providers.toml` may declare a provider type with no registered implementation (`ensure_provider_loaded` swallows the import failure silently by design, then `get_provider` raises `KeyError`). Today's `sq model list` (`src/squadron/cli/commands/models.py`) never touches the provider layer, so this design introduces a new per-alias failure path into a command that currently cannot fail on user alias config. The design's own integration requirement \u2014 \"`sq doctor` and `sq model list` run cleanly with and without the extra\" \u2014 and the no-regression posture (\"Other profiles' `sq auth login` behavior is byte-for-byte unchanged\") leave this case unmet unless the design states the degradation: an alias whose profile or provider cannot be resolved simply gets no marker (treated as if the provider does not implement `ExtraRequirement`), never a crash. Add that one sentence to D9 or the model-list bullet in \"Sub-part B surfaces\".",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technology Choices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Deferred slice 907's empty `[codex]` extra premise is superseded by this design",
+      "description": "Slice 907 (status: deferred) designed the `[codex]` extra as intentionally empty \u2014 \"PyPI rejects direct URL references\" \u2014 with the extra existing only as a documentation target. This slice populates the extra with a real PyPI dependency (`openai-codex`), which removes 907's stated reason for emptiness. D1 notes it \"replaces the stale pyproject comment\", which is the right call, but if 907 is ever revived its codex-extra section must not reintroduce the empty extra on top of this slice's declaration. No action required for this design; worth a one-line note in 907 or the slice plan when either is next touched.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Design fully implements the slice plan entry within architectural bounds",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`sq model list` marker path does not specify handling for aliases whose profile or provider cannot be resolved",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technology Choices",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Deferred slice 907's empty `[codex]` extra premise is superseded by this design",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-17T13:32:27.524620",
+  "model": "qwen/qwen3.8-max-0902",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 167291,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-max-0902",
+  "answering_models": [
+    "qwen/qwen3.8-max-0902"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 810606,
+  "cached_tokens": 676736,
+  "cache_write_tokens": null,
+  "completion_tokens": 40856,
+  "reasoning_tokens": 38145,
+  "duration_seconds": 1065.002256959211,
+  "cost_usd": 0.68206,
+  "cost_basis": "alias_pricing"
+}

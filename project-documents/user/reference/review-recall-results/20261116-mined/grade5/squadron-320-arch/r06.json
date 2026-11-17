@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Dispersion's \"existing machinery\" does not exist as claimed",
+   "description": "Description: The \"Dispersion needs repeated measurements\" paragraph states \"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`.\" Verified against the stack, both halves are wrong as stated. (1) 300's multi-sample judging is Future Work item 1 in `300-slices.eval-actions-llm-as-judge-scoring.md`, still `[ ]` unchecked \u2014 it was deliberately deferred so the core judging path landed first, and it has not been built. There is no config option to run a judge N times today. (2) `fan_out` is not a 140 mechanism \u2014 it is 180's slice 182, which the `180-slices` notes confirm was \"originally slice 159 in 140's plan, then moved... It now lives as slice 182.\" The only fan-in reducers registered in `src/squadron/pipeline/intelligence/fan_in/reducers.py` are `collect` and `first_pass`; a median reducer (what multi-sample judging needs, per `000-process-journal.md`) is not present. So the capability this paragraph leans on \u2014 \"the metrology must accept dispersion data opportunistically (when multi-sample ran anyway)\" \u2014 has no execution path yet. The dispersion slice's prerequisite is unbuilt, and 320's frontmatter (`dependencies: [100, 140, 300]`) lists neither 180 (the real `fan_out` owner) nor the unmet 300-FW1. The paragraph should state that dispersion measurement is blocked on 180's fan-in reducers plus a median reducer, not that the machinery \"exists.\"",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:81"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`fan_out` misattributed to 140 in prose and dependency list",
+   "description": "Description: Related Work line 110 credits \"Initiative 140 (Pipeline Foundation) \u2014 the executor, `fan_out`, and checkpoint machinery.\" `fan_out` is owned by initiative 180 (slice 182), confirmed by `180-slices` (\"Relocated from 140 future work item 10\") and by `_execute_fan_out_step` living in the shared executor while the step type/reducer are 180's. The same misattribution appears at line 81. Concretely this means the correct runtime dependency for the dispersion work is 180, yet the frontmatter declares `dependencies: [100, 140, 300]` and omits 180. A slice planner reading this doc will look in 140's (complete) scope for fan_out and conclude the dependency is satisfied, when the mechanism actually lives in a different initiative. Fix the attribution and add 180 to the dependency set.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:110"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Keystone \"unambiguous attach\" is not reconciled with clobber-on-rejudgment persistence",
+   "description": "Description: The keystone's core requirement is that a sample verdict \"attach unambiguously to the specific persisted judge result being checked.\" But the current judge persistence cannot provide a stable unique handle for a re-judged artifact. `ReviewAction._review` persists via `save_review_result`/`save_review_file`, both of which compute a deterministic filename (`{index}-review.{review_type}.{slice_name}` / `{index}-review.{review_type}.{step_name}`) and write with `path.write_text(...)` \u2014 an overwrite. A 303 judge-gated cycle (judge\u2192fix\u2192re-judge, repeated) therefore leaves only the LAST judge result on disk; earlier runs on the same artifact are clobbered. The run-state JSON (`StepState.score`) is per-run, so it does form a time series, but the doc never says the join key is run-id/step/timestamp \u2014 it frames \"the specific persisted judge result\" as if each judge result is a distinct, findable record. The slice will hit this immediately: \"which judge result is the operator spot-checking?\" has no answer in the file store. The doc must commit the join key (e.g., run-id + step + template + model + timestamp) and state that the review-file store alone is insufficient because re-judgment overwrites. As written, the keystone's headline constraint is a load-bearing decision left implicit.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:75"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "arch-vs-concept is enumerated as a calibratable level but has no judge",
+   "description": "Description: The overview (line 20) and first Design Goal (line 30) both enumerate three artifact levels \u2014 \"tasks-vs-slice, slice-design-vs-arch, arch-vs-concept\" \u2014 as the grain at which calibration is measured, and present arch-vs-concept as a live, low-trust level (\"weak for arch-vs-concept\"). Verified against the stack, only two judge templates exist: `src/squadron/data/templates/judge-slice-vs-arch.yaml` and `judge-tasks-vs-slice.yaml`. There is no `judge-arch-vs-concept` template; `arch.yaml` is a standard (non-judge) review template, and 300's completed scope explicitly prioritized only \"slice-design vs. arch, tasks vs. slice.\" So one of the three levels the doc commits to measuring has no judge to measure, and 300 (complete) never shipped one. The per-level calibration report the Envisioned State promises (\"how trustworthy is this judge at this artifact level?\") cannot be produced for arch-vs-concept. Either drop arch-vs-concept from the enumerated levels (it has no judge) or name the missing judge as an explicit prerequisite; the current present-tense enumeration overstates what is measurable.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:30"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Pre-emption prompt's injection mechanism and ownership are unspecified",
+   "description": "Description: The \"first measurable customer\" is a \"dispatch-side prompt-chaining pre-emption prompt \u2014 front-loading avoidance of the issue classes the audit actually finds.\" The doc states the *what* (avoid baseline issue classes) and the *ordering* (baseline before intervention), but never the *how*: the injection point, the format, or who owns the change. The dispatch action (`src/squadron/pipeline/actions/dispatch.py`) is 140's, and 320's governing principle (line 46, \"Read-side over 300's write path... it does not modify the judging path\") is a read-side mandate. Injecting avoidance instructions into the dispatch prompt is a write-side change to a component 320 does not own, and the doc does not say whether it is a new dispatch param, a rules-file layer, a template edit, or a coordinated 140 change. This is the hard part left as \"step 3: magic happens\": the whole value of the second oracle (\"proving the metrology can detect an intervention's effect\") hinges on a prompt change whose locus, mechanism, and cross-initiative ownership are never stated. It should name the dispatch injection point and declare whether it is an additive param or a coordinated 140 change, mirroring how 300 handled its 140 boundary.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:22"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Code-quality oracle's 340 dependency is under-declared",
+   "description": "Description: The scope (line 24) and the \"Tech-debt-audit baseline harness\" slice (line 95) both depend on the tech-debt-audit skill that is \"shipped in the 340 analysis pack\" (line 22). The frontmatter declares only `dependencies: [100, 140, 300]` \u2014 340 is absent \u2014 and Related Work (line 111) frames 340 as a \"consumer relationship... not assumed.\" The initiative plan (001, line 45) echoes this: \"340 does not depend on 320,\" treating 320 as consumer. But 320's baseline-harness and pre-emption slices cannot execute until 340's analysis pack is installed (`sq skills install analysis`); that is a runtime prerequisite, not a loose relationship. Because 340 is `status: complete` the omission is not blocking, but the dependency is real and should be in the frontmatter and in the slice ordering (baseline harness is gated on 340's pack, which is gated on 100). As written, the slice plan can order the audit harness before 340's install is acknowledged.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:5"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Two oracles, one metrology shape... reporting layer built once\" overstates reuse",
+   "description": "Description: The Envisioned State claims the two oracles \"share one metrology shape \u2014 capture oracle verdicts, persist them queryably, report agreement/trend \u2014 so the reporting layer is built once.\" The capture\u2192persist\u2192report spine is indeed similar, but the two reporting requirements diverge materially: judge agreement is small-n categorical agreement per artifact level and per judge config (with a minimum-evidence floor before loosening thresholds), whereas audit quality is normalized findings (category/location/severity), a cross-project baseline, and an observational before/after delta. These are different schemas, different grains, and different statistical honesty constraints (the audit's own run-to-run variance is an explicit concern at line 83). Calling it \"one reporting layer built once\" risks a premature shared abstraction that fits neither well. The shape-reuse is a fair motivation, but the doc should not commit to a single reporting implementation; it should commit to a shared *store/contract* and let the two report producers be separate.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:69"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The `criteria` map is cited as a 320 latent field, but it is a populated 300/302 field",
+   "description": "Description: The read-side principle says \"Where a latent field exists (e.g. the reserved `criteria` map), 320 populates or reads it.\" Verified: the `criteria` map is not a 320 field and is not merely latent \u2014 302's judge templates already emit it (via the `criteria:` block) and the parser already extracts it into `ReviewResult.criteria`. It is the judge's own per-criterion sub-score breakdown, not a calibration hook. 320 would at most *read* it; \"populates\" is wrong, and using it as the doc's example of a field 320 can write to mischaracterizes the boundary the principle is trying to draw. A cleaner example of a read-side hook is `provenance` (already distinguishing judge-derived vs. review-produced), which 300-arch explicitly says exists \"to give the calibration initiative [320] the discriminator it needs.\"",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:46"
+  }
+ ]
+}

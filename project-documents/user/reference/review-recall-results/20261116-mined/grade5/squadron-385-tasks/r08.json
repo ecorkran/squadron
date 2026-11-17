@@ -1,0 +1,19 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Local head sha for the pushed-branch precondition is unnamed",
+   "description": "`check_head_pushed` takes `local_sha: str` as an input, but no task says how the command obtains the local head sha. Task 3 adds only `current_branch` (a branch *name*) and `commits_in_range` (which needs a base \u2014 and per Task 13.1's ordering, base selection runs *after* the precondition). The wiring step in Task 13 therefore depends on an acquisition (`git rev-parse HEAD`) that exists in no task's steps. This is completable \u2014 the parameter name makes the requirement clear and the acquisition is idiomatic \u2014 but naming it in Task 3's helpers or Task 13.1's steps would remove the last unspecified input on the path.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"No host call is made\" in 12.2 conflates reads with writes",
+   "description": "Task 12.2 asserts \"the failure path creates nothing \u2014 no host call is made\", while the success criterion says \"verified by the fake runner recording zero write calls\". At command level the check runs *after* several legitimate host reads (`identify_operator`, `branch_exists`, possibly `default_branch`), so \"no host call\" would be literally wrong there; 13.2 (line 309) phrases it correctly as \"no write\". In the unit-level `tests/pr/test_body.py` context the assertion is trivially true. Reconciling the phrasing to \"no write\" would keep the two levels consistent.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:287"
+  }
+ ]
+}

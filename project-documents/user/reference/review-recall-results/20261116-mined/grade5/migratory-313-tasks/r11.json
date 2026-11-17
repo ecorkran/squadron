@@ -1,0 +1,40 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Loader instructions silently accept explicit null",
+   "description": "Using `data.get(\"policy\", None)` conflates an absent key with explicit YAML `policy: null`. The design requires any present value to be a string. Distinguish key absence from null and extend the existing non-string test to cover null rejection.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:69-73"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Round-trip assertion is weaker than criterion 5",
+   "description": "Task 1.4 checks only that the reloaded policy matches. Criterion 5 also requires plain-string YAML output and equality of the complete reloaded `ServerConfig`. Strengthen this existing test\u2019s assertions rather than adding another test task.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Manual verification can undo the required shipped default",
+   "description": "\u201cWhichever policy you want to keep\u201d permits leaving `config/test.yaml` on `open` or `reflect`, violating criterion 12 after Task 4.2 has passed. Require restoration to `wrap` and verify it before closeout.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:306"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items",
+   "description": "All five `**Commit**:` markers are checkboxes rather than required plain lines. Convert them to standalone markers after their tested work groups. Their placement after validation is otherwise appropriate.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task decomposition is heavier than the slice needs",
+   "description": "The small slice has 23 task headings, including five commit-only tasks. Merge Tasks 1.1\u20131.3 into one config implementation task, combine the two shipped-config edits, and replace commit-only tasks with plain markers. Tasks 5.1 and 5.2\u2019s Step 2 duplicate the same final full-suite check; retain one. Preserve the focused tests and viewer walkthrough.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

@@ -1,0 +1,96 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`reviewedSha` will record the operator's HEAD, not the PR head being reviewed",
+   "description": "`save_review_result` stamps provenance with `resolve_reviewed_sha(\".\")` (`src/squadron/review/persistence.py`), and `format_review_markdown` receives it as a parameter \u2014 there is no way to pass a different SHA through the existing CLI save path. The document says \"The head sha recorded in the artifact is what was reviewed,\" that the posted comment \"carries ... the reviewed head sha,\" and that \"Archiving, digest, and integrity checks from the 900-band review work apply unchanged.\" For a PR review the operator's checkout HEAD is *not* the fetched PR head, so as written the artifact and the public comment both advertise the wrong commit. This also poisons `sq review resolve`, which uses `reviewedSha` as its diff base (`resolution_evidence.py:165`). The design must specify who supplies the PR head SHA to persistence, and that `sq review pr` never routes through `resolve_reviewed_sha(\".\")`.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The no-worktree review path resolves the diff against the operator's HEAD",
+   "description": "`normalize_diff_spec` rewrites a bare base ref to `<base>...HEAD` (`git_utils.py`), and both `code_review_prompt` (`builders/code.py`) and `_run_git_diff` / `_run_git_diff_filenames` (`review_client.py`) run git with `cwd=inputs[\"cwd\"]`. The document says the adapter produces \"a local diff range, a head ref present in the local repository,\" that \"A review without tools needs only the fetched ref,\" and that squadron \"never checks out or mutates the operator's working tree.\" Those three statements cannot all hold: with no scratch worktree, `inputs[\"cwd\"]` is the operator's checkout, so `...HEAD` reviews whatever branch the operator happens to be on, not the fetched PR head \u2014 exactly the wrong-subject defect slice 916 was created to fix. The design never states whether the adapter emits an explicit two-endpoint range (`base...refs/squadron/pr/N`), which is the only form that works without a worktree.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Untrusted repository content is injected as system-prompt authority",
+   "description": "The untrusted-text treatment covers only \"Title, body, linked issues, and unresolved threads.\" But the PR head's own `CLAUDE.md` is injected by `_inject_file_contents` as \"CLAUDE.md (project conventions)\" and `load_review_rules` reads `.claude/rules/*.md` from `resolve_rules_dir(review_cwd)` into the **system prompt** as \"## Additional Review Rules\". In the target use case \u2014 an enterprise repository squadron did not plan \u2014 that tree is third-party-controlled, so a PR can author its own \"conventions\" with higher authority than the review template. The \"Rules outside a planned project\" bullet makes this worse: it claims the review \"runs with the template's rules and language auto-detection only,\" but `code.yaml` contains no rules, `load_review_rules` returns `None` when no rules dir resolves, and `resolve_rules_dir` will happily find a foreign `.claude/rules/` \u2014 so the claimed explicit degradation is actually either a silent no-rules review or an injection of the foreign repo's rules. Additionally, `cli/app.py` calls `load_dotenv(Path.cwd() / \".env\")` at import time, so reviewing an untrusted checkout loads that repo's `.env` into the same process that then shells out to `gh` (which reads `GH_TOKEN`/`GH_HOST`). The document needs an explicit trust boundary for tree-sourced rules, CLAUDE.md, and env.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "PR-keyed persistence has no filename, frontmatter, or data-directory contract",
+   "description": "\"A PR-keyed name that satisfies the review frontmatter contract without a slice index\" is asserted but never defined, and the contract is not just `docType`: `format_review_markdown` emits `slice`, `project`, `reviewType`, `sourceDocument`, `verdict`, and `reviewedSha`, and its `slice_info=None` branch fabricates `slice: unknown`, `# Review ... \u2014 slice 0`, and `project: unknown` \u2014 silent fallback values that `CLAUDE.md` forbids (\"Fail explicitly with errors or obviously-placeholder values\"). \"A configured squadron data directory\" has no corresponding key in `config/keys.py` (only `metrology.store_dir` exists), no collision semantics for PR numbers across hosts/owners/repositories, and `get_config` raises `KeyError` on undefined keys. Finally, \"Archiving, digest, and integrity checks ... apply unchanged\" is false for discovery: `metrology/capture.py:97` and `metrology/discovery.py:46` glob `{index}-review.*` / `*-review.*`, `resolution_evidence.py:105` globs `{index}-review.*.md` and `review_type_of` splits the filename on `.` by position, and `sq review resolve` requires an integer index. A PR-keyed artifact is invisible to all of them. This is a cross-document gap, hence `unverified` rather than a single line.",
+   "location": "unverified"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The typed PR record has no carrier through the review result, and PR metadata cannot reach the prompt without changing `sq review code`",
+   "description": "\"PR identity is a value, not a string ... Every downstream consumer, including persistence and posting, keys on that record,\" but `ReviewResult` (`review/models.py`) has no PR fields, and `_run_review_command` takes `inputs: dict[str, str]` whose only review-domain keys are `cwd`, `diff`, `files`, and `diff_exclude_patterns`. `code_review_prompt` reads exactly those keys; adding a `pr_metadata` input means editing the shared `code` template/builder used by `sq review code`, which contradicts \"Existing flows do not change\" and \"There is no second reviewer.\" It also runs through `_inject_file_contents`, which treats every non-`_SKIP_KEYS` input as a potential file path and would not apply the promised truncation discipline (that logic is a private `_truncate`/`_add_injection` closure). The document needs to name the seam that carries the record and the metadata into the prompt without touching the code-review path.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`--post` depends on a saved artifact the flag surface can suppress, and its idempotency mechanism is unspecified",
+   "description": "\"With the opt-in flag, the saved review is rendered as one PR comment\" assumes a persisted markdown artifact, but `_resolve_save_outcome` produces `SUPPRESSED` for `--no-save`, `NOT_PERSISTABLE` (exits 0 with a warning) when no target resolves, and `UNSAVED` on write failure; `--json` writes a `.json` artifact. None of `--post --no-save`, `--post --json`, `--post --no-rules`, or a failed save is resolved. \"The comment is marked so squadron can find and update its own prior comment\" requires enumerating/paginating all PR comments and PATCHing one \u2014 `gh pr comment` only creates, so this becomes a `gh api` REST call whose shapes the doc says the protocol \"must not leak\"; two concurrent `--post` invocations can both observe no prior comment and stack. \"A write operation that cannot confirm the operator's identity refuses\" is a stated principle but is absent from the \"Failure modes are enumerated\" list, as are worktree creation/cleanup failure, TOCTOU head force-push between resolve and fetch, and \"no artifact to post.\"",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The proposed `sq doctor` checks break doctor's pure-check contract and would fail every non-PR install",
+   "description": "`doctor_checks.py` is explicitly \"Pure check functions ... no network, no subprocesses\"; even `core.hooksPath` is resolved in `doctor.py` and passed in. \"`gh` present, authenticated, host reachable\" needs two subprocesses plus a network probe, conflicting with slice 905's stated exclusion (\"No network calls to provider endpoints\"). Worse, `doctor` exits 1 on any `CheckStatus.MISSING`; marking `gh` required would make `sq doctor` fail for every user who never uses PRs, violating \"No PR is ever required\" and \"Existing flows do not change.\" \"Setup does not install `gh`; it reports its absence\" is also not free: `setup_steps.py` has name-keyed `_RECHECK_MAP`, `_TITLE_MAP`, `_EXPLANATION`, and `DOCS_ANCHOR` maps (with a test asserting every anchor resolves), so a new check renders with no title, explanation, or anchor and no recheck. Finally, the doc acknowledges \"a process boundary ... per call\" but specifies no timeout, unlike `run_git`'s `GIT_COMMAND_TIMEOUT_SECONDS = 30`; `ContextForgeClient._run` already demonstrates the unbounded-subprocess pattern. `gh` is also an undeclared external binary in a package whose `pyproject.toml` has no optional extra for it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Interface parity\" with `/sq:review` is false as written: the slash command rejects `pr` before the CLI sees it",
+   "description": "`commands/sq/review.md` is a natural-language prompt, not a transport: it declares \"Valid subcommands: `code`, `slice`, `tasks`, `arch`, `resolve`\" and \"If the subcommand is missing or unrecognized, show the usage below and **stop**.\" So `/sq:review pr 123` terminates in the prompt and never reaches `sq review pr`. Achieving parity means editing that allowlist, adding a `pr` branch with its own flag documentation, shipping a new `commands/sq/pr.md`, and having users re-run `sq install-commands` (installed copies live at `~/.claude/commands/sq/`); `check_slash_commands` only counts `.md` files and cannot detect a stale copy. The same principle asserts \"any later pipeline input accept identically, producing the same artifact\" while Scope says \"No pipeline actions\" and \"A pipeline input for PR review is a later decision\" \u2014 parity is claimed with a component the design excludes.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`sq pr create` under-specifies the hard parts: \"latest saved review\", unsourced sections, and an unparsed section contract",
+   "description": "No discovery function exists for \"the latest saved review\": `locate_review` requires an integer index, metrology globs `{index}-review.*`, and nothing orders reviews by `dateCreated`/`dateUpdated`; in the unplanned-repo case the review lives in a data directory the doc never locates. The Design Goal \"Nothing is asserted that no input supports\" is adopted from 360, which enforces it with explicit per-field gap markers \u2014 here fixed sections \"why\", \"how it was verified\", and \"known gaps\" have no named input (commits, slice docs, and a review verdict do not assert verification or enumerate gaps), and no gap-marker syntax is defined. \"A stable section structure that an AI reviewer, including `sq review pr` itself, can parse for intent and claimed verification\" has neither a parser nor a consumer: `sq review pr` injects PR body as delimited data, not as structured intent. The \"one-shot model call through the existing provider-profile machinery\" also doesn't name `capture_summary_via_profile` (`pipeline/summary_oneshot.py`) or how the review-only model cascade (`_resolve_model` with `default_model_code`, alias expansion) applies to a non-review call.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The integration-branch rule silently degrades to `main`, which `sq pr create` is required to never do",
+   "description": "`resolve_diff_base` (`git_utils.py`) reads `git.integration_branch` via `cf config get` and \"falls back to `DEFAULT_DIFF_BASE` when the key is unset, when `cf` is unavailable, or when reading it fails\" \u2014 with a DEBUG-only log, deliberately \"never raise[s]\". The document requires `sq pr create` to target the configured integration branch and \"never `main` in that case,\" and `CLAUDE.md` makes that a hard rule. A repo with an integration branch set but `cf` missing/unreadable therefore produces a PR against `main`, silently. The design needs a fail-closed read for PR base selection rather than reuse of the diff-base convenience path, plus a statement of what happens when the resolved base has no remote-tracking ref (`gh pr create --base` requires one).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\"A second host is a new implementation, not an edit\" has no selection mechanism",
+   "description": "One protocol with six operations and one `gh` implementation is declared, but nothing defines how an implementation is chosen: the target grammar includes full URLs, `owner/repo#n`, branch names, and absence, and \"Resolution must ... fail loudly when the repository has no host remote, has more than one.\" Selecting an adapter therefore requires inspecting remotes *before* resolution, yet \"The grammar is fixed at the adapter boundary and nowhere else\" \u2014 so the adapter owns both parsing and selection with no registry, config key, or discovery protocol specified. Adding GitLab/Gitea means editing that selection code, i.e., an edit, not just a new implementation; with a non-GitHub remote and only the `gh` implementation, behavior is undefined. Host-specific PR refspecs (`refs/pull/N/head` vs `refs/merge-requests/N/head`) and `gh api` REST shapes are also load-bearing details the \"must not leak `gh`-specific shapes\" rule cannot hide behind a plain interface.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design Goals"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Mechanism count exceeds what three CLI capabilities require",
+   "description": "Six slices carry an adapter protocol with six operations, a typed record, a five-form target grammar, namespaced fetch refs, a scratch-worktree lifecycle, a generic persistence-target refactor, a rules-degradation path, prompt-input delimiting, idempotent comment updates, doctor+setup checks, model-call description composition, a body section contract, two slash transports, and a live-run evidence slice \u2014 for three commands. Against `CLAUDE.md`'s \"Always resist adding complexity,\" the following can be cut or deferred without dropping any plan-assigned capability: (1) the \"stable section structure that an AI reviewer ... can parse\" contract \u2014 no parser or consumer is built, so plain deterministic sections suffice until there is one; (2) the separate \"Slash-command and documentation parity\" slice \u2014 it is a markdown edit plus `sq install-commands`, fold it into the slices that add the commands; (3) the doctor \"host reachable\" network probe \u2014 `gh auth status` plus the invocation-time error paths already cover it; (4) \"Interface parity ... any later pipeline input\" \u2014 the plan explicitly makes pipeline PR targets a non-goal. Keeping the generic save-target refactor scoped to a PR-specific writer would also avoid reworking `format_review_markdown`'s frontmatter contract, which the metrology and resolution readers depend on.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Anticipated Slices"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Scratch worktree creation is described as a slice-level question, not designed",
+   "description": "\"Concurrency with the operator's own worktrees, disk use, and cleanup on failure are the slice-level questions\" is an explicit deferral of the mechanism that determines whether tool-enabled PR reviews work at all. `git worktree add` refuses if the branch/ref is already checked out elsewhere, so a PR whose head is the operator's current branch \u2014 the common \"review my open PR\" case \u2014 cannot be materialized in a scratch worktree without detaching at a SHA. The document says \"A review without tools needs only the fetched ref\" but never says what happens when a tool-enabled review hits this collision, nor who removes the worktree and the namespaced ref on a failed review (and `CLAUDE.md`'s destructive-operation rules constrain what may be deleted).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  }
+ ]
+}

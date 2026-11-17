@@ -1,0 +1,68 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Residual offers have no viable source of unsampled results",
+   "description": "T13 says to fall back to store-recorded samples if no discovery surface exists. The existing capture resolver finds reviews for a supplied target, while the store contains samples\u2014not an inventory of unsampled reviews. That fallback cannot satisfy the non-empty-offers criterion. Add a bounded review-discovery task and test it with real unsampled review files; do not defer the missing capability.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Graduation lookup does not select the current version",
+   "description": "T15 filters recommendations by template, model, and level, but the report can contain multiple cells with those same values and different content hashes. A historical `GRADUATE` cell could therefore authorize graduation after a prompt edit. Require an exact match to the current full `JudgeConfigId`, define refusal when no current cell exists, and test old-version evidence alongside a new version.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Direction precedence contradicts the required outcomes",
+   "description": "T7 explicitly orders `n < floor` before `TIGHTEN`, then requires a low-n, low-match cell to reach `TIGHTEN`. A junior implementer cannot follow both instructions. Replace the ordered list with unambiguous, mutually compatible rules and tests, including the interaction between unversioned and low-match cells.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Offer selection omits the graduation\u2019s artifact level",
+   "description": "T13 matches results by `JudgeConfigId` but does not require matching `GraduatedConfig.artifact_level`. Graduation is scoped to both identity and level, so offers could be drawn for a level that did not earn it. Add level matching and a cross-level regression test.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model limitation is absent from the required note",
+   "description": "T9 requires the model-and-threshold pairing note but not the slice\u2019s explicit warning that a runtime-drawn model cannot be tracked by the threshold. T10 and T16 check only that a note is present. Require and test that limitation in both rendered and JSON recommendations.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-151"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Model placement introduces a circular dependency",
+   "description": "T3 places `GraduatedConfig` in `calibration_models.py`, which needs `GroupKey` and `JudgeConfigId`; T11 then puts `GraduatedConfig` in `MetrologyRecord` in `models.py`. Since `report_models.py` already imports `models.py`, straightforward runtime imports form a cycle. Specify a dependency-safe model arrangement or forward-reference strategy and verify imports and envelope round-trips.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:56-67"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Malformed threshold handling is neither implemented nor tested",
+   "description": "The coverage check claims T8 exercises malformed judge blocks, but T8 only tests registered and unregistered templates. `resolve_thresholds` converts values with `float()` and can raise for a non-numeric floor; it does not provide the documented warning and fallback. Add explicit handling and a test for the slice\u2019s malformed-block failure mode.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:121-139"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Empty-result CLI signals are missing",
+   "description": "T15 requires a lapse message but does not require the slice\u2019s \u201cno evidence\u201d message for an empty recommendation report or \u201cno offers due\u201d for an exhausted current graduation. Add both output requirements and CLI tests, distinguishing exhaustion from lapse.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:226-252"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Commit markers precede tests and occur after every task",
+   "description": "The same pattern repeats throughout: each implementation task has a commit marker before its immediately following test task, and every task has a marker. Consolidate markers at selected working, tested points after implementation/test pairs rather than committing untested implementations and every individual task.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39-52"
+  }
+ ]
+}

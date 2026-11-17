@@ -1,0 +1,99 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Section 3's commit gate (3.7) cannot pass \u2014 `adoptionBuild.integration.test.ts` goes red in 3.3 but is only deleted in 4.1",
+      "description": "Task 3.3 removes the adoption hook from `ContextIntegrator`/`CoreServiceFactory` and names exactly four test files to update (`ContextIntegrator.test.ts`, `CoreServiceFactory.test.ts`, `pipeline-integration.test.ts`, `pure-build-golden.test.ts`). It does not mention `packages/core/tests/adoption/adoptionBuild.integration.test.ts`, which calls the two-argument `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })` (`packages/core/tests/adoption/adoptionBuild.integration.test.ts:68`) and asserts the behavior the slice removes: the brownfield prompt swap (`:100-101`), the `### Adoption Facts` heading (`:102`), and `readAdoptionState(root)` being `'in_progress'` after a build (`:123`, `:209`). As soon as 3.3 lands, these cases fail. Task 3.7 then requires `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm -r test` to **all pass** before committing `refactor: remove adoption hook from the build pipeline`, but the full-suite run must fail on this file \u2014 its deletion is only listed at task 4.1 (`:144`), after the 3.7 commit marker. The commit marker therefore sits at a point that is not tested-green, contradicting the file's own success criterion and the \"test-with\" sequencing the rest of the plan follows (the file's section-4 header even promises \"Each task leaves the workspace compiling and commits on its own\", but the red window 3.7 \u2192 4.1 crosses a commit). Fix: delete (or rewrite against the kept detection functions, per the design's Migration Plan note) `adoptionBuild.integration.test.ts` as part of 3.3's test updates, or move 4.1's deletion of that file ahead of the 3.7 commit.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:131-134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria traceability is otherwise complete",
+      "description": "Cross-referencing the design's Success Criteria against the task file: \"no build path reads/writes `adoption.state`, runs detection or spawns `sq`\" \u2192 5.1 (fake-`sq` marker, snapshot helper) + 6.2 + 6.3; \"Phase 0 brownfield returns the concept prompt and writes nothing, whatever `adoption.state` holds\" \u2192 5.1 (no-state and `in_progress` runs, explicit-key check) + 6.3 step 2; \"greenfield, already-planned and later-phase builds byte-identical\" \u2192 2.1\u20132.3 (D6 capture before any edit) + 6.1 golden-diff check; \"CLI and MCP `context_build` outputs match\" \u2192 5.1 parity check; \"`MIN_GUIDE_VERSION` warning preserved\" \u2192 3.5/3.6 keep the named assertions and 6.1 verifies no `expect` line about the warning changed (both named tests verified to exist at `packages/cli/tests/commands/build.test.ts:91` and `packages/mcp-server/tests/contextTools.test.ts:162`); \"services/ imports nothing from `adoption/`/`detection/`\" \u2192 3.3 grep + 6.2; \"no orphan exports except `history`/`comprehensionAnalysis`/`adoptionOutcome`\" \u2192 4.1\u20134.4 + 6.2 export audit (the `fileComprehension` exception at `packages/core/src/detection/comprehensionAnalysis.ts:15` is correctly anticipated); \"format/lint/typecheck/tests pass\" and \"269 can start clean\" \u2192 6.1\u20136.2. No scope creep found: every task traces to a design item (D1\u2013D6, Migration Plan, or the Verification Walkthrough), and no NFR is restated in the design, so no load test is required. Commit markers (2.3, 3.2a, 3.7, 4.1\u20134.4, 5.1, 6.3-conditional) are sensibly distributed rather than per-task or end-only.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-201"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Section 3's commit gate (3.7) cannot pass \u2014 `adoptionBuild.integration.test.ts` goes red in 3.3 but is only deleted in 4.1",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:131-134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Success-criteria traceability is otherwise complete",
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-201",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-17T06:29:41.843331",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 125533,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 247314,
+  "cached_tokens": 193312,
+  "cache_write_tokens": null,
+  "completion_tokens": 34169,
+  "reasoning_tokens": 31839,
+  "duration_seconds": 1548.8221819996834,
+  "cost_usd": 0.053991148,
+  "cost_basis": "alias_pricing"
+}

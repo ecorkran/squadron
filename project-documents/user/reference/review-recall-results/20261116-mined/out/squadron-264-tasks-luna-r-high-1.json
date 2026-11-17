@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The live-demo success criterion is deferred rather than completed",
+      "description": "The slice\u2019s success criterion 6 requires a non-SDK model dispatch to call `cf_build_context` and receive assembled context. Task 9.3 explicitly leaves walkthrough step 4 open, and no task implements or verifies that demo. As written, the breakdown does not cover all stated success criteria.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The fake-server tests do not exercise a CF tool executor end to end",
+      "description": "Slice success criterion 3 calls for a real stdio round-trip in which an executor returns the fake server\u2019s text; criterion 4 requires spawn failure not to escape the executor. Task 5 tests `call_mcp_tool` directly, while Task 7 mocks that transport for descriptor tests. The live executor round-trip in Task 8 uses the real CF server and may be skipped when unavailable, so it does not fill this gap. Add a test that invokes a materialized CF executor against the fake server, including the executor-level failure path.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Some required result and transport behaviors lack test coverage",
+      "description": "The slice\u2019s result-mapping rules require joining multiple text blocks and noting non-text blocks by type, but the fake server and bridge tests cover only a single text response, an error response, and an empty response. The design also lists protocol/transport errors as a failure mode whose observable warning should be tested; an unknown tool test does not establish handling of a closed stream or transport exception. Add targeted fixture cases and assertions for these behaviors.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The live-demo success criterion is deferred rather than completed",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The fake-server tests do not exercise a CF tool executor end to end",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Some required result and transport behaviors lack test coverage",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-17T12:34:33.382185",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 494,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 16547,
+  "cached_tokens": 5391,
+  "cache_write_tokens": null,
+  "completion_tokens": 3876,
+  "reasoning_tokens": 3389,
+  "duration_seconds": 40.93293354194611,
+  "cost_usd": 0.00310751,
+  "cost_basis": "alias_pricing"
+}

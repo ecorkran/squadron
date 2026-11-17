@@ -1,0 +1,26 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Collision remediation deletes the winning personal value",
+   "description": "The prescribed `cf config unset <key> --project` cannot remove the stale shared copy: Delete routing explicitly targets the personal file (line 89). This removes the developer\u2019s preference, reactivates the stale shared value through fallback, and leaves the warning unresolved. Define a working shared-copy cleanup operation, and update the collision walkthrough accordingly.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Existing projects can commit the new personal file",
+   "description": "Ignore protection runs only during `cf init`, but existing projects can create `.context-forge.local.toml` through either migration or a project-scoped write without reinitializing. Migration can therefore move personal settings into another unignored file, leaving the plan\u2019s \u201cmust never be committed\u201d requirement unmet. Reuse the minimal ignore safeguard before creating the personal file through either path, with explicit failure handling.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-159"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Compatibility walkthrough contradicts the specified precedence",
+   "description": "Step 1 creates a personal value of `dev/erik`; step 4 leaves that file untouched but expects the shared value `legacy/value` to win. Correct precedence produces `dev/erik`, and migration subsequently encounters a collision rather than the expected successful move. Remove the personal value before testing legacy fallback, and test precedence and collision behavior separately. Otherwise the walkthrough cannot verify the compatibility requirement or satisfy the parent architecture\u2019s behavior-verification principle.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-257"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator's three \"in-scope\" sites are the SliceStatus.status sites TD-3 excludes",
+   "description": "The scope table (line 36) classifies `WorkflowNavigator.ts`'s 3 sites as `NormalizedStatus` `=== 'complete'` checks, the component table (line 75) and migration step 4 (line 90) sweep them \u2014 but verified against source, all three are members of the `SliceStatus.status` workflow-position union (types.ts:267\u2013274), not `NormalizedStatus`:\n\n- `WorkflowNavigator.ts:312` and `:345` \u2014 `slice.status === 'complete'` where `slice` is `status.activeSlice: SliceStatus`\n- `WorkflowNavigator.ts:588` \u2014 `return { ...base, status: 'complete', taskProgress }` constructing a `SliceStatus` (`base: SliceStatus` in `deriveSliceStatus`)\n\nThis directly contradicts TD-3 (slice doc lines 104\u2013106: \"`SliceStatus.status` \u2026 is a different, larger union \u2026 touching it risks conflating two independent unions. Left untouched.\") and the success criterion at line 136 (\"`SliceStatus.status` remain untouched \u2026 not accidentally swept\"). Executing step 4 as written violates the design's own exclusion; skipping it makes WorkflowNavigator's true in-scope count 0 and leaves 3 pattern matches that defeat the \"zero matches in the six swept files\" check at line 135. Reconcile by dropping the WorkflowNavigator row and migration step 4 (and adjusting the success-grep expectations), since the sweep of `NormalizedStatus` sites is complete without them \u2014 not by amending TD-3, whose reasoning is correct.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Verification counts and the success grep don't fully reconcile with the code",
+   "description": "Minor count inaccuracies in the site table and Verification Walkthrough (all hedged as \"~65\"/\"~75\", so informational): `statusNormalizer.ts`'s value side is 14 occurrences (lines 5\u201318), not 13; the walkthrough's after-count of \"SliceStatus.status (4)\" matches only 1 occurrence under the stated pattern (`types.ts:269`, the sole `'complete'`); and `ConsistencyChecker.ts`'s \"36 sites\" includes 3 literal occurrences inside the comment at `ConsistencyChecker.ts:514` (`// 'complete' | 'in-progress' | 'not-started'`), which the success grep will match. That comment documents the pre-TD-1 type and is stale after the retype, so the sweep should update it (and the similar comment at `ProjectModelBuilder.ts:179`) or the grep at line 135 needs to be comment-aware \u2014 as written, \"zero matches in the six swept files\" is unachievable while the comment stands. (Also trivial: `ProjectModelBuilder.ts`'s `'unknown'` literal is at line 181, plus 256/269/270 \u2014 not \"line 179\" \u2014 though the exclusion conclusion is unchanged.)",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  }
+ ]
+}

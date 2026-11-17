@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Performance NFR lacks the required load test and CI gate",
+   "description": "Slice D2 restates a sub-second detection NFR. The task file explicitly excludes load testing, but the review requirements require a task adding coverage under `tests/load/` and an explicit CI gating task. Add both; the cap unit tests alone do not satisfy that requirement.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit checkpoints are modeled as checkbox tasks",
+   "description": "Task 2C and the subsequent `*C` entries make commits standalone checklist tasks rather than plain `**Commit**:` markers. Replace these entries with markers at the existing tested checkpoints. This also removes unnecessary task fragmentation without changing implementation scope.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Renderer tests omit required outcomes",
+   "description": "The slice\u2019s technical success criteria require renderer tests for every outcome. Task 8T lists brownfield, adoption-in-progress and explicit-instruction outcomes, but omits greenfield, already-planned and adoption-closed. Add those cases, including both closed states, to verify their outcome/reason and state rendering.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Write-failure test does not verify unchanged state",
+   "description": "The slice explicitly requires D9 write-failure coverage asserting both `AdoptionError` and unchanged state. Task 9T only checks the error message. Capture the original configuration and assert that the failed build leaves it unchanged.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:199"
+  }
+ ]
+}

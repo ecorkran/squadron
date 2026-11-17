@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox items instead of plain `**Commit**:` lines",
+      "description": "All 17 commit markers in this file are written as checklist items (`- [ ] Commit: \\`feat: ...\\``, e.g. lines 112, 157, 187, 217, 264, 320, 508, 527), rather than plain `**Commit**: \\`...\\`` lines. This deviates from the repo's established convention \u2014 every other task file I checked (e.g. `144-tasks.utility-actions.md`, `128-tasks.review-transport-unification-provider-decoupling.md`) uses the plain non-checkbox `**Commit**:` form, which is what the review convention calls for (\"plain lines, never checkboxes\"). Any tooling that greps for `**Commit**:` to find tested commit points will find none here. The placement itself is correct (after impl+test pairs, not every task, not only at the end), so only the marker format needs fixing.",
+      "file_ref": null,
+      "category": "documentation-convention",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "All functional, technical and integration success criteria trace to tasks with correct test-with sequencing",
+      "description": "Every success criterion maps to a task: owner/heartbeat/progress (Tasks 8, 11\u201314), orphaned listing + wait exit 8 (19, 20, 22), stale policy (19, 20, 22, 33\u201335), v4 UNOWNED behaviour (8, 20, 22), foreground stall + dispatch mapping (15\u201318), prune selection/protection/deletion (32\u201339), no per-run warnings + summary line (21, 22, 25, 26), column fitter and no-box pipelines list (23\u201328), pipelines show (29\u201331). Each implementation task is immediately followed by its test task(s) with a commit at the tested point; the spike (Task 2) precedes D7 work, `ActiveItem` is defined once in Task 4 and explicitly not redefined in Task 8, `run_liveness` (9\u201310) precedes its consumers (19, 21, 33), and the report pattern (32) precedes `apply_prune` (36). No scope-creep task found; Task 41 (issue) and Task 42 (verification) trace to Implementation Notes step 8 and the Verification Walkthrough.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Restated listing-time NFR has a load test that CI already gates",
+      "description": "The slice restates the \"under 1 s with a few hundred run-state files\" NFR in Success Criteria; Task 22a adds `tests/load/test_run_listing_scale.py` with a `MAX_LISTING_S = 1.0` wall-clock assertion and row-count check, modelled on the existing `tests/load/test_usage_reader_loop.py`. I confirmed the task's claim that no new CI wiring is needed: `pyproject.toml` sets `testpaths = [\"tests\"]` with no exclude, and `.github/workflows/ci.yml` runs `uv run pytest` (plus the hermetic job), so `tests/load/` is collected and gated on every CI run \u2014 the four existing load tests are gated the same way. Gating is explicitly documented in the task rather than left implicit.",
+      "file_ref": null,
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load test adds a time assertion the design deliberately omitted \u2014 consistent with review requirements",
+      "description": "The design's Special Considerations state \"There is still no assertion on time in tests\" and rely on walkthrough step 8 for wall-clock measurement. Task 22a introduces a hard 1.0 s assertion, a small addition beyond the design text, but it is appropriate: the review criteria require a load test when the slice restates an NFR, and the bound is described as generous for CI jitter. No action needed; noted only for awareness of the design/task difference.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-convention",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox items instead of plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "All functional, technical and integration success criteria trace to tasks with correct test-with sequencing",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "summary": "Restated listing-time NFR has a load test that CI already gates",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Load test adds a time assertion the design deliberately omitted \u2014 consistent with review requirements",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-17T07:43:49.380176",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 17,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 130321,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 222764,
+  "cached_tokens": 185344,
+  "cache_write_tokens": null,
+  "completion_tokens": 34536,
+  "reasoning_tokens": 33013,
+  "duration_seconds": 182.05994820827618,
+  "cost_usd": 0.006422756,
+  "cost_basis": "alias_pricing"
+}

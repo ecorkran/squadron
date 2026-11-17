@@ -1,0 +1,40 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Exit gate substituted for the parent plan's assigned criteria; \"no regression on k-first path\" dropped",
+   "description": "The parent plan entry (`project-documents/user/architecture/140-slices.simulation-scaling.md:56`) assigns: \"k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N; parity \u2026 preserved; **no regression on k-first path**.\" The design's criterion 4 (line 358) redefines the gate baseline to `radius_only`, and scope item 7 (line 67) removes `k_first` entirely \u2014 converting the plan's non-regression requirement into deletion of the path, plus config-error handling, a default flip, and test updates. The rationale (early exit masks the cost being fixed; biased selection) is coherent, but the plan entry is not revised, and development step 4 (line 444) plans to mark the entry `[x]` as if the original criteria were met. The baseline swap is also uncalibrated: `radius_only` performs full-radius scans with no early exit, so it may be *slower* than `k_first`, silently changing the gate's difficulty in either direction. Either the plan entry's exit criteria must be updated to match the design, or the design must retain `k_first` and gate against it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"No file outside the GPU compute path is touched\" contradicted by the design's own config/workload scope",
+   "description": "Component Structure (line 93) asserts no file outside the GPU compute path is touched, but in-scope item 7 (line 67) removes `k_first` from `ComputeConfig` and `Workload`, and Implementation Details (line 349) specifies edits in `migratory_server.config` \u2014 the world-server config surface \u2014 and `migratory.bench.workload`, with verification step 7 running `tests/migratory_server`. The `Interfaces Required` section (line 84) lists only field allocation and kernel binding; the `neighbor_mode` config contract change (accepted values, default flip, `ConfigurationError` for legacy configs) is an integration point consumed by the production server and bench harness and is under-declared there. The edits may well be one-liners, but the document must state the true blast radius so the server-side consumer of this change isn't surprised by a claim that explicitly excludes it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Architecture throughput NFR not restated; Tier 3 target misquoted as 200k",
+   "description": "The architecture states the throughput NFR \u2014 sustaining **60 TPS at the tier targets** (`project-documents/user/architecture/140-arch.simulation-scaling.md:28`) \u2014 and defines Tier 3 at **250k** (line 74; the plan's tier table agrees). The design's Overview (line 17) attributes \"the architecture's Tier 3 target (N=200k)\" to the architecture, and line 44 repeats \"our current Tier 3 milestone of 200k\"; 200k is this slice's gate N, not the architecture's Tier 3. More substantively, every gate in the design is *relative* (within 20% of `radius_only`; beat 213.9 TPS at 10k) \u2014 the absolute 60 TPS target is never restated anywhere in the document. All gates can therefore pass at throughput far below the tier NFR (e.g., `radius_only`=10 TPS, `k_nearest`=8 TPS at 200k) with no criterion tying the slice to the architecture target. Restate \"60 TPS at 250k on production-class CUDA (Tier 3)\" \u2014 or explicitly label the dev-class relative gate as a checkpoint toward it \u2014 and correct the Tier 3 N.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Load-bearing gate can fail for a reason whose prescribed fix is out of slice scope",
+   "description": "Verification step 4 (line 395) states that if the gate fails because heap eviction/selection cost dominates at 200k density, \"the FRNN follow-up slice is the correct response, not a fix to this slice\" \u2014 while FRNN-style collect-then-sort is explicitly out of scope (line 75), even though the parent plan entry names FRNN as the mechanism that makes \"k-nearest \u2026 viable at scale\" (plan line 56). The slice's stated value \u2014 `k_nearest` as the production murmuration default at N=200k \u2014 therefore hinges on a measurement outcome whose documented failure mode routes outside the slice, leaving the default flip (step 7 requires four passes) undelivered and the plan entry uncheckable. Either bundle a minimal FRNN fallback so the slice can meet its own gate when selection cost dominates, or restate the gate/plan so a within-scope success path exists under that failure mode.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:395"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Reference-ceiling analysis and headroom probes exceed what this slice's gate needs",
+   "description": "The \"Reference points\" section, the 16M/80\u00d7 gap analysis (line 44), criterion 3's three-point `radius_only` baselines, and verification step 5's 500k/1M headroom probes (line 397) build a comparison against the published Babylon.js/M1 Max reference rather than against the slice's assigned decision: does the coherent grid make `k_nearest` viable at 200k. The architecture's actual target is 2M at 60 TPS, not 16M at 60 FPS on Apple Silicon. The measurements are cheap and the FRNN trigger condition uses them, but the framing inflates the document; the reference-ceiling discussion and repeated \"16M-class\" reframing can be trimmed to a short future-work note without losing anything the gate or parity checks consume.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:44"
+  }
+ ]
+}

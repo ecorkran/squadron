@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Sections 2 and 6 cite a preflight rejection as their fallback, but no such preflight check exists",
+      "description": "The mapping table is declared binding (\"The fallback column has no third option. Every section resolves to sourced content or a gap marker\"), yet rows 2 and 6 give \"preflight rejects empty `layers`\" / \"preflight rejects empty `edges`\" as the fallback \u2014 a third outcome (no document at all) rather than a gap marker. 361's preflight is executed unchanged by this slice, and its only such checks are top-level array validation (`layers`/`edges` empty arrays are rejected at contract level, 361 design \"Validation: absence vs malformation\"); the 361 flow's own per-section rule for empty layers/edges is not \"reject\" \u2014 only 362's table introduces that phrasing. As written, an implementer cannot tell whether a present-but-empty `layers[]` reaches section 2 (which would then need a defined non-gap fallback that is not stated) or is intended to be a contract-level rejection. Either restate rows 2 and 6's fallback as gap markers consistent with the \"no third option\" rule, or explicitly cite the 361 contract check by name and note that preflight runs before any section is written.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 6's function/class endpoint resolution mechanism is unstated, leaving the read-discipline criterion unverifiable",
+      "description": "Section 6 requires that \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts as an inter-layer signal.\" The architecture's read discipline states plainly that \"function- and class-level nodes are not read,\" and this slice's Success Criterion 9 asserts \"no function- or class-level node is read\" \u2014 but the design never states how a function endpoint is mapped to its owning file's layer without reading function nodes. (Parsing the type-prefixed node `id` from the edge, which the architecture documents as `function:path:name`, would satisfy both, but that mechanism is not named.) Without it, SC9 cannot be checked against implementation and an implementer could reasonably resolve endpoints by selecting function nodes from `nodes[]`, contradicting SC9 and the architecture's discipline. State the mechanism explicitly (e.g., \"resolve via the `path` segment of the endpoint id; never select function/class nodes from `nodes[]`\").",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `.understandignore` reporting rule contradicts its own example",
+      "description": "The rule says \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\" \u2014 but the same sentence's parenthetical, the Verified graph facts table (\"17 active lines\"), and walkthrough step 4 (`grep -vE '^\\s*(#|$)' \u2026 | wc -l` \u2192 17) all establish that this repo's file is *not* all-comments. An implementer reading the rule as written will look for an all-comments case and, finding 17 active lines, cannot tell whether \"defaults only\" or the active-pattern count is correct. Split the two cases: report the count and list whenever active lines exist (this repo's case); use \"defaults only\" only when zero active lines exist.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:234"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architecture goals and boundaries are held",
+      "description": "Verified against `360-arch.document-intelligence.md` and `360-slices.document-intelligence.md`: no Python added and no `src/squadron/` change (matches the plan's drift tripwire); extraction mapping, `[INFERRED]` governance, and the `analyze-codebase-prompt.md` reuse decision \u2014 exactly the three items the (362) plan entry assigns \u2014 are all delivered; the reference document is retained in `user/reference/` with only a cross-reference line, as the architecture requires; 361's contract sections are consumed unchanged rather than restated; 363/364 integration points match what those plan entries say they consume (per-section field mapping for 363, corrected layer composition for 364); read discipline preserved with the node filter widening from 201 to 238 bounded by excluding the 687 function/class nodes; both corrections align the 361 skill text back to the architecture's own statements (\"every file is assigned to exactly one layer\", the nine file-level types); and the walkthrough gates the design's core premise on re-measuring 238 across three sources with an explicit stop-and-report if they disagree. No scope creep beyond the plan entry; failure handling for each new source field (missing `project`, empty `layers`/`edges`, empty `tour`, missing `meta.json`/`config.json`, coverage discrepancy) has explicit, non-TBD handling.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Sections 2 and 6 cite a preflight rejection as their fallback, but no such preflight check exists",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Section 6's function/class endpoint resolution mechanism is unstated, leaving the read-discipline criterion unverifiable",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The `.understandignore` reporting rule contradicts its own example",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:234",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Architecture goals and boundaries are held",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-17T06:56:42.464587",
+  "model": "xiaomi/mimo-v2.6-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 211574,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-flash",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1409739,
+  "cached_tokens": 991040,
+  "cache_write_tokens": null,
+  "completion_tokens": 52483,
+  "reasoning_tokens": 50027,
+  "duration_seconds": 523.649667291902,
+  "cost_usd": 0.04359383,
+  "cost_basis": "alias_pricing"
+}

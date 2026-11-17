@@ -1,0 +1,54 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Orphans in the shared agents root have no enumerated handling on either failure path",
+   "description": "The agents install writes into `~/.agents/skills`, a root the design itself calls \"shared with every other skill source\" (D3), and the project rule is that receipts are \"the only authority for what squadron owns in a shared directory (#65)\". Two new failure modes on that path are unhandled and unmentioned:\n\n1. **Aborted write.** \"validate every skill dir \u2192 any violation \u2192 nothing written\" is validation atomicity, not write atomicity. `write_skill_dirs` is a per-directory `copytree` loop, and the receipt is written *after* the copy returns \u2014 a permission error or ENOSPC on the third skill directory leaves the first two in the shared root with no receipt, hence undeletable by any future uninstall (and, per #65's own rule, they must never be deleted on suspicion). The design names no strategy: fail-and-report-the-orphaned-names, write-then-rollback, or \"re-run to capture them\".\n2. **Content change on reinstall.** `install_for_target` reads the previous receipt and removes stale entries at the same destination; `install_pack` reads no receipt at all \u2014 it only writes one. So after D2/D3, a pack that renames or drops a skill and is reinstalled `--ide codex` leaves `<prefix>-old/` in the shared root forever, visible to Codex, indistinguishable from a user's own skill. The sibling path already fixed this; the new path inherits the hole. `Technical Scope \u2192 Excluded` covers name *collisions*, not this.\n\nName one strategy for each in the slice, and add a success criterion (criterion 2 currently covers only the clean uninstall, and nothing asserts the receipt file itself is deleted).",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#data-flow"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D10's subcommand list is the design's heaviest item and is still unresolved, while a success criterion depends on it",
+   "description": "The table at :159 and its surrounding rows leave the deliverable undetermined: `sq review/run/metrology` are \"yes \u2014 confirm by probe\", `skills install` is \"yes \u2014 confirm by probe\", the seven daemon-client rows await a probe with `sq serve` running, and `sq auth login` is \"unprobed\". Criterion 8 (line 228) then requires README/QUICKSTART to \"carry the D9 rule with the D10 subcommand list\" and to be checked with `codex execpolicy check` \u2014 so the criterion is not evaluable until implementation runs a manual, version-gated (Codex \u2265 0.146) terminal campaign against ~15 commands and records the results in a DEVLOG entry. Line 229/290 compound this: whether README's \"`$sq-spawn` \u2026 fine to invoke directly\" sentence gets corrected is conditional on a probe that has not happened.\n\nThe plan entry asks for enumeration (\"at least `sq review`, `sq run`, `sq pr`\"), not for empirical classification of every command. What can be cut: derive the alternatives from the command surface (provider-touching and GitHub-touching commands, which is decidable by reading, plus `skills install` for github sources) and run `codex execpolicy check` only as a spot-check on the listed \"yes\" rows and on `sq models list` as the negative case. That preserves D9's stated benefit \u2014 `match` examples fail loudly at load time \u2014 without making the docs deliverable depend on a terminal probe whose outcome no criterion can currently verify. Also resolve the daemon-socket and `auth login` questions *before* implementation, per the 915 precedent in the plan (\"state and justify one answer before implementation \u2014 not leave it open a second time\").",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:159"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The D4 asset move breaks 925's drift guards and silently removes their teeth; the migration promise is false",
+   "description": "The Migration Plan says the consumers are \"the fixtures in `tests/cli/test_install_commands.py` and `tests/skills/test_targets.py`\" and asserts \"Existing tests for those commands pass without edits other than the moved fixture paths.\" That does not hold. `test_every_claude_command_has_an_agents_twin` / `test_every_agents_skill_has_a_claude_twin` / `test_openai_yaml_mirrors_disable_model_invocation` all resolve a **single** `_agents_root()` (`get_commands_source() / \"agents\"`) and pair twins as `{sub}-{stem}`; after D4 the agents skills live in two trees (`commands/agents/` and `commands/analysis/agents/`), so the bijection is false by construction, and the `analysis-understand/agents/openai.yaml` assertions (test_install_commands.py:655, :842) point at a path that no longer exists. More consequentially, `test_no_agents_skill_uses_claude_argument_substitution` and `test_agents_skill_name_matches_its_directory` iterate `_agents_root()` only \u2014 if the fix is a path edit rather than making the guards read `DELIVERIES[AGENTS].bundle_subdirs`, the two heavyweight `analysis-*` skills drop out of coverage *silently*, which is exactly the shape 925's `test_drift_guard_fails_on_a_command_with_no_twin` exists to prevent. The slice should state the guard rework (derive expected agent locations from the delivery table, plus a teeth test for the two-root case), not describe it as a fixture move.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#migration-plan"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A new pack-authoring contract is defined from a maintenance slice without touching the architecture that owns it",
+   "description": "Correction to the location tag above: this finding pins to `project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions` (D2/D3/D6) \u2014 the path given is not one I verified, and the finding content below is what I mean.\n`340-arch.skill-pack-infrastructure.md` owns the pack model: \"Manifest is declarative, not executable\", \"File copy is the delivery primitive\", pack = \"a named collection of slash command markdown files\", and its design goal is first-party parity on the Claude surface. D2/D3 add a second, normative clause to that contract \u2014 a pack that wants Codex content must ship a validated `agents/` tree with a specific directory-naming rule \u2014 and D6 adds a new abstraction (`PACK_LAYOUTS`) that becomes the place \"a pack lands\" is answered. That is a capability and a cross-authoring-format decision, not plumbing: it is what \"any future pack source follows\" (Provides to Other Slices). 900-arch explicitly excludes \"new features or capabilities\", and the plan's own entry 10 moved slice 912 out of 900 for exactly this reason (\"That makes it a new capability, which 900's scope excludes\"). The plan does authorize the *decision* (entry 26 names it as the open design question), so the work belongs here \u2014 but the owning architecture must be amended, the way 925's Migration Plan dated amendments into `340-arch` and `360-arch`. As written, `340-arch` continues to describe a pack as Claude-only markdown, and the Codex pack format exists only inside a maintenance slice design. Add the 340 amendment (and a CHANGELOG/docs note for pack authors) to the Migration Plan.",
+   "location": "project-documents/user/slice-review-target"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "One edited file is missing from the Component Structure table",
+   "description": "Line 24 and Technical Scope (\"`sq model list` \u2192 `sq models list` in both command trees\") plus criterion 9 require an edit to `commands/sq/review.md`, but the Component Structure table lists only `commands/agents/sq-{review,run,pr}/SKILL.md` and README/QUICKSTART. `commands/sq/review.md` is otherwise untouched by this slice, so the table is the only place a reader enumerates the changed files. One row fixes it. (The fix itself is a legitimately scoped find-and-correct: it is a wrong instruction handed to the model, in a file the slice is already reasoning about.)",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Scope sits above the plan's 2/5, with the increase justified and nothing actually dropped",
+   "description": "Part A as planned was threading `CommandTarget` through two commands. The design adds `skills list`/`check_skill_packs` per target, D4's asset move, D7's removal extraction, and D12's hints in three skills. Each is defensible and none is gold-plating: `skills list`/doctor hardcode the same root the issue names; D7 is load-bearing correctness (the current flat `unlink` loop would leave `mypack-x/agents/` behind in a shared root); D12 is the reason D11 can decline a doctor check; and the design states the effort revision explicitly (3/5, with the cause named). Nothing assigned by plan entry 26 is deferred or dropped \u2014 including the two questions it tells design to answer (pack format \u2192 D2/D3, doctor check \u2192 D11 with reasons). The deviation from the plan's stated rule location (`default.rules` \u2192 `squadron.rules`) is recorded in the plan entry itself, so no parent-doc inconsistency needs fixing beyond what is already there. The only overweight item is D10, addressed above.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-scope"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`remove_receipt_files`'s contract boundary does not say who removes the receipt",
+   "description": "D5 makes receipt names suffixed, but both today's uninstallers unlink `receipts_dir / f\"{pack_name}.toml\"` directly (`skills.py`, `install.py`) \u2014 i.e. a second hardcoding of the name that D5 changes. D7's signature (`remove_receipt_files(receipt) -> int`) covers file removal only, and `install.py` is described as \"no behavior change,\" which implies the unlink stays with callers. State explicitly that `skills uninstall` must unlink under the `receipt_name(...)` value rather than the pack name, since a residual suffixed receipt is the failure the design is otherwise careful to avoid (a later uninstall that resolves the wrong record). Minor, but it is the one place the new naming scheme touches code the design does not describe changing.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#api-contracts"
+  }
+ ]
+}

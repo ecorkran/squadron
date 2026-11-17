@@ -1,0 +1,26 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Commit markers are checkboxes rather than plain lines",
+   "description": "The five commit markers (lines 96, 179, 249, 286, 325) are written as `- [ ] **Commit:** ...` checkbox items, and commits are split out into dedicated tasks (1.5, 2.4, 3.6, 4.3, 5.5). The review convention is for `**Commit**:` markers to be plain lines at working, tested points, not checkbox tasks. This is a clash with the project's CLAUDE.md convention (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\"), so the author's choice is defensible; either way the markers sit at correct, tested points (after each section's tests pass) rather than after every task or only at the end. No action required.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 5.2 directs editing the completed slice design retroactively",
+   "description": "The trailing note in Task 5.2 instructs: \"Update the slice design's Verification Walkthrough with any actual command output, corrections, or caveats discovered during implementation.\" No success criterion requires this, and mutating a completed design document during implementation risks diverging the design record from what was reviewed. If the walkthrough turns out to be wrong, a note in the commit message or a follow-up issue would keep the design doc stable. Minor, since the walkthrough looks accurate as written.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-308"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Some step-level detail exceeds what the slice strictly requires",
+   "description": "Task 2.3 enumerates ~16 individually named unit tests with exact coordinates, and Task 3.3 dictates the exact log-line format (`%s` with `.value`). The slice requires coverage categories (edge-exact, single/large/negative overshoot, passthrough) rather than a named test list, so this is over-specification in the strict sense. That said, each enumerated test maps to a stated coverage category, the coordinates make the tests mechanical for a junior implementer, and the total test count is proportionate to a vectorized numpy module with well-defined edge semantics. Similarly, splitting the new ~50-line enforcement module across Tasks 2.1 and 2.2 is slightly granular but each task is independently verifiable. Nothing here needs cutting; flagging only for transparency.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-174"
+  }
+ ]
+}

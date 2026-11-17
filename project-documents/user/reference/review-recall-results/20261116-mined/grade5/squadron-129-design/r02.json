@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Logout path (and login's pre-wait runtime start) have no explicit timeout or failure handling",
+   "description": "The Failure Modes table and D7 bound three of the slice's I/O paths \u2014 `thread.run` (`codex.turn_timeout_s`), `handle.wait()` (`codex.login_timeout_s`), and `account()`/runtime start in status (`codex.account_timeout_s`) \u2014 but `sq auth logout` is named as a spawning site (Data Flow, line 82: \"Spawning is confined to three places \u2014 a Codex turn, `sq auth login/logout`, and `sq auth status`\") with no row and no config key covering it. Neither a hang in logout's runtime start/`initialize`, nor a failure/timeout of `AsyncCodex.logout()` itself, has a specified behavior (does the command exit non-zero? log WARNING? bound by `login_timeout_s` or `account_timeout_s`?). The same table row for status bounds \"runtime start \u2026 during `sq auth status`\", but login's own `AsyncCodex(config)` \u2192 `login_chatgpt()` span before `handle.wait()` is not named as bounded by any key either. This is a new I/O path the slice adds, so it needs an explicit handling strategy, not omission. Fix: add a row (or extend D7's table) assigning logout and the login pre-wait span to an existing timeout key or a new one, with the exit/log behavior stated.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-135"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Decision numbering is out of order (D9 precedes D8)",
+   "description": "D9 is presented before D8 in Technical Choices, and D8 is later cross-referenced from the failure table (\"per D8\"). Cosmetic, but it makes cross-references harder to follow; renumber or reorder.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112-114"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Interfaces provided with no consumer are honestly declared",
+   "description": "The frontmatter declares `interfaces: []` with a rationale, and all three new abstractions (`InteractiveLogin`, `ExtraRequirement`, `CodexRuntime`) are consumed within this slice itself (CLI auth commands, `sq model list`, agent/provider/doctor respectively) rather than being speculative extensions for nobody. This is the right proportionality call and is explicitly justified in the doc \u2014 no action needed.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:7"
+  }
+ ]
+}

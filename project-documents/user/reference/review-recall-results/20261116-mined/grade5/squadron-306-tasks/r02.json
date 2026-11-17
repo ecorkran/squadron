@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Part D guard is placed in `save_review_file`, but the CLI/pipeline-with-slice-info path writes via `save_review_result` and never touches that function",
+   "description": "The slice criterion \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns; nothing is silently destroyed\" is not achievable by T12 as written. T12 names only `save_review_file`, but `sq review code` reaches disk through `save_review_result` (`src/squadron/cli/commands/review.py:746`), which composes the name and calls `path.write_text(format_review_markdown(...))` directly \u2014 it does not call `save_review_file`. The pipeline action's primary branch also uses `save_review_result` (`src/squadron/pipeline/actions/review.py:255`); `save_review_file` is only the no-slice-info fallback (`review.py:272`). T13's first test (\"save a review \u2026 save again over the same path\") is silent about which function, so it can pass green against `save_review_file` while the real data-loss path stays unguarded. Two follow-on consequences: `save_review_result` returns `Path`, not `Path | None`, so the \"return `None` (matching the function's existing failure-return contract)\" instruction does not transfer without a signature/decision update and a caller change (the CLI at `review.py:746` prints the returned path and is not wrapped in the pipeline's `except Exception`); and an existing test asserts the opposite behavior and must be updated \u2014 `tests/cli/test_review_save.py:117` `testsave_review_result_overwrites_existing`. Fix: add a task (or extend T12/T13) that factors the archive-and-verify step into one helper used by both `save_review_result` and `save_review_file`, tests the CLI path specifically, and names the existing-overwrite test that changes.",
+   "location": "src/squadron/review/persistence.py:294-305"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T3 keeps a `RoundDiff` import across the boundary in the wrong direction, which the breakdown mislabels and which risks a package cycle",
+   "description": "T3 moves `verification.py` into `review/addressed/` but instructs that its import of `RoundDiff` from `pipeline.actions.findings_addressed.screens` \"stays as a cross-package import in the pipeline\u2192review direction.\" Post-move that edge is `review \u2192 pipeline`, i.e. the inversion F002 relocation exists to remove: `pipeline/actions/findings_addressed/__init__.py` pulls in `evidence.py` \u2192 `review.addressed.models` (T1), and once T7 populates `review/addressed/__init__.py` with the moved names, importing either package walks `review.addressed.__init__` \u2192 `verification` \u2192 `pipeline.actions.findings_addressed.screens` \u2192 parent `__init__` \u2192 back into `review.addressed` mid-initialization. `RoundDiff` is not loop-specific \u2014 it is a plain diff-evidence dataclass (`screens.py:33-66`) consumed by `verify_outcomes` and `judge_residue_core`; the design's own rule (\"what stays in pipeline is exactly what is loop-specific\") puts it on the review side. T3 offers no fallback if the cycle bites, so a junior AI will stall at T4 with an import error and no stated remedy. Fix: relocate `RoundDiff` (and any type `verification.py`/`judge.py` must name) into `review/addressed/`, have `screens.py` import it from there, and correct T3's direction wording.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T6's \"no test needed rewriting\" stop rule collides with T5 moving the monkeypatched transport",
+   "description": "305's judge and e2e tests patch the transport by module path \u2014 `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile` (`test_findings_addressed_judge.py:32`, `test_findings_addressed_e2e.py:27`). T5 moves the body that calls `run_review_with_profile` into `review/addressed/judge.py`, so that patch target either stops existing or stops having effect and the real transport gets invoked. T6 then asserts \"Confirm no test needed rewriting to pass (if one did, the extraction changed behavior \u2014 stop and reconcile with the design before continuing),\" which will fire a false alarm and block the relocation. The criterion \"305's full test suite passes unchanged\" means assertions/coverage unchanged, not mock-path strings unchanged. Fix: state explicitly in T5/T6 that updating the two `_JUDGE_TRANSPORT` constants to the new module path is an authorized mechanical edit, and that a rewrite of any *assertion* \u2014 not a patch string \u2014 is the stop condition.",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T14 is sequenced after the only commit marker in Part D, contradicting the design's Phase-5 requirement",
+   "description": "The slice design mandates that the cf `archive/`-scanning check \"be sequenced **before** Part D lands \u2014 it is a go/no-go on the archive filename scheme.\" In the breakdown T12 (implementation) and T13 (tests) both precede T14, and T13 carries the commit line `fix: archive prior review content before overwrite, fail closed on archive failure`, so the archive filename scheme is on a commit before the go/no-go is known. The prose guard (\"do not mark T12 done until T14's outcome is known\") is a checkbox-discipline note, not a structural one, and a junior AI following the list order will commit at T13 and treat T14 as a later amendment. Fix: move the cf-scanning verification to sit between T11 and T12 (its own commit-free research task), keeping T12/T13 downstream of it.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "T4 repeats T2's verification verbatim; the relocation gate is over-partitioned",
+   "description": "T2 and T4 run the identical five-file pytest command plus `pyright` on code that only moved, and T8 runs the full suite after T7. Four separate verify-only tasks for one mechanical relocation is more ceremony than the change needs; early localization is the only justification, and T6/T8 already cover it. Consider folding T3/T4 into T1/T2 (one move + one verify) and keeping T8 as the Part 0 gate. This does not block progress \u2014 noted only because file 1 is otherwise proportionate for a 1/5-effort Part A + Part D + relocation.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:121"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The criterion's \"review discovery\" half is not covered by T32 in file 2",
+   "description": "Cross-file observation, out of this file's task range but worth catching before Phase 6: the criterion \"Metrology `discover_judge_results` **and review discovery** return no resolution artifacts (test against the real glob)\" is implemented in file 2's T32 only against `discover_judge_results` (`discovery.py:46`). The second glob, `reviews_dir.glob(f\"{index}-review.*\")` in `metrology/capture.py:97`, has no named test. Add it to T32.",
+   "location": "src/squadron/metrology/capture.py:97"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Archive directory is a second literal alongside `_REVIEWS_DIR`",
+   "description": "T12 hard-codes `project-documents/user/reviews/archive/{filename}` while `_REVIEWS_DIR` already owns the parent path in the same module. Derive the archive dir from `_REVIEWS_DIR` (single place to change) rather than re-spelling the prefix, per the \"never scatter comparison values\" rule in CLAUDE.md.",
+   "location": "src/squadron/review/persistence.py:16"
+  }
+ ]
+}

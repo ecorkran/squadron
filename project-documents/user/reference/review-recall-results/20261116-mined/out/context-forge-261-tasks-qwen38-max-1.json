@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria fully traced to tasks",
+      "description": "All 13 Functional Requirements map to Task 12's integration fixtures (empty, scaffold-only, brownfield, shallow clone, concept-only, planned, monorepo, resume, overrides, `--phase 2`, explicit instruction, missing-profile, `template_preview`), with the invalid-value rejection additionally unit-tested in Task 1T. Every Technical Requirement unit test is present: `measureSourceVolume` (Task 3T), `readHistory` (Task 5T), `presentPaths` (Task 4T), D9 write-failure + guide-check-before-write ordering and the explicit-instruction path (Task 9T), `findPlanningArtifacts` (Task 6T), `decideOutcome` (Task 7T), `renderAdoptionFacts` (Task 8T), and the resolver selection table (Task 9T). The CLI/MCP parity requirement is Task 13; the byte-identical-prompt requirement is Task 15 walkthrough step 1. No scope creep: Task 6's `ArtifactIntrospector` refactor is justified by D6's pattern reuse + DRY and is explicitly \"no behavior change.\"",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR / load-test handling correctly justified",
+      "description": "The slice restates a performance NFR (D2: \"detection adds under one second\"), but the design specifies \"Tests assert the caps, not timings.\" I confirmed the only `tests/load/` rule lives in `rules/python.md` and is scoped to `**/*.py`; `rules/typescript.md` has no load-test tier. The Context Summary's decision to verify the bound via the cap tests in Task 3T (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`) rather than a timing/load test is correct for this TypeScript repo, and no CI load-gate task is therefore required.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "description": "The review criterion describes commit markers as plain lines (`**Commit**:`), but this file writes them as checkbox tasks (e.g. `- [ ] **Task 2C: Commit** \u2014 ...`). This is consistent with the project's own convention (AGENTS.md: \"Each item and subitem should have a `[ ]` checkbox\") and with the completed sibling slice `260-tasks.onboarding-consolidation.md`, which uses the identical `**Task nC: Commit** \u2014` checkbox form. The substantive requirement \u2014 markers at working, tested points, not after every task and not only at the end \u2014 is satisfied (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). No action needed; noted only because it deviates from the literal marker format.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Renderer tests exercise reachable outcomes only, not literally \"every outcome\"",
+      "description": "The Technical Requirements say `renderAdoptionFacts` should be tested for \"every outcome.\" `AdoptionOutcome` has five kinds; Task 8T exercises `brownfield`, `adoption-in-progress`, and `NOT_EVALUATED`, omitting `greenfield`, `already-planned`, and `adoption-closed`. This is defensible: the resolver only renders facts when selected (D4 step 3 = brownfield / adoption-in-progress / explicit), so the other three kinds are unreachable in production and the exhaustive `never` switch already forces them to compile. Impact is therefore near-zero. If literal coverage of the requirement is wanted, adding a `greenfield` case is the cheapest close, since it is the source-bearing sibling of `brownfield` and would catch a regression in the \"source volume when the outcome carries it\" branch.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5's parenthetical about gitExec's timeout message is imprecise",
+      "description": "Task 5 states \"gitExec's timeout message already reads `timed out after 5s`.\" The real rejected message wraps that detail: `git {args} failed in {cwd}: timed out after 5s`, and `withNetworkErrorHint` then appends offline-remediation text because `/timed out after \\d+s/i` matches. This does not break anything \u2014 Task 5T wisely mocks gitExec to reject with exactly `timed out after 5s` and asserts only that `reason` *contains* `timed out`, which is robust to the wrapping. The practical consequence is that the `history: unknown` reason rendered in the Adoption Facts section will be the full wrapped string (command + cwd + network hint), not the bare phrase. Worth the implementer knowing so the verbose reason in the facts bullet isn't a surprise; no change to the task logic is required.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts#gitExec"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criteria fully traced to tasks",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "NFR / load-test handling correctly justified",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Renderer tests exercise reachable outcomes only, not literally \"every outcome\"",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 5's parenthetical about gitExec's timeout message is imprecise",
+      "location": "packages/core/src/guides/gitExec.ts#gitExec",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T13:50:58.965898",
+  "model": "qwen/qwen3.8-max-0902",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 206069,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-max-0902",
+  "answering_models": [
+    "qwen/qwen3.8-max-0902"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 740688,
+  "cached_tokens": 670080,
+  "cache_write_tokens": null,
+  "completion_tokens": 53608,
+  "reasoning_tokens": 50482,
+  "duration_seconds": 1187.8559464169666,
+  "cost_usd": 0.630384,
+  "cost_basis": "alias_pricing"
+}

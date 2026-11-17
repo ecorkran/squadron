@@ -1,0 +1,170 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Guide release coupling\" and \"Guide prompt contract\" still mandate the removed `cf build` behavior",
+      "description": "The amendment and Design Goals state \"cf build is pure again: no detection, no state writes, no prompt swap\" and the Detection section says \"cf build does not run detection.\" Yet Technical Considerations line 137 says \"If cf selects the brownfield profile and the installed guide lacks it, `cf build` fails with a named error. It never falls back to the greenfield prompt,\" and line 136 still describes the Adoption Facts section as one that \"`cf build` appends after the instruction prompt.\" These are written in live, present-tense voice and are not clearly marked as history, and they directly contradict the core principle they sit under. A slice designer implementing 268 (\"Pure cf build\") gets contradictory instructions: 268's success criteria remove the profile swap and Adoption Facts, while these two bullets keep a build-time fail-fast and a build-time append. The doc must state unambiguously that the fail-fast and the Adoption Facts/appending responsibility move to the slice-271 prompt-delivery primitive and that `cf build` owns neither.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:136-137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Anticipated Slices\" and \"Dependencies\" present the superseded 260\u2013264 design as the current plan",
+      "description": "The document carries two complete, competing designs. After the one-line rework summary, the \"Anticipated Slices\" section says \"The list below is the original plan, all shipped (260\u2013267)\" and then lists as anticipated work: \"the persisted adoption state,\" \"`cf build` selecting the `brownfield-adoption` profile (fail-fast when the guide lacks it),\" \"Squadron path: reading the probe,\" and \"Brownfield-aware `cf next`: adoption steps while in progress\" \u2014 every one of which the amendment explicitly removes. Dependencies line 158 says \"cf releases that select the brownfield profile require at least v0.22.2,\" again assuming the removed behavior. The Current State bullet at line 65 (\"The capability probe does not exist yet\") and line 135 (\"Neither the probe nor squadron 366 is built yet\") are stale against the verification evidence, which shows squadron 0.23.7 emitting `probe_version` 1. Cut the superseded anticipated-slice list and the probe/old-prompt paragraphs; leave a short pointer to the historical plan only if recall is needed, and rewrite Dependencies around the slice-271 primitives contract.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:141-158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Concept document has no single owner: \"Shared\" with two producers and no selection rule",
+      "description": "The responsibility table marks Concept (`000-concept`) as \"Shared\" and says it is written \"from the comprehension doc and repo prose (squadron 363, or the guide's adoption prompt)\" with \"Exactly one writer per run,\" but never defines how that single writer is chosen. This is the initiative's load-bearing artifact and the rule is left implicit. On the normal squadron path the guide's own brownfield prompt (verified in `prompt.ai-project.system.md`, \"Squadron path steps,\" step 3) instructs the agent to invoke squadron 363's concept step, while the same prompt's \"1. Baseline concept\" tells the agent to draft a concept from repo prose, and the adoption flow outline (step 5) says \"The agent drafts the concept.\" With squadron present, nothing in the architecture prevents two writers or an overwrite dispute. Contrast this with row (c), which pins architecture to \"One writer.\" The single-writer selection rule must be stated, not deferred to slice design and squadron.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Nothing in scope verifies the amended flow; the only end-to-end runs tested the design that was deleted",
+      "description": "The Design Goal \"The workflow starts where the project is\" and the Navigation promise \"cf next points at the first unbuilt slice\" have no in-scope verification. Slices 268\u2013272 are removals and primitives; the only real adoption run (273) and the comprehension carry-through (274) are parked until `sq onboard` exists \u2014 which the document itself says does not exist yet (amendment, Dependencies). The verification evidence that does exist (`project-documents/user/analysis/260-analysis.adoption-verification-runs.md`) exercised the old `cf build`-based flow: `adoption.state` transitions, the Adoption Facts section and the probe JSON \u2014 precisely the behavior slices 268\u2013271 delete. The amendment even concedes \"the 265 runs never exercised live\" the navigation. The initiative can therefore complete every rework slice with zero evidence that `sq onboard` \u2192 derived artifacts \u2192 `cf next`-at-new-work actually works. Either add an in-scope verification slice with acceptance criteria, or make the verification an explicit, owned deliverable of squadron's `sq onboard` with a defined handoff.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shipped guide prompt hard-stops without Adoption Facts, which the rework removes; guide update is sequenced too late and the minimum version is wrong",
+      "description": "The installed `guide.ai-project.brownfield-adoption` prompt (verified in `project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md`, lines ~442-476) tells the agent: \"If the section is missing, stop and say: 'The Adoption Facts section is missing; cf build should always supply it.' Do not continue on any path,\" and branches on probe `surfaces`/`graph` fields. Under this rework, `cf build` no longer appends Adoption Facts (268) and cf no longer runs the probe (271); slice 271's prompt-delivery primitive only \"fills the comprehension path.\" Until the guide prompt is rewritten, any prompt it delivers makes the agent stop immediately. But the guide update is slice 272 \u2014 sequenced *after* 271 \u2014 and Dependencies line 158 still names v0.22.2 as the requirement (\"cf releases that select the brownfield profile require at least v0.22.2\"), while the code pins `MIN_GUIDE_VERSION = '0.22.6'` and slice 272 says to \"raise `MIN_GUIDE_VERSION` to the guide release that carries that.\" The guide release that drops the hard-stop and the raw-probe branching must be a prerequisite of the prompt-delivery primitive, not a cleanup step, and the minimum version and Dependencies section must reflect it.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Read-only detection's failure modes and consumer call sites are left unspecified",
+      "description": "Detection is now consumed by `sq onboard`, `cf init` and `cf next` (Architectural Principles, line 48), derived from files every time. But detection is not total: the source-volume walk throws on trees above `MAX_WALK_ENTRIES` and on filesystem errors, and the planning-artifact scan throws on unreadable directories (verified in `packages/core/src/detection/sourceVolume.ts` and `planningArtifacts.ts`). The \"Brownfield thresholds\" consideration worries about *misclassification* but never says what the report, `cf init` (\"prints one line\"), or `cf next` (\"one line for an unadopted brownfield repo\") do when detection throws. It is also unclear whether `cf next` still calls the report at all: slice 270 requires \"no adoption-specific routing remains in the navigator,\" yet emitting the unadopted-brownfield line requires the detection result. Specify the error contract for the JSON report and each consumer, and state explicitly that `cf next` calls detection to produce that one line.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-134"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Guide release coupling\" and \"Guide prompt contract\" still mandate the removed `cf build` behavior",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:136-137",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "\"Anticipated Slices\" and \"Dependencies\" present the superseded 260\u2013264 design as the current plan",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:141-158",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Concept document has no single owner: \"Shared\" with two producers and no selection rule",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Nothing in scope verifies the amended flow; the only end-to-end runs tested the design that was deleted",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Shipped guide prompt hard-stops without Adoption Facts, which the rework removes; guide update is sequenced too late and the minimum version is wrong",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:158",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Read-only detection's failure modes and consumer call sites are left unspecified",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-134",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-17T07:58:49.077973",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 137664,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 400331,
+  "cached_tokens": 338432,
+  "cache_write_tokens": null,
+  "completion_tokens": 33387,
+  "reasoning_tokens": 30733,
+  "duration_seconds": 221.3289513331838,
+  "cost_usd": 0.0073482930000000005,
+  "cost_basis": "alias_pricing"
+}

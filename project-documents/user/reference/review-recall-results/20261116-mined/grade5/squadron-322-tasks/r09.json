@@ -1,0 +1,47 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T13's result-discovery premise is false and its fallback cannot satisfy the offer contract",
+   "description": "T13 instructs: \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk.\" I verified no such surface exists: `capture.resolve_target` (src/squadron/metrology/capture.py:64-121) resolves a single caller-named target (a per-index glob, not an enumeration); `MetrologyStore` globs only its own record directory (store.py:174); `report.enrich_samples` reads only files already referenced by samples. Worse, the named fallback is logically impossible for the function's purpose: `select_residual_offers` must find results **not yet sampled** (T13's own bullet: \"no `SampleVerdict.result_ref` points at them\"), but store-recorded samples are by definition the **sampled** ones \u2014 the exact complement. Under the fallback the function can never return a non-empty offer set, contradicting T13's own success criteria (\"3 unsampled matching results at `rate=1.0` yields 3 `OfferTarget`s\"), T14's tests (non-empty guarantee, exhausted, `rate=0.5` over 4 unsampled results, pruned file at lines 215-219), and the asserted success criterion \"a graduated config with unsampled results yields a non-empty offer set\" \u2014 an explicit architecture commitment. The lapse-detection bullet (line 203) and the pruned-file test also require enumerating current review files. Fix before execution: add an explicit result-discovery step \u2014 enumerate `project-documents/user/reviews/*-review.*` under cwd, derive each file's `JudgeConfigId` via 320's `derive_judge_config_id`, subtract sampled `result_ref`s \u2014 as a small standalone task or an explicit T13 bullet, replacing the impossible fallback (this also removes the need for the mid-task \"ask the Project Manager\" stall).",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T3's placement of GraduatedConfig creates a circular import with T11's envelope extension",
+   "description": "T3 defines `GraduatedConfig` in `calibration_models.py` with `judge_config: JudgeConfigId` (line 64), and `JudgeConfigId` lives in `src/squadron/metrology/models.py` \u2014 so `calibration_models` must import from `models`. T11 then extends `MetrologyRecord` in `models.py` (line 175) with `graduated_config: GraduatedConfig | None`, forcing the reverse import. Both load orders fail: whichever module is imported first leaves the other partially initialized and its needed name undefined. 321's `report_models.py` has the same one-way shape but no back-edge, which is why it works. A junior AI cannot complete T11 as written without deviating from T3's explicit placement. Fix: define `GraduatedConfig` in `models.py` \u2014 it is a store payload, matching that module's own docstring (\"shapes persisted to and read from the metrology store\", models.py:1-3) and the `SampleVerdict` precedent next to the envelope (models.py:100-111) \u2014 and keep the recommendation/offer models in `calibration_models.py`.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:175"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T7's numbered precedence contradicts its own clarification and T8's required test",
+   "description": "T7 says to implement the bands \"in this precedence order\" with case 1 (`n < floor` \u2192 `INSUFFICIENT_EVIDENCE`) evaluated first, then case 4 (`TIGHTEN`) carrying the parenthetical that a below-floor low-match cell \"still surfaces as `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\" (line 119). As literally ordered, case 1 fires first for every below-floor cell, so case 4 is unreachable for exactly the cells the clarification (line 121) and T8's test (line 134: \"`n < floor` with a low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\") require. A junior AI following the numbered order produces code that fails T8. The intent is recoverable \u2014 the clarification and the test agree with each other \u2014 but the spec must be corrected so `match_rate <= tighten_rate` is checked *before* the floor/unversioned gates, and while doing so it should pin the one interaction neither the design's table nor T7 resolves: an **unversioned** cell with a low match rate (`TIGHTEN` or `INSUFFICIENT_EVIDENCE`?).",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Malformed-judge-block failure mode is claimed covered but absent from T7/T8",
+   "description": "The coverage check asserts \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8)\" \u2014 but T8 (lines 129-140) contains no malformed-block test, and T7's `read_current_thresholds` (line 122) specifies handling only for unregistered templates. The design's Failure Modes row requires an explicit handling decision, a WARNING naming the template, and a test (\"malformed judge block \u2192 flagged, not silently defaulted\"). The handling also needs a decision the design leaves open: `resolve_thresholds` (src/squadron/pipeline/actions/judge.py:49-55) does `float(pass_floor)` and raises `ValueError` on a non-numeric floor \u2014 it does not \"fall back\" \u2014 so T7 must catch and flag (e.g., `current=None` + WARNING) rather than inherit silently. Add the branch to T7 and the test to T8, or strike the row from the claimed coverage.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "model_dimension_note spec drops the runtime-drawn-model clause the success criterion requires",
+   "description": "The success criterion requires \"the runtime-drawn-model limitation is stated where the recommendation is produced\", and the design spells it out: where a step draws its model at runtime (a 180 pool), the note states the threshold cannot track the drawn model and the recommendation does not apply to that step. T9's note-text bullet carries only the (template, model)-pairing clause, and T10 asserts only non-emptiness \u2014 so a note omitting the runtime-pool clause passes every test in this breakdown and the criterion's second half ships silently unmet. Add the clause to T9's bullet (and optionally a content assertion to T10).",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "offers --project has no implementable semantics under the specified data model",
+   "description": "Both the design's API contract and T15 give `sq metrology offers [--project ID] ...`, but `GraduatedConfig` (line 64) carries no project dimension \u2014 only `judge_config`, `artifact_level`, `evidence`, `graduated_at`. Samples carry `ProjectId` (that is how `recommend --project` filters via `store.list_samples`), but graduations do not, so there is nothing for the flag to filter on; ignoring it would be a silent no-op, which this slice's own discipline forbids. Either drop `--project` from `offers` or define it (e.g., record the project on the graduation, or filter offer targets by the cwd-derived project via 320's `derive_project_id`). Worth pinning at the same time: `graduate` has no `--project` flag yet must \"re-derive via the same path as `recommend`\", which needs a sample-listing scope \u2014 presumably the cwd-derived project, but T15 does not say.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:231"
+  }
+ ]
+}

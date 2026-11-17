@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Existing projects can write personal settings without ignore protection",
+      "description": "The ignore rule is added only by `cf init`, but existing projects can use `set` or `migrate-personal` without re-running init. Their new personal file may therefore be committed, contrary to slice 915\u2019s goal. The proposed substring check can also mistake a comment or negated rule for effective coverage.\n\nSpecify how existing projects receive or are warned about effective ignore protection before personal writes, and test existing and negated `.gitignore` entries.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Collision remediation deletes the wrong copy",
+      "description": "For differing values, migration leaves both copies and instructs users to run `cf config unset <key> --project` to remove the shared copy. But the design says project deletion routes to the personal file (line 89). The instruction instead removes the preferred value and exposes the stale shared value.\n\nProvide an explicit, safe way to remove the shared copy while retaining the personal value, and cover that outcome in tests.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:144-146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP write confirmation can report the wrong file",
+      "description": "The design updates MCP path reporting for `config_get`, but slice 162\u2019s `config_set` contract also returns a `configFile` identifying the write target. Routing personal keys to the new file requires that confirmation to identify the personal path. Specify and test the affected MCP write response as well as read responses.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Migration failure recovery assumes writes cannot damage a file",
+      "description": "Writing personal before deleting shared protects against an interruption *between* successful writes, but does not establish the stated recovery guarantee if a read-modify-write fails partway through writing either TOML file. A partial shared-file write could damage unrelated configuration too.\n\nSpecify a safe replacement strategy for migration writes and explicit handling for unreadable or malformed files and partial failures, including a non-success result when keys fail.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough cannot exercise the promised fallback",
+      "description": "Step 1 creates a personal value; step 4 leaves it in place but expects the shared legacy value to win. The declared precedence instead selects the personal value, and migration then skips the differing collision. This walkthrough cannot verify compatibility or the happy-path migration.\n\nRemove the personal value before setting up the fallback case, and retain a separate collision test with the corrected remediation.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-259"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security",
+      "raw_category": null,
+      "summary": "Existing projects can write personal settings without ignore protection",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Collision remediation deletes the wrong copy",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:144-146",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "MCP write confirmation can report the wrong file",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193-201",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Migration failure recovery assumes writes cannot damage a file",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Verification walkthrough cannot exercise the promised fallback",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:227-259",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T13:51:02.088638",
+  "model": "openai/gpt-6.1-terra",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6.1-terra",
+  "answering_models": [
+    "openai/gpt-6.1-terra"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 64137,
+  "cached_tokens": 36509,
+  "cache_write_tokens": null,
+  "completion_tokens": 1235,
+  "reasoning_tokens": 312,
+  "duration_seconds": 26.241778749972582,
+  "cost_usd": 0.03562845,
+  "cost_basis": "alias_pricing"
+}

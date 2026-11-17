@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Collision recovery deletes the personal value instead of the stale shared copy",
+      "description": "The Data Flow section states that project-scoped deletion for a personal key removes it from `.context-forge.local.toml`. Nevertheless, the collision semantics and Verification Walkthrough instruct users to run `cf config unset <key> --project` to clear the stale shared-file copy. That command would delete the personal value instead, leaving the shared copy intact; read-time fallback would then resurrect the stale shared value, and the consistency warning would remain. This contradicts the promised cleanup path and leaves the parent plan\u2019s required migration/compat story incomplete. Define an operation that specifically removes the shared copy, or revise the migration semantics and walkthrough accordingly.",
+      "file_ref": null,
+      "category": "behavior-contracts",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Personal files created outside `cf init` are not guaranteed to be ignored",
+      "description": "Only `cf init` adds `.context-forge.local.toml` to `.gitignore`. The central use case for this slice is an existing project, and both `migrate-personal` and ordinary project-scoped writes can create the personal file in that project without adding the ignore rule. The value can therefore still be committed\u2014the exact leakage this slice is intended to prevent. Ensure the one-line ignore rule is present whenever the personal file is first created, including during migration and non-CLI write paths, while retaining the parent plan\u2019s minimal one-line scope.",
+      "file_ref": null,
+      "category": "security-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:138-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cross-file migration has no defined core API",
+      "description": "The design makes `ConfigManager` the owner of project-file routing but gives `migrate-personal` no contract for reading the raw shared file or deleting from it. Normal `set` and `delete` cannot perform that cross-file operation, while implementing TOML manipulation directly in the CLI would duplicate core logic and introduce an inappropriate CLI-to-TOML implementation dependency. Specify a narrow core-level migration or shared-file inspection/deletion API that returns per-key outcomes and enforces the collision semantics for both the checker and CLI command.",
+      "file_ref": null,
+      "category": "architecture-boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#API Contracts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope discriminator literals are scattered rather than centralized",
+      "description": "The design introduces repeated `'shared' | 'personal'` literals and comparisons in the registry, `ConfigManager`, the consistency checker, and migration logic. This conflicts with the project convention that values used in conditionals or lookups be defined once. Introduce a canonical constant and derived type, such as `CONFIG_SCOPE.Shared` and `CONFIG_SCOPE.Personal`, and use them throughout the implementation and tests.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Technical Decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The MCP tool contract will retain the obsolete resolution order",
+      "description": "The only specified MCP change is to surface both project paths. The published `config_get` tool description currently advertises `project \u2192 user \u2192 default`, which will become incorrect when the effective order is `project-personal \u2192 project-shared \u2192 user \u2192 default`; `config_set` also should explain that project scope is automatically routed by key classification. Update the tool descriptions and any schema-facing documentation as part of the MCP contract change so consumers do not receive contradictory guidance.",
+      "file_ref": null,
+      "category": "api-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure behavior for the new personal-file read paths is unspecified",
+      "description": "The failure-mode section covers migration writes, `ConfigManager.set`, and the gitignore write, but not the new reads of `.context-forge.local.toml` by `get`/`list`, the raw shared/personal reads used by migration and detection, or reads performed by the consistency checker. Specify the handling for missing files, malformed TOML, and permission/read errors\u2014including whether the checker degrades to an explicit finding or aborts\u2014so a malformed local file does not produce undocumented behavior across entry points.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Consistency-check coverage is undefined for slice-scoped modes",
+      "description": "The design says the new project-level rule surfaces automatically through `cf check` and MCP `workflow_check`, but those surfaces also provide slice-scoped modes that use the single-slice checker rather than the all-slices suite. Specify whether the personal-config rule is aggregate-only or is also evaluated in slice-scoped requests. If it is aggregate-only, qualify the automatic-surface claim and document that scope; otherwise include the single-slice path in the design and tests.",
+      "file_ref": null,
+      "category": "integration-contracts",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "behavior-contracts",
+      "raw_category": null,
+      "summary": "Collision recovery deletes the personal value instead of the stale shared copy",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-boundary",
+      "raw_category": null,
+      "summary": "Personal files created outside `cf init` are not guaranteed to be ignored",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:138-159",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture-boundaries",
+      "raw_category": null,
+      "summary": "Cross-file migration has no defined core API",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#API Contracts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Scope discriminator literals are scattered rather than centralized",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "api-contract",
+      "raw_category": null,
+      "summary": "The MCP tool contract will retain the obsolete resolution order",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure behavior for the new personal-file read paths is unspecified",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "integration-contracts",
+      "raw_category": null,
+      "summary": "Consistency-check coverage is undefined for slice-scoped modes",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-17T10:44:11.812891",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 401813,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 944652,
+  "cached_tokens": 763136,
+  "cache_write_tokens": null,
+  "completion_tokens": 90436,
+  "reasoning_tokens": 87473,
+  "duration_seconds": 468.50527950003743,
+  "cost_usd": 0.046086452,
+  "cost_basis": "alias_pricing"
+}

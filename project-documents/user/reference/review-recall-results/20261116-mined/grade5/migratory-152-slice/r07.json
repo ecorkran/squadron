@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Internal contradiction: `k_first` \"removed entirely\" vs. \"still parsed with deprecation warning\"",
+   "description": "Technical Scope item 7 and the Technical Decisions \u00a7\"k_first removed\" commit to removing `k_first` entirely from the kernel, `ComputeConfig`, `Workload`, and `_NEIGHBOR_MODE_MAP`, with configs using it raising `ConfigurationError`. But Mitigation Strategies states: \"Until then, ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning) so the slice can land incrementally; flip the default and remove `k_first` parsing in the final commit.\" These are different shipped end-states (a mode that parses but has no kernel path is undefined behavior waiting to happen \u2014 if the config accepts `k_first` while the kernel no longer specializes for it, what does the tick do?). Pick one: either the mode is removed in the same commit as the kernel change (with `ConfigurationError`), or a documented transition state exists that specifies exactly what `k_first` does while deprecated. The current doc ships both statements.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Mitigation-Strategies"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Exit criteria diverge from the parent slice plan entry without updating it",
+   "description": "The plan entry for slice 152 ([140-slices.simulation-scaling.md](project-documents/user/architecture/140-slices.simulation-scaling.md) item 13) defines the exit criteria as: \"k-nearest TPS at N=200k **within 20% of k-first** TPS at the same N; parity preserved; **no regression on k-first path**.\" The slice design replaces the comparison baseline with `radius_only` (criterion 4) and removes `k_first` entirely \u2014 which makes the plan's \"no regression on k-first path\" unsatisfiable by construction. The engineering rationale for the redesign is well-argued, but the plan entry has not been updated to match, so the slice as designed cannot be checked off against its own plan definition. Update the plan entry (or keep `k_first` through this slice and remove it in a follow-up) so the plan's exit criteria and the slice's exit criteria agree.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Success-Criteria"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Dependency claimed shipped while its own documents show it unmet",
+   "description": "The slice states \"Slice 150 is shipped on `main` as of 2026-05-05.\" Slice 150's design doc has `status: in_progress`, the slice plan shows item 11 unchecked (`[ ]`), and slice 150's own Implementation History records that its exit criterion 3 (TPS regression \u2264 20% vs. first-k-found at N=10k) is **not met** \u2014 \"~88% regression\" persists, with the coherent grid named as the fix. Slice 152's mechanism (reindex + mode-set change) in fact supersedes how 150's TPS criterion can be met, but the design should say so explicitly: state that slice 150 ships only in conjunction with 152, or that 152 relaxes/absorbs 150's TPS criterion. As written, the dependency claim conflicts with the recorded status of the dependency.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Dependencies"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tier 3 NFR misstated: 200k vs. the architecture's 250k",
+   "description": "The slice repeatedly anchors on \"the architecture's Tier 3 target (N=200k)\" and \"our current Tier 3 milestone of 200k.\" Both the architecture document (140-arch.simulation-scaling.md, \u00a7Envisioned State: \"Tier 3 (250k...)\") and the slice plan (\u00a7Scaling Tier Milestones: \"Tier 3 (250k, ...)\") define Tier 3 as **250k** on production-class hardware. The 200k gate itself is a reasonable dev-box checkpoint and matches the plan entry for slice 152, but attributing it to \"the architecture's Tier 3 target\" misstates the parent NFR. Restate it as what it is \u2014 a slice-level checkpoint below Tier 3 \u2014 or correct the N to 250k where the architecture is being cited.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Overview"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Measurement scope beyond the plan entry is cheap but could be deferred",
+   "description": "Criterion 3 requires a `radius_only` baseline at N=1M and verification step 5 requires new `mid-flock-500k`/`mid-flock-1M` workloads \u2014 none of which the plan entry assigns to this slice (its scope ends at the 200k gate + parity). These are bench-only runs, not code, so the cost is low and the FRNN follow-up trigger conditions genuinely need them; acceptable, but if the slice overruns, this is the first scope to defer to the FRNN follow-up slice's opening measurement.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Verification-Walkthrough"
+  }
+ ]
+}

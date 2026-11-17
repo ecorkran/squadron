@@ -1,0 +1,296 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The document's stated scope is \"the interfaces these present to the rest of the system,\" but no interface is specified \u2014 and the interfaces chosen downstream contradict the document's own performance and GPU claims",
+      "description": "The Overview puts interfaces squarely in scope, yet the body contains zero signatures, zero protocol definitions, and zero data-structure contracts. Every load-bearing interface decision was made later, in slice designs, and the choices made there are incompatible with three explicit claims in this document:\n\n- **\"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\"** (Design Goals) and **\"Neighbor query cost dominance \u2026 the engine's performance ceiling is largely set by how fast it can answer 'which agents are within radius R of agent A'\"** (Technical Considerations). The architecture never specifies the *shape* of the neighbor result, which is the single most performance-determining decision in the system. `100-slice` invented `SpatialQuery.query_radius(position, radius) -> NDArray[intp]` \u2014 one Python call per agent \u2014 and `BulkForce.__call__(state, neighbor_lists: list[NDArray[np.intp]], \u2026)` \u2014 a ragged Python list of variable-length arrays. That representation makes rectangular vectorization impossible; `src/migratory/engine/tick.py:47-51` is a Python `for idx in eval_indices` loop, and all three flocking forces in `src/migratory/engine/flocking.py` loop per active agent in Python. At 10K agents this is \u226510K NumPy dispatches per tick *per force* \u2014 order 0.5s/tick against a 50ms budget at 20Hz. Slice 105's spatial hash cannot fix this; it accelerates the query, not the per-agent Python loop that consumes it (101-slice says so explicitly).\n- **\"The BulkForce pattern \u2026 is structurally identical to a GPU compute dispatch \u2026 bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop.\"** A `list[NDArray]` of ragged neighbor sets is not dispatchable to CuPy/CUDA without a representation change (padded matrix + counts, or flat CSR-style indices + offsets). `tick()` also allocates `np.zeros_like(state.positions)` every tick and rebuilds `max_speeds` via a Python list comprehension over all N agents (`tick.py:59-62`) \u2014 per-agent Python attribute access in the hot loop, which the document forbids.\n- **\"Profile as data \u2026 the engine interprets profiles\"** combined with vectorization: profiles are Python dataclass objects in a `list`, so *any* per-agent profile parameter lookup is inherently Python-level. The architecture needs a flattened per-profile parameter array (or per-agent parameter columns) and never says so.\n\nThe document flags SoA-vs-AoS as \"needs validation\" while leaving the actually-decisive question \u2014 how neighborhoods are represented and how profile parameters reach a vectorized kernel \u2014 completely unstated. Slices 102\u2013105 all build on the current protocol, so correcting it later means rewriting every force implementation. This must be resolved before further behavioral slices proceed.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Returns the updated state array\" and \"stateless between ticks\" contradict the in-place-mutation contract, and void the world server's \"tick as transaction / state commit\" model",
+      "description": "Envisioned State step 5 says the tick \"Returns the updated state array,\" and the following paragraph asserts \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it. This makes the tick function testable in isolation: feed in state, get back state. No setup, no teardown.\"\n\nBoth are wrong against the design this document spawned. `tick()` returns `None` and mutates `AgentState` in place (100-slice, \"Output: `AgentState` mutated in place\"; `src/migratory/engine/tick.py:19` -> `-> None`). \"No setup\" is also false: a `SpatialQuery` instance must be supplied, and it is stateful across ticks \u2014 `BruteForceQuery.build()` stores a copied position array (`src/migratory/spatial/brute_force.py`), and the server constructs one at startup and reuses it (`src/migratory_server/server.py:84`).\n\nThe consequence is not cosmetic. `300-arch.worldserver-foundation.md` builds its first architectural principle on the return-value reading: \"**Tick as transaction** \u2014 read current state, compute next state, commit,\" with step 3 \"Receive updated positions and velocities\" and step 4 \"**State commit** \u2014 Apply the updated entity state as the new canonical state.\" With in-place mutation there is no next-state buffer and no commit point: the canonical state is overwritten during evaluation, so a tick cannot be rolled back, cannot be evaluated speculatively, and cannot produce the clean between-tick snapshot the principle promises. One of the two documents must change; this one is the source of the mismatch.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The claimed \"narrow interface: tick, query agent state, register/remove agents\" does not exist, and agent lifecycle is duplicated across the engine/server boundary",
+      "description": "Envisioned State closes with \"the engine presents a narrow interface: tick the simulation forward, query agent state, register/remove agents.\" The actual surface is a free function (`tick`), a bare struct with public mutable arrays (`AgentState.positions/velocities/accelerations/profile_indices`), and `AgentState.add_agent/remove_agent`. There is no query API and no register/remove API.\n\nWorse, the boundary the Overview draws (\"The engine owns what happens within a tick\"; lifecycle is the world server's) is crossed in both directions. `AgentState` implements lifecycle (`add_agent`, `remove_agent`, `src/migratory/engine/state.py:88-113`) while `EntityManager` reimplements the same lifecycle by reaching into engine internals and reassigning its arrays directly (`src/migratory_server/entities.py:120-133`, `np.concatenate` onto `self._state.positions` etc., bypassing `AgentState.add_agent`). Server tests also write engine arrays directly (`em.state.velocities[:] = np.array([2.0, 0.0])`, `tests/test_simulation.py`).\n\nThis falsifies the Clean Boundaries goal \u2014 \"Internal representation choices (array layout, spatial index strategy) are hidden behind these interfaces and replaceable without affecting consumers.\" The array layout *is* the interface; the SoA/AoS decision flagged as replaceable in Technical Considerations cannot be changed without touching `EntityManager`, `SimulationManager`, and the server test suite. Pick one owner for agent lifecycle and one owner for array mutation, and say so.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Environment as input surface\" is asserted as a principle with no interface, no tick parameter, and no environment architecture document in existence",
+      "description": "The principle states the engine \"queries environmental state (terrain elevation, resource locations, threat zones, seasonal parameters) through a read-only interface.\" No such interface is named, shaped, or assigned. `tick()` has no environment parameter, no slice in `100-slices.behavior-engine.md` adds one, and there is no `500-arch` document anywhere in `project-documents/user/architecture/` \u2014 the referenced \"environment layer\" that is supposed to provide this does not exist as a design artifact. `300-slices` (304) assumes it will: \"Pass environment context to `SimulationManager` and `engine.tick()`.\"\n\nTwo of the five archetypes in the first Design Goal depend on it. The Envisioned State list includes \"Swarm agents respond to environmental stigmergy (reinforced paths),\" and `100-slices` defers swarm to Future Work (106) precisely because \"the behavior engine alone cannot provide\" the substrate; migration (107) \u2014 the project's namesake \u2014 is deferred for the same reason. So \"Archetype fidelity \u2026 for each behavioral archetype (flocking, herding, pack hunting, territorial/solitary, swarm intelligence)\" is not deliverable by anything this architecture plans, and the tick signature that must eventually carry environment context is being frozen now by slices 100\u2013105. Either specify the environment query protocol and reserve its place in the tick contract, or narrow the Design Goal to four archetypes and state the dependency explicitly.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Inter-profile interaction \u2014 flagged as a real problem in Technical Considerations \u2014 has no representation in a flat scalar profile dataclass",
+      "description": "Technical Considerations correctly identifies that \"an elk herd member's separation force from a nearby wolf is qualitatively different from its separation force from another elk\" and that \"Profile-to-profile interaction rules add a combinatorial dimension to the parameter space.\" The document then stops. Its own model \u2014 \"**Profile as data** \u2014 a plain data structure: a set of named weights, ranges, and thresholds\" \u2014 cannot express a relation between two profiles. `BehavioralProfile` is a flat dataclass of scalars (`src/migratory/engine/profile.py`), and the stated extension mechanism is \"subsequent slices extend it with new fields.\"\n\nSlice 103 (Predator-Prey Dynamics) needs exactly that relation: flight response of prey profile P toward predator profile Q, pursuit gain of Q toward P, pack target selection. Appending scalars cannot encode an N\u00d7M interaction matrix, and encoding it as `fear_of_wolf`, `fear_of_elk` fields per profile is the fragile, unbounded schema the document warns about. This is a schema change (interaction table keyed by profile-index pairs, or a per-profile interaction vector indexed by target profile), plus a matching config representation, plus a decision about whether forces may read other agents' profile indices at all. It should be designed here, before three behavioral slices hard-code the flat-scalar assumption.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The agent state model is closed at positions/velocities/profile-index, but three of the planned archetype slices require per-agent attributes",
+      "description": "\"**Data-oriented agent state** \u2014 Agent state is stored in contiguous typed arrays (positions, velocities, profile indices).\" That enumeration is presented as the state model, and Envisioned State reinforces it: \"all behavioral variation comes from parameterized profiles, not from archetype-specific code paths.\"\n\nPer-agent variation that is *not* expressible as a profile scalar is missing:\n- **Slice 102 (Herding):** \"leadership tendency (experienced individuals influence group heading)\" requires designating *which* individuals are experienced \u2014 a per-agent role or influence value, not a per-profile weight.\n- **Slice 103 (Predator-Prey):** \"hunt/pursuit behavior, target selection\" requires a per-agent (or per-pack) current target reference.\n- **Slice 104 (Territorial):** \"Home-range attraction (agents pulled toward a defined center point)\" requires a per-agent anchor position.\n\nNone of these fit `profile_indices`. Each requires a new array in `AgentState`, which the world server mirrors and reallocates by hand (`EntityManager.spawn_population` concatenates four arrays individually), which must survive `remove_agent` index shifting, and which must be covered by the serialization boundary described in Technical Considerations. The state schema and its growth rule belong in this document; leaving them implicit guarantees three separate cross-boundary schema changes.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregate entities cannot be presented \"through the same neighbor query interface\" \u2014 the extension point named for slice 108 does not work as described",
+      "description": "Technical Considerations states: \"Aggregate entities are managed by the world server, not the behavior engine \u2014 but the engine may need to evaluate forces between individually-simulated agents and nearby aggregates, which the world server would present through the same neighbor query interface.\" Anticipated Slices repeats this as \"(108) Aggregation Interface Support.\"\n\nThe interface as designed cannot carry an aggregate. `SpatialQuery.build(positions)` indexes one N\u00d72 position array; `query_radius` returns `NDArray[intp]` indices into it; forces then read `state.positions[neighbors]` and `state.velocities[neighbors]`. An aggregate is not a point \u2014 `300-arch` defines it as \"center of mass, average heading, dispersion radius, population count.\" There is no channel for count or dispersion, no way for a force to distinguish index *k* (one bird) from index *j* (5,000 birds), and no way to make separation/cohesion scale with aggregate population. Delivering 108 requires changing `query_radius`'s return type to something typed (e.g., a neighbor record array with kind/mass/dispersion) and rewriting every `BulkForce` \u2014 i.e., rearchitecting the exact protocol this document promises is stable. Either design the typed-neighbor record now or state plainly that 108 changes the spatial protocol.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The subset-evaluation contract is undefined where it matters: index stability across spawn/remove, duplicate indices, and profile-index alignment",
+      "description": "\"**Subset-evaluable tick** \u2014 the engine's tick interface accepts an agent subset (index array or mask)\" is called the foundation of the world server's multi-resolution strategy, but the document specifies none of the invariants that make index-based subsetting safe:\n\n- **Stability.** `AgentState.remove_agent` uses `np.delete`, shifting every index above the removed one; `EntityManager.remove_entity` then rebuilds its ID\u2194index maps (`src/migratory_server/entities.py:145-170`). A world server that computes `active_indices` for reduced-rate ticking (the stated use case) holds indices that become wrong the moment any entity is removed. Who owns index stability \u2014 the engine, the server, or a slot/tombstone scheme? Unanswered, and `300-arch` only says removals \"must not occur during behavior evaluation,\" which does not cover between-tick invalidation.\n- **Duplicate indices silently corrupt.** `integrate()` does `velocities[idx] += forces[idx] * dt` (`src/migratory/engine/integration.py:44-47`). NumPy buffers augmented assignment through fancy indexing, so a duplicated index in `active_indices` applies the update **once**, not twice \u2014 silent under-integration with no error. This directly violates the project rule \"Never use silent fallback values. Fail explicitly.\" The contract must either require uniqueness and validate it, or define duplicate semantics.\n- **Profile-index alignment is unowned.** `AgentState.create` validates `profile_indices` against a `profiles` list it then discards; `tick()` receives a separate `profiles` list and indexes it unchecked (`tick.py:49`). `100-slice` notes \"The server is responsible for ensuring this alignment,\" and `server.py:83` passes `entity_manager.profile_list`. A mismatch resolves every agent to the wrong profile with no error \u2014 the definition of a silent failure.\n- **Mask vs index array.** The principle says \"index array or mask\"; only an index array was built. Two accepted forms with different semantics (a mask has no duplicates and no ordering; an index array has both) is an ambiguity the document should close.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The determinism goal is unqualified, and the stochastic behavior the planned slices require has no RNG ownership",
+      "description": "\"**Tick determinism** \u2014 Given the same state and inputs, a tick produces the same outputs. This enables replay, debugging, testing, and eventual distribution.\" `300-arch` leans on this hard: \"If the tick function is deterministic \u2026 logging only the initial state plus any non-deterministic inputs \u2026 is sufficient\" for replay.\n\nTwo gaps. First, the engine has no RNG anywhere, yet the next slices need one: slice 102's \"experienced individuals\" must be chosen, and slice 103's \"target selection\" among candidate prey is inherently stochastic. The document never says where RNG state lives (per-agent? engine-global? caller-supplied?), who seeds it, or how the stream is captured for replay. If it lives outside the arrays, the \"stateless between ticks, all state lives in the arrays passed to it\" claim breaks and replay silently diverges. Second, no statement about floating-point reproducibility: `300-arch`'s replay-from-initial-state scheme requires bit-identical results, but NumPy reduction order depends on version, SIMD width, and BLAS threading. Once the vectorized rewrite implied by the Design Goals lands (pairwise sums, matmul-based distance kernels), cross-machine bit-equality is not automatic. State the guarantee level \u2014 bit-exact, or tolerance-bounded with snapshots logged \u2014 and assign RNG ownership.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No failure semantics anywhere in the document: NaN forces, unbuilt index, invalid dt, and out-of-range profile indices all propagate silently",
+      "description": "The document never says what the tick does when something goes wrong, despite the project rule \"Never use silent fallback values. Fail explicitly with errors\" and `300-arch`'s \"No silent failures, no undefined states.\" Concrete unaddressed cases:\n\n- **NaN/Inf from a force.** `SeparationForce` divides by `dist\u00b2` (`src/migratory/engine/flocking.py:81-85`); two agents at identical positions \u2014 which cohesion plus a clamped max speed makes reachable \u2014 produce a division by zero. `tick()` accumulates into `total_forces` with no validation, `integrate()` writes NaN into `positions` and `velocities` permanently, and the world server streams NaN to clients (slice 305) and writes NaN into the replay log (slice 307). Nothing detects it and nothing recovers.\n- **Spatial index not built / stale.** `BruteForceQuery` raises `RuntimeError` if `build()` was not called, but that contract lives in the implementation, not in the architecture; a future strategy that lazily builds has no stated obligation.\n- **Invalid `dt`, out-of-range `profile_indices`, `active_indices` beyond `n`.** `profiles[state.profile_indices[idx]]` (`tick.py:49`) raises `IndexError` on a stale index rather than a diagnostic naming the invariant; `dt <= 0` is unchecked.\n- **A force raising mid-accumulation.** Forces accumulate into a fresh array and `integrate()` runs last, so state happens to survive \u2014 but that is an accident of the current ordering, not a stated transactional guarantee, and it is the guarantee `300-arch`'s \"tick as transaction\" assumes.\n\nSpecify: what the tick validates at entry, whether force output is checked for finiteness, and what the caller sees when a force raises.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Profiles \u2026 can be serialized, loaded from configuration\" has no schema owner, and the hand-mirrored config schema is already stale \u2014 the server cannot start",
+      "description": "The architecture says profiles are data that \"can be serialized, loaded from configuration, and swapped at runtime,\" and `300-arch`'s \"Configuration over convention\" puts \"enabled behavioral profiles\" in server config. Neither document assigns ownership of the profile schema or defines the config\u2192engine mapping, so it was duplicated by hand: `BehavioralProfile` in the engine, `ProfileConfig` plus `_validate_profile` in `src/migratory_server/config.py:47-51,222-240`, and `build_profiles` in `src/migratory_server/simulation.py:13-22` as the bridge.\n\nThe mirror is broken today. Slice 101 added four required fields to `BehavioralProfile` (`cohesion_weight`, `separation_weight`, `alignment_weight`, `separation_radius`) with no defaults, but `ProfileConfig` still carries only `name/max_speed/query_radius`, `build_profiles` still passes only two arguments, and `config/default.yaml` still defines only those two. `BehavioralProfile(max_speed=\u2026, query_radius=\u2026)` will raise `TypeError` for four missing required arguments, so `Server.run()` fails at `src/migratory_server/server.py:71` on every startup with the shipped config, and `tests/test_simulation.py` (which constructs two-field profiles in `profiles_dict`, `TestProfileAlignment`, and `TestBuildProfiles`) is red. Nothing in either architecture anticipated that \"no silent defaults\" plus a hand-copied schema plus three initiatives means every new behavioral parameter breaks config loading, the YAML file, the validator, and the server tests simultaneously.\n\nAlso unresolved: the engine's force list. `SimulationManager` is constructed with `forces=[]` (`server.py:85`) and slice 303 defers registration to \"a future `add_force()` method,\" so the flocking forces built in slice 101 are not reachable from the running server. Ownership of force registration \u2014 engine, server, or config \u2014 is not stated in this document, and \"the world server calls this interface on its tick cycle\" currently calls it with no behavior at all.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subset evaluation and the aggregation slice are mechanism built for a caller that does not exist and a feature its own host architecture has deferred",
+      "description": "CLAUDE.md's first core principle is \"Always resist adding complexity. Ensure it is truly necessary.\" The Subset-evaluable tick principle threads `active_indices` through four layers \u2014 `tick()`, every `BulkForce.__call__`, `integrate()`, and `_clamp_velocities()` \u2014 plus dedicated tests, on the explicit justification that \"the interface exists from day one so it doesn't need to be retrofitted.\" The only consumer is multi-resolution simulation, which `300-slices.worldserver-foundation.md` parks under Future Work (\"**Multi-resolution simulation deferred:** \u2026 premature for the foundation slice plan,\" Risk: High) and which additionally depends on client spatial culling (309, not started). Anticipated Slices here also carries \"(108) Aggregation Interface Support\" for the same unbuilt feature.\n\nThe cost is not neutral. Because `active_indices` is an index array rather than a mask, `neighbor_lists` becomes positionally paired with `eval_indices` \u2014 an implicit ordering contract documented only in slice 101 (\"pairing `neighbor_lists[i]` with `active_indices[i]`\") and re-derived independently inside each of the three force classes. That positional coupling is one of the two things blocking the vectorized rewrite described in the FAIL finding above.\n\nCut or defer: drop `active_indices` from `BulkForce` and `integrate()` until a caller exists (keeping it only on `tick()`, where adding a parameter later is a one-line change), and move slice 108 out of Anticipated Slices into future work as `300-slices` already has. That removes the per-force subset bookkeeping and makes a rectangular, vectorizable neighbor representation reachable.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Anticipated Slices is stale against the slice plan, and the Related Work link to the world server architecture is broken",
+      "description": "Anticipated Slices lists seven slices including a standalone \"Spatial query abstraction \u2014 Define the neighbor query interface and implement the first concrete strategy,\" and \"Aggregation interface support.\" `100-slices.behavior-engine.md` folded the spatial interface into slice (100), made the spatial hash slice (105) \"Spatial Query Optimization,\" and moved aggregation to Future Work (108). The two documents now disagree about what the engine's plan contains.\n\nRelated Work links `[200-arch.world-server-foundation.md](200-arch.world-server-foundation.md)`; the file is `project-documents/user/architecture/300-arch.worldserver-foundation.md`. The Overview refers to the same document correctly as \"(300-arch),\" so the body and the link disagree. `100-slices.behavior-engine.md` repeats the same broken 200-arch link. This matters more than a typo: that document is the cited source for the scaling tiers and multi-resolution strategy this architecture uses to justify its interface requirements. `dependsOn: [000-concept.migratory]` in frontmatter also omits the world-server relationship the body describes, and `dateUpdated: 20260320` predates every slice design that changed the interfaces (100-slice 20260325, 101-slice 20260330).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Related Work"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The document's stated scope is \"the interfaces these present to the rest of the system,\" but no interface is specified \u2014 and the interfaces chosen downstream contradict the document's own performance and GPU claims",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Returns the updated state array\" and \"stateless between ticks\" contradict the in-place-mutation contract, and void the world server's \"tick as transaction / state commit\" model",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The claimed \"narrow interface: tick, query agent state, register/remove agents\" does not exist, and agent lifecycle is duplicated across the engine/server boundary",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Environment as input surface\" is asserted as a principle with no interface, no tick parameter, and no environment architecture document in existence",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Inter-profile interaction \u2014 flagged as a real problem in Technical Considerations \u2014 has no representation in a flat scalar profile dataclass",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The agent state model is closed at positions/velocities/profile-index, but three of the planned archetype slices require per-agent attributes",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Aggregate entities cannot be presented \"through the same neighbor query interface\" \u2014 the extension point named for slice 108 does not work as described",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The subset-evaluation contract is undefined where it matters: index stability across spawn/remove, duplicate indices, and profile-index alignment",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The determinism goal is unqualified, and the stochastic behavior the planned slices require has no RNG ownership",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No failure semantics anywhere in the document: NaN forces, unbuilt index, invalid dt, and out-of-range profile indices all propagate silently",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Profiles \u2026 can be serialized, loaded from configuration\" has no schema owner, and the hand-mirrored config schema is already stale \u2014 the server cannot start",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Subset evaluation and the aggregation slice are mechanism built for a caller that does not exist and a feature its own host architecture has deferred",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Anticipated Slices is stale against the slice plan, and the Related Work link to the world server architecture is broken",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Related Work",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-17T13:14:40.901551",
+  "model": "qwen/qwen3.8-2.4t-a95b",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 100215,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-2.4t-a95b",
+  "answering_models": [
+    "qwen/qwen3.8-2.4t-a95b"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 230779,
+  "cached_tokens": 182784,
+  "cache_write_tokens": null,
+  "completion_tokens": 28270,
+  "reasoning_tokens": 21921,
+  "duration_seconds": 675.6943040839396,
+  "cost_usd": 0.3021668,
+  "cost_basis": "alias_pricing"
+}

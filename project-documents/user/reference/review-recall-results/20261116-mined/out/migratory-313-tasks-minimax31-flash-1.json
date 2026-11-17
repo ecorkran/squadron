@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every numbered success criterion has corresponding task coverage",
+      "description": "The criteria map cleanly to the breakdown: SC1\u2013SC4 map to Tasks 1.1\u20131.4; SC5 maps to Task 1.4, though its assertion needs strengthening as noted below; SC6\u2013SC9 map to Tasks 2.1\u20132.3; SC10\u2013SC11 map to Tasks 3.1\u20133.4; SC12 maps to Tasks 4.1\u20134.2; SC13 maps to Tasks 3.5 and 5.1; and SC14 maps to Task 5.2. No numbered criterion is wholly absent.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:45-306"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies and test-with sequencing are sound",
+      "description": "Configuration precedes the enforcement module, enforcement precedes simulation integration, and configuration defaults follow integration. Each test task immediately follows its implementation work: 1.4 follows 1.1\u20131.3, 2.3 follows 2.1\u20132.2, and 3.4 follows 3.1\u20133.3. Dependencies are acyclic. The status, changelog, and slice-plan updates are normal closeout work rather than material scope creep.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:45-293"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Explicit `policy: null` can be silently treated as an omitted policy",
+      "description": "Task 1.3 prescribes `data.get(\"policy\", None)` but does not explicitly require checking `\"policy\" in data`. An implementation that branches on `value is None` will accept an explicitly present null value as `OPEN`, contrary to the slice design\u2019s rule that a present policy must be a string. Specify the membership check explicitly and add a test asserting that `policy: null` raises `ConfigError`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:69-74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The round-trip test is weaker than the success criterion",
+      "description": "Task 1.4 only asks the test to assert that the reloaded policy matches. SC5 additionally requires the policy to be emitted as a plain string and the reloaded configuration to equal the original `ServerConfig`. Assert that the parsed YAML value is the string `\"wrap\"` and that the complete reloaded `ServerConfig == original ServerConfig`, rather than checking only the policy member.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88-89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are embedded in checkboxes instead of being plain lines",
+      "description": "The `**Commit:**` marker is written as `- [ ] **Commit:** ...`; the same pattern recurs at lines 179, 249, 286, and 325. Commit markers must be plain lines and never checkboxes. Their current placement after tested work is otherwise reasonable.",
+      "file_ref": null,
+      "category": "source-control",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Completion status conflicts with the unchecked task list",
+      "description": "The frontmatter says `status: complete`, while all implementation, test, verification, and documentation checkboxes remain unchecked. This conflicts with the project convention that completed tasks and subtasks must be checked off and makes the completion state impossible to audit. Either check off genuinely completed work or mark the file as in progress until execution is complete.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The task file is disproportionately large and granular for a 2/5-effort slice",
+      "description": "The breakdown contains 18 substantive tasks, five commit tasks, and roughly 325 lines for a small additive feature. It also prescribes import ordering, exact test names, and substantial implementation detail beyond the criteria, and invokes the full pytest suite three times. Reduce it by merging Tasks 1.1\u20131.3, 2.1\u20132.2, 3.1\u20133.3, and 4.1\u20134.2 while retaining their immediately following test tasks; remove one redundant full-suite run and the redundant parametrized dispatch test; and retain the meaningful working commit points.",
+      "file_ref": null,
+      "category": "task-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:1-325"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every numbered success criterion has corresponding task coverage",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:45-306",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Dependencies and test-with sequencing are sound",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:45-293",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Explicit `policy: null` can be silently treated as an omitted policy",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:69-74",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The round-trip test is weaker than the success criterion",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88-89",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "source-control",
+      "raw_category": null,
+      "summary": "Commit markers are embedded in checkboxes instead of being plain lines",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Completion status conflicts with the unchecked task list",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "task-design",
+      "raw_category": null,
+      "summary": "The task file is disproportionately large and granular for a 2/5-effort slice",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:1-325",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-17T11:03:53.392119",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 347589,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 791015,
+  "cached_tokens": 657216,
+  "cache_write_tokens": null,
+  "completion_tokens": 84777,
+  "reasoning_tokens": 82286,
+  "duration_seconds": 589.1541818752885,
+  "cost_usd": 0.040068537,
+  "cost_basis": "alias_pricing"
+}

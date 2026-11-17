@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Collision recovery deletes the personal value instead of the stale shared copy",
+   "description": "The Data Flow section states that project-scoped deletion for a personal key removes it from `.context-forge.local.toml`. Nevertheless, the collision semantics and Verification Walkthrough instruct users to run `cf config unset <key> --project` to clear the stale shared-file copy. That command would delete the personal value instead, leaving the shared copy intact; read-time fallback would then resurrect the stale shared value, and the consistency warning would remain. This contradicts the promised cleanup path and leaves the parent plan\u2019s required migration/compat story incomplete. Define an operation that specifically removes the shared copy, or revise the migration semantics and walkthrough accordingly.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Personal files created outside `cf init` are not guaranteed to be ignored",
+   "description": "Only `cf init` adds `.context-forge.local.toml` to `.gitignore`. The central use case for this slice is an existing project, and both `migrate-personal` and ordinary project-scoped writes can create the personal file in that project without adding the ignore rule. The value can therefore still be committed\u2014the exact leakage this slice is intended to prevent. Ensure the one-line ignore rule is present whenever the personal file is first created, including during migration and non-CLI write paths, while retaining the parent plan\u2019s minimal one-line scope.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:138-159"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Cross-file migration has no defined core API",
+   "description": "The design makes `ConfigManager` the owner of project-file routing but gives `migrate-personal` no contract for reading the raw shared file or deleting from it. Normal `set` and `delete` cannot perform that cross-file operation, while implementing TOML manipulation directly in the CLI would duplicate core logic and introduce an inappropriate CLI-to-TOML implementation dependency. Specify a narrow core-level migration or shared-file inspection/deletion API that returns per-key outcomes and enforces the collision semantics for both the checker and CLI command.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#API Contracts"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Scope discriminator literals are scattered rather than centralized",
+   "description": "The design introduces repeated `'shared' | 'personal'` literals and comparisons in the registry, `ConfigManager`, the consistency checker, and migration logic. This conflicts with the project convention that values used in conditionals or lookups be defined once. Introduce a canonical constant and derived type, such as `CONFIG_SCOPE.Shared` and `CONFIG_SCOPE.Personal`, and use them throughout the implementation and tests.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Technical Decisions"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The MCP tool contract will retain the obsolete resolution order",
+   "description": "The only specified MCP change is to surface both project paths. The published `config_get` tool description currently advertises `project \u2192 user \u2192 default`, which will become incorrect when the effective order is `project-personal \u2192 project-shared \u2192 user \u2192 default`; `config_set` also should explain that project scope is automatically routed by key classification. Update the tool descriptions and any schema-facing documentation as part of the MCP contract change so consumers do not receive contradictory guidance.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:31"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure behavior for the new personal-file read paths is unspecified",
+   "description": "The failure-mode section covers migration writes, `ConfigManager.set`, and the gitignore write, but not the new reads of `.context-forge.local.toml` by `get`/`list`, the raw shared/personal reads used by migration and detection, or reads performed by the consistency checker. Specify the handling for missing files, malformed TOML, and permission/read errors\u2014including whether the checker degrades to an explicit finding or aborts\u2014so a malformed local file does not produce undocumented behavior across entry points.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-151"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Consistency-check coverage is undefined for slice-scoped modes",
+   "description": "The design says the new project-level rule surfaces automatically through `cf check` and MCP `workflow_check`, but those surfaces also provide slice-scoped modes that use the single-slice checker rather than the all-slices suite. Specify whether the personal-config rule is aggregate-only or is also evaluated in slice-scoped requests. If it is aggregate-only, qualify the automatic-surface claim and document that scope; otherwise include the single-slice path in the design and tests.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+  }
+ ]
+}

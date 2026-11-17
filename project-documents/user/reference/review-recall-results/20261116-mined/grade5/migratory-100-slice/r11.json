@@ -1,0 +1,40 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Neighbor ordering is unspecified across spatial implementations",
+   "description": "The query contract does not define result ordering. Different orders from brute-force and spatial-hash implementations can change floating-point force sums, conflicting with the slice plan\u2019s requirement that slice 105 preserve behavioral output and determinism. Define a canonical neighbor order and require both implementations to return it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:165-173"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Neighbor interface conflicts with the bulk hot-path goal",
+   "description": "The design queries one agent at a time and passes a dynamically allocated list of per-agent arrays to each bulk force. The architecture calls for bulk array inputs without Python-level per-agent branching or dynamic allocation in the hot loop for eventual GPU offload. Define a batch-oriented neighbor representation and query contract, while retaining the brute-force implementation as the initial provider.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:138-150"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Per-agent force path is both ambiguous and extra scope",
+   "description": "The document says the tick prefers bulk forces when available and requires testing both protocol paths, but its signature accepts only `list[BulkForce]`. It does not specify registration or dispatch for per-agent forces. Cut the separate production `Force` path and use bulk placeholder forces; the slice plan requires basic integration, not two force dispatch mechanisms.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-152"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Performance target is not restated for the affected path",
+   "description": "The design targets hundreds of agents without restating the parent architecture\u2019s goal of **tens of thousands of agents at full behavioral fidelity on one CPU process**. State that target and distinguish it from the deliberately limited brute-force implementation; the slice plan assigns spatial optimization to slice 105.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Full pairwise distance storage adds avoidable quadratic memory",
+   "description": "Precomputing all pairwise distances on every build adds quadratic storage even when only a small subset is active, while queries still cost O(n). Use a simpler on-demand brute-force distance calculation for active queries and leave spatial indexing optimization to slice 105.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  }
+ ]
+}

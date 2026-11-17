@@ -1,0 +1,242 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Append-only index consumption is the wrong lifecycle for the client overview, and the 950+ overflow contradicts the \"no convention change\" claim",
+      "description": "The Output Conventions section adopts the tech-debt-audit model \u2014 \"each run is an independent sample rather than a revision of the last\" \u2014 for *both* generated document types. That model exists because audits are metrology samples where run-to-run variance is the signal. A client overview is the opposite: a living derived view of initiative statuses that will be regenerated as statuses change. Under append-only incrementing, every regeneration of `/sq:overview` permanently consumes another index, stale overviews accumulate with no deprecation/supersede mechanism defined, and the 10-slot 940-949 range is exhausted in a handful of runs. The \"Overflow into 950+ is sanctioned\" paragraph then unilaterally extends the reserved range while the same section claims \"no change to `file-naming-conventions.md`\" \u2014 the convention's owner is Context Forge, and self-sanctioning overflow beyond the reserved range is a convention change by another name. Worse, the 900 band is the maintenance initiative's slice range (repo has `901`\u2013`915` slice documents); analysis documents landing in \"remaining slots in the 900 band\" will collide with `900-slices.maintenance` numbering. The doc flags this as \"a known future concern\u2026 not a blocker,\" which defers a decision the architecture itself is making.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:241-270"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `000-concept` index claim is contradicted by the repo's own recorded concept location",
+      "description": "The Outputs section writes to `project-documents/user/project-guides/000-concept.{project}.md` and the Current State section asserts squadron \"has no `000-concept` document.\" But the existing initiative plan (`001-initiative-plan.squadron.md`) records its source as `user/project-guides/001-concept.squadron.md` \u2014 index **001**, not 000. Either the convention reserves 000 for concept (and the initiative plan's source field is wrong) or the convention is per-document sequential and the architecture is inventing a 000 slot. The naming-convention authority (`file-naming-conventions.md`) lives in the `ai-project-guide` submodule, which is not initialized in this checkout, so the claim is unverifiable from the repo. Writing a planning document at an index that contradicts the one existing reference to a concept doc is exactly the kind of fragile convention assumption the architecture should have reconciled before specifying an output path.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:146-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The graph read strategy conflicts with itself: you cannot resolve edges while refusing to read function/class nodes, and you cannot grep \"sections\" of a JSON file",
+      "description": "Two problems in the read discipline. (1) \"Grep for the needed section before reading; never load the whole file into context\" assumes a pretty-printed file with greppable structure. The reference sample in this very repo (`project-documents/user/reference/repowire-probe-sample.json`) shows a knowledge graph serialized as a single minified line; grep on a one-line JSON returns the entire file. The discipline as written is not executable against the format the plugin plausibly emits. (2) \"File-level node types\u2026 are sufficient for planning artifacts; function- and class-level nodes are not read\" is incompatible with the analysis output that includes \"dependency observations\": `edges[]` records `{source, target}` as node IDs, and edge types like `calls` reference function-level nodes (`function:path:name`). Producing dependency observations requires resolving edge endpoints to nodes, which requires at minimum indexing all node IDs including function- and class-level ones. Either the outputs or the read discipline has to give.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:103-110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The third-party graph contract has no version or schema compatibility guard",
+      "description": "The entire Capability 1 rests on an output contract asserted \"from the plugin's own reference\" for a pinned version (v2.8.1) of an upstream marketplace plugin. Nothing in the design verifies the graph was produced by a compatible plugin version: the preconditions check only that the file *exists*. There is no schema validation step, no minimum-field check, no degradation path for a malformed or older-format graph, and no fixture plan. Per this project's own conventions (CLAUDE.md: \"the test fixture must include the actual format that parser will consume in production\"), a parser of `knowledge-graph.json` needs a real graph as a test fixture \u2014 the architecture defers nothing to slice design here; the decision to have no compatibility strategy at all is baked in at architecture level. An upstream minor release that renames a field turns into a silently wrong planning document rather than a detectable failure, which is precisely the \"confidently wrong document\" failure mode the staleness section says it most wants to avoid.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:79-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No sensitivity rule for the client-facing document \u2014 \"traceable\" is not the same as \"safe to share\"",
+      "description": "The translation rules guarantee every claim traces to an input artifact, which prevents *invention* but not *leakage*. Initiative plans and analysis documents in this project legitimately contain internal security findings (e.g., the current tech-debt audit's F055: \"no auth on the local daemon\u2026 accepts spawn/shutdown from any local process\"). A client overview derived from the initiative plan under the stated rules has no mechanism that would filter that class of content \u2014 it is traceable, so it passes. For a document whose explicit purpose is external distribution, the architecture needs a confidentiality boundary (what categories of content may not cross) and it defines none. \"Derive, never invent\" is a correctness rule being asked to do a security job it cannot do.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:228-240"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Working-tree hygiene design makes heavyweight git decisions for repos squadron does not own",
+      "description": "Capability 1 runs against external codebases (\"a codebase that was never planned in squadron\"). The hygiene step unilaterally (a) edits the target repo's `.gitignore`, and (b) decides that `knowledge-graph.json`, `meta.json`, `config.json` are *tracked* in that repo's git history. Knowledge graphs are multi-megabyte generated JSON (the in-repo reference sample shows a 3 MB single-file graph); committing them means every `/understand` run produces a massive diff and permanent repo bloat in a repo the user may not even own the git policy for. The \"Not ignored\" list is presented as settled (\"They are durable project knowledge\") when it is a significant opt-out-free commitment imposed on a foreign repository. It also contradicts the stated design goal \"Leave the working tree clean\" \u2014 the hygiene step itself dirties the working tree on first run, and the tracked-graph decision guarantees recurring large diffs thereafter. This needs an explicit consent/opt-out decision, not an architectural default.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:174-190"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capability 2's required input is a hard-coded label",
+      "description": "\"Required: the initiative plan (`001-initiative-plan.{project}.md`)\" hard-codes both the index and the filename. CLAUDE.md's own rule: \"NEVER use user-accessible labels as logical structure. They are fragile.\" The skill runs against arbitrary target projects whose initiative plans may sit at a different index or name; the doc that motivates this capability notes squadron itself has a *retroactively generated* plan \u2014 a project with multiple planning documents, a renamed project token, or a plan at a different index will fail input resolution. The architecture should specify discovery by `docType: initiative-plan` frontmatter (the mechanism the repo already has) rather than a fixed path.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter provenance may not survive the gate the document itself cites",
+      "description": "The staleness decision requires the warning to \"appear in the generated document's provenance,\" and the Output Conventions section correctly notes the frontmatter gate validates `docType` and `status` against fixed enums. Whether the gate *also* rejects unknown frontmatter keys (a `provenance` field) is unspecified \u2014 the gate is owned by Context Forge and its strictness on extra keys is not verifiable from this checkout. If unknown keys are rejected, the mandated provenance recording fails the pre-commit hook on the very documents it is supposed to protect. The design depends on a gate behavior it neither verifies nor states.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-134"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Delivery section states capability (b)'s design twice with different framings",
+      "description": "The Delivery section contains a full paragraph on capability (b) as a first-party command, then a second \"Capability (b) \u2014 `overview`\" paragraph repeating the same decision with the name rationale. The duplication is vestigial draft residue; the dependency claim \"[100] \u2014 CLI command registration\" is also loose for (b), whose delivery is a markdown command file installed by the existing `install-commands` copy mechanism, not a registered CLI surface. Harmless but should be cleaned before slice design.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:271-289"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Plugin-detection and staleness preconditions are under-specified mechanically",
+      "description": "\"Verify the plugin is installed\" and \"compare `meta.json`'s `gitCommitHash` to HEAD\" are stated as steps without a mechanism: user-scope plugin installs live outside the repo in a Claude-Code-managed location the skill must know how to find, and the staleness check silently assumes the target is a git repository (an unversioned source drop has no HEAD to compare). Neither failure mode (plugin installed but stale-shape config, non-git target) has a specified behavior.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Append-only index consumption is the wrong lifecycle for the client overview, and the 950+ overflow contradicts the \"no convention change\" claim",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:241-270",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The `000-concept` index claim is contradicted by the repo's own recorded concept location",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:146-156",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The graph read strategy conflicts with itself: you cannot resolve edges while refusing to read function/class nodes, and you cannot grep \"sections\" of a JSON file",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:103-110",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The third-party graph contract has no version or schema compatibility guard",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:79-111",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No sensitivity rule for the client-facing document \u2014 \"traceable\" is not the same as \"safe to share\"",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:228-240",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Working-tree hygiene design makes heavyweight git decisions for repos squadron does not own",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:174-190",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Capability 2's required input is a hard-coded label",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-200",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Frontmatter provenance may not survive the gate the document itself cites",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-134",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Delivery section states capability (b)'s design twice with different framings",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:271-289",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Plugin-detection and staleness preconditions are under-specified mechanically",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-135",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-17T12:44:44.653720",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 157110,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 609764,
+  "cached_tokens": 524480,
+  "cache_write_tokens": null,
+  "completion_tokens": 38754,
+  "reasoning_tokens": 35605,
+  "duration_seconds": 180.22388095781207,
+  "cost_usd": 0.42627999999999994,
+  "cost_basis": "alias_pricing"
+}

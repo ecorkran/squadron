@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`prompt get` guide read via phase shorthands is not covered and is sequenced after the stated wiring point",
+   "description": "D3 requires covering every guide-content read, and Task 20 says to grep `PROMPT_FILE_RELATIVE_PATH` and wire each non-test hit \"before the read,\" listing `prompt.ts (~lines 60 and 116)`. But in the `get` action, `resolvePhaseInput(phase, opPath)` at line 114 reads the guide (via `getPhaseShorthands` \u2192 `fs.readFile` of the prompt file, `packages/cli/src/utils/phaseShorthand.ts:22`) before the listed line 116. If `ensureGuideReady()` is placed at line 116 as the task directs, the shorthand read at 114 runs against the empty tree and caches an empty shorthand map, so phase shorthands silently break on the fresh-clone case. The grep will also surface `phaseShorthand.ts:22`, which is not in the task's explicit list, leaving a junior unsure whether to wire it there (risking duplicate notices). Task 20 should name line 114 (before the shorthand read) and state that `phaseShorthand.ts` needs no separate wiring because its only callers are in `prompt.ts`, which is covered upstream.",
+   "location": "packages/cli/src/commands/prompt.ts:114"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Config-sourced `manual` alias warning has no defined path from core to the CLI/MCP boundary",
+   "description": "Functional criterion 6 requires a shared config with `guide.git_strategy: manual` to \"install as tarball with the same warning.\" Task 5 leaves the return shape as a junior's choice (\"Choose one return shape ... e.g. `{ method, deprecatedAlias?: string }`\"), and Task 7 bullet 2 expects `guidesInstallAction()` to print the warning \"when Task 5's return shape reports an alias.\" But `guidesInstallAction()` only receives `InstallResult` from `manager.install()` (verified at `packages/cli/src/commands/guides.ts`), and no task says to add an `alias`/`deprecatedAlias` field to `InstallResult`. As written, the alias signal cannot reach the CLI (or MCP) for the config path, so the warning requirement is unimplementable without an undocumented change. The task should specify the exact transport \u2014 e.g. extend `InstallResult` with an optional alias field set by `install()` from `resolveStrategy()` \u2014 and add a matching assertion to Task 6b/8.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No task defines where MCP notices live for text-result tools",
+   "description": "D4 says MCP tools return auto-init notices in a `notices: string[]` \"on the result rather than mutating the primary payload,\" and Task 22's success criterion requires a single shared notices shape. But the three result helpers here all return `{ content: [...] }` only \u2014 `context_build` and `prompt_get` use `textResult()` (plain text content), and `prompt_list` uses `jsonResult()`. There is no field for `notices`, and adding a top-level key would itself change the shape the task says to preserve. Task 23 compounds the ambiguity by asserting `context_build` \"returns the existing payload plus one notices entry\" without saying where. No task actually specifies creating the shared notices-bearing result type or how text-result tools surface it. A junior cannot satisfy Task 22/23 as written; the breakdown needs a concrete, testable definition (e.g. a shared result helper that appends `notices` to the JSON payload or a defined text format) before implementation.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "A few single-purpose tasks could be merged without loss of traceability",
+   "description": "Task 10 (add three type/constant declarations) is immediately followed by Task 11 (the only consumer, `detect()`), and Task 28 (add one constant + two print sites) by Task 29 (its tests). These are granular enough to merge into their neighbors. This does not block progress \u2014 the overall 32-task count is proportionate to the three-issue scope, and test-with pairing is otherwise appropriate \u2014 but merging would reduce task-file overhead.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Dispersion measurement assumes machinery that does not exist and cannot retain scores",
+   "description": "The \"Dispersion needs repeated measurements\" bullet states \"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`.\" Neither supports the claim. 300's own slice plan (300-slices, Future Work 1) still has **Multi-Sample Judging** unchecked \u2014 it was deferred and not built; there is no `median` fan-in reducer (only `collect` and `first_pass` are registered in `fan_in/reducers.py`, and `merge_findings` is only referenced in a comment). Both reducers drop `score`/`criteria`/`provenance`, keeping only `verdict`/`outputs`, so per-judge scores are lost at reduction. Worse, judge reviews persist to a fixed path `{index}-review.{template}.{slice}.md` (`save_review_result`), so N fan-out branches judging the same artifact overwrite one another. Judge-vs-judge dispersion therefore has no data source as assumed; the keystone data layer must first build score retention and unique per-run result identity.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The code-quality oracle has no execution substrate \u2014 \"harness\" is undefined magic",
+   "description": "The slice \"Tech-debt-audit baseline harness\" says it \"runs the audit across squadron-managed projects, normalize[s] and persist[s] findings.\" But `tech-debt-audit` is a human-invoked Claude Code slash command (`commands/analysis/tech-debt-audit.md`: `disable-model-invocation: true`, a 5\u201320 minute interactive protocol using TodoWrite and subagents). `sq skills` only installs/lists/uninstalls markdown files; there is no headless or CLI runner for the skill anywhere in `src/squadron`. \"The harness runs across projects\" is entirely new work, not reuse of an existing mechanism, and it is never designed \u2014 only asserted. The whole baseline-plus-delta value proposition is blocked on a runner that the architecture does not specify or even acknowledge as needing to be built.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "300 does not persist judge-configuration version or provenance, breaking the read-side and keying commitments",
+   "description": "\"Read-side over 300's write path\" promises 320 \"does not re-thread plumbing,\" and \"Comparability across template and model versions\" commits to keying measurements by \"template identity/version, model\" so reports \"must not blend measurements across incompatible configurations.\" But 300 (complete) persists review markdown whose frontmatter carries `reviewType` (template name) and `aiModel` only; `format_review_markdown` explicitly notes \"provenance is never emitted here (reserved \u2014 slice 301),\" and no template version is recorded anywhere. A template revision is undetectable from persisted data, so the read side cannot honor the no-blending commitment. Meeting it requires either changing 300's write path (which the document forbids) or building a separate store that re-derives identity \u2014 a choice the document leaves unmade.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Architectural Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No stable result identity exists to key human samples against",
+   "description": "\"Sampling capture ergonomics\" requires the operator's verdict to \"attach unambiguously to the specific persisted judge result being checked,\" and the keystone slice is \"human sample verdicts keyed to persisted judge results.\" Persisted reviews are named `{index}-review.{review_type}.{slice_name}.md` and overwritten on every run; they carry no run id, sample index, or UUID. Re-runs and the multi-sample/fan-out cases the document relies on all collide on one file. The keystone slice's \"keyed to persisted judge results\" has no key available to it.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The arch-vs-concept artifact level has no judge to calibrate",
+   "description": "Calibration is claimed \"per artifact level (tasks-vs-slice, slice-design-vs-arch, arch-vs-concept)\" and the trust-gradient narrative leans on arch-vs-concept being the weakest-ground-truth case. 300 actually delivered only two judge templates \u2014 `judge.tasks-vs-slice` and `judge.slice-vs-arch` (300-slices slice 302; only those two template files exist under `data/templates/`). There is no arch-vs-concept judge, so one of the three stated calibration grains is vacuous. Either authoring that judge must be pulled into scope or the per-level claim must be narrowed.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Design Goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Every load-bearing measurement decision is deferred",
+   "description": "For an initiative whose entire product is trustworthy measurement, the core methodology is pushed to slice design: the agreement metric, chance-corrected behavior at small n, the minimum-evidence floor, and \"which results are offered for sampling ... a biased sample yields a biased agreement number.\" The document itself warns that a report overstating confidence \"would move thresholds on noise.\" Yet cross-tabulating agreement by artifact level \u00d7 template \u00d7 model \u00d7 version \u00d7 threshold override with \"a handful of samples\" leaves most cells at n \u2264 1; without a defined floor there is no defensible decision rule for the calibration-to-threshold feedback. The decisions that determine whether the initiative produces signal or noise are precisely the ones left open.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Two oracles, one metrology shape\" is a leaky abstraction",
+   "description": "The document asserts \"the reporting layer is built once\" for both oracles. The judge oracle yields paired verdicts on the same artifact (judge vs human, judge vs judge), so agreement and dispersion are computable. The audit oracle yields a single rater's finding counts across projects \u2014 no second rater and no paired verdicts \u2014 so neither agreement nor dispersion is even definable; only counts and trends exist. A single \"agreement/dispersion/trend reporting layer\" cannot serve both without becoming two different systems behind one name. The shared-abstraction premise does not survive contact with the data shapes.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Overview"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Overweight, conflated scope \u2014 cut the code-quality half",
+   "description": "The document bundles two largely independent initiatives joined only by analogy: judge calibration (data layer, sampling UI, statistics, threshold feedback) and code-quality baseline + pre-emption prompt (cross-project audit harness, normalization, baseline reporting, delta measurement). They share no execution path and no common data shape (see the abstraction finding), and the code-quality half additionally lacks an execution substrate and a declared dependency (below). The proportionality test fails: split or defer the entire tech-debt-audit baseline and pre-emption-prompt scope into its own initiative, and keep 320 focused on calibrating judges against sampled human verdicts.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Hard dependency on initiative 340 is undeclared",
+   "description": "The code-quality oracle depends entirely on the tech-debt-audit skill shipped in the 340 analysis pack (\"shipped in the 340 analysis pack\" in the Overview; 340 listed in Related Work). Yet frontmatter declares `dependencies: [100, 140, 300]`, and the initiative plan's dependency line for 320 likewise omits 340 \u2014 even though 340's own architecture names 320 as its primary consumer. If the code-quality scope is retained, 340 is a hard dependency that must be declared; if that scope is cut, the inconsistency disappears. As written the dependency graph is wrong in a way that hides what the second oracle actually needs.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The pre-emption prompt presumes dispatch plumbing that does not exist",
+   "description": "A \"dispatch-side prompt-chaining pre-emption prompt\" that \"front-load[s] avoidance of the issue classes the audit actually finds\" needs a mechanism to inject baseline findings into dispatch prompts across projects. No prompt-chaining facility exists in squadron (no such module or CLI; searches of `src` for chain/preempt/baseline return nothing), and 280 \u2014 the candidate home for cross-project baseline data \u2014 is not started and declared independent of 320 in the initiative plan. The document treats the pre-emption prompt as a prompt-authoring task when it is actually new plumbing plus a cross-project baseline query, neither designed here.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Scope"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "\"Calibration feeds the gates\" overstates what is actually built",
+   "description": "The goal says \"Measurement closes the loop ... moving a trustworthy judge from advisory toward auto-gate.\" But the matching slice is only \"the documented ... path,\" and Non-Goals forbid automatic threshold mutation \u2014 \"Loosening a gate is an operator decision.\" The \"feedback\" is a human reading a report and hand-editing 300's template/step threshold config; there is no mechanism, config-schema tie, or validation connecting report output to threshold config. Describing this as a closed feedback loop is misleading about the deliverable and should be stated plainly as a documented manual process.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Design Goals"
+  }
+ ]
+}

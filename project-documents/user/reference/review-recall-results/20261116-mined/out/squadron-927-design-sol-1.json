@@ -1,0 +1,111 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Deduplicating model history loses the actual final answering model",
+      "description": "The design stores distinct models in first-seen order, but D12 selects the last entry as the model that wrote the review. For turns answered by A \u2192 B \u2192 A, the stored list becomes `[A, B]`, incorrectly attributing the review to B. This violates slice-plan Part C and can corrupt metrology identity. Track the latest observed model separately from the distinct-model list, including across recovery turns.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:170-174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Missing failure telemetry is treated as proof of successful tool use",
+      "description": "The formula substitutes zero for an unreported `failed_tool_calls` count. Slice 918 explicitly defines missing telemetry as unknown and leaves SDK failure telemetry unreported. Consequently, positive call counts with unknown outcomes bypass the coverage cap\u2014even if every call failed. This contradicts this design\u2019s requirement that failed calls do not count, and its prohibition on replacing unknown counts with plausible values. Define unknown-outcome handling explicitly; either obtain failure telemetry or conservatively retain the cap without asserting that calls failed.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:129-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Synthetic finding bypasses the required location contract",
+      "description": "D4 explicitly omits `location` because the synthetic finding cites no file. The parent plan\u2019s shipped slice 904 requires a location on every finding and provides `unverified` for precisely this situation; location also supports ensemble deduplication. Emit `location: unverified` consistently in the finding and its serialized representation, while leaving `location_verified` unset.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Deduplicating model history loses the actual final answering model",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:170-174",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Missing failure telemetry is treated as proof of successful tool use",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:129-135",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Synthetic finding bypasses the required location contract",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T05:27:36.861657",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 55865,
+  "cached_tokens": 54656,
+  "cache_write_tokens": null,
+  "completion_tokens": 595,
+  "reasoning_tokens": 93,
+  "duration_seconds": 52.37502899998799,
+  "cost_usd": 0.013833600000000001,
+  "cost_basis": "alias_pricing"
+}

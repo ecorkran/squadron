@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Overwrite safety contract only defined for the two top-level files; `.github/instructions/` and `.github/prompts/` are unprotected",
+   "description": "The sequence step 4 checks the managed marker in `.github/copilot-instructions.md` and `AGENTS.md` only, and \"Files Changed\" adds `isManagedCopilotFiles(projectPath)` for just those two files. Yet the design decision at line 65 says \"Both Claude and Copilot generated files carry `[//]: # (context-forge:managed)`\" \u2014 i.e., every emitted `.instructions.md` and `.prompt.md` gets a marker that nothing in the CLI checks before overwrite. These two directories are exactly where users author their own content: `.github/prompts/` is the documented VS Code location for user prompt files (see the referenced tool guide's examples), and skill names like `commit` / `review-pr` are plausible collision points. A user-authored, unmarked `commit.prompt.md` would be silently replaced by the guide script with no prompt and no `.bak`, violating the plan's safety contract (\"first-run warns before overwriting unmanaged user content\"). The design should specify per-file marker checks and backup/collision behavior for the instructions/prompts directories, and state explicitly whether backup-to-`.bak` runs even when `--yes` is passed (the 202 contract for `CLAUDE.md` is \"backup runs regardless of `--yes`\"; this slice's \"prompt (or skip with `--yes`), backup to `.bak`\" is ambiguous on that point).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Two plan success criteria have no verification counterpart in the slice design",
+   "description": "The slice plan's success criteria include: (1) \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files,\" and (2) \"Manual verification: an AI agent in VS Code Copilot can read `.github/copilot-instructions.md` + `AGENTS.md` and follow project conventions as well as Claude does with `CLAUDE.md` + `.claude/rules/`.\" The Test Coverage section assigns a test to every other criterion (generation, managed re-run, unmanaged prompt, worktree propagation, target validation, init end-to-end) but has no item for the translation or for the in-Copilot behavior check. This matters disproportionately because the plan rates the slice Risk: Med and names \"frontmatter translation correctness\" explicitly, and because the translation lives in a bash script in the guides submodule \u2014 the one component the CLI-side test list cannot reach. The design should name where translation correctness is verified (fixture-based tests in the submodule script, or a CLI-side smoke test asserting emitted `applyTo` values for a known rule set) and add the manual Copilot-verification item.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tool-guide reference/promotion criterion dropped from the design",
+   "description": "The plan lists as a success criterion: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed.\" The slice design never references that file \u2014 its VS Code format facts (`applyTo` comma-separated globs, prompt-file frontmatter fields `name`/`description`/`argument-hint`/`agent`/`model`/`tools`, \"multiple instruction files combine with no guaranteed order\", `AGENTS.md` folder-locality) all come from that guide, so the traceability the plan asks for is missing. Additionally, the file as it exists is a raw chat export (embedded CDN logo `<img>`, footnote spans, a closing \"Would you like...\" question), not a published guide; the \"promoted \u2026 if needed\" half of the criterion is silently skipped. Either add a reference (and the format facts it anchors), or record a deliberate deferral with a named follow-up.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Onboarding-time NFR from the parent architecture is not restated",
+   "description": "The 200 architecture's design goal is \"from `npm install` to useful context output in under two minutes,\" and this slice adds a branch to that path (`cf init --ide copilot` routes through `setupIdeAction` plus the new copilot safety checks and worktree propagation). The slice doc does not restate the target. The new work is a single script invocation and file copies, so risk to the two-minute budget is low \u2014 but if the copilot compilation in the guides script is expected to take materially longer than the claude compile, that should be noted against the target.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Partial-run failure of the guide script and propagation copy errors not explicitly handled",
+   "description": "Step 5's `execFileSync` inherits the claude path's failure behavior (non-zero exit \u2192 clear error, verified in `setup-ide.ts`), and the Risks section covers the out-of-sync-submodule case well. Two modes are not addressed: (a) the script failing mid-write (e.g., `copilot-instructions.md` written with marker, `AGENTS.md` not yet) \u2014 re-run appears safe by construction since managed files skip the prompt, but that should be stated; (b) `propagateToWorktrees` copy failures against a registered worktree whose path is stale or unwritable \u2014 the current claude block lets `fs.copyFileSync` throw to `handleError`, and the parallel copilot block would do the same, which is acceptable, but worth a sentence so implementers don't \"improve\" it inconsistently. Neither blocks the design; both are one-liners.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-103"
+  }
+ ]
+}

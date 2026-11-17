@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Success criterion 12 has no explicit acceptance check",
+      "description": "Task 8.1 checks many concrete properties of the generated concept, but never asks the PM to judge whether it is something they would edit rather than discard. The PM\u2019s correction of the description does not establish that success criterion 12 is met. Add an explicit acceptance check to the walkthrough.",
+      "file_ref": null,
+      "category": "acceptance-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough does not verify all required attribution and inference rules",
+      "description": "Tasks 3 and 7 specify the attribution and `[INFERRED]` rules, but Task 8.1 checks only selected examples and that the provenance line exists. It does not require checking that every intent claim cites its prose source, every structural claim names its graph field, and every `[INFERRED]` sentence satisfies the rule (success criteria 3 and 10). Add an explicit audit of those properties to the written output\u2019s acceptance checks.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guide failure coverage omits absent and unreadable cases",
+      "description": "Tasks 2.1 and 6.1 define distinct stop behavior for a missing guide tree, an absent or unreadable guide, and a missing section title. Task 8.3 exercises only the renamed-title case. Success criterion 7 also requires loud stops for the absent/unreadable cases; add verification for those branches or otherwise state how their behavior will be confirmed.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers use checkbox form and are too frequent",
+      "description": "The commit entries are written as checkbox subitems (`- [ ] Commit:`), rather than plain `**Commit**:` lines. There are also entries after nearly every authoring group. Convert them to plain markers and retain only meaningful working, tested commit points rather than marking each group.",
+      "file_ref": null,
+      "category": "workflow",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The breakdown is overweight for a single-file flow addition",
+      "description": "Tasks 1\u20137 repeatedly separate authoring from short fidelity checks, and the walkthrough repeats premise and source checks already covered earlier. Consolidate the paired author/verify steps into fewer cohesive tasks, and remove duplicated checks where one verification can establish the same fact. Task 8.6 also includes a repository-wide Ruff format check despite the design specifying no Python changes; drop that unrelated check unless a project-specific requirement justifies it.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "acceptance-coverage",
+      "raw_category": null,
+      "summary": "Success criterion 12 has no explicit acceptance check",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough does not verify all required attribution and inference rules",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Guide failure coverage omits absent and unreadable cases",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "workflow",
+      "raw_category": null,
+      "summary": "Commit markers use checkbox form and are too frequent",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The breakdown is overweight for a single-file flow addition",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-17T12:35:30.341945",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 3417,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 19360,
+  "cached_tokens": 5381,
+  "cache_write_tokens": null,
+  "completion_tokens": 5271,
+  "reasoning_tokens": 4624,
+  "duration_seconds": 55.51878112507984,
+  "cost_usd": 0.00408721,
+  "cost_basis": "alias_pricing"
+}

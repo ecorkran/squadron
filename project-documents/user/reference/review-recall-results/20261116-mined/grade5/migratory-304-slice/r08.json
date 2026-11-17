@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Plan-assigned config scope (grid resolution, layer selection) silently dropped",
+   "description": "The parent slice-plan entry for 304 (item 5 in `300-slices.worldserver-foundation.md`) explicitly assigns: \"Server-side environment configuration (seed, **grid resolution**, layer selection) in YAML.\" This slice delivers only `seed` and excludes the other two: \"Grid resolution configuration \u2014 no grids until layers exist,\" and layer selection is nowhere in scope. The doc's justification (\"no grids until layers exist\") is defensible for grid resolution, since 500-arch makes resolution per-layer/per-instance and routes it through the environment specification (507) \u2014 but deferring a requirement the plan entry assigns to this slice is a scope deferral that should be recorded as a decision (e.g., explicitly moving grid resolution and layer selection to 507/the layer slices, or noting the plan needs amending), not listed as a bare exclusion. As written, the slice plan and this design disagree about who delivers that configuration surface.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47-48"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Post-tick write pathway reduced to a bare `post_tick()` call",
+   "description": "The plan assigns this slice: \"Handle post-tick environment writes (e.g., stigmergic trail deposits).\" The design calls `post_tick()` with no arguments, and the Data Flow section shows no source for `trail_deposits` or `threat_mutations` at all. The 500 architecture describes the write-back as the behavior engine \"returning threat zone mutations ... alongside updated agent state,\" but 303's `engine.tick()` has no such return contract and this slice adds none. So the slice that the plan names as responsible for the write pathway delivers only a no-arg call, without stating who computes the writes, how they reach `post_tick()`, or that this plumbing is explicitly owned by a named future slice. \"Environment-aware behavioral forces \u2014 initiative 100\" (Excluded) covers force construction, not the deposits/mutations plumbing. This should be addressed either by extending the design (define the handoff) or by an explicit deferral naming the slice that owns it.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-Extension"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Environment context not passed to `engine.tick()`, contradicting the plan and the 500 integration surface",
+   "description": "Both the plan (\"Pass environment context to `SimulationManager` **and `engine.tick()`**\") and the 500 docs (500-arch: \"The world server passes the environment (or its query method) to `engine.tick()` as the 'environmental context' parameter\"; 500 slice: \"The `query` method (or the `Environment` object itself) is passed to `engine.tick()` as environmental context\") expect the environment to flow into `engine.tick()`. This slice instead routes the reference via force constructor injection, with `engine.tick(state, profiles, spatial, dt, forces)` unchanged and no environment parameter. That is a coherent alternative, but it changes the cross-initiative integration contract without acknowledging the conflict \u2014 the 500 initiative's stated integration surface (three methods \"plus the constructor ... the complete integration surface,\" with context delivered to `engine.tick()`) will mislead the 501+ slices and the 100-band force work if they read the plan/500-arch. The design should state explicitly that it deliberately deviates from the \"pass to `engine.tick()`\" pattern and what that implies for the 500/100 contracts, or conform.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-as-Simulation-Orchestrator"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Layers register themselves ... plug in without server changes\" conflicts with 500's composition model",
+   "description": "The Integration Points section claims: \"Slices 501-507 add layers to the environment. The server creates the environment; layers register themselves,\" and the Overview claims layers \"plug in without server changes.\" The 500 design says the opposite on both counts: layers are \"composed at construction\" via the `Environment(bounds, layers)` dict (the container \"iterates registered layers\" it was given), and 500-arch is explicit that \"The environment layer does not provide a dynamic layer registry or abstract plugin interface. Layers are statically composed in the environment container.\" When 501 lands, `server.py` must change to construct the terrain layer and pass it into the constructor (eventually via an environment specification). The \"no server changes\" claim is false and risks leaving 304 with a handoff story that no 500 slice will match. The doc should describe the actual handoff: layer slices add construction code (or a spec) that the server startup wires into `Environment(bounds, layers=...)`.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Tick-budget NFR not restated for the newly instrumented tick path",
+   "description": "The parent architecture states target tick rates (20\u201360Hz) and discusses tick-budget overrun handling; slice 301 established the tick budget and overrun metrics. This slice inserts `pre_tick()` and `post_tick()` into the per-tick path \u2014 calls that, once real layers exist, do O(active cells) work per tick (trail decay alone) plus batch-bound validation. The design adds no restatement of the tick-budget target (e.g., 50ms at 20Hz) nor any statement of how environment lifecycle work is expected to fit within it. Even with an empty environment today the cost is near-zero, but the slice's stated promise is that 501+ layers plug in without server changes, which means the budget interaction of `pre_tick`/`post_tick` should be at least acknowledged with the specific target inherited from the architecture.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Data-Flow"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`seasonal_parameter=0.0` is mislabeled as \"mid-season\"",
+   "description": "The doc says the fixed 0.0 default produces a \"mid-season\" environment. Per 308/500 the seasonal parameter is a continuous 0\u20131 cycle value advancing per tick, so 0.0 is the *start* of the cycle, not mid-season. Harmless while layers are empty, but the label will mislead the 308 and 504 authors; correct it to \"season-start (0.0).\" Relatedly, the new `pre_tick`/`post_tick` call paths have no failure-mode discussion: with zero layers they cannot raise, so this is acceptable today, but one sentence on what happens if a registered layer later raises (propagate through the tick body? crash? \u2014 cf. 301's tick loop and the \"no silent failures\" principle) would close the gap cheaply.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#SimulationManager-as-Simulation-Orchestrator"
+  }
+ ]
+}

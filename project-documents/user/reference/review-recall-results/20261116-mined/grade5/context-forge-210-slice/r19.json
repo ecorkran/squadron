@@ -1,0 +1,19 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Specify failure handling for setup and propagation I/O",
+   "description": "The sequence adds a guide-script invocation and worktree file propagation, but does not specify handling for failures or hangs on either path. Define what happens if the script times out or exits unsuccessfully, or if a worktree disconnects or a copy fails partway through. These operations can leave generated files or worktrees partially updated; an implicit \u201cclear error\u201d for a missing backend does not cover those cases.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:95-103"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Restate the onboarding time target",
+   "description": "The parent architecture sets the goal of reaching useful context output in under two minutes. This slice changes the IDE setup path used during onboarding, but does not restate that target or explain how Copilot setup stays within it. Include the relevant target for this path so its performance can be assessed.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:15-19"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 5 walkthrough step 2 (and the `## Value` test assertions it depends on) expect an impossible output",
+   "description": "Task 5 step 1 runs \"steps 1\u20135 of the design's Verification Walkthrough\" and demands that \"each produces the stated output and exit code\". Walkthrough step 2 generates a broken copy with `sed '/^## Value$/,...'` (removing only `## Value`) but the design's expected output is **two** missing-heading lines: `missing: ## Value` **and** `missing: ### Verification Walkthrough`, plus the claim that the bash script prints \"same two lines\". That expectation is unachievable: I checked the real template (`project-documents/ai-project-guide/project-guides/templates/slice-design.md`) and the bash script \u2014 `### Verification Walkthrough` is not marked `<!-- required -->` there (it's unmarked guidance), so no copy of a valid design can be missing it, and both tools would agree on a single `missing: ## Value` line. The test file carries the same token: 3T asserts \"a copy missing `## Value` fails with exactly that missing heading\" (plausibly satisfiable) but 2T's level-mismatch item and 4T's broken-copy item both use `## Value` specifically. I verified all other referenced anchors exist (`GUIDE_RELATIVE_PATH` in `packages/core/src/guides/types.ts`, the `frontmatterSchema.js` exports in `packages/core/src/index.ts:39`, `validate.test.ts` and `validate-worktree-scope.test.ts`, the 214 design in `project-documents/user/slices/`, the `sed`-removable `## Value` section, and README line 355 listing `cf validate` with no subcommands \u2014 so Task 6's confirm-branch is correct).\nResolution: amend the design's step 2 (e.g., sed out `## Value` **and** `### Risk Assessment`'s required sibling, or simply expect the single `missing: ## Value` line) and adjust Task 5's wording and the 2T/4T assertions to match; then Task 5 and the tests are completable as written for everything else.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41"
+  }
+ ]
+}

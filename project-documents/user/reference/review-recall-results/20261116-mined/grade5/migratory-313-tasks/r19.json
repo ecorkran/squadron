@@ -1,0 +1,19 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "NOTE",
+   "title": "Round-trip test asserts policy match rather than full `ServerConfig` equality",
+   "description": "Success criterion 5 has two halves: (a) `config_to_yaml` emits the policy as a plain string, and (b) reloading the emitted YAML produces an *equal `ServerConfig`*. The task's `test_bounds_policy_yaml_round_trip` covers the reload and asserts the policy matches, which substantively proves the policy field round-trips, but it stops short of asserting whole-config equality. Asserting `reloaded == original` on the `ServerConfig` would cost one line and fully satisfy criterion 5. Non-blocking.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md (Task 1.4)"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Shipped-config defaults verified by one-off commands, not a committed regression test",
+   "description": "Success criterion 12 (`default.yaml` and `test.yaml` use `policy: wrap`) is verified in Tasks 4.1/4.2 via inline `python -c` load checks, which satisfies the criterion as written. There is no committed test pinning the shipped configs to `wrap`, so a later accidental edit to those YAML files would only surface in the manual walkthrough (Task 5.2). This is optional hardening, not a gap against the stated criteria \u2014 noted for the record only.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md (Tasks 4.1, 4.2)"
+  }
+ ]
+}

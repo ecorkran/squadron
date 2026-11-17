@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope matches slice-plan entry (109) exactly",
+      "description": "The plan entry assigns: eliminate the per-agent loop in every `BulkForce`, swap the jagged `list[NDArray[np.intp]]` for a vectorizable form, rewrite the five named forces, and change the `BulkForce` protocol + all callers in the same slice. The slice's Included list covers all of these, and the Excluded list correctly delegates spatial query optimization and batch query to (105) and leaves already-vectorized forces (`WorldBoundsRepulsor`, `ConstantDrift`, `VelocityDrag`) and the `Force` protocol alone. No scope assigned to this slice is dropped or deferred; nothing beyond the plan entry is added. Prerequisites (101, 102) match the plan's dependency list.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#technical-scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile-weight list comprehension violates the slice's own defining constraint and its verification check",
+      "description": "The \"Per-Agent Profile Weight Vectorization\" section proposes `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` \u2014 a Python-level iteration over all n agents inside each force call. The slice's Technical Requirements state \"No Python-level per-agent loops in any `BulkForce.__call__` implementation (the defining constraint)\" (line 198), and the plan entry's headline goal is eliminating exactly this pattern. The doc's justification (\"runs once per force call (not per-agent)\", line 136) conflates \"once per call\" with \"not per-agent\": it is O(n) Python iterations per call, five times per tick. The verification step (line 223) is mutually inconsistent with the design \u2014 the grep pattern `for.*eval_indices` would match the doc's own recommended comprehension as written, yet would silently pass if the loop variable were renamed, and it only covers two files while five forces are rewritten. A lighter option that meets the constraint exists: build a per-profile-index weight column once per tick (`np.array([p.cohesion_weight for p in profiles])`, O(#profiles) Python) and gather with `w_by_profile[state.profile_indices[eval_indices]]`, which is pure vectorized indexing. Either adopt that (and drop the precompute-tick deferral on line 136) or amend the constraint explicitly to exempt the comprehension and replace the grep check with something that actually enforces the stated rule.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Memory analysis and verification stop at 100 agents; padded worst case is unexamined at the architecture's stated tier",
+      "description": "The architecture's Design Goals state \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" (100-arch.behavior-engine.md:36). The slice's decision rationale validates the padded representation only at n=100 (\"~80KB \u2014 trivial\", line 146) and defers memory concerns to \"100K+\" (line 148), skipping the 10K\u2013100K range that is precisely the architecture's stated tier. Because `max_neighbors` is the per-tick maximum and the slice's own premise is that clustered flocking drives k \u2192 n, the padded arrays and the per-force gather temporaries `(n_active, max_neighbors, dims)` are O(n\u00b7k_max) \u2192 O(n\u00b2) in exactly the workload this slice targets: at 10K fully-clustered agents a single gather temporary is on the order of gigabytes. The claim that CSR \"may become necessary\" at 100K+ is unsupported for the dense case. The design should either analyze the dense-clustering case at the architecture's scale tier, name a concrete switch/chunking trigger (e.g., cap `max_neighbors`, block-wise gathers, or a CSR fallback behind `NeighborData`), or correct the scale claim. Deferring the mechanism is fine; deferring the analysis is not.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:144-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture throughput NFR is not restated as a target and is not verified",
+      "description": "The slice touches the force-computation hot path carrying the architecture's \"tens of thousands of agents at full behavioral fidelity\" NFR (100-arch.behavior-engine.md:36), but the Success Criteria and Verification Walkthrough anchor solely on a 50ms tick budget at 100 agents (lines 213-215) \u2014 a latency figure that comes from observed behavior, not the parent architecture's stated goal. The architecture's throughput target is never restated with a specific number, and no verification runs at a scale where the vectorization's benefit (and the O(1) Python overhead claim, line 22 of the plan entry) can be observed. Name the target (e.g., force-computation time per tick at 5K/10K agents) and add one verification run at that scale so \"regardless of agent count\" is demonstrated rather than asserted.",
+      "file_ref": null,
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#success-criteria"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New `NeighborData` interface silently assumes individual-agent neighbors, conflicting with the architecture's heterogeneous-neighbor requirement",
+      "description": "The architecture is explicit: aggregate neighbors \"have a fundamentally different shape from individual agents (centroid, heading, dispersion radius, population count vs. position, velocity, profile index). The spatial query interface must be designed from the start to accommodate heterogeneous neighbor types, or aggregate support will require a breaking change\" (100-arch.behavior-engine.md:100), and the slice plan's Scaling context requires that engine interfaces \"must not preclude\" multi-resolution strategies. The slice introduces `NeighborData` \u2014 presented in \"Provides to Other Slices\" as the structure \"future force implementations (predator-prey, territorial) consume this instead of raw lists\" \u2014 whose shape (`indices` into the agent SoA arrays, gather via `state.positions[neighbor_data.indices]`) hardcodes neighbors-as-agent-rows. Once every force gathers through it, slice (108) Aggregation Interface Support needs a breaking change to both `NeighborData` and all five force patterns \u2014 the exact failure the architecture warns about. The fix is lightweight and should stay so: document that `NeighborData` covers individual agents only and name the extension point for aggregate neighbors (or reserve a neighbor-kind discriminant), rather than designing aggregate support now. As written, the doc claims future-facing status for a structure with an acknowledged-nowhere limitation.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#neighbor-data-representation"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`counts` and `mask` are redundant state",
+      "description": "`mask` is fully derivable from `counts` (`mask[i, j] \u21d4 j < counts[i]`, stated at line 78), so `NeighborData` carries two sources of truth for one fact that must be kept in sync. Precomputing the mask is a defensible micro-optimization across five force calls per tick, but if it is kept, the doc should say the invariant is builder-enforced (only `build_neighbor_data` constructs `NeighborData`) so consumers cannot observe divergent state; otherwise drop `mask` and derive it with `np.arange(max_neighbors) < counts[:, None]` at gather time.",
+      "file_ref": null,
+      "category": "design-simplicity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:74-78"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches slice-plan entry (109) exactly",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Profile-weight list comprehension violates the slice's own defining constraint and its verification check",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Memory analysis and verification stop at 100 agents; padded worst case is unexamined at the architecture's stated tier",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:144-148",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "summary": "Architecture throughput NFR is not restated as a target and is not verified",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "New `NeighborData` interface silently assumes individual-agent neighbors, conflicting with the architecture's heterogeneous-neighbor requirement",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#neighbor-data-representation",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "design-simplicity",
+      "raw_category": null,
+      "summary": "`counts` and `mask` are redundant state",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:74-78",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-17T06:33:52.151914",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 39369,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 43224,
+  "cached_tokens": 24448,
+  "cache_write_tokens": null,
+  "completion_tokens": 10961,
+  "reasoning_tokens": 8806,
+  "duration_seconds": 248.69960962515324,
+  "cost_usd": 0.017801422,
+  "cost_basis": "alias_pricing"
+}

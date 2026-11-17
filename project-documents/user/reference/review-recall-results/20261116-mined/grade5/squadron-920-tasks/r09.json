@@ -1,0 +1,40 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Criterion-9 grep check contradicts the criterion-7 substring test Task 3 adds to the same file",
+   "description": "Task 10's success condition requires `grep -n \"MessageParseError.*rate_limit\\|ClaudeSDKError(\\\"rate_limit_event\" tests/providers/sdk/test_agent.py` to return no matches. Task 3 (line 41) instructs adding to that exact file \u2014 defaulting to the existing `TestRateLimitBackoff` class \u2014 a test constructing `ClaudeSDKError(\"rate_limit_event: slow down\")` to prove the retained substring path (criterion 7). That literal matches Task 10's grep pattern, so following Task 3's default makes Task 10's check fail, or pressures the implementer to drop the criterion-7 test. Fix by using the \"new focused test module\" option for the helper tests, narrowing the grep to simulation sites, or using a plain-429 string for the helper test. Task 3's verification command (line 42, `-k \"classif or throttle or RateLimitRejected\"`) is also unreliable: tests named `test_event_blocks_*` would match none of those tokens, so the command can select zero tests while the task claims to confirm the new tests pass.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:99"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 6's informational-event instruction is self-contradictory and leaves D6 / criterion 4 unachievable on the query and client paths",
+   "description": "Line 61 says \"continue the loop without yielding it to the caller as a raw SDK type \u2014 let it flow to translation as normal\". `_skip_unparseable` only yields SDK messages; `translate_sdk_message` is invoked by its callers (`src/squadron/providers/sdk/agent.py:154-156` and `src/squadron/providers/sdk/agent.py:208-210`), so a `continue` means translation never sees the event (Task 4's branch becomes unreachable on both agent paths, and D6's \"informational one becomes observable\" is unmet), while yielding it means the new system message is appended to prose by `src/squadron/review/review_client.py:263`, `src/squadron/metrology/audit.py:557`, `src/squadron/pipeline/summary_oneshot.py:139` and `src/squadron/pipeline/actions/dispatch.py:165` \u2014 none exclude `rate_limit_event`. That breaks criterion 4's \"does not appear in ... text\" and walkthrough step 3 / Task 14's artifact-prose check, which is conditional on a live event firing and can pass vacuously. Task 8 (line 79) tells the implementer to grep `SDK_RESULT_TYPE` across `src/`, which finds those four consumers, but no task adds exclusions there or tests them. Task 4 (line 47) also underspecifies the returned `Message`: `src/squadron/core/models.py` requires `sender`, `recipients` and `content: str`, leaving a junior to invent `content` with no guidance on keeping rate-limit text out of prose. State one behavior explicitly and either exclude `rate_limit_event` in every prose consumer with a test, or drop informational events in `_skip_unparseable` per D4 and scope D6's observability to the pipeline path.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Shim deletion (Task 9) is committed before the shim-importing tests are deleted, and criterion 2's `tests/` half is never verified",
+   "description": "Criterion 2 requires no `install_rate_limit_parser_shim` symbol in `src/` **or `tests/`**, and walkthrough step 1 runs `grep -rn \"install_rate_limit_parser_shim\" src tests`. Task 9's checkpoint (line 88) greps only `src`, even though `tests/providers/sdk/test_agent.py:701,720,743,758,760` still import the symbol until Task 10 deletes those four tests; Task 9 then has its own commit (line 89), which lands with `pytest tests/providers/sdk/test_agent.py` red from four ImportErrors and criterion 2 unverifiable. Task 1's commit (line 28) is likewise untested: at 0.2.152 the parser no longer raises on `rate_limit_event`, so `test_the_shim_lets_a_rejected_event_raise` (`tests/providers/sdk/test_agent.py:715`) and `test_the_shim_absorbs_informational_events` (`:684`) already fail against the new floor. Delete/rewrite the shim-specific tests in the same task as the shim deletion (or move Task 10 before Task 9), run that file before committing, and change the checkpoint to `src tests`.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:88-89"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Implementation tasks 6\u20139 have no immediately following test task, and commit steps are checkbox items after nearly every task",
+   "description": "Tasks 2\u21923 and 4\u21925 follow the test-with pattern, but Tasks 6, 7, 8 and 9 each end with a commit (lines 66, 75, 81, 89) while tests for those changes appear four tasks later in Tasks 10\u201311 (lines 91, 103); Task 8's exclusion change is exercised only by Task 11's informational test. No test run is attached to Tasks 6\u20139, so a junior commits untested production code \u2014 and, per the finding above, at least two of those commits are red. The file has 13 `- [ ] Commit: ...` checkbox sub-items (Tasks 1\u201311, 13, 16), effectively a commit after every task, rather than plain `**Commit**:` lines at a few working, tested checkpoints. Run the relevant test file before each of those commits (or collapse them to after Tasks 10/11 and 13) and express commit points as plain lines; a file with no commit markers at all is also acceptable.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:66-101"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Sixteen tasks and thirteen commit steps are overweight for a 3/5 slice the design calls a small diff",
+   "description": "The design's Effort section says \"Small diff, concentrated risk. The cost is in test rewriting and live verification\", with a Technical Scope of 6 production files and 5 test files. The breakdown has 16 tasks with roughly 90 checkbox sub-steps, 5 test tasks (3, 5, 10, 11, 12), a separate full-suite task, two live-run tasks and a closeout task. Task 8 is a one-line tuple edit in the same function Task 7 already edits (`src/squadron/pipeline/sdk_session.py:173`) yet carries its own commit; Task 12 produces no artifact (it verifies two files need no change and defers a DEVLOG note to Task 16) and can fold into Task 13's suite run; Tasks 3 and 5 are single-test tasks with their own commits and can merge into their implementation tasks. Merge Task 8 into 7, fold Task 12 into 13, and combine the helper/translation tests with Tasks 2/4 \u2014 keeping the load-bearing Task 10 rewrite and the mandatory live verification (14\u201315) as stand-alone tasks.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  }
+ ]
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T13\u2019s samples-only fallback cannot produce residual offers",
+      "description": "T13 permits limiting selection to \u201cstore-recorded samples only\u201d if no result-discovery surface exists. That surface does not currently exist: `capture.py#resolve_target` resolves one requested review, while `store.py#list_samples` returns only `SampleVerdict` records. Every such record is already sampled and therefore excluded by T13\u2019s own unsampled-result definition, so this fallback necessarily produces zero offers. It cannot satisfy T13\u2019s three-unsampled-results example or the slice\u2019s non-empty-offer success criterion (`322-slice.calibration-to-threshold-feedback.md:269`). Replace the fallback with explicit persisted-review discovery work, reusing the existing identity/result-reference helpers and subtracting sampled results.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "FAIL",
+      "title": "T7\u2019s precedence algorithm contradicts its required TIGHTEN behavior",
+      "description": "The numbered algorithm returns `INSUFFICIENT_EVIDENCE` whenever `n < floor` before it reaches the `TIGHTEN` check. Consequently, a below-floor cell with a low match rate cannot return `TIGHTEN`, despite T7\u2019s success criterion and T8 requiring exactly that result. The accompanying prose does not resolve the contradiction. Rewrite the decision order so the non-floor-gated tightening path is actually reachable, explicitly define its interaction with unversioned cells, and align T8 with that algorithm.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:112-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The runtime-drawn-model limitation is missing from the recommendation-note requirements",
+      "description": "T9 requires only a general template/model pairing note. It omits the slice\u2019s specific requirement that recommendations state the runtime-pool limitation: a threshold cannot track a model drawn at runtime, so the recommendation does not apply to that step (`322-slice.calibration-to-threshold-feedback.md:270`). T10 and T16 merely assert that the note is non-empty or that JSON round-trips, allowing this criterion to pass unnoticed. Add the limitation to the required note content and assert it in normal and `--json` output.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed judge-block coverage is claimed but neither implemented nor tested",
+      "description": "The Coverage Check at line 287 says malformed `judge:` blocks are exercised in T8, but T8 contains only registered- and unregistered-template cases. T7 likewise defines no malformed-value behavior. This matters because `resolve_thresholds` converts values with `float(...)`; a non-numeric floor raises `ValueError` rather than performing the warned fallback described by the slice\u2019s failure-mode table. Specify the required handling and observable signal in T7, then add the malformed-block fixture and WARNING/flag assertion to T8.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:129-137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The offer-selection contract does not define how required outcomes are observed",
+      "description": "`select_residual_offers` returns only `list[OfferTarget]`, yet downstream tasks require three additional observability contracts: distinguishing lapsed from exhausted graduations, counting pruned targets, and naming skipped paths. T13 leaves the lapse signal optional and vague, while T14\u2019s \u201cskipped, counted\u201d assertion has no defined count to inspect. Moreover, if candidates are discovered solely from currently existing review files, a deleted review cannot become a candidate in the first place. Define the candidate lifecycle and a concrete per-config outcome/logging contract\u2014including lapse status and pruned count\u2014before specifying these tests.",
+      "file_ref": null,
+      "category": "api-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-219"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Required empty-state CLI output is absent from T15 and T16",
+      "description": "The slice requires an empty recommendation report to print a \u201cno evidence\u201d line while still stating `floor_applied`, and an exhausted graduated config to produce an explanatory \u201cno offers due\u201d result. T15 specifies below-floor rendering only when a cell exists and lapse output only for `offers`; it does not specify either ordinary empty state. T16 correspondingly lacks both cases. Add the empty-store `recommend` and exhausted-config `offers` behavior and CLI tests.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:228-249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config-key tests lack an oracle for the expected defaults",
+      "description": "T5 says all three keys must have descriptions and defaults, while T6 requires tests for their \u201ccorrect\u201d defaults, but neither the tasks nor the slice supplies the expected numeric values. A junior implementer cannot determine what those assertions should contain without inventing the answer. Name the three defaults\u2014or identify an authoritative existing source\u2014and use those values explicitly in T6.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:86-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task and commit granularity is excessive for this slice",
+      "description": "The breakdown creates eight separate implementation/test task pairs plus final validation, with a `**Commit**:` marker after every one of the 17 tasks. This produces test-only commits and places implementation commits such as T1 before their regression tests land, rather than consistently at tested working points. Fold each pair\u2014T1/T2, T3/T4, T5/T6, T7/T8, T9/T10, T11/T12, T13/T14, and T15/T16\u2014into one implementation task whose final steps are its tests. Retain T17 separately and place one commit after each completed, tested implementation task. This preserves the test-with pattern while cutting the task and commit overhead roughly in half.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "T13\u2019s samples-only fallback cannot produce residual offers",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "T7\u2019s precedence algorithm contradicts its required TIGHTEN behavior",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:112-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The runtime-drawn-model limitation is missing from the recommendation-note requirements",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-147",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Malformed judge-block coverage is claimed but neither implemented nor tested",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:129-137",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "api-design",
+      "raw_category": null,
+      "summary": "The offer-selection contract does not define how required outcomes are observed",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-219",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Required empty-state CLI output is absent from T15 and T16",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:228-249",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Config-key tests lack an oracle for the expected defaults",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:86-105",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task and commit granularity is excessive for this slice",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T12:51:36.070703",
+  "model": "moonshotai/kimi-k3.1-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 66891,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "moonshotai/kimi-k3.1-pro",
+  "answering_models": [
+    "moonshotai/kimi-k3.1-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 134698,
+  "cached_tokens": 84992,
+  "cache_write_tokens": null,
+  "completion_tokens": 16082,
+  "reasoning_tokens": 13588,
+  "duration_seconds": 159.64370758412406,
+  "cost_usd": 0.2772304,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,164 @@
+{
+ "case": "context-forge-240-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work says 180 \"Established worktree-scoped config resolution\" and that `workflow.review_*` should resolve at worktree scope \"using the resolution chain 180 introduced\". 180's arch (`180-arch.initiative-context-worktree.md`, \"Project layer\" line 81 and \"What Stays Shared vs. Per-Context\" line 232) keeps configuration project-level and shared; its resolution chain (line 124: flag, CWD match, `default_project`) resolves which project, not which config. `ConfigManager.get` at `6c667b79` reads project config, then user config, then default, with no worktree step. **VALID**: contradicts a sibling document and code. Needs: doc (180 arch) or code (`ConfigManager.ts`).",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r02": [],
+    "r03": [
+     3
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [],
+    "r07": [
+     7
+    ],
+    "r08": [
+     9
+    ],
+    "r09": [
+     4
+    ],
+    "r10": [
+     2
+    ],
+    "r11": [
+     4
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Renumbering of the `getNext()` cascade is assigned to two different slices: Anticipated Slices bullet 1 (discovery and config keys) \"Includes renumbering the `getNext()` priority cascade\", while Technical Considerations says \"The slice implementing the gate logic should renumber the full cascade\". **VALID**: self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [
+     10
+    ],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     9
+    ],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": []
+   }
+  },
+  {
+   "id": "F3",
+   "text": "The `review_unknown_as` value set is inconsistent: the config block gives `\"fail\"`; Technical Considerations uses `review_unknown_as = \"concern\"` (singular, while `review_threshold` uses `\"concerns\"`); the `pending-review` status definition says \"or verdict is UNKNOWN and `review_unknown_as` treats it as pending\", a value the doc never defines. The values are never enumerated. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     9
+    ],
+    "r02": [
+     2,
+     3
+    ],
+    "r03": [
+     7
+    ],
+    "r04": [
+     8
+    ],
+    "r05": [],
+    "r06": [
+     2
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [],
+    "r09": [
+     1
+    ],
+    "r10": [
+     5
+    ],
+    "r11": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "\"V1 implements only the four slice-level transitions\", but the four configured gates are `pre-slice-plan` (initiative-level, stated deferred in the same section and in the Overview), `pre-tasks`, `pre-implementation`, `pre-advance`. That is three slice-level transitions in v1. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [],
+    "r06": [
+     0
+    ],
+    "r07": [
+     12
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [
+     0
+    ],
+    "r10": [
+     1
+    ],
+    "r11": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F5",
+   "text": "Technical Considerations: \"`getNext()` uses integer comments (Priority 1-7)\" and renumbering is needed \"to avoid fractional priorities\". `WorkflowNavigator.ts` at `6c667b79` already has a `// Priority 2.5` branch (line 187). **VALID** (minor): contradicts code. Needs: code.",
+   "hits": {
+    "r01": [
+     13
+    ],
+    "r02": [
+     10
+    ],
+    "r03": [
+     12
+    ],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     9
+    ],
+    "r07": [
+     14
+    ],
+    "r08": [],
+    "r09": [],
+    "r10": [
+     16
+    ],
+    "r11": []
+   }
+  }
+ ],
+ "note": "Borderline counted: F1 r03#3 (says no worktree-scoped config resolution exists, does not name 180 docs) and r05#2; F4 r03#0 and r08#0 (quote the \"four slice-level transitions\" claim as wrong but focus on only pre-advance being designed). Borderline excluded: F1 r06#3, F3 r08#4, F2 r07#14 (criticizes renumbering placement but not the two-slice contradiction)."
+}

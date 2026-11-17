@@ -1,0 +1,67 @@
+{
+ "case": "context-forge-915-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Data Flow says \"Delete: mirrors write, deletes from whichever project file the key's scope maps to\", so `cf config unset git.integration_branch --project` (a personal key) deletes from `.context-forge.local.toml`. The collision rule in the Migration Plan and Verification Walkthrough step 9 instead say that when `migrate-personal` skips a key, the stale shared-file copy is cleared by \"a separate, explicit `cf config unset <key> --project`\", and step 9 expects `.context-forge.toml` to be cleared while the personal `legacy/value` survives. By the design's own routing that command removes the personal value and leaves the stale shared copy. **VALID**: self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [],
+    "r09": [
+     0
+    ],
+    "r10": [
+     0
+    ],
+    "r11": [
+     2
+    ],
+    "r12": [
+     0
+    ],
+    "r13": [
+     0
+    ],
+    "r14": [
+     1
+    ],
+    "r15": [
+     2
+    ],
+    "r16": [
+     1
+    ],
+    "r17": [
+     0
+    ],
+    "r18": [
+     0
+    ],
+    "r19": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "No borderline calls"
+}

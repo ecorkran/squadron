@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Dense padding can exceed the architecture\u2019s CPU-scale memory budget",
+   "description": "The padded representation allocates `n_active \u00d7 max_neighbors` entries, and the design explicitly includes the all-same-cluster case where `max_neighbors` can approach the population size. The 80KB estimate is for 100 agents; at 10,000 densely clustered agents, the neighbor indices and mask alone would use roughly 900MB, before the gathered position/velocity arrays and temporary reductions. That risks making the force path unusable at the architecture\u2019s tens-of-thousands CPU scale. Bound the dense working set\u2014for example, by processing in chunks\u2014or choose a representation that does not require materializing population-wide padded gathers.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-agent profile lookup still uses Python iteration inside force calls",
+   "description": "The proposed weight construction uses a Python list comprehension over agents for each force call. That conflicts with the slice\u2019s requirement of no Python-level per-agent loops in `BulkForce.__call__` and the architecture\u2019s vectorized hot-loop principle. Build profile-field arrays indexed by `profile_indices`, or otherwise arrange the lookup so force calls use array operations rather than iterating over agents in Python.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Per-Agent Profile Weight Vectorization"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The new neighbor interface cannot represent aggregate neighbors",
+   "description": "`NeighborData` stores only integer indices, and the force pattern gathers position and velocity directly from individual-agent state arrays. It cannot represent the aggregate neighbor data the architecture describes (such as centroid, heading, dispersion, and population count). The architecture requires the force/spatial-query interfaces to accommodate heterogeneous neighbors from the start. This slice need not implement aggregates, but it should preserve a representation or extension point that can carry them without a breaking interface change.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Verification does not cover the architecture\u2019s stated scale target",
+   "description": "The architecture calls for full-fidelity evaluation of tens of thousands of agents on a single CPU. The slice\u2019s live verification targets 100 agents and a 50ms tick budget; it does not restate or validate the tens-of-thousands CPU target for this hot path. Add a performance acceptance criterion at the architecture\u2019s stated scale, with a specific tick-time or throughput target.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Success Criteria"
+  }
+ ]
+}

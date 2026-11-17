@@ -1,0 +1,19 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "File-level node selection exceeds the architecture\u2019s defined types",
+   "description": "The design changes the selector to include every node except `function` and `class`, so a future or unknown node type would be treated as file-level data automatically. The architecture defines the file-level types explicitly (`file`, `config`, `service`, `endpoint`, `schema`, `table`, `pipeline`, `document`, and `resource`) and says function- and class-level nodes are not read. Use that defined set, or make an unknown type an explicit contract-drift case rather than silently widening what the skill reads.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Corrections to the 361 contract"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Dependency mapping conflicts with the graph read discipline",
+   "description": "The dependency-observations section says function- and class-level edge endpoints will be resolved to their owning file\u2019s layer, so cross-layer `calls` edges are counted. The architecture\u2019s read discipline excludes function- and class-level nodes, and this design does not explain how it can determine their owning files without reading them. Define a compliant mapping strategy, or omit those endpoints from this slice\u2019s observations.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Section detail"
+  }
+ ]
+}

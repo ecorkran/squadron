@@ -1,0 +1,33 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The relocation and resolution path reintroduce a review-to-pipeline dependency",
+   "description": "T3 leaves `review/addressed/verification.py` importing `RoundDiff` from pipeline screens, and T21 has `review/resolution.py` import both `RoundDiff` and `screen_byte_identical` from pipeline internals. That reverses the dependency direction the slice design explicitly establishes, where pipeline consumes the review subsystem and review must not import `pipeline/actions/`. Keep the shared diff type and required logic on the review side or otherwise expose them without introducing this reverse dependency.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The unreadable-response requirement is not explicitly implemented and tested on the resolve path",
+   "description": "The slice requires an unreadable judge response to produce `UNKNOWN` with a warning. T25\u2013T26 specify and test transport failure, `--no-judge`, and the injection cap, but do not explicitly require the resolve orchestration to map a parse-failed/unreadable response to `UNKNOWN` or test that case. T5\u2019s parsing work and the existing core behavior do not establish that the new path handles and reports it correctly.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Resolution-artifact exclusion is tested for only one of the two required discovery paths",
+   "description": "The success criteria require both `discover_judge_results` and review discovery to return no resolution artifacts. T32 tests only `discover_judge_results`; add coverage for the review-discovery path as well.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The reviewedSha test task does not require coverage of both persistence callers",
+   "description": "The slice requires `reviewedSha` from both the CLI and pipeline persistence paths. T10 wires both, but T11 explicitly permits an integration test of either path, so the other caller can regress without failing the planned tests. Require tests for both callers\u2019 stamping and git-unavailable behavior, or a shared test arrangement that demonstrably exercises both paths.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "New auth-command I/O paths lack failure modes, a timeout, and the shared install hint",
+   "description": "The Login data flow goes straight from `login.login(mode)` to `AsyncCodex(config)` \u2014 it never calls `resolve_codex_runtime()`, and the \"extra missing\" row of the failure table is scoped to `create_agent` only (line 122). Yet the success criterion says \"**any** `openai-oauth` use exits with an error containing the exact install command\" (line 190), and Verification step 1 exercises only `review`/`model list`/`doctor` without the extra. Requirement left unmet: `sq auth login/logout/status` on a default install would hit a raw `ImportError` instead of the one shared hint string (line 139). Related gaps on these same new paths: `AsyncCodex.logout()` spawns a runtime (line 82) but D7 defines no timeout for it and no failure-table row covers SDK error, hang, transport close, or a partially completed logout; `webbrowser.open` failing or returning False on a headless box has no stated strategy (\"attempt `webbrowser.open`\"); and `login_chatgpt()` raising before a handle exists means the only specified cleanup \u2014 `handle.cancel()` on timeout/Ctrl-C (line 110) \u2014 cannot run. Add rows for login startup, pre-handle failure, browser-open failure and logout (including a bounded runtime-start + RPC timeout), and route all three commands through the shared resolver/hint.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Doctor/model-list missing-extra handling is left implicit at a raising boundary",
+   "description": "D9 builds both consumers on `resolve_codex_runtime()`, which the Data Flow (line 80) says **raises** `ProviderError` when the package or binary is missing. But `ExtraRequirement.missing_extra_hint()` must return `str | None`, and the doctor check must return a `CheckResult` WARN row (Verification step 1, line 212) \u2014 neither contract permits a raised `ProviderError`. The design says \"Doctor contains no import probing or `shutil.which` of its own\" without stating which layer catches the resolver's error and converts it into the hint/detail, or how the row's `detail` (package version, runtime source) is produced when resolution fails. Slice 905's doctor contract requires the pure-check module to wrap unexpected exceptions in a typed, WARNING-logged handler that still emits a row; slice 381 restates that `run_all_checks` makes no subprocess call. Requirement left unmet: \"sq doctor and sq model list run cleanly with and without the extra\" (line 205). Specify the non-raising wrapper (and its single hint source) explicitly, plus a failure row and test for the wrapped exception.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112-112"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Parent's SDK startup NFR is not restated with a target; the 30 s status budget is unjustified",
+   "description": "The HLD's \"System Architecture / SDK Agent Provider\" and \"SDK Agent Design Considerations\" state a startup-cost constraint for SDK-subprocess providers (20\u201330 s CLI initialization; design for warm-pool/instance reuse rather than per-message creation), and the slice plan's Notes record 2\u201312 s+ per `query()`. This slice adds three new fresh-spawn command paths (login, logout, status) and explicitly declines any target: \"No latency target is set\" (line 82); no measured startup bound or reuse decision is given for them. More concretely, `codex.account_timeout_s = 30` (D7, line 109) covers \"runtime start + `account()`\", so a startup at the parent's stated 20\u201330 s leaves little or no room for the RPC \u2014 and the design's own failure row (line 126) then degrades to a WARNING row with **no account details**. That leaves the success criterion \"sq auth status shows email and plan for a logged-in `openai-oauth`\" (line 192) unmet on an in-spec slow startup. Restate the startup NFR with its numeric bound (or a measured Codex bound), and either split startup from the account RPC budget or raise/justify the cap so a normal startup cannot consume it.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82-82"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Several mechanisms are heavier than this slice needs",
+   "description": "Frontmatter says no planned slice consumes `InteractiveLogin`, `ExtraRequirement` or `CodexRuntime`, so the \"Provides to Other Slices\" generalizations are speculative. `ExtraRequirement` is a new `runtime_checkable` Protocol in `providers/base.py` with exactly one implementer, layered on top of the hint string that is already centralized in `runtime.py` and consumed by doctor/model list (line 139) \u2014 two mechanisms for one signal where the provider-side hint plus the shared resolver already satisfies \"no profile-name check\". `sq auth login --timeout SECONDS` (line 148) adds a second knob for a value D7 already centralizes in `codex.login_timeout_s`; the plan entry asks only for browser login and `--device-code`. Implementation step 0 (line 224) gates all of Part A on a live `OPENAI_API_KEY` fallback probe with a branching outcome that edits `OAuthFileStrategy` for a case the plan never assigns to slice 129. Cut/defer candidates: keep one hint mechanism (the shared `runtime.py`/provider hint) instead of a base-layer Protocol for one implementer; drop `--timeout` and use the config key; move the API-key fallback verification to its own bug-fix slice rather than making it a precondition of the port. This is trimming mechanisms, not dropping plan scope \u2014 Parts A/B/C remain intact.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181"
+  }
+ ]
+}

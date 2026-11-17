@@ -1,0 +1,12 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Merge step at line 251: - [ ] Merge `917-slice.review-artifact-integrity` into `main`; set this file and",
+   "description": "Line 251 schedules a merge: `- [ ] Merge `917-slice.review-artifact-integrity` into `main`; set this file and`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+   "location": "project-documents/user/tasks/917-tasks.review-artifact-integrity-2.md:251"
+  }
+ ]
+}

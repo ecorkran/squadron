@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Plan criteria and architectural principles are fully covered",
+      "description": "Each slice-plan criterion for 403 lands in a functional requirement: merge-commit topology with no reflog (c1), fast-forward via the existing resolver plus durability after expiry/fresh clone (c2, D1/D4), `git archive` export that leaves the measured `.git` unchanged (c4), type counts gated on lockfile equality (c6), identity-match-or-flag comparability (c7), noise floor and sample size on every figure (c8, c9, D8), and unresolved slices appearing at project level only (c10, D9). Dependency direction is correct and sanctioned by the architecture, which names `review/git_utils.py` as the resolver \"this component reuses and makes durable\". The audit integration point also matches 323's real shape: `baseline_report` groups by `(project_id, commit_sha, audit_prompt_hash)` and returns `ProjectBaseline`, which is exactly what `compute_delta(baseline, new_run)` consumes, and D8's \"same prompt hash\" condition mirrors `audit_report._group_key`.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:332-341"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`report history`'s first-parent ordering read has no owning module and no failure mode",
+      "description": "The component structure states the three report assemblies do \"No git and no store writes beyond what `ensure_snapshot` and `record_slice_ranges` do\" (line 99), but `report history` is specified to order snapshots \"by the target's first-parent history\" and to drop snapshots \"of commits off that line\" with a closing count. That ordering is a new git read (roughly `git rev-list --first-parent <target>`) that no module in the table owns, is absent from the failure-mode table (timeout \u2192 `run_git` returns `None`; non-zero when the target ref isn't fetched locally), and has no test or success criterion. The same check is also required by the fast-forward resolver at line 117 (\"tip on target's first-parent line? \u2192 `LANDED_ELSEWHERE`\") with no helper named for it. There is an existing `_first_parent_chain` in `src/squadron/pipeline/git_ops.py`, but importing it would put metrology \u2192 pipeline, a direction nothing in this architecture sanctions. Fix: name the one module function that answers \"is this commit on the target's first-parent line\", put it in the resolver (or `git_utils`, alongside the other changes the slice already makes there), add its `None`/non-zero handling to the failure table, and either relax line 99's \"No git\" or order `report history` by the store's existing `list_snapshots` (newest-first) and mark off-line commits rather than silently leaving them out.",
+      "file_ref": null,
+      "category": "architecture-boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Git could not answer\" has no unresolved reason, so a transient git failure is reported as a confident topological finding",
+      "description": "The resolver's decision tree has six outcomes (`NO_LANDING`, `NOT_LANDED`, `LANDED_ELSEWHERE`, `REFLOG_UNAVAILABLE`, `EMPTY_BRANCH`, `FORK_NOT_ANCESTOR`) and none of them represents \"git could not run / timed out / refused\". The failure table covers only two git paths (\"A reflog read or merge search returns `None`\"); the new reads in the same tree \u2014 `merge-base(M^1, M^2)`, the containment check, the first-parent check, `git cat-file -e` for the missing-commit check \u2014 have no row. Under `run_git`'s documented contract, `None` (missing binary, timeout) and non-zero (git ran and refused) are different failures that callers must distinguish, and `slice-ranges` is specified to \"Exit 0 when every slice either resolved or was unresolved for a stated reason\", so a 30-second `rev-list` timeout surfaces as, most likely, `NOT_LANDED` \u2014 which D4 specifically characterises as \"an in-progress branch\" and declines to persist. The user is told something false about a slice's state with exit 0. Fix: add a reason such as `GIT_UNAVAILABLE` (or make an unanswerable git call an error that exits 1, matching the export rows), and add one failure-table row per remaining git call stating which of `None`/non-zero maps to it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:114-127"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The target is read through a function that degrades to `main` when `cf` fails, for a record the design says is never corrected",
+      "description": "`resolve_diff_base` returns `DEFAULT_DIFF_BASE` (`\"main\"`) not only when the key is genuinely unset (correct) but when `cf` is absent, the key is unknown, it exits non-zero, or it emits non-JSON \u2014 at DEBUG level. The slice title of D2 is \"with no fallback to main\" and its stated reason for rejecting `_find_merge_commit`'s main fallback is that such a search \"can return a merge whose diff spans a batch promotion, which is acceptable as a logged warning for a review diff, but not for a record that's kept forever\". A degraded target reintroduces exactly that hazard one level up: on a repo with `git.integration_branch` set whose `cf` read temporarily fails, the merge search runs over `main`'s first-parent line and can persist a promotion merge as a durable landing. The Risk Assessment already flags the consequence \u2014 \"Range resolution is persisted once and never corrected. A wrong landing stays in the store\" \u2014 but never connects it to this read. This repo has already solved the problem for write-history operations: `pipeline/git_ops.read_integration_target` raises instead of degrading (\"degrading to `main` is wrong for an operation that writes history\"). Fix: resolve the target strictly for the resolver \u2014 either promote that strict read to a shared home rather than importing it from `pipeline` (keeps the metrology \u2192 pipeline edge out), or add a `RangeUnresolvedReason` for \"target unknown\" plus a failure-table row \u2014 and state which one `report history`'s ordering read uses too.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two \"tests pass unchanged\" claims are impossible given this slice's own changes",
+      "description": "Line 351 requires that \"`sq review code`'s range-resolution tests pass unchanged\" while lines 77 and 195 rename `_find_slice_branch`, `_resolve_fork_point` and `_search_merge_commit` to public names and extract the grep pattern. The review tests both import the private names directly (`tests/review/test_git_utils.py:26-28`) and patch them by dotted path (`\"squadron.review.git_utils._find_slice_branch\"` at `:217, 240, 252, 273, 279, 282, 299, 304, 305, 312, 314, 330`, and `_find_merge_commit`/`_resolve_fork_point` similarly); a rename breaks both forms by construction, and `tests/pipeline/test_code_pipelines_branching.py:17` imports `_find_slice_branch` as well. The same pattern appears in the development approach line 389: adding `environment_root` as \"a required field with no default\" (D5) breaks the existing `AdapterContext(...)` constructions in `tests/metrology/snapshot/builders.py:80` and `tests/metrology/snapshot/test_python_length.py:25`, so \"the 400 tests pass unchanged\" is false for those fixtures. This is not a design defect \u2014 it is a mis-stated verification claim that will read as a regression when the first build runs. Fix: restate both as \"review and 400 test call sites are updated to the public names / the new field, and the assertions and coverage are unchanged\", and list the pipeline test's import as a third call site.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:351"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The adapter conformance test runs on an export tree the export path never produces",
+      "description": "D5's conformance test \"runs every adapter in `default_registry()` on an export whose tree has no `.venv` or `node_modules`, with the live tools available\" \u2014 but the specified export always creates `tmp/tree/node_modules \u2192 <live>/node_modules` when the live one exists (line 132-133 of the data flow), so on the exact project the test exists to protect, the tree under test is not the tree production builds. The rule this parallels is AGENTS.md's \"A test that only passes on a format the real data never uses only provides false confidence.\" The property is still satisfiable (ESLint's config import failing yields `tool_failed`, which passes the \"absent for a reason other than `tool_missing`\" gate), so the test isn't wrong \u2014 it just proves less than intended. Fix: state the fixture explicitly \u2014 one export with the symlink present (the production shape, where `lint_count` must be *present*) and one without \u2014 so the `environment_root` rule is checked against both.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:347-350"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor schema naming drift and restatement of other slices' designs",
+      "description": "The schema block declares `SliceRanges.slices: dict[int, list[SliceLanding]]`, but the validator sentence immediately below rejects \"an empty `landings`, a duplicate `after_sha`\" \u2014 two field names for one structure, which a task-breakdown reader will resolve by guessing. Separately, the 401 prerequisite bullet (lines 74) carries a cross-slice ordering analysis (where 401 resolves tools, what coverage reads, which order each is implemented in) that largely restates 401's own design doc; the actionable content is two lines \u2014 \"reports iterate over `SnapshotMetric`, so new members appear unchanged\" and \"if 401 lands first, 403 updates the tool/environment reads\". Worth trimming, and worth naming 401's actual reader call site rather than \"whatever of 401's code reads `ctx.repo_root`\", which is an unenumerated edit set. Neither affects alignment.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#database-storage-schema"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Plan criteria and architectural principles are fully covered",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:332-341",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture-boundaries",
+      "raw_category": null,
+      "summary": "`report history`'s first-parent ordering read has no owning module and no failure mode",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "\"Git could not answer\" has no unresolved reason, so a transient git failure is reported as a confident topological finding",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:114-127",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The target is read through a function that degrades to `main` when `cf` fails, for a record the design says is never corrected",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:109",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Two \"tests pass unchanged\" claims are impossible given this slice's own changes",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:351",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The adapter conformance test runs on an export tree the export path never produces",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:347-350",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Minor schema naming drift and restatement of other slices' designs",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#database-storage-schema",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-17T11:24:58.880219",
+  "model": "qwen/qwen3.8-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 465038,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-flash",
+  "answering_models": [
+    "qwen/qwen3.8-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1335621,
+  "cached_tokens": 1143296,
+  "cache_write_tokens": null,
+  "completion_tokens": 116575,
+  "reasoning_tokens": 112120,
+  "duration_seconds": 1517.341032042168,
+  "cost_usd": 0.10078844,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,152 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Wire bandwidth and delta-compression estimates are inconsistent with the protocol",
+      "description": "The document estimates the current state stream at 24 bytes per entity, but the project\u2019s STATE_UPDATE format carries both 2D float64 positions and 2D float64 velocities: 32 bytes per entity. That makes the stated 3,500-entity update about 112 KB rather than 84 KB, and the 10,000-entity update about 320 KB rather than 240 KB. The later claim that int16 position deltas provide \u201c~32\u00d7 compression over float32 positions\u201d also does not follow from quantization alone: two int16 coordinates take 4 bytes versus 8 bytes for two float32 coordinates, or 2\u00d7. Omitting velocities and sending only changed entities could reduce total traffic, but those are separate mechanisms. Recalculate the scaling thresholds and wire budget using the actual payload format, and separate quantization gains from sparsity and omitted fields.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Current State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The GPU return-type abstraction does not yet support the stated data flow",
+      "description": "The document asks the tick contract to support NumPy arrays, Quadrants fields, and DLPack handles, while also saying wire optimizations layer on top of engine output. In the existing stack, the state serializer constructs binary messages from NumPy arrays and the WebSocket sends bytes; DLPack alone does not provide that serialization or wire path. Converting fields to NumPy reintroduces a host-visible state transfer, while passing fields to the server leaks the backend the boundary is meant to hide. This becomes especially consequential alongside server-side frustum culling: the design does not specify whether culling runs on the GPU or requires all positions to be copied to the server first. Define the ownership and extraction path for the actual consumer, including where culling runs and what data crosses the boundary, before treating all three return options as one supported abstraction.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exact neighbor output can still grow quadratically at the 2M target",
+      "description": "A spatial hash can reduce candidate search work, but it cannot avoid producing every neighbor edge the query contract requires. The current profile\u2019s `max_neighbors` is optional; without a cap, dense populations can produce O(N\u00b2) CSR output. At 2 million agents, that output is infeasible regardless of whether the search runs on a GPU. The plan also does not specify how variable edge counts are sized and allocated on the GPU between counting, prefix-sum, and gather stages. Define the high-tier neighbor semantics\u2014such as requiring a bounded topological cap or using aggregation\u2014and the output-capacity strategy. Otherwise the proposed GPU kernel changes the search substrate without bounding its potentially dominant memory and output costs.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Spatial query strategy shift at GPU scale"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Staggered neighbor caching lacks validity and lifecycle rules",
+      "description": "The document accepts temporal variation from cached neighbor lists on the basis that statistical properties are preserved, but specifies neither a validity bound nor how that claim will be tested. Between refreshes, agents move, so cached lists can retain agents that left the radius and miss agents that entered it; the error depends on movement per tick, query radius, and refresh period. The anticipated cache also needs explicit invalidation or remapping when entities are added or removed, since entity indices can change. Define the cache\u2019s ownership and lifecycle, a movement/error envelope or invalidation rule, and behavioral tests across formation changes before treating staggered updates as a fidelity-preserving scaling step.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Staggered neighbor updates and determinism"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The server-rendered video path adds a separate rendering stack to the scaling initiative",
+      "description": "Tier 4 introduces a Vulkan framebuffer and H.264 stream as an alternative to the dedicated-LAN transport, even though viewer/client rendering optimization is explicitly excluded from scope. This is not just another wire optimization: it requires a server rendering pipeline, GPU interop, encoding, and a distinct delivery path. It is not necessary to validate the stated simulation-scaling milestones when the document already includes culling and a dedicated transport option. Defer server-rendered video to a separate initiative unless a concrete requirement makes it necessary.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Wire bandwidth and delta-compression estimates are inconsistent with the protocol",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Current State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The GPU return-type abstraction does not yet support the stated data flow",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Exact neighbor output can still grow quadratically at the 2M target",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Spatial query strategy shift at GPU scale",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Staggered neighbor caching lacks validity and lifecycle rules",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Staggered neighbor updates and determinism",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The server-rendered video path adds a separate rendering stack to the scaling initiative",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#Envisioned State",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/140-arch.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-140-arch"
+  },
+  "timestamp": "2026-11-17T12:40:34.223309",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 21243,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 446412,
+  "cached_tokens": 321145,
+  "cache_write_tokens": null,
+  "completion_tokens": 15742,
+  "reasoning_tokens": 13930,
+  "duration_seconds": 157.34272349998355,
+  "cost_usd": 0.02360915,
+  "cost_basis": "alias_pricing"
+}

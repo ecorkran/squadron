@@ -1,0 +1,40 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The design\u2019s scope and review-type model diverge from the architecture",
+   "description": "The architecture says v1 implements slice-level transitions only and defers the `pre-slice-plan` arch gate. It also describes the review type for each transition as configurable. This design instead includes the arch gate in 241 and makes review types position-derived, leaving the shipped per-gate `review_type` keys inert. The slice plan records those as deliberate changes, but the architecture still states the earlier scope and goals. Reconcile the architecture with this design\u2019s model, or keep 241 within the architecture\u2019s stated scope.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Overview"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Recommendation examples conflict with the runner-facing vocabulary",
+   "description": "The architecture requires stable recommendation values `review` and `blocked` for downstream consumers. TD-7 describes those as new recommendation values but its examples put human-readable text such as `Review required before advancing` and `Blocked: review verdict does not clear threshold` in the `recommendation` field. Clarify that the field carries the stable tokens and that the explanatory text belongs in another field, so consumers do not receive a changed or ambiguous contract.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Parse failures lose the cause required in the rationale",
+   "description": "The architecture requires the returned rationale to name a parse failure explicitly. The design says `parseFrontmatter()` returns the same empty result for read/parse errors and for missing or malformed frontmatter, then maps the missing verdict to `UNKNOWN`. With that interface, the gate cannot distinguish a parse/read failure from an absent verdict, and the rationale requirements only specify naming the verdict and threshold. Specify how the failure cause is preserved or surfaced while still ensuring it cannot silently clear the gate.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Dependencies"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Invalid persisted gate configuration has no explicit failure strategy",
+   "description": "The architecture requires invalid thresholds and unrecognized per-gate configuration to fail fast. This design has `resolveGateConfig()` read values through `ConfigManager.get()` but does not specify validation or explicit error behavior for invalid values already present in TOML. Define how invalid loaded values are detected and surfaced rather than allowing them to be interpreted implicitly.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-1"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The stated worktree-scoped configuration resolution is not reflected in the wiring",
+   "description": "The architecture requires review policy to be resolvable at worktree scope. This section claims that scope is inherited, but the specified surface wiring constructs `ConfigManager(project.projectPath)`. Since `ConfigManager` resolves project configuration from the path it is given, the design should specify how a worktree-resolved config path is passed\u2014or clarify that these settings are project-scoped and update the integration expectation accordingly.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Config-Injection-resolves-the-one-open-design-decision"
+  }
+ ]
+}

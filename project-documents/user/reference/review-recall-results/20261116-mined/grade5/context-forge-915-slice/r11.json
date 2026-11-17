@@ -1,0 +1,19 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Delete routing spec contradicts the prescribed cleanup path for stale shared-file copies",
+   "description": "The Data Flow section specifies \"**Delete:** mirrors write \u2014 deletes from whichever project file the key's scope maps to\", and states `migrate-personal` is \"the one exception that touches the *other* project file\". For a personal key this means `cf config unset git.integration_branch --project` only touches `.context-forge.local.toml`. But the Collision semantics section (line 146) directs the user to clear a stale shared-file copy via \"a separate, explicit `cf config unset <key> --project`\", and Verification Walkthrough step 9 (line 259) asserts that this exact command clears the stale copy from `.context-forge.toml` and leaves `cf check` clean. Under the stated delete routing, step 9 is unreachable: `unset` would delete the *personal* copy (the developer's preferred value) while the stale shared copy survives the read fallback \u2014 inverting the intended outcome and leaving the `personal-config-in-shared-file` finding permanently unfixable by any documented command except hand-editing. The requirement left unmet is the design's own promised explicit cleanup path for the collision case. Fix: specify that project-scope delete for a personal key also removes any pre-existing copy in the shared file (read-side fallback mirrored on the delete side), or otherwise reconcile the two sections.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"Reusing the pattern already used for personal ignores\" has no referent",
+   "description": "Technical Scope says the `cf init` change works by \"reusing the pattern already used for personal ignores\", but the design's own `.gitignore handling in cf init` section (line 159) confirms \"no gitignore-writing logic exists anywhere in `packages/cli`/`packages/core` today\" \u2014 so there is no existing pattern to reuse. The normative section is self-contained and correct (create-if-absent, append-if-missing line check), so this is a wording issue only, but the phrase could send an implementer looking for scaffolding that does not exist.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+  }
+ ]
+}

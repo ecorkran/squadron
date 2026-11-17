@@ -1,0 +1,63 @@
+{
+ "case": "context-forge-925-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Success Criteria say \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" (a `cf guides install` behavior). Task 7 implements the config-path warning print; Task 6(b) checks it only in core (`GuideManager.test.ts`, \"the alias is reported\"), and Task 8's CLI test covers the `--strategy manual` flag path only. No task asserts the CLI prints the warning for the config-sourced case. **VALID** (minor, `coverage`): the tests leave out a branch the parent criterion names. Needs: doc (design plus tasks). **Raised by the original review (F002, note)**; the response added the case.",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [
+     4
+    ],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [
+     6
+    ],
+    "r09": [],
+    "r10": [
+     0
+    ],
+    "r11": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 20 puts the CLI `ensureGuideReady` call for `prompt.ts` \"before the read\" at \"~lines 60 and 116\". In `prompt.ts` at `25ef4d74` the `get` action reads the prompt file first through `resolvePhaseInput(phase, opPath)` at line 114 (`phaseShorthand.ts:22` opens `PROMPT_FILE_RELATIVE_PATH` for `P<n>` inputs), before line 116; placing the call at 116 leaves `cf prompt get P3` reading an uninitialized checkout, the exact failure #80 describes. The grep hit in `phaseShorthand.ts` is also not in the task's listed call sites. **VALID** (minor): the task's anchor contradicts the code. Needs: code. Medium confidence: the task's \"every non-test hit\" wording leaves room to catch it; the final code at `b99cc35c` carries a comment saying the ensure call must precede shorthand resolution.",
+   "hits": {
+    "r01": [],
+    "r02": [
+     0
+    ],
+    "r03": [],
+    "r04": [
+     8
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     4
+    ],
+    "r07": [],
+    "r08": [
+     1,
+     2
+    ],
+    "r09": [],
+    "r10": [
+     4
+    ],
+    "r11": []
+   }
+  }
+ ],
+ "note": "Borderline: r04 finding 8 (F2) only notes phaseShorthand.ts is unnamed and calls it handled by 'cover every hit', does not raise the ordering defect; counted. r05 finding 2 (config-alias warning delivery path) not counted for F1 since it is about return-shape plumbing, not test coverage; r10 finding 0 counted for F1 because its title and text include the missing CLI test."
+}

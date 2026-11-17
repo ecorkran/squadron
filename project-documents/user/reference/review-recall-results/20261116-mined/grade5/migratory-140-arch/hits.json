@@ -1,0 +1,60 @@
+{
+ "case": "migratory-140-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Current State: \"The wire protocol is currently uncompressed JSON over WebSocket ... 84 KB/tick (24 bytes x 3,500 agents)\", and Tier 2: \"Binary WebSocket replaces JSON\". At `fc7b39c^` `src/migratory_server/protocol.py` builds every message with `struct.pack` and `positions.tobytes()` (lines 184-213, 280-369) and ships bytes; `project-documents/reference/terrain-wire-protocol-v2.md` documents the binary format. The 24 bytes (6 x f32) is the binary size. **VALID**: contradicts code. Needs: code. Raised by the original review (F006: \"24 bytes cannot be JSON, either the byte count or the format is wrong\"; the author answered that the format claim was stale). The reviewer did not know which half was wrong, but did raise the inconsistency.",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     5
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     6
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     3
+    ],
+    "r09": [],
+    "r10": [
+     0
+    ],
+    "r11": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Related Work says `100-arch.behavior-engine.md` \"Defines the `SpatialQuery` protocol, `BulkForce` interface, CSR edge representation, and profile-driven force model\". At `fc7b39c^` 100-arch contains none of `SpatialQuery` (it speaks of a \"neighbor-query interface\"), `CSR`, or a `BulkForce` interface (one passing mention of a \"BulkForce pattern\"). Those live in code and slice designs 100, 110 and 111. **VALID** (minor): contradicts a referenced document. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [],
+    "r09": [],
+    "r10": [],
+    "r11": []
+   }
+  }
+ ],
+ "note": "F1: r06 finding 6 counted because it flags the 24-bytes vs JSON inconsistency (not that the protocol is binary). r09 finding 0 not counted: it only corrects 24 B to 32 B (f64) and never questions the JSON claim. F2: no review says 100-arch lacks the named terms; r03 finding 1 and r07 finding 2 quote the Related Work sentence but attack it against the code interfaces, a different problem, so not counted."
+}

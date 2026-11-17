@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Renaming the private `git_utils` helpers breaks the existing test suite, contradicting the \"tests pass unchanged\" criterion",
+      "description": "The design states the helpers `_find_slice_branch`, `_resolve_fork_point` and `_search_merge_commit` \"are renamed to public names\" (line 77) and requires that \"`sq review code`'s range-resolution tests pass unchanged\" (line 351). These two are incompatible as written: `tests/review/test_git_utils.py` imports the private names directly (`from squadron.review.git_utils import (_find_merge_commit, _find_slice_branch, _resolve_fork_point, ...)`) and patches them by string path in ~20 places (`patch(\"squadron.review.git_utils._find_slice_branch\", ...)`, `patch(\"squadron.review.git_utils._search_merge_commit\", ...)`). `tests/pipeline/test_code_pipelines_branching.py` also imports `_find_slice_branch` with a `pyright: ignore[reportPrivateUsage]`. Renaming them makes the import fail at collection, so the suite does not pass unchanged. The requirement named by the slice plan (\"the existing `git_utils` resolver\") and the architecture's boundary (\"the existing resolver this component reuses\") are met either way, so the fix is to keep the private names as thin aliases of the new public ones (or add the public names and leave the privates in place), and correct the \"pass unchanged\" wording to \"pass after the alias is added\".",
+      "file_ref": null,
+      "category": "integration-point",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`report history` orders by first-parent history, but the design never says how that ordering is computed or what happens when it fails",
+      "description": "`report history` is specified as \"snapshots ordered by the target's first-parent history\" (line 298), but the Data Flow section (lines 107-150) defines the first-parent *merge search* only for landing resolution, and no command or failure-mode row covers obtaining the first-parent commit list for the history report. This is a new git I/O path with its own failure surface: `git rev-list --first-parent <target>` can time out (`run_git` returns `None`), can fail on an empty repository, and can return a list the store's snapshots don't cover. The failure-mode table (lines 157-168) has rows for `git archive`/`rev-parse`, reflog reads and merge searches, but none for the history ordering itself. The requirement left unmet is the slice plan's \"over-time breakdowns\" success criterion and the architecture's \"over time\" rollup: without a specified source and failure handling, the ordering of the report's primary axis is undefined. Name the git call, its timeout handling, and what the report does when the target's history cannot be read.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`report project` and `report history` have no failure modes, unlike `report slice`",
+      "description": "The failure-mode table (lines 157-168) enumerates failures for the export path, the resolver, `report slice`'s boundary snapshot, the missing-landing-commit check, concurrent writes and store write failure \u2014 but nothing specific to `report project` or `report history`. Both read audit runs, review records and snapshots; `report project` additionally calls `baseline_report`, which itself scans the store and can raise `MetrologyStoreError` on a store read. The slice plan requires \"per-slice, per-project and over-time breakdowns\", and the architecture requires every report to present its figures with source and sample size. The requirement left unmet is the architecture's and the project's own failure-mode-enumeration rule applied to two of the three new report commands. The row \"A boundary snapshot fails during `report slice`\" (line 164) shows the pattern to follow: `report project`/`report history` should each state what a failed store read, a missing audit baseline, or an unreadable snapshot record does, and with what exit code and signal.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The report modules' \"no git and no store writes\" boundary is stated but not enforced by the stated dependency direction",
+      "description": "The component table says the report assembly modules do \"No git and no store writes beyond what `ensure_snapshot` and `record_slice_ranges` do\" (line 99), but `report slice` is specified to resolve and record ranges before it reads (line 144: \"range = resolve + record (above)\"), and `report slice` therefore needs git access and a store write. The design resolves this by declaring that the modules \"take the store, the resolver and `ensure_snapshot` as arguments\" (line 103), which allows a test fake for the resolver \u2014 but the resolver's *return type* is `list[SliceLanding] | RangeUnresolvedReason` and its side effect (persisting) is not in the contract the report sees. The requirement left unmet is the design's own stated boundary: the dependency direction between the report layer and git/store I/O is only documented in prose, not in the component table or the API contracts, so an implementer can satisfy \"the report assembly modules take the store\" while also calling git directly. State the boundary in the component table row itself (no `git_utils` import; resolver and `ensure_snapshot` are the only I/O seams) and make the fake-able resolver's persistence side effect explicit in the contract.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The design is at the upper end of proportionality for the slice's scope, but its own exclusions are disciplined",
+      "description": "The slice carries ten decisions, a new record type, a resolver, an export path, a contract change to `AdapterContext`, a comparability module, seven new modules and four new commands. That is a lot of mechanism, and the slice plan's own relative effort is 4/5, so it is proportionate to the plan rather than padded. The Excluded list (lines 61-66) is well judged and each exclusion names its reason: running audits/reviews from a report, a review noise floor, dependency installation at an export, ESLint `node_modules` identity, any composite score/gate/pipeline hook, side-branch ranges, and a slice table in `report project` (line 66: \"No success criterion needs it\"). Two further deferrals are available if the implementation needs headroom, and neither is claimed by a slice-plan criterion: `report project`'s \"latest audit baseline with its floor (from `baseline_report`)\" (line 297) duplicates a report 323 already ships under `report baseline`, and `report history`'s per-commit audit totals and per-category review rows are the heaviest remaining pieces of the report set. Cutting the audit-baseline restatement from `report project` and pointing at `report baseline` would remove duplicated logic without dropping a criterion.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:61"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architecture goals, dependency directions and record-model boundaries are honoured",
+      "description": "The design consistently follows the architecture's principles: one coarse `slice_ranges` record per project holding every slice's landings (D1, matching the architecture's coarse-records principle and the plan's \"one record per project\"); optional sibling payloads on `MetrologyRecord` with `schema_version` unchanged (line 314, matching \"Extend the 320 store, don't fork it\"); a deterministic `sliceranges-{sha256(project_id)[:12]}` id keyed on `ProjectId`, never a filesystem path; absences carrying a reason (`environment_unresolved` at an export with a differing `uv.lock`, D6; `absent_before`/`absent_after` in comparability, D7) rather than a zero; and an explicit refusal to produce any composite score, backed by a test asserting no serialized report key contains \"score\" (D8, criterion 9). The `environment_root` split is a coherent refinement of the architecture's rule that an exported commit is measured from a `git archive` export, and D5 correctly keeps the exported tree's rule set while using the live checkout's tools. Dependency directions are correct: `400` and `402` are consumed, `323` is reused unchanged, `401` is explicitly handled for both orderings (line 74), and `420` receives `take_snapshot_at` and `get_slice_ranges` without a record change (lines 320, 356).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:178"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-point",
+      "raw_category": null,
+      "summary": "Renaming the private `git_utils` helpers breaks the existing test suite, contradicting the \"tests pass unchanged\" criterion",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`report history` orders by first-parent history, but the design never says how that ordering is computed or what happens when it fails",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`report project` and `report history` have no failure modes, unlike `report slice`",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "The report modules' \"no git and no store writes\" boundary is stated but not enforced by the stated dependency direction",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design is at the upper end of proportionality for the slice's scope, but its own exclusions are disciplined",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:61",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Architecture goals, dependency directions and record-model boundaries are honoured",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:178",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-17T10:23:15.227980",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 774788,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1591456,
+  "cached_tokens": 1338368,
+  "cache_write_tokens": null,
+  "completion_tokens": 180533,
+  "reasoning_tokens": 176173,
+  "duration_seconds": 448.9139868328348,
+  "cost_usd": 0.08251007599999999,
+  "cost_basis": "alias_pricing"
+}

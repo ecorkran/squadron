@@ -1,0 +1,129 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Performance NFR lacks the required load test and CI gate",
+      "description": "Slice D2 restates a sub-second detection NFR. The task file explicitly excludes load testing, but the review requirements require a task adding coverage under `tests/load/` and an explicit CI gating task. Add both; the cap unit tests alone do not satisfy that requirement.",
+      "file_ref": null,
+      "category": "requirement-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit checkpoints are modeled as checkbox tasks",
+      "description": "Task 2C and the subsequent `*C` entries make commits standalone checklist tasks rather than plain `**Commit**:` markers. Replace these entries with markers at the existing tested checkpoints. This also removes unnecessary task fragmentation without changing implementation scope.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests omit required outcomes",
+      "description": "The slice\u2019s technical success criteria require renderer tests for every outcome. Task 8T lists brownfield, adoption-in-progress and explicit-instruction outcomes, but omits greenfield, already-planned and adoption-closed. Add those cases, including both closed states, to verify their outcome/reason and state rendering.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Write-failure test does not verify unchanged state",
+      "description": "The slice explicitly requires D9 write-failure coverage asserting both `AdoptionError` and unchanged state. Task 9T only checks the error message. Capture the original configuration and assert that the failed build leaves it unchanged.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:199"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "requirement-coverage",
+      "raw_category": null,
+      "summary": "Performance NFR lacks the required load test and CI gate",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "Commit checkpoints are modeled as checkbox tasks",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Renderer tests omit required outcomes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Write-failure test does not verify unchanged state",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:199",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-17T05:28:30.455562",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 56216,
+  "cached_tokens": 44928,
+  "cache_write_tokens": null,
+  "completion_tokens": 796,
+  "reasoning_tokens": 321,
+  "duration_seconds": 39.47742950031534,
+  "cost_usd": 0.0350288,
+  "cost_basis": "alias_pricing"
+}

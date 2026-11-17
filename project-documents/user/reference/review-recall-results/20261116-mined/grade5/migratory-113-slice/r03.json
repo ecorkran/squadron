@@ -1,0 +1,96 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Density signal reads post-cap counts at the specified call site, violating the \"pre-cap density\" requirement",
+   "description": "The parent slice plan and perf journal Entry 5 both state the dispatch decision must use **pre-cap** neighbor counts: \"the adaptive dispatcher's decision signal should be raw density (`mean_neighbors_per_agent` from the prior tick's CSR), not capped density.\" But the design specifies `spatial.record_density(filtered_counts)` at step 8 of `tick.py`, where `filtered_counts` has already been **overwritten** by `apply_neighbor_cap` \u2014 in `src/migratory/engine/tick.py` lines 5-6, `filtered_flat, filtered_counts = exclude_self(...)` is followed by `filtered_flat, filtered_counts = apply_neighbor_cap(...)` inside the `if (all_max_neighbors > 0).any():` branch, so the variable that reaches step 8 holds the **capped** counts whenever any profile sets `max_neighbors`. Under `config/test.yaml` (used as the benchmark config for this slice) `max_neighbors=1` is set on both profiles, so capped density collapses to ~1 neighbor per agent, far below any plausible threshold, and the dispatcher would latch onto the grid backend permanently regardless of actual clustering. The design's own step-8 sketch shows the cap applied at step 4 and the `record_density` call at step 8 using the same variable name, so the two are indistinguishable as written. The design must specify capturing the pre-cap counts into a separate variable (e.g. `pre_cap_counts`) before the cap branch and passing that to `record_density`; this is the single requirement the whole dispatch decision hinges on.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-159"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Default-threshold justification is arithmetically wrong and contradicts the dispatch rule",
+   "description": "The \"Default Threshold Choice\" section computes the expected mean neighbors as `(\u03c0 \u00d7 35\u00b2 / 90000) \u00d7 3100 \u2248 132` for N=3100 uniform with radius 35 on a 300\u00d7300 world. That is right in isolation, but it is the density in the **uniform/scattered** regime \u2014 the very regime the design claims selects the **grid**. With `m \u2248 132` and `t = 10.0`, the switching rule (\"if currently on brute, switch to grid when `m < t - h`\" i.e. `m < 8.0`) never fires, so the dispatcher stays on brute-force in exactly the phase where Entry 4 addendum showed the grid holding 20 TPS against brute-force's ~14 TPS. The bullet's conclusion (\"far above threshold, so brute-force is selected\") applies to the clustered regime, but the doc's second bullet then claims that in \"an expansion phase where agents are spread uniformly across the whole world ... mean neighbors can drop below 10\" \u2014 contradicting the first bullet's own arithmetic for the same uniform distribution. Either the threshold's default of 10.0 is wrong by more than an order of magnitude for this world/N, or the signal's scale does not match the intended meaning. The design notes the default is \"defensible but not proven\" but then rests the entire performance case on it; the default needs re-derivation against the actual crossover (which the walkthrough's sweep would discover, making the shipped default actively harmful until then).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Dispatcher's \"grid is always cheaper when the mean is very low\" premise is not supported by the cited benchmark, and the design's own benchmark data contradicts it",
+   "description": "The config validation rule states `grid_threshold_mean_neighbors` must be `> 0` \"because ... the grid is always cheaper than brute when the mean is very low\", and the density-signal rationale asserts grid cost scales with local density while brute-force cost is \"fixed at `n_active \u00d7 n` regardless\". The perf journal's actual numbers (Entry 4) show the grid is 3.3\u00d7 faster at *uniform* N=2000 with query_radius=50 in a 1000\u00d71000 world \u2014 a regime with a nonzero mean neighbor count \u2014 and the grid loses in clustered regimes. Entry 4's explanation is that the grid's per-tick **NumPy bookkeeping is O(n_active)** regardless of density, so the grid has a fixed overhead floor, not a density-proportional cost. A pure density threshold cannot express that: at low-but-nonzero density the grid's fixed bookkeeping overhead may already exceed brute-force's BLAS matmul, and the crossover depends on `n` and the world size, not only on `mean_neighbors_per_agent`. This is the same class of error the journal warns about (\"the constant factors are what decide it\"). The design's \"Why this signal\" section should acknowledge the O(n_active) floor term and state the assumption it is making, or the threshold's meaning is not what the doc says it means.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-125"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Brute-force `build()` is a no-op today\" is factually wrong \u2014 brute-force's `build()` stores a copy of positions",
+   "description": "The design states twice (lines 108 and 404) that \"brute-force's `build` does nothing today\" and that skipping it is \"purely cosmetic\". In `src/migratory/spatial/brute_force.py`, `build()` performs `self._positions = positions.copy()` \u2014 an O(n) copy of the full position array. It is not a no-op. This matters for two of the design's claims: (a) the risk assessment at line 404 is based on a false premise (the real hazard is not a hypothetical future cache but the present-day copy, which is skipped on grid-mode ticks and means the brute backend holds a **stale** position array if it is ever selected without a preceding `build()` \u2014 the dispatcher must guarantee the brute backend is built on every tick it is selected, including the tick immediately following a switch, which the design's \"delegates `build` to the currently-selected backend only\" rule does achieve, but the design does not state the invariant); and (b) the \"dispatcher is almost free / no per-tick overhead\" claim understates that on grid-mode ticks the brute backend's O(n) copy is avoided \u2014 a small win the design should own rather than dismiss as cosmetic.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:108"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`build()` does not rebuild the grid after a switch \u2014 the grid's index is stale for the tick it is first used on",
+   "description": "The switching rule says the switch \"takes effect on the next `build()`\", and `build()` \"delegates to the currently-selected backend's `build()`\". Because `record_density` is called at the *end* of tick N (after `build` and after the forces have already run), a switch decided during tick N changes the selected backend *after* tick N's `build()` has already run. On tick N+1, `build()` runs on the newly selected grid backend \u2014 which is fine \u2014 but the reverse direction is the problem: if the switch happens from grid to brute, tick N+1's `build()` correctly builds brute, but if the switch happens from brute to grid, the grid's first use is tick N+1 whose `build()` *does* run the grid's counting sort. So the ordering happens to be safe only if `build()` always precedes the query in the same tick, which it does in `tick.py`. The design should state this ordering invariant explicitly, because the alternative (a switch flag checked inside `query_radius_batch`) would silently use an unbuilt grid. This is currently under-specified rather than wrong \u2014 but it is the kind of hidden coupling that produces a \"query before build\" `RuntimeError` from `HashGridQuery` if the tick pipeline is ever reordered.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:108-114"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough step 2 relies on an unspecified, undocumented environment-variable mechanism",
+   "description": "Step 2 requires running the suite as `MIGRATORY_SPATIAL_BACKEND=grid python -m pytest ...` and `MIGRATORY_SPATIAL_BACKEND=brute ...`. The design itself concedes \"(Whether pinning happens via env var or a test fixture is an implementation detail)\". But it is not an implementation detail: the server constructs the spatial backend from `config.simulation.spatial.backend`, and no env-var override exists in `src/migratory_server/config.py`. An env var would need to be added to config loading (a new, undocumented precedence rule over YAML), or the tests must instead construct the backend themselves \u2014 but the existing end-to-end tests (`tests/test_server.py`, `tests/test_server_tick.py`) build the server from a YAML fixture, so a fixture-only approach cannot change what `server.py` wires up. The requirement \"Full existing test suite passes under `backend: adaptive`, `grid`, `brute`\" therefore implies a config-precedence mechanism the design never specifies. Either specify the env-var override and its precedence over YAML (and how it interacts with `config_to_yaml` round-tripping and the simulation log header), or restate the requirement in terms the design actually supports.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:354-361"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Bit-exact position equality\" is an unreachable success criterion given the two backends' different numerics",
+   "description": "Implementation step 5 requires the integration test to confirm \"bit-exact position equality against brute-force-only over N ticks\". The two backends are not numerically equivalent: `BruteForceQuery` uses the identity form `|a-b|\u00b2 = |a|\u00b2 + |b|\u00b2 \u2212 2\u00b7a\u00b7b` (a BLAS matmul with documented catastrophic-cancellation limits), while `HashGridQuery` uses `np.einsum` on an explicit diff tensor. These produce different floating-point values for the same pair, so a pair at a near-boundary distance can be included by one backend and excluded by the other \u2014 as the grid's own docstring notes, the comparison is `sq_dists < radius\u00b2`. The design's own unit-test strategy correctly says to compare neighbor **sets** and notes \"order within a row may differ for grid\", but the integration criterion demands bit-exact *positions*, which is strictly stronger and, once the grid is selected for any tick, not achievable in general. Worse, `tests/test_tick.py::test_max_neighbors_none_is_bit_exact_noop` sets the precedent for \"bit-exact\" meaning something specific; reusing the phrase here is misleading. The criterion should be redefined as neighbor-set parity plus a positional tolerance, and the failure mode (a boundary-adjacent pair flipping) should be stated rather than glossed.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Success criterion \"652 tests\" is not verifiable and the number is inconsistent with the repo's own history",
+   "description": "The criterion states \"Full existing test suite (652 tests) passes\". Slice 105's verification recorded \"630 passed\" as the post-105 baseline, and slice 112 (which added `tests/test_neighbor_cap.py` and slice-112 tick tests) is marked complete in the parent plan, so the current count is at least 630 plus slice 112's additions. I could not run the suite to confirm the exact number. More importantly, a hardcoded test count as a *success criterion* is brittle and will fail on any unrelated test addition; the criterion should be \"the full suite passes\" with the count recorded in the perf-journal/slice log, not asserted in the design.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:335"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough step 5 asserts a `grid_selected` / `brute_selected` log counter that the design never specifies",
+   "description": "Step 5 says \"The `grid_selected` count in the dispatcher's log output should be high during this phase\" and \"brute_selected dominates\", and step 4 asks for \"the ratio of ticks served by grid vs. brute\". Neither counter is defined anywhere in the design: `AdaptiveSpatial` is specified as an engine-level class in `src/migratory/spatial/adaptive.py`, and the engine package has no logging at all (no `import logging` anywhere under `src/migratory/`), while the server's structured JSON logging lives in `src/migratory_server/logging_setup.py`. So the observable the walkthrough depends on does not exist and its ownership is unassigned. The design must specify either (a) a counter exposed as a property on `AdaptiveSpatial` and read by the server's tick loop / logging, or (b) an explicit engine-level logging convention \u2014 which would be a new architectural surface for the engine, and would need to be justified against the architecture's \"engine does not own logging\" boundary. As written, this is a hidden dependency on an unspecified mechanism, and the slice plan's own NFR-bearing claim (TPS improvement) cannot be verified without it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:371-381"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`hasattr` guard in `tick.py` is an acceptable but avoidable coupling to a dispatcher concern",
+   "description": "The design deliberately rejects putting `record_density` on the `SpatialQuery` protocol and instead uses a runtime `hasattr` check in the engine's tick hot path, to keep the protocol clean. This keeps `tick.py` decoupled from backend identity at the type level, but introduces a duck-typed side-channel: `tick.py` now depends on an optional method name that exists on exactly one implementation, and a typo or a rename in `AdaptiveSpatial` would silently degrade to \"no density ever recorded\" rather than failing loudly \u2014 the opposite of the project's \"fail explicitly, never use silent fallbacks\" principle in CLAUDE.md. The design's stated rationale (the protocol would be \"coupled to a dispatcher concern\") is a weaker argument than the alternative of a separate, narrow `DensityReporter` protocol that `tick.py` can `isinstance`-check, or of having `AdaptiveSpatial` expose the density through a server-side wrapper. Worth a sentence acknowledging the silent-failure risk and the mitigation (e.g. an assertion in the server wiring that the adaptive backend actually reports density).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:160-164"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Cell-size derivation depends on `profiles` being non-empty but the helper's fallback hides a real misconfiguration",
+   "description": "`_derive_cell_size` falls back to `max(world.width, world.height)` when the profile list is empty, matching slice 105's documented caveat (`tests/test_server.py::test_init_hooks_run_in_order` runs with zero profiles). With `cell_size = world width`, the grid degenerates to a single cell and every query degenerates to brute force over the whole population \u2014 silently. The design notes this is \"a degenerate config but valid per current code\" but does not say the dispatcher will silently behave as brute-force. Acceptable given the precedent, but the doc should note that in this configuration the grid backend is a performance no-op, since the whole point of the slice is the crossover behavior.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:215-219"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`SpatialConfig` default of `backend: \"adaptive\"` changes production behavior on upgrade with no staged rollout",
+   "description": "The design is explicit that omitting the section changes the default from brute-force to adaptive, and it justifies the initial-backend choice as \"matches current production behavior from tick 0 until the first density signal is in\". Given the density-signal defect above (post-cap counts), the *steady-state* backend after the first tick is not what the design intends, so the \"identical behavior until the signal kicks in\" reassurance is weaker than claimed. Since the whole point of slice 113 is a perf improvement and the backends are already regression-tested, changing the default is defensible \u2014 but the design should pair it with the requirement that the perf journal Entry 6 record the adaptive default's before/after numbers, and it does (step 6), so this is informational rather than blocking.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:166-196"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Slice plan's stated dependency list is not reflected in the slice's frontmatter/dependency section",
+   "description": "The parent plan lists slice 113's dependencies as (100), (110), (111) \u2014 matching the frontmatter. The design additionally leans on slice 112's `apply_neighbor_cap` semantics (correctly, and it gets the orthogonality argument right) and on slice 105's preserved implementation (also correct). No dependency-direction violation. Flagging only that the design's \"Consumes from Other Slices\" section lists 105/110/111/112 while the frontmatter lists only 100/110/111 \u2014 worth making consistent so the dependency list is machine-checkable.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:55-73"
+  }
+ ]
+}

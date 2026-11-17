@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Token-ceiling failure mode asserts the signal but not \"other metrics are unchanged\"",
+   "description": "Functional Requirement 10 (slice design line 278) requires that when a language's token count passes `DUPLICATION_MAX_TOKENS`, `duplicated_lines` is `tool_failed` with a WARNING naming the count and the ceiling **and that \"its other metrics are unchanged\"**, and the Technical Requirements (slice design line 286) state that \"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table.\" The corresponding failure-mode row (slice design line 109) names \"Other metrics are unaffected\" as the outcome. Task 11's monkeypatched-constant case verifies only the signal (`tool_failed` + WARNING with count and ceiling) at the level of `measure_duplication`, which returns a single measurement and so cannot demonstrate the outcome. No other task covers it: Task 13/15 exercise the adapters without triggering the ceiling, and Task 26's snapshot tests use a fresh report. Add one adapter- or snapshot-level case (naturally in Task 13, 15 or 26) that lowers the constant and asserts file length, function length and cyclomatic complexity are still present with their normal values. Compare the tokenizer-failure row, whose outcome (\"their function length is unaffected\") is correctly asserted in Task 13.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Counting-text content is asserted only for coverage",
+   "description": "Functional Requirement 1 says each of `cyclomatic_complexity` and `duplicated_lines` has \"a `counting` text giving its definition (D2, D3)\". Only coverage's counting content has a named assertion (Task 24 line 244, the provider-limit clause of SC7). For complexity and duplication, Task 9 line 112 asserts merely that the two counting texts differ, and no task asserts that complexity's text names the decision-point set and the module-level-code caveat (Task 8) or that duplication's text states window size, exact-match semantics and the ceiling (Task 10's `tool.counting` bullet). The texts are built from the module constants by construction, so the risk is low, but a one-line content assertion in Task 9 and Task 11 would give SC1 a direct test mapping, which Task 30's final check asks for.",
+   "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:263"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers are checklist items rather than plain lines",
+   "description": "The commit markers are written as `- [ ] Commit: \u2026` checkbox items (lines 46, 68, 88, 97, 115, 142, \u2026), whereas the marker convention is a plain `**Commit**:` line that is never a checkbox. Placement is correct \u2014 commits cluster at working, tested points (e.g. after the Task 4, 6, 9, 11 test groups and after Task 7's refactor validated by 400's length tests), none after single trivial tasks, and Task 30 closes with \"commit any remaining changes\" rather than being the only marker. Note that AGENTS.md's \"checklist format for all task files\" rule pulls the other way, so this may be intentional project style; flagged informationally only.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  }
+ ]
+}

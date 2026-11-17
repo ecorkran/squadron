@@ -1,0 +1,165 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Residual discovery fallback cannot deliver unsampled offers",
+      "description": "T13 permits restricting discovery to store-recorded samples if no discovery API exists. Those results are already sampled, so excluding sampled references leaves no offers. Current `MetrologyStore` lists samples; capture resolves a supplied target rather than enumerating unsampled results. Explicitly task candidate discovery instead of allowing this fallback. Otherwise the non-empty residual-offer guarantee and continued evidence accumulation cannot be delivered.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-204"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Direction precedence contradicts its required outcome",
+      "description": "T7 says to implement the listed precedence exactly, starting with unconditional below-floor refusal, then requires below-floor low-agreement cells to reach `TIGHTEN`. Both cannot hold. Replace the contradictory sequence with an unambiguous decision table preserving floor-gated loosening and non-floor-gated tightening.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runtime-drawn-model warning is missing",
+      "description": "T9 requires the config-time model/threshold pairing note but omits the explicit warning that runtime-drawn models cannot have model-specific thresholds. T10/T16 check only note presence. Add the required warning to every recommendation and assert its content in text and JSON output, satisfying the slice\u2019s fourth functional criterion.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed threshold handling is claimed but not tasked",
+      "description": "The coverage check claims malformed `judge:` blocks are exercised in T8, but T8 covers only registered and missing templates. Moreover, current `resolve_thresholds` directly converts values with `float()`; non-numeric values raise rather than provide the claimed inherited handling. Add an explicit handling decision and regression test providing the design\u2019s warning and flagged target without modifying 300\u2019s judging path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lapse diagnostics lack a settled interface",
+      "description": "T13 fixes the return type as `list[OfferTarget]` while requiring distinguishable lapse information through an unspecified alternative mechanism. An empty list cannot distinguish exhaustion from lapse, and `find_graduation` alone does not establish current configuration state. Define the diagnostic contract before T13/T14 so T15 can consume it without redesigning earlier work.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit placement and task splitting are excessive",
+      "description": "The pattern continues throughout: every implementation and test task receives its own commit marker, placing implementation commits before their regression tests. Merge small implementation/test pairs\u2014particularly models and config keys\u2014and retain markers only after tested working increments. Tests already immediately follow implementations; preserve that sequencing.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:31-108"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Residual discovery fallback cannot deliver unsampled offers",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-204",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Direction precedence contradicts its required outcome",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Runtime-drawn-model warning is missing",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146-147",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Malformed threshold handling is claimed but not tasked",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Lapse diagnostics lack a settled interface",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Commit placement and task splitting are excessive",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:31-108",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T05:28:30.236713",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 54196,
+  "cached_tokens": 52480,
+  "cache_write_tokens": null,
+  "completion_tokens": 801,
+  "reasoning_tokens": 0,
+  "duration_seconds": 51.63651566719636,
+  "cost_usd": 0.01669,
+  "cost_basis": "alias_pricing"
+}

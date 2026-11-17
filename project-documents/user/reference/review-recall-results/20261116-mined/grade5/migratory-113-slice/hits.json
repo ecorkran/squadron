@@ -1,0 +1,53 @@
+{
+ "case": "migratory-113-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The density signal is described three times as \"the CSR's raw `counts` output ... pre-cap\", \"`filtered_counts` (post-`exclude_self`, pre-cap)\", and `record_density(filtered_counts)` as step 8, after the force and integrate steps. In `src/migratory/engine/tick.py` at `a0b2418`, `filtered_counts` is reassigned by `apply_neighbor_cap` whenever any profile has `max_neighbors > 0`, so at step 8 it is the capped count. With the cap on (the `test.yaml` run the walkthrough names has `max_neighbors=1`), mean density is at most 1, below the default threshold of 10, so the dispatcher is pinned to grid, the opposite of the stated \"the cap cannot perturb backend selection\" (Non-Risks). **VALID**: contradicts code. Needs: code. The implementation added `pre_cap_counts = filtered_counts` before the cap (`tick.py` at `8ed2760`).",
+   "hits": {
+    "r01": [],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [],
+    "r05": [
+     1
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ],
+    "r09": [
+     7
+    ],
+    "r10": [],
+    "r11": [
+     0
+    ],
+    "r12": [
+     0
+    ],
+    "r13": [],
+    "r14": [
+     0
+    ],
+    "r15": [
+     0
+    ],
+    "r16": [],
+    "r17": [],
+    "r18": [],
+    "r19": []
+   }
+  }
+ ],
+ "note": "Borderline: r09 finding 7 only says the cap \"may rebind\" filtered_counts and the pseudo-code does not say, bundled with the hasattr point; counted. r02 finding 6 also mentions post-cap edge total but is mainly about O(1) claim; not counted (r02 finding 0 is counted)."
+}

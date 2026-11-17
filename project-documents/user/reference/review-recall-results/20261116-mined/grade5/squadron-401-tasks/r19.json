@@ -1,0 +1,12 @@
+{
+ "review": "r19",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checklist checkboxes, not plain lines",
+   "description": "Every `Commit:` line (Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29) is written as `- [ ] Commit: \u2026`, i.e. a checkbox item. The convention requires `**Commit**:` markers as plain lines, never checkboxes. The substantive placement rule is satisfied \u2014 markers sit at tested points, with uncommitted implementation tasks (e.g. Task 3, 5, 8, 10, 16, 19, 21, 23, 25) picked up by the immediately following test task's commit \u2014 but the marker form itself should be normalized to a plain `**Commit**:` line.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

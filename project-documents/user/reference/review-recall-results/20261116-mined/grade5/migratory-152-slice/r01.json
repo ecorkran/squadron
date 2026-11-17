@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The load-bearing exit gate no longer measures what the slice-plan entry assigns",
+   "description": "Plan 140's entry for slice 152 (`140-slices.simulation-scaling.md#feature-slices`, item 13) states the exit criteria as \"k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N; parity preserved; **no regression on k-first path**.\" The design replaces both halves: k-nearest is gated against `radius_only` instead of k-first, and k-first is deleted rather than preserved. The substitution may be defensible \u2014 the design argues k-first only existed to mask the scatter this slice fixes \u2014 but the plan entry is the authority on what this slice must deliver, and as written the slice ships a different gate and deletes a path the plan says must not regress. The plan entry needs to be amended (or the gate kept against k-first with k-first's removal deferred).",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`radius_only` and the 16M-reference program are scope the slice plan does not assign",
+   "description": "The mechanism the plan asks for is one post-sort reindex pass plus a coalesced inner loop. On top of that, the design adds a second behavioral flocking mode (`radius_only`, with its own inner-loop branch, heap-omission gating, template-cache-key handling, and documentation of when users should pick it), a default-mode flip, and a new configuration error path. Nothing in the plan entry or the architecture calls for a metric/Reynolds path; the justification is a published external ceiling (Babylon.js/WebGPU at 16M) and a \"defensible match-the-reference speed test\" the initiative does not define. Cut or defer: (a) the `radius_only` mode and its inner-loop branch \u2014 the plan's own gate needs only a baseline to compare k-nearest against, and the lighter option (retain k-first as the denominator, per the plan) meets that requirement; (b) the \"Reference points (the design anchors)\" block and the 16M/80\u00d7 headroom narrative (lines 38\u201344), which restate reference material rather than specify this slice; (c) the N=500k/N=1M headroom probe (verification step 5, lines 399\u2013400), which is explicitly \"not a hard gate\" and is really the FRNN follow-up's trigger measurement; (d) the \"Double-coherent\" and LBVH items in Future Work. Keeping the coherent grid + `k_nearest` alone would put this design squarely inside the plan's Medium/3-of-5 effort envelope.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:21-44"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The design contradicts itself on whether `k_first` keeps parsing",
+   "description": "Scope item 7 (line 67) and the decision at line 199 say `k_first` is \"removed entirely\" with \"No silent migration,\" raising a parse-time error. The Mitigation Strategies section at line 433 says the opposite: \"ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning) so the slice can land incrementally.\" Those are different config-boundary contracts, and they land in different commits of the recommended sequence (steps 2 and 4). A deprecation warning on a value with known behavior implications (spatial bias) is the exact silent-migration path the design elsewhere rejects. Pick one \u2014 either the mode set is `{radius_only, k_nearest}` from the first commit that touches the kernel, or the incremental landing plan is explicit about the interim three-value set and its removal commit.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`NEIGHBOR_MODE_DEFAULT` and the `.get(..., default)` fallback are omitted from the removal list",
+   "description": "Item 7 enumerates where `k_first` disappears: \"the kernel, `ComputeConfig`, `Workload`, and the `_NEIGHBOR_MODE_MAP`.\" It does not mention the module-level `NEIGHBOR_MODE_DEFAULT` constant that is currently defined as the k-first mode value, is the default argument of `run_fused_tick`, and is the fallback in the `map.get(name, DEFAULT)` lookups used by both the bench runner and the production GPU driver. If `k_first` is deleted from the mode set while that constant still resolves to the removed specialization, an unrecognized or absent mode string silently selects a mode the kernel no longer handles \u2014 a silent fallback, which project conventions forbid and which no criterion here would catch (the gates all pass an explicit `--neighbor-mode`). The design should name the repointing of that constant (and either keep the `get` fallback with a new default plus a loud error, or drop the fallback).",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Criterion 3's slice-stop gate is built on an inverted cost comparison",
+   "description": "Criterion 3 requires `radius_only` at N=10k to beat the 213.9 TPS baseline, reasoning that \"coherent reads + no-cap is strictly less work than scattered reads + early exit.\" The no-cap half of that is not true at the `mid-flock-10k` regime: that workload is two tight clusters (`cluster_radius=45` in 400\u00d7400) and the design's own numbers are ~1400 candidates evaluated per agent for the uncapped path versus \u226432 for k-first with early exit. Coalescing buys the ~2\u20133\u00d7 the literature reports; it does not offset a ~40\u00d7 increase in accepted-candidate work. So the \"if it doesn't, the reindex itself is too expensive and that is a slice-stop bug\" test can fire on a healthy reindex and halt the slice for the wrong reason. The legitimate reindex-overhead gate is a different measurement: same-mode before/after (k_nearest TPS with and without the reindex, or the reindex kernel's `spatial_build_ns` delta), not a comparison against a mode that scans 40\u00d7 less. Note also the baseline is mislabeled \u2014 213.9 TPS is the slice 149 first-k-found figure that slice 150 cites as its regression denominator, not a \"slice 150 `k_first` baseline.\"",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Spawn/despawn interaction is stated incorrectly and the new fields have no failure mode for a count change",
+   "description": "\"Allocation in `setup()` only \u2026 Spawn/despawn paths (slice 146's secondary mutation) re-run `setup()` and reallocate; the coherent fields are reallocated alongside. No special handling needed.\" That is not how the production path this slice is on works: slice 146's design and the driver's public interface show `setup_from_server()` called once from `GpuSimulationDriver.setup()`, with count changes handled by `sync_from_entity_manager()`, which uploads into the **existing** fields via `from_numpy` \u2014 no re-allocation, and `state.n` is fixed at startup. The reindex kernel's loop bound and the seven coherent fields plus `coherent_to_original` are all N-shaped, so a count change is exactly the case where \"no special handling\" is not safe, and it is the one case the existing slice-146 path exercises (a spawn arriving between the bounds sync-back and the next `build_spatial_hash`). The requirement this leaves unmet is an explicit statement of what happens to the coherent scratch when N changes \u2014 either N is capacity-fixed and the slice says so, or the reallocation/resize path is named. I verified the driver and slice-146 design only; whether the current code path produces correct results on count change was not exercised here.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#special-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The gate commands depend on bench-harness surface that is not in the slice's scope",
+   "description": "Every measurement step is written as `python -m migratory.bench run|parity \u2026 --workload X --neighbor-mode Y --ticks Z`. The bench CLI takes `--workload`, `--backend`, `--workload-dir`, `--results-dir` and two `--list-*` flags; it has no `run`/`parity` subcommand, no `--ticks`, and no `--neighbor-mode` \u2014 mode comes from the workload YAML, so comparing two modes at the same N means two workload files. Likewise `mid-flock-200k` is only mentioned in Technical Requirements and an Implementation Notes aside (\"likely needs to be added\"), while `mid-flock-500k` and `mid-flock-1M` appear solely in the commands and are named nowhere in scope. The requirement left unmet is a runnable acceptance path for the load-bearing TPS gate; add the harness surface (or restate the commands against per-mode/per-N workload YAMLs and enumerate all four files in scope).",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:385-400"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The parent architecture's TPS NFR is not restated, and Tier 3 is mislabeled",
+   "description": "The design says the slice makes k-nearest \"viable at the architecture's Tier 3 target (N=200k).\" The architecture's Tier 3 is **250k** at the initiative's stated goal of 60 TPS (and Tier 2's 50k @ 60 TPS is the gate slice 148 explicitly adopted). No absolute TPS figure appears anywhere in this slice's criteria \u2014 the gate is purely relative (20% of another mode) and the only absolute anchor is \"at minimum, hundreds of TPS at 1M-class,\" which is not the architecture's number. Since this slice is the load-bearing performance fix on the Tier 3 path, the parent NFR should be restated with its target (e.g. \"contributes to 60 TPS at N=250k; this slice's measured contribution is X TPS at 200k on the dev-class box, with the Tier 3 gate deferred to the production-class measurement slice the plan already lists in Future Work\"). As written, a reader cannot tell whether passing this slice moves the initiative toward or away from its stated TPS goal.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Prerequisite is cited as shipped while its own slice document is `in_progress`",
+   "description": "Line 31 asserts \"Slice 150 is shipped on `main` as of 2026-05-05.\" Slice 150's frontmatter is `status: in_progress` and its task checklist is entirely unchecked, yet the heap/pruning/`neighbor_mode` code this slice rewrites is already present in the kernels module. Whether 150's branch has merged to `main` is unverified from here. The consequence to resolve: slice 152 edits the same mode-set surface slice 150 is still finalizing, so the two designs overlap on one contract and 152's k-first-removal decision can invalidate a 150 criterion still open.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:31"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Named error class does not match the config layer's error type",
+   "description": "The design twice specifies that stale `neighbor_mode: k_first` configs raise a `ConfigurationError` at parse time. The compute-config parser in the server config module validates against a frozen accepted-value set and raises `ValueError`, which the simulation validator re-wraps as that module's `ConfigError`. Naming a type that isn't the one raised invites an implementer to introduce a parallel error class; align the wording to the existing failure boundary (and note the same explicit-failure message already enumerates valid values).",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:199"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Deferrals are stated with good judgment but have no home in the plan",
+   "description": "Resisting the collect-then-sort rewrite in favour of shipping the coherent grid first and measuring matches the architecture's \"bottleneck moves\" and \"algorithmic before constant-factor\" principles. The four Future Work items (FRNN swap, Tier 3 production-class measurement, LBVH, double-coherent writeback) are however not entries in plan 140's Feature Slices or Future Work lists, and the FRNN item is also referenced in slice 150's own plan as Phase 2. If any of these is the intended continuation of the Tier 3 path, it should be recorded where the plan tracks it so the deferral is visible rather than living only in this document.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:457-463"
+  }
+ ]
+}

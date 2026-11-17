@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Bit-exact parity claim conflicts with acknowledged neighbor-order divergence",
+      "description": "The architecture document (100-arch.behavior-engine.md:34) makes tick determinism a core principle. The slice's unit-test plan compares neighbor output \"as sets\" because \"order within a row may differ for grid\" (Testing Strategy), yet Implementation Notes step 5 requires \"bit-exact position equality against brute-force-only over N ticks\" in the integration test. CSR-native force evaluation (slice 111) sums per-row via `np.add.reduceat`; a different neighbor order changes floating-point summation order, so bit-exact parity across a mid-run backend switch is not guaranteed by anything in the design. The design should state explicitly whether cross-backend FP-order divergence exists and, if so, replace the \"bit-exact\" criterion with an appropriate tolerance \u2014 otherwise the integration test is specified to fail for reasons that are not a dispatcher bug.",
+      "file_ref": null,
+      "category": "determinism",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#implementation-notes"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`initial_backend` is documented as operator-selectable but absent from the config surface",
+      "description": "The \"Brute as Initial Backend\" decision says the initial backend is made configurable \"so an operator running a scattered-start scenario can choose grid-first,\" and the class signature exposes `initial_backend`. But `SpatialConfig` defines only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band` \u2014 there is no YAML field for the initial backend, and no validation rule for it. Either add the field to `SpatialConfig` or remove the claim that operators can choose it; as written, the design promises a knob the specified config surface does not deliver. (The hardcoded `\"brute\"` in `_build_spatial` also contradicts the \"no magic defaults\" project convention unless it is surfaced at the config level.)",
+      "file_ref": null,
+      "category": "configuration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#server-configuration"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dispatcher design preserves protocol boundaries and dependency directions",
+      "description": "The wrapper approach keeps `tick.py` dependent only on `SpatialQuery`, avoids adding dispatcher concerns to the protocol (the `record_density`-via-`hasattr` guard is a documented, deliberate choice), constructs both backends from config-derived parameters in the correct direction (server config \u2192 dispatcher \u2192 backends), and the rejected alternatives (branching in `tick.py`, per-agent dispatch, moving averages) are each argued. Scope matches the plan entry, with KD-tree and per-agent dispatch correctly deferred.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Performance/NFR handling restates the arch's tick-budget concern concretely",
+      "description": "The architecture names \"complete a full tick within the budget\" as its only timing NFR (100-arch.behavior-engine.md:96, no numeric target). The slice restates it operationally: walkthrough step 5 requires overall TPS >= brute-only baseline and \"no dispatcher-induced spike\" in worst-case tick duration, and the switch-boundary counting-sort spike is explicitly enumerated with a bounded mitigation and a journal follow-up. This satisfies the arch-level NFR at the fidelity the arch itself defines.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#risk-assessment"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "determinism",
+      "raw_category": null,
+      "summary": "Bit-exact parity claim conflicts with acknowledged neighbor-order divergence",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#implementation-notes",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "configuration",
+      "raw_category": null,
+      "summary": "`initial_backend` is documented as operator-selectable but absent from the config surface",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#server-configuration",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Dispatcher design preserves protocol boundaries and dependency directions",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Performance/NFR handling restates the arch's tick-budget concern concretely",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#risk-assessment",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-17T12:43:38.219676",
+  "model": "z-ai/glm-5.3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 4016,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3",
+  "answering_models": [
+    "z-ai/glm-5.3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 46120,
+  "cached_tokens": 30144,
+  "cache_write_tokens": null,
+  "completion_tokens": 1857,
+  "reasoning_tokens": 698,
+  "duration_seconds": 16.955914958845824,
+  "cost_usd": 0.03837464,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,188 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The PR range is not tied to a pinned base snapshot",
+      "description": "`Envisioned State` says the adapter fetches the PR head and computes a merge-base range, but the typed PR record lists a base ref\u2014not a base SHA\u2014and the fetch step mentions only the head. A local base ref may be absent or stale, so the computed range need not match the host\u2019s current PR diff. The document also names \u201cbase moved since resolution\u201d as a failure mode without specifying how movement is detected. Record and fetch the resolved base SHA, compute against that immutable snapshot, and define what happens if the base or head changes before the review is posted.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned-State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PR scope flags have no defined precedence against the resolved PR diff",
+      "description": "The \u201cInterface parity\u201d goal promises that `sq review pr` accepts whatever `sq review code` accepts, with existing flags behaving as today. But `sq review code` has scope-changing `--diff` and `--files` options, while PR review is supposed to use the adapter-resolved PR range. If `--diff` replaces that range, the review can be posted to a PR whose diff it did not review; if it is rejected or ignored, the promised parity is false. Define which flags carry over and reject or explicitly define behavior for conflicting scope inputs.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design-Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The adapter contract does not cover idempotent comment updates",
+      "description": "The adapter operations enumerate reading review threads and posting a comment, but the posting design requires finding and updating Squadron\u2019s exact prior summary comment. Review threads are not necessarily the PR\u2019s general comments, and \u201cpost a comment\u201d alone does not provide a way to enumerate and update a marked comment. Add those operations to the protocol, or define another reliable update mechanism; relying on \u201cedit last\u201d behavior risks editing an unrelated comment or stacking duplicates.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Model-generated PR prose cannot enforce the stated traceability rule",
+      "description": "The document requires that PR descriptions assert nothing unsupported by their inputs, but `sq pr create` delegates sections such as \u201cwhy,\u201d \u201chow it was verified,\u201d and \u201cknown gaps\u201d to a one-shot model call. Deterministic assembly of commit lists and provenance does not constrain those generated claims. Specify an enforceable approach\u2014such as structured claims tied to named input evidence with validation, or deterministic \u201cunknown/not supplied\u201d sections\u2014and what happens when the model returns unsupported or unverifiable content.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PR persistence is described as generic before the current save path is generic",
+      "description": "The document says the CLI save path already accepts a generic target, but in the current implementation the generic `_resolve_save_outcome` helper ultimately calls `save_review_result`, which takes a `SliceInfo` and generates slice-indexed filenames and frontmatter. `format_review_markdown` also emits slice fields, defaulting to `unknown`/`0` without slice data. The architecture says PR persistence will avoid a fabricated slice record, but does not define the replacement target\u2019s naming and frontmatter contract or how existing consumers handle it. Specify the end-to-end persistence change rather than treating the CLI boundary as already target-generic.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scratch-worktree isolation has unresolved lifecycle and concurrency behavior",
+      "description": "Tool-enabled reviews depend on a scratch worktree for the PR head, but the document leaves concurrency and cleanup \u201cslice-level questions.\u201d Without a per-invocation worktree identity and defined cleanup/recovery behavior, concurrent reviews can collide, and interruption or process failure can leave stale worktrees and repository metadata behind. Specify safe creation, teardown, and stale-worktree handling; these are necessary to uphold the stated isolation guarantee.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The doctor requirement conflicts with the existing pure-check boundary unless placement is defined",
+      "description": "The architecture requires `sq doctor` to check `gh` authentication and host reachability. The existing `doctor_checks` layer is explicitly designed for pure checks with no subprocesses or network calls. Implementing the new checks there would break that boundary; doing the checks in the command layer instead needs a defined handoff, timeout, and optional-integration failure policy. Specify where these checks run and ensure a transient network outage does not make routine local diagnostics hang or misreport the installation as broken.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The PR range is not tied to a pinned base snapshot",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned-State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "PR scope flags have no defined precedence against the resolved PR diff",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design-Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The adapter contract does not cover idempotent comment updates",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Model-generated PR prose cannot enforce the stated traceability rule",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "PR persistence is described as generic before the current save path is generic",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural-Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Scratch-worktree isolation has unresolved lifecycle and concurrency behavior",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The doctor requirement conflicts with the existing pure-check boundary unless placement is defined",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical-Considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-17T12:35:43.068997",
+  "model": "openai/gpt-6-luna",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 11022,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "openai/gpt-6-luna",
+  "answering_models": [
+    "openai/gpt-6-luna"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 271124,
+  "cached_tokens": 190890,
+  "cache_write_tokens": null,
+  "completion_tokens": 12074,
+  "reasoning_tokens": 10342,
+  "duration_seconds": 123.77081970917061,
+  "cost_usd": 0.0159693,
+  "cost_basis": "alias_pricing"
+}

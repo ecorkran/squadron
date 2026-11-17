@@ -1,0 +1,78 @@
+{
+ "case": "context-forge-260-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Dependencies: \"cf releases that select the brownfield profile require at least v0.22.2\", while the Amendment states \"`cf build` is pure again: no detection, no state writes, no prompt swap\" and Technical Considerations says `cf build` \"no longer selects the `brownfield-adoption` profile\". The same stale material sits in the Responsibility table row (b) (\"plus squadron 361's provenance block\"), Current State (\"The capability probe does not exist yet\") and Technical Considerations (probe contract kept \"for history\"). **VALID**: self-contradiction (the Dependencies line is the cleanest instance; the others are labeled history). Needs: doc alone. **Raised by the original review (F001)**; control for claude-sonnet-5-5.",
+   "hits": {
+    "r01": [
+     0,
+     1,
+     14
+    ],
+    "r02": [
+     10,
+     11
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [
+     5,
+     8
+    ],
+    "r05": [
+     3,
+     6
+    ],
+    "r06": [
+     0,
+     1
+    ],
+    "r07": [],
+    "r08": [
+     12
+    ],
+    "r09": [
+     0
+    ],
+    "r10": [
+     2,
+     3,
+     9
+    ],
+    "r11": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Responsibility table row (c): \"CF writes the architecture doc on both paths\", while the amendment and Design Goals make squadron the only adoption path with no CF-only fallback. The amendment says rows (a), (b) and (g) changed; (c) was not updated. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     12
+    ],
+    "r02": [],
+    "r03": [
+     3
+    ],
+    "r04": [],
+    "r05": [],
+    "r06": [],
+    "r07": [],
+    "r08": [
+     2
+    ],
+    "r09": [
+     0
+    ],
+    "r10": [],
+    "r11": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "Borderline: F1 counted broadly (any finding on amendment-vs-stale-text contradiction, Dependencies line, Current State or for-history blocks); weakest are r01 0, r02 11, r05 6, r10 9, r02 10 (stale text but not the Dependencies line itself). F2 hits all explicitly quote row (c) \"both paths\"."
+}

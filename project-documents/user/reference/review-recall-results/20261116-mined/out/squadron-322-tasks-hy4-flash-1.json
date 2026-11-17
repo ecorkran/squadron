@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Runtime-drawn-model limitation has no implementing or test task",
+      "description": "The design states a Functional success criterion: the runtime-drawn-model limitation must be stated \"where the recommendation is produced\" \u2014 specifically, \"Where a step draws its model at runtime (a 180 pool), the note states that the threshold cannot track the drawn model \u2014 the recommendation does not apply to that step\" (slice line 201). T9's `model_dimension_note` spec (line 147) and T10's assertion (line 161) cover only \"this template paired with this model / choose model and threshold together at config time.\" No task anywhere mentions runtime-drawn models or the 180 pool (a grep across the task file returns only an unrelated \"drawn\" at line 267). The criterion has no corresponding task. Add the runtime caveat to the `model_dimension_note` spec in T9 and assert its presence in T10/T16.",
+      "file_ref": null,
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No result-discovery surface for unsampled results; T13 fallback contradicts the non-empty-offers guarantee",
+      "description": "T13 assumes \"reuse 320's existing result-discovery surface,\" but no such surface exists: `capture.resolve_target` resolves one review by a specific index/path, and `report.py` only re-reads review files already referenced by stored samples (`result_ref.relative_review_path`); there is no function that enumerates persisted judge results to find ones with no `SampleVerdict`. T13's fallback \u2014 \"scope this task to the store-recorded samples only\" \u2014 can only ever yield already-sampled results, so `select_residual_offers` could never return the non-empty set that T13's Success line, T14's non-empty guarantee, T16's \"lists at least one offer,\" and walkthrough step 6 require. The core functional criterion \"agreement data does not freeze\" is unachievable under the stated fallback. The task must specify a concrete discovery approach (e.g., enumerating the review directory and deriving `JudgeConfigId` via `derive_judge_config_id`, with the design/PM updated to own that new surface) rather than pointing at a nonexistent one.",
+      "file_ref": null,
+      "category": "dependency-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`classify_direction` precedence is self-contradictory between T7 and T8",
+      "description": "T7 lists a numbered precedence where step 1 is `n < floor \u2192 INSUFFICIENT_EVIDENCE` and step 4 is `match_rate <= tighten_rate \u2192 TIGHTEN`. Its own parenthetical then insists a below-floor, low-match-rate cell must reach `TIGHTEN` and \"not stop at INSUFFICIENT_EVIDENCE,\" and T8 line 134 makes that a hard test assertion. As literally written, an early return at step 1 makes step 4 unreachable for exactly the below-floor case, so a junior cannot implement both. The order must be stated unambiguously (evaluate the TIGHTEN condition before applying the floor gate, or gate only the loosening path on the floor), consistent with the design's \"tightening is not floor-gated.\"",
+      "file_ref": null,
+      "category": "task-specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:116-120"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed judge-block failure mode has no task/test; coverage claim is inaccurate",
+      "description": "The Coverage Check claims \"malformed judge block ... exercised in T8,\" but T8's test list (lines 130-137) contains no malformed-judge case, and neither T7's `read_current_thresholds` spec nor any other task implements the design's Failure-Modes row for it (\"non-numeric floor \u2192 fall back ... flag the target; WARNING naming the template\"). Additionally, `resolve_thresholds` (src/squadron/pipeline/actions/judge.py:41-57) does `float(pass_floor)` with no catch, so a non-numeric floor raises `ValueError` rather than the \"documented merge\" with a WARNING the design assumes. A junior would have neither an implementation target nor a test. Either add explicit malformed-judge handling to T7 plus a test in T8, or correct the design's assumption and the coverage claim together.",
+      "file_ref": null,
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A commit marker follows every task, including untested implementation half-steps",
+      "description": "All 17 tasks carry a plain `**Commit**:` line. Implementation tasks (T1, T3, T5, T7, T9, T11, T13, T15) commit before their paired test task exists, so several markers sit at untested points. This runs against the \"tested points, not after every task\" guidance, though it matches the project convention of committing at least once per task; worth deciding which convention governs here.",
+      "file_ref": null,
+      "category": "commit-placement",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "summary": "Runtime-drawn-model limitation has no implementing or test task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "dependency-gap",
+      "raw_category": null,
+      "summary": "No result-discovery surface for unsampled results; T13 fallback contradicts the non-empty-offers guarantee",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-specification",
+      "raw_category": null,
+      "summary": "`classify_direction` precedence is self-contradictory between T7 and T8",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:116-120",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "requirements-coverage",
+      "raw_category": null,
+      "summary": "Malformed judge-block failure mode has no task/test; coverage claim is inaccurate",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "commit-placement",
+      "raw_category": null,
+      "summary": "A commit marker follows every task, including untested implementation half-steps",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-17T08:00:05.204758",
+  "model": "tencent/hy4-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 292738,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "tencent/hy4-flash",
+  "answering_models": [
+    "tencent/hy4-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 632940,
+  "cached_tokens": 556032,
+  "cache_write_tokens": null,
+  "completion_tokens": 71775,
+  "reasoning_tokens": 69292,
+  "duration_seconds": 418.72371341707185,
+  "cost_usd": 0.013574328000000002,
+  "cost_basis": "alias_pricing"
+}

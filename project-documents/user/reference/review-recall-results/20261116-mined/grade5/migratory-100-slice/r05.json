@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Parent NFR (tens of thousands of agents) not restated; slice text sets a lower de facto target",
+   "description": "The parent architecture states the NFR \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" for the evaluation hot path (`100-arch.behavior-engine.md:33`), and the slice plan notes the engine's interfaces \"must not preclude\" scaling. This slice owns that hot path (tick, force accumulation, spatial query) but never restates the target. Instead it says the O(n\u00b2) brute force is \"acceptable for the hundreds-of-agents scale this slice targets\" \u2014 a reader implementing from this doc alone could design the neighbor-query loop and force accumulation around hundreds of agents. Restate the NFR explicitly: tens of thousands of agents is the architectural target; the brute-force implementation is a deliberate, slice-105-replaced interim bound, and the interface (vectorized hot path, `BulkForce`) must be built to that target from day one.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`BulkForce.neighbor_lists` semantics and per-tick neighbor list assembly are unspecified",
+   "description": "`BulkForce.__call__` receives `neighbor_lists: list[NDArray[np.intp]]`, but the doc never states whether this list is full-population length (indexed by agent id) or active-only, nor whether the tick queries neighbors for all N agents or only active ones (Data Flow step 3 says \"For each *active* agent\"). The same ambiguity applies to `profiles: list[BehavioralProfile]`. This is the exact contract slices 101\u2013104 will implement forces against (\"Each archetype slice registers new forces\"), and getting it wrong means forces index the wrong neighbors when `active_indices` is a subset. Specify: `neighbor_lists[i]` corresponds to agent `i` for all N agents (or explicitly active-only with a mapping rule), and state how the tick builds it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:145"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tick accepts only `list[BulkForce]`, contradicting the per-agent `Force` path it claims to support",
+   "description": "The signature is `forces: list[BulkForce]`, yet line 152 says \"The tick loop prefers the bulk variant when available\" (implying a per-agent fallback exists), Data Flow step 4 describes forces as returning a per-agent force vector, and Technical Requirements require \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths\" \u2014 but the per-agent `Force` protocol has no entry point through `tick()`. Either the signature should accept `list[Force | BulkForce]`, or the per-agent `Force` protocol should be cut from this slice and deferred to a slice that has a consumer (it is currently exercised only by calling forces directly in tests). The lighter option \u2014 one protocol, `BulkForce`, with test doubles that conform to it \u2014 meets this slice's stated need and removes a redundant abstraction.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:186"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tick return contract contradicts the slice's own scope and the parent's stated I/O",
+   "description": "The Included scope says tick will \"\u2026integrate (semi-implicit Euler), **return updated state**\" (line 39), but the signature is `-> None` with in-place mutation (confirmed by \"state: AgentState arrays, mutated in place\"). The parent architecture's envisioned tick \"Returns the updated state array\" and describes the engine as \"feed in state, get back state\" (`100-arch.behavior-engine.md:68`). In-place mutation is a defensible choice for a foundation slice, but the doc must pick one contract and apply it consistently across scope, signature, Data Flow step 6, and success criteria \u2014 downstream slices and the world server will call this interface as written.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:190"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`accelerations` array is defined but has no writer or reader",
+   "description": "`accelerations` (N\u00d72 float64) is listed in scope (line 35) and in `AgentState`'s array access, but nothing in the document uses it: integration is `velocity += force * dt` (line 207), which treats force as acceleration directly \u2014 no mass is defined, no force path returns or writes to `accelerations`, and it appears in no success criterion or data-flow step. This is state nothing reads or writes yet. Either delete it from this slice (add it when a force model needs it), or specify the F=ma relationship that populates it. Related: `profiles` appears both as a per-tick `tick()` argument and inside `AgentState.create(n=\u2026, profiles=[\u2026])` in the verification walkthrough \u2014 clarify whether profile ownership lives in state or the call, so consumers don't build against both.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Environmental context has no slot in the tick/force signatures",
+   "description": "The parent architecture's envisioned tick \"Receives the current agent state array, **environmental context**, and an optional active-agent subset\" and states the \"Environment as input surface\" principle. This slice omits environment entirely \u2014 correct, since no slice in the plan requires it and the Environment Layer initiative doesn't exist yet. However, the doc also declares tick/force contracts as frozen (\"Behavioral slices add forces; they don't modify the tick loop\"). A one-line note that environmental context will be added as a new parameter at a designated point (before those contracts are declared stable) would prevent the retrofit problem the doc itself argues against for `active_indices`.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:177"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Indented heading renders as a code block",
+   "description": "The `### Integration: Semi-Implicit Euler` heading and its content are indented four spaces (lines 205\u2013215), so they render as an indented code block rather than a section heading \u2014 the section disappears from the document outline and the pseudo-code loses its fence. Unindent to match the surrounding structure.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205"
+  }
+ ]
+}

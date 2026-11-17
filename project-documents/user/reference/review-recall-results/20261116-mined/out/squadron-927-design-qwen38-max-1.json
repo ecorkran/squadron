@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope matches the parent slice plan entry exactly, including delegated decisions",
+      "description": "The plan entry (900-slices, item 25) assigns three parts and explicitly delegates choices to design: \"design picks the minimum that lets a gate decide\" (Part A field shape), \"Design picks between forcing CONCERNS with a synthetic finding and failing the run\" (Part B), and \"Design must decide what counts as 'differs'\" (Part C). The design resolves each: D1/D2 pick a single `diffTruncated` boolean plus counts in header/JSON; D4/D5 pick the CONCERNS cap with a reasoned rejection of run failure; D9 defines the substitution rule. Exclusions match: defaults and #114 are the plan's own \"not in scope,\" and diff-ordering/`--stat` \u2192 #137 and file-body truncation \u2192 #138 are recorded in the plan entry's design-note line, so deferring them is plan-sanctioned, not dropped scope. The judge template exclusion (`round_diff` rendered by its builder, never through `_truncate`) is verified against the template set \u2014 only `code.yaml` declares a `diff` input.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration points and dependency directions verified against current code",
+      "description": "Claims the design makes about existing code held up: `VerdictSource` exists with STATED/DERIVED and its docstring's \"closed vocabulary\" concern is about reason strings, so adding IMPOSED is the low-risk reading (D5); `to_dict()` already emits `verdictSource`, so `\"imposed\"` rides for free; the pipeline `ReviewAction` maps `result.verdict.value` into `ActionResult.verdict` for non-judge templates, so a cap applied inside `run_review_with_profile` propagates to checkpoints and loop `until:` without a second code path, as the design's \"parity is structural\" claim states; `claude-agent-sdk>=0.2.152` is in pyproject.toml, satisfying the stated SDK prerequisite even though the 920 plan entry's status field is stale; `_truncate` does compare `len(content)` on a `str`, making D1's characters-not-bytes decision correct. The `aiModel` meaning change is disclosed in Provides-to-Other-Slices rather than hidden, and the plan entry itself directs it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D6's unconditional fallback notice asserts false text for derived-verdict-with-findings artifacts",
+      "description": "D6 fixes a real interaction: with a synthetic finding prepended, `findings` is non-empty, so the current `if result.findings / elif result.fallback_used` chain in `format_review_markdown` (persistence.py) would skip the \"Findings Not Parsed\" section for a capped degraded PASS. But D6's fix \u2014 render the notice \"whenever `fallback_used` is set, after any findings\" \u2014 assumes `fallback_used` has one meaning. The parser sets it in two distinct branches (parsers.py:992 and :1025), and `models.py` explicitly documents that one of them \"sets fallback_used=True for a verdict that was genuinely STATED\" while the verdict-recovery branch derives a lost verdict *from parsed findings*. For that derived-with-findings shape, D6 would append a section whose fixed reason string says \"A verdict of X was parsed, but no findings could be extracted\" \u2014 both halves false there (the verdict was derived, the findings were extracted), in an artifact where findings render normally above it. This slice exists to make artifacts state truthfully what happened, so a degradation notice that misstates the degradation undercuts it. It also interacts with Part B precisely: a derived PASS (all-PASS findings) over a truncated, tool-less diff gets capped, gains the synthetic finding, and then gains the inaccurate notice. Fix options: key the notice on the specific shape (findings empty vs. present), or parameterize the reason text per shape. SC7 covers only \"PASS with fallback_used=True that gets capped\" and should add the derived-with-findings case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d6--a-synthetic-finding-must-not-hide-a-degraded-parse"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No new I/O paths; provider silence is handled explicitly rather than defaulted",
+      "description": "The slice adds no new network or subprocess paths \u2014 it reads fields off payloads the existing provider streams already deliver \u2014 so the failure-mode bar applies to degradation of existing paths. Those are enumerated with explicit handling: `<synthetic>` placeholders and subagent messages skipped (D8), empty `chunk.model` accumulation degrading to \"not reported\" with a digest line rather than a fabricated id (D11), Codex's no-report case stated in the artifact without a WARNING, and multi-model runs disclosed in the digest with a WARNING (D12). The hand-built-result convention (`None` vs `[]`, `is None` never `or 0`) matches the existing telemetry precedent in `ReviewResult` and the Run Digest.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d11--not-reported-keep-the-requested-id-say-so-in-the-artifact"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope matches the parent slice plan entry exactly, including delegated decisions",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Integration points and dependency directions verified against current code",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D6's unconditional fallback notice asserts false text for derived-verdict-with-findings artifacts",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d6--a-synthetic-finding-must-not-hide-a-degraded-parse",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No new I/O paths; provider silence is handled explicitly rather than defaulted",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d11--not-reported-keep-the-requested-id-say-so-in-the-artifact",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-17T13:27:38.445941",
+  "model": "qwen/qwen3.8-max-0902",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 102465,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "qwen/qwen3.8-max-0902",
+  "answering_models": [
+    "qwen/qwen3.8-max-0902"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1104712,
+  "cached_tokens": 920064,
+  "cache_write_tokens": null,
+  "completion_tokens": 27229,
+  "reasoning_tokens": 24148,
+  "duration_seconds": 708.0202703750692,
+  "cost_usd": 0.7626860000000001,
+  "cost_basis": "alias_pricing"
+}

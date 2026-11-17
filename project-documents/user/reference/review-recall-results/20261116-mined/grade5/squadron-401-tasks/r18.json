@@ -1,0 +1,61 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" is false: `PythonAdapter.metrics` narrowing breaks an existing assertion",
+   "description": "Task 2 adds four `SnapshotMetric` members and replaces `PythonAdapter.metrics = frozenset(SnapshotMetric)` (`src/squadron/metrology/snapshot/python_adapter.py`) with an explicit four-metric set. `tests/metrology/snapshot/test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`, so that test fails from Task 2 onward \u2014 contradicting Task 2's success criterion (\"the full `tests/metrology/` suite passes unchanged\") and leaving the suite red until Task 25 restores the full set. No task owns that edit: Task 25 says only \"keep it written out explicitly\" and lists no test change. Task 2 should either keep `frozenset(SnapshotMetric)` semantics (via an explicit literal set compared against the enum) or explicitly own the edit to `test_python_length.py:60` (assert the four-metric set in Task 2, the full set again in Task 25).",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The Python Success Criterion 3 fixture expectation (6) contradicts D2's counting rules",
+   "description": "Task 4 requires \"the Success Criterion 3 fixture (`if`, `elif`, `and`, a comprehension `if`, an `except`) scores 6\", and Task 4/Task 3 restate D2's rule that \"a comprehension adds 1 per `for` \u2026 plus 1 per `if` in it\". Under those rules the listed fixture has six decision points \u2014 `if`(1), `elif`(1 \u2014 a second `ast.If` node), `and`(1), the comprehension's `for`(1), the comprehension's `if`(1), `except`(1) \u2014 so it scores 7, not 6. The value 6 is only reachable with `if`/`else` instead of `elif` (5 decision points), which is also consistent with the TypeScript fixture in Task 6 (`if`+`??`+ternary+2 cases = 5 \u2192 6). Whichever way it is resolved, an implementer following Task 3's rules will produce 7 and the Task 4 assertion will fail, or the implementer will weaken the counting rule to hit 6. The fixture source and its expected score must be pinned before Task 4.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 10 omits D3's \"duplicated non-blank lines\" rule, leaving the counted unit undefined",
+   "description": "D3 defines `per_file` for `duplicated_lines` as \"duplicated non-blank lines, only for files with a non-zero count, as lint does\", and notes that the file-length total over the same files is the denominator. Task 10 only says \"`per_file` holds the count of distinct duplicated lines\". Because the token window drops comments and layout but not blank lines, a duplicated block spanning blank lines would count blank lines as duplicated under Task 10's wording, inflating the metric relative to the file-length denominator. Task 10 should state that only non-blank lines are counted and that the count is per distinct line.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No task asserts the duplication (or complexity) `counting` text states its definition",
+   "description": "Success Criterion 1 requires that each new measurement \"has a `counting` text giving its definition (D2, D3)\". The coverage `counting` text is asserted (Task 24: \"the Istanbul fixture's `counting` states the provider limit\"), but no task asserts the duplication `counting` text (window size, exact token match / type-1, comments and layout dropped, the ceiling \u2014 all listed in Task 10's implementation bullet) or the complexity `counting` text content. Task 9 only asserts that the two counting texts \"differ\", which passes for any two distinct strings. Task 11 should assert the duplication counting text names the window size and the exact-match rule, and Task 9 should assert the complexity counting text names the decision-point set.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Success Criterion 10's \"its other metrics are unchanged\" has no corresponding assertion",
+   "description": "SC 10 requires that a language over `DUPLICATION_MAX_TOKENS` gets `duplicated_lines` as `tool_failed` \"and its other metrics are unchanged\". Task 11 tests the ceiling at the `measure_duplication` module level, where no other metric is in scope, so the second clause is unverified. A one-line assertion in Task 15 (TypeScript) or Task 13 (Python) that file/function length are still present when duplication fails would close it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The \"module-level code isn't counted\" note is specified for Python only",
+   "description": "D2 states the rule generally (\"Module-level code isn't in any function, so it isn't counted. The `counting` text says so\"), but Task 8 attaches that sentence only to the Python complexity identity; the TypeScript identity's `counting` comes from Task 5's constant-derived text with no mention of it. Add the same clause to the TypeScript counting text in Task 8.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 16's \"key name string appears once\" is unachievable alongside the CONFIG_KEYS entry",
+   "description": "Task 16 requires the key name to appear \"once in source, in `coverage.py`, apart from `CONFIG_KEYS`\", while also requiring a `metrology.coverage_report` entry in `CONFIG_KEYS`. The existing convention (`metrology.max_file_lines` at `src/squadron/config/keys.py:237`, with `KEY_MAX_FILE_LINES` in `src/squadron/metrology/snapshot/preflight.py:26`) spells the literal twice in `keys.py` (dict key and `name=`). `keys.py` also cannot import the constant from `snapshot/coverage.py` without a cycle (`keys` \u2192 `coverage` \u2192 `config.manager` \u2192 `keys`). Relax the criterion to \"the key constant lives in `coverage.py`; `CONFIG_KEYS` spells the literal, as 400's keys do\".",
+   "location": "src/squadron/config/keys.py:237"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 10 is the one oversized unit",
+   "description": "At Effort 4, Task 10 carries the tokenizer contract, the id/array storage, the rolling hash, the collision-confirmation step, the token ceiling and its `tool_failed` path, `MemoryError` handling, the per-file line marking and the `counting` text \u2014 against a ~300-line module budget. Splitting it into (a) window index + ceiling and (b) line marking + per-file assembly would keep each unit under the line budget and make Task 11's test list map one-to-one onto the two units.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

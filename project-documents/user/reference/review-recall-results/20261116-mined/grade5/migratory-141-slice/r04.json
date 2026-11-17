@@ -1,0 +1,33 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-force timing \u2014 assigned to this slice by the plan \u2014 is deferred to slice 142",
+   "description": "The parent plan's entry for 141 explicitly scopes \"per-tick timings broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration).\" The design makes `force_total` a single aggregate and pushes per-force resolution to slice 142. Slice 142's own plan entry only calls for implementing and benchmarking a cohesion `@ti.kernel` \u2014 it does not assign building per-force instrumentation. Dropping scope assigned to this slice leaves 142 to either build the instrumentation itself or benchmark without the resolution its design says it needs. Either keep per-force breakdown here (even as an optional field populated by the NumPy backend) or get the scope formally moved to 142.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Workload schema example uses 3D coordinates while the engine is 2D",
+   "description": "The authoritative `mid-flock` YAML example uses `world_size: [200.0, 200.0, 200.0]` and 3-element `cluster_centers`, but the engine is 2D (`DIMS = 2` in `src/migratory/__init__.py`) and `AgentState` allocates `(n, DIMS)` arrays. The task breakdown for this same slice (T23\u2013T25) already uses 2-element vectors (`[400.0, 400.0]`), confirming the design example is stale. Since workload YAML is the cross-slice contract future slices will copy, a schema example that cannot load against the engine is a real integration defect. Correct the example (and the schema prose) to 2D, or state the dimensionality rule explicitly.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:360-369"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Integration-point descriptions reference engine symbols that do not exist",
+   "description": "The design claims profile names \"resolve ... to the existing `BehavioralProfile` constructors used in `config/default.yaml`\" and that \"the harness does not invent new profiles.\" But `config/default.yaml` defines only one profile (`\"default\"`); there are no `flocker`/`leader` presets, so the harness necessarily invents them. Likewise, force names are said to \"resolve to module-level singleton instances ... (e.g. `flocking.cohesion_force`),\" yet the engine defines force *classes* (`CohesionForce`, etc.) with no such module-level singletons. These are hidden dependencies: the design points consumers at symbols that aren't there, while leaving the actual profile values and force wiring unspecified. State plainly that the bench owns a small local registry of concrete `BehavioralProfile`/`BulkForce` instances and record their values, so downstream slices have a real contract to rely on.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:391-400"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Restated NFR value from slice 140 is wrong (50 \u00b5s vs 10 \u00b5s)",
+   "description": "The design cites slice 140's micro-benchmark as \"`from_numpy_state` < 50 \u00b5s.\" Slice 140's actual Performance NFR and success criterion are **< 0.01 ms (10 \u00b5s)** at N=3,500 \u2014 a 5\u00d7 tighter target. Misstating a prerequisite slice's performance contract in the design is misleading and could lead a future reader to accept a materially slower construction. Correct the figure to match slice 140.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:106-110"
+  }
+ ]
+}
