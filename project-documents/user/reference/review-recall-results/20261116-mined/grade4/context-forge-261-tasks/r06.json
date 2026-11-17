@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Performance NFR intentionally covered by cap tests, not a load test",
+   "description": "D2's sub-second detection target is bounded by the cap assertions in Task 3T (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`) rather than timing tests, and the design explicitly decided \"tests assert the caps, not timings.\" The task file also records that `tests/load/` is a Python-repo rule inapplicable to this TypeScript repo. No load-test or CI-gating task is therefore required; the rationale is documented in the breakdown itself.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 12 is at the upper bound of single-task size but stays coherent",
+   "description": "Thirteen fixtures in one task (effort 3) is large, but all cases share one helper, one guide fixture, and one pipeline invocation pattern, and each expectation is enumerated precisely enough for a junior implementer. Splitting it (e.g. greenfield/planned vs. brownfield/override/edge groups) would be defensible but is not required \u2014 the slice's own Success Criteria list is what dictates the count.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-247"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 7's missing-input error is a small principled addition beyond the design text",
+   "description": "The design does not state that `decideOutcome` throws on a missing input the outcome order needs, but the task adds it as a programming error rather than a silent default. This is consistent with the project's \"never use silent fallback values\" principle and costs one test case; not scope creep.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:152-157"
+  }
+ ]
+}

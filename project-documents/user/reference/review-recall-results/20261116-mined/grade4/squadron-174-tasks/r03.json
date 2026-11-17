@@ -1,0 +1,12 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 32 has no commit marker; its work folds into Task 35's commit",
+   "description": "Task 32 (StateManager.scan_runs + report-file pattern, with its own inline tests) is a tested, working point but carries no `**Commit**:` marker. Its changes are bundled into Task 35's commit (`feat: add plan_prune selection and protection`). This is acceptable per the commit-marker guidance (markers are not required after every task, and a file with none is acceptable), and the bundle is still a coherent, tested point. No action required; noted for completeness.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  }
+ ]
+}

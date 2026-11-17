@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-agent spatial query and ragged neighbor lists put a Python-level loop in the inherited hot path",
+   "description": "`BulkForce.__call__` takes `neighbor_lists: list[NDArray[np.intp]]` (lines 141-152) and `SpatialQuery` exposes only `query_radius(position, radius)` for one agent at a time (lines 159-173). Building `neighbor_lists` therefore requires one Python-level call per active agent plus one small allocation per agent inside `tick` \u2014 the loop the slice's own Technical Requirement scopes out (\"No Python-level per-agent loops in the hot path\", line 246, explicitly limited to *force accumulation and integration*, leaving the neighbor phase unconstrained). This runs against the architecture's \"Efficient large-scale evaluation\" goal (\"the hot loop must be structured for vectorized computation over arrays of agent state, not object-by-object iteration\") and its GPU-compatibility requirement that the force interface use \"bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop\" (100-arch.behavior-engine.md, \"GPU compute path for force accumulation\"). Slice 105 only replaces the index behind this same per-agent interface, so the loop and the ragged list are inherited by 105 and by every force slice. Either give `SpatialQuery` a bulk/vectorized query variant (e.g. `query_radius_bulk(positions, radii, active_indices)` returning CSR-style flattened indices + offsets) or state explicitly that the bulk path is deferred and where it will be introduced.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:141-173"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The architecture's scale NFR is not restated, and the only quantitative statement contradicts it",
+   "description": "The parent architecture states the performance target for this path: \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process\" (100-arch.behavior-engine.md, Design Goals \u2192 Efficient large-scale evaluation). The slice touches exactly that path (tick loop + neighbor queries) but never restates a target or a tick-time budget; the single quantitative statement is \"acceptable for the hundreds-of-agents scale this slice targets\" (line 173), two orders of magnitude below the architecture goal. Deferring spatial-index optimization to slice 105 is legitimate and the plan's scaling note confirms the engine's contribution is interface-level, but the design should state the deferral and the constraint it must preserve (the interface must not preclude the tens-of-thousands tier), so a reader can tell whether the architecture NFR is met or deferred and by whom.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Force protocol contract is contradictory for consuming slices (101\u2013104)",
+   "description": "`tick()` is typed `forces: list[BulkForce]` (line 186), yet the design states \"The tick loop prefers the bulk variant when available\" (line 152) and makes \"Placeholder forces exercise both the `Force` and `BulkForce` protocol paths\" a success criterion (line 248), while Integration Points tells slices 101\u2013104 that \"Each archetype slice registers new forces\" (line 223) without saying which protocol to implement. A `Force` implementation cannot be passed to the declared signature. Either narrow to `BulkForce` alone (and cut the per-agent protocol and `ConstantDriftSingle`, whose only stated purpose is to exercise the `Force` path), or declare the parameter as `list[Force | BulkForce]` and specify the per-agent fallback. As written, consumers cannot tell what to implement.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:186"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`accelerations` is declared state with no consumer",
+   "description": "`accelerations` (N\u00d72 float64) appears in the Included scope (line 35) and in `AgentState`'s array access (line 96), but it never appears in the Data Flow (lines 86-93) or in the integration formula (lines 205-215) \u2014 integration applies `force * dt` directly to velocity. The slice plan's state description lists only \"positions, velocities, profile indices using NumPy SoA layout\". As specified, this array is carried, resized on add/remove, and never read or written, and its semantics (per-tick scratch vs. persistent) are undefined. Cut it, or state the consumer that justifies it (e.g. a persistent acceleration buffer for a future Verlet integrator) and specify its lifecycle.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:35"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Environment input surface is unaddressed despite the no-retrofit claim",
+   "description": "The architecture lists \"Environment as input surface\" as a principle (the engine queries terrain, resources, threat zones, seasonal parameters through a read-only interface) and its Envisioned State has the tick receive \"environmental context\" alongside state and the active subset. The slice's `tick()` signature (lines 176-203) and the `Force`/`BulkForce` protocols carry no environment handle, and the Excluded list (lines 42-48) is silent on environment \u2014 it defers persistence, serialization and networking but never states where environment input enters. This matters because the slice claims its interfaces \"exist from day one so it doesn't need to be retrofitted\" (line 203), yet adding environmental context later would change both the tick signature and the force protocol that slices 104/106/107 will implement against. The remedy is a statement, not new scope: record explicitly that environment input is deferred to the Environment Layer initiative and note that it will require a tick/force signature change, so the stability claim is accurate.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:176-203"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Subset is accepted as an index array only, while the architecture allows a mask",
+   "description": "The architecture specifies the subset as \"index array or mask\"; the slice plan entry says \"active-agent mask/indices\"; the slice types it `NDArray[np.intp] | None`. A boolean mask is cheap to convert (`np.flatnonzero`), so impact is low, but a world server handing a mask would be rejected by the typed contract. I could not verify what the world server actually passes: `200-arch.world-server-foundation.md` (referenced from the slice plan's Scaling context) is not present in `project-documents/user/architecture/`, so this is unverified rather than a confirmed mismatch.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:186"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "No error contract for invalid tick/state inputs",
+   "description": "The project guidelines require explicit failure over silent fallback, but the design specifies no behavior for: a `profile_indices` value outside `range(len(profiles))`, an out-of-range or duplicated `active_indices`, or mismatched array lengths in `add_agent`/`remove_agent`. NumPy raises for the out-of-range cases, but duplicate indices in `active_indices` are silently absorbed by fancy-indexed assignment (the update applies once, not twice), and that is the kind of quiet behavior the guidelines call out. A sentence defining these as caller errors (with an explicit raise) is enough; there is no external I/O in this slice, so no timeout/disconnect-style failure enumeration applies.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#tick-function-signature"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The Integration section is indented and will not render as a heading",
+   "description": "Lines 205-215 (\"### Integration: Semi-Implicit Euler\" through the fancy-indexing sentence) are indented four spaces, so the heading and prose render as a preformatted block rather than a section. The content itself is correct and consistent with the Data Flow step 5 (lines 90-93); this is a formatting defect that also breaks heading-anchor navigation for downstream readers.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205"
+  }
+ ]
+}

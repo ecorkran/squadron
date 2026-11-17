@@ -1,0 +1,207 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All Functional Requirements covered by Task 4 and Task 4T",
+      "description": "Functional Requirements 1\u20137 each map to a specific bullet in Task 4T: PASS exit 0 on real designs, FAIL exit 1 with missing heading lines, doctype frontmatter message, ordered multi-file runs, exit 2 cases including \"valid file before missing one\" with the `cf guides update` naming, `--json` contract match, and worktree-aware template loading.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task4T"
+    },
+    {
+      "severity": "PASS",
+      "title": "Technical Requirements unit-test cases all enumerated in Task 2T",
+      "description": "Task 2T explicitly names every case the design's Technical Requirements require: case differences, extra whitespace, HTML comments, parentheticals, `{placeholder}` prefix, level mismatch, fenced code block exclusion, CRLF input, `#hashtag` non-heading, and template-order preservation in `missingHeadings`.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task2T"
+    },
+    {
+      "severity": "PASS",
+      "title": "Real-template and real-design tests present in Task 3T and Task 4T",
+      "description": "Task 3T loads the real template from `project-documents/ai-project-guide/project-guides/templates/slice-design.md` and asserts the required list is non-empty and includes `## Overview` and `### Verification Walkthrough`, exactly as the design requires. Task 4T runs the command against real `project-documents/user/slices/` designs including the 214 design.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task3T"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verification Walkthrough steps 1\u20136 mapped to Task 5",
+      "description": "Task 5 runs steps 1\u20135 of the design's Verification Walkthrough (PASS this design, FAIL broken copy parity, doctype check, usage-error exits, JSON output) and step 6 (parity sweep across all `*-slice.*.md` files). Any unexplained `DIFF` triggers a fix plus a test in the matching test task file.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task5"
+    },
+    {
+      "severity": "PASS",
+      "title": "Build/lint/full-test gate present",
+      "description": "Task 6 runs `pnpm -r build`, `pnpm lint` and `pnpm test`, plus the 300-line size check on new files and the \"validate.ts grew only by the register call\" check. This satisfies the Technical Requirements' \"Build, lint and the full test suite pass. New files stay under ~300 lines.\"",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task6"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers at working, tested points, plain lines not checkboxes",
+      "description": "Commits sit immediately after the test task that verifies the work: Task 2C after Task 2T, Task 3C after Task 3T, Task 4C after Task 4T. Task 5C and Task 6C are conditional (\"only if Task X changed files\"), which is appropriate. All are bare lines, not checkboxes.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task2C,3C,4C,5C,6C"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Integration Requirement \"guide can replace every reference\" is not a code task, and that is intentional",
+      "description": "The design's Technical Scope explicitly excludes guide-side edits, and the Context Summary notes \"After release (not a task here): send the ai-project-guide-old session the cf version and the exact command `cf validate design <path>`.\" The prerequisite (parity proven by Task 5's sweep) is met. No gap.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:Integration-Requirements"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No NFRs requiring load tests in this slice",
+      "description": "The slice is a CLI command that validates local markdown files; the design states no throughput, latency, or concurrency NFRs. No load test or CI-gating task is warranted, so none is missing.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:Success-Criteria"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All Functional Requirements covered by Task 4 and Task 4T",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task4T",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Technical Requirements unit-test cases all enumerated in Task 2T",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task2T",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Real-template and real-design tests present in Task 3T and Task 4T",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task3T",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Verification Walkthrough steps 1\u20136 mapped to Task 5",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task5",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Build/lint/full-test gate present",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task6",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers at working, tested points, plain lines not checkboxes",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:Task2C,3C,4C,5C,6C",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Integration Requirement \"guide can replace every reference\" is not a code task, and that is intentional",
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:Integration-Requirements",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No NFRs requiring load tests in this slice",
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:Success-Criteria",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T21:39:49.095881",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 18399,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 17772,
+  "cached_tokens": 3840,
+  "cache_write_tokens": null,
+  "completion_tokens": 5317,
+  "reasoning_tokens": 4727,
+  "duration_seconds": 86.261304249987,
+  "cost_usd": 0.010790399999999999,
+  "cost_basis": "alias_pricing"
+}

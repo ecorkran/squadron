@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Part D guard is placed on a function the success criterion's scenario never calls",
+      "description": "The success criterion is \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns; nothing is silently destroyed.\" T12 adds the archive-on-overwrite guard exclusively to `save_review_file` (`src/squadron/review/persistence.py:220`). But `sq review code <N>` does not use that function:\n\n- `src/squadron/cli/commands/review.py:746` calls `save_review_result(...)`.\n- `save_review_result` writes directly via `path.write_text(...)` at `src/squadron/review/persistence.py:294` \u2014 it never calls `save_review_file`.\n- `save_review_file` has exactly one production caller: `src/squadron/pipeline/actions/review.py:272`, and that call site is reached only in the `else` branch where `slice_info is None`. When `slice_info` is available (the ordinary `sq review code 305` case), the pipeline action also routes through `save_review_result` (`src/squadron/pipeline/actions/review.py:255`).\n\nNet effect: after T12/T13, re-running `sq review code 305` over an edited review still silently overwrites the hand-written content. The data-loss hazard the slice names in its Value section (\"re-running `sq review code <N>` destroys hand-written content in the review file with no warning\") and in Verification Walkthrough step 7 is not closed. T13's tests only exercise `save_review_file` directly, so they would pass while the criterion stays false.\n\nThe guard belongs in `save_review_result` (the function both the CLI and the slice-info pipeline branch actually call), with `save_review_file` either delegated to it or guarded in parallel. The task's own wording \"In `review/persistence.py`, before `save_review_file` writes to an existing `path`\" is the place the implementation lands, but that is the wrong target for the criterion.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:229"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Relocation leaves the review\u2192pipeline import that the design's F002 rule exists to eliminate",
+      "description": "The slice design states the rule the relocation exists to satisfy: \"Having `review/resolution.py` import `pipeline/actions/` internals would invert that and create a review \u2194 pipeline package-level cycle. So the context-free core *moves* into `review/addressed/` rather than being imported across the boundary.\" T1 moves `models.py` \"verbatim \u2014 no logic changes,\" but that file carries `from squadron.pipeline.models import ActionResult` (`src/squadron/pipeline/actions/findings_addressed/models.py:18`), used by `read_findings(result: ActionResult)`. After T1, `review/addressed/models.py` imports `squadron.pipeline.models` \u2014 a review\u2192pipeline import, in the module the design labels \"the context-free core.\"\n\nT3 compounds this: it moves `verification.py` into `review/addressed/` while `verify_outcomes` has a runtime (non-`TYPE_CHECKING`) `from squadron.pipeline.actions.findings_addressed.screens import RoundDiff` (`src/squadron/pipeline/actions/findings_addressed/verification.py:17`). T3 describes this as \"a cross-package import in the pipeline\u2192review direction,\" but the direction is the opposite: `review/addressed/verification.py` importing from `pipeline/...` is review\u2192pipeline. T3's own wording is directionally wrong, and a junior AI following it literally would reproduce the inversion the design forbids.\n\nNeither T1 nor T3 asks the implementer to make the relocated core genuinely context-free (e.g. move `RoundDiff` to `review/addressed/`, or drop the `ActionResult` type from the relocated reader). The design's own Cross-Slice Dependencies line \"each importing the moved core in the already-established direction\" is not satisfied by the tasks as written. This needs either a task to relocate `RoundDiff` and sever the `ActionResult` dependency, or an explicit design decision accepting the inversion \u2014 the current breakdown does neither, and T3 asserts the opposite of what the code will do.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success criterion 11 names two discovery surfaces; only one is tested",
+      "description": "The criterion reads: \"Metrology `discover_judge_results` **and review discovery** return no resolution artifacts (test against the real glob).\" T32 tests only `discover_judge_results` (`src/squadron/metrology/discovery.py:27`, glob `*-review.*`). The second named surface \u2014 \"review discovery\" \u2014 is `metrology.capture.resolve_target` (`src/squadron/metrology/capture.py:97`, glob `{index}-review.*`), which resolves a review by bare slice index and raises an ambiguity error listing candidates. It is a separate function with its own glob, and it is not exercised by T32.\n\nBoth are safe by construction today (the resolution filename `{index}-resolution.{type}.{name}-r{n}.md` contains no `-review.` substring), but the criterion explicitly calls for the real glob on both, and the second is the one that a same-index review-plus-resolution pair would interact with. T32 should add a `resolve_target` case asserting that a directory containing both `305-review.code.x.md` and `305-resolution.code.x-r1.md` resolves unambiguously to the review and does not list the resolution artifact as a candidate.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:319"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part A does not cover the pipeline action's second persistence branch or the JSON output path",
+      "description": "T10 states the pipeline path as \"`pipeline/actions/review.py` (the pipeline-action path): same resolution and same fallback behavior.\" That action has **two** persistence branches (`src/squadron/pipeline/actions/review.py:255` and `:272`): the first calls `save_review_result`, the second calls `format_review_markdown` and then `save_review_file` with pre-formatted content. Only the first can carry `reviewed_sha` through a new parameter; the second needs the stamp resolved into the `format_review_markdown` call before `save_review_file` receives the string. T10's wording does not distinguish them, so the second branch is a plausible omission.\n\nRelatedly, `save_review_result` has a JSON branch (`src/squadron/review/persistence.py:288`, reached by the CLI's `--json` flag on `review slice`/`arch`/`tasks`) that serializes `result.to_dict()` and never calls `format_review_markdown` \u2014 so it has no frontmatter to carry `reviewedSha`. The criterion says \"carries `reviewedSha:` in frontmatter,\" which a JSON artifact does not have, but neither T10 nor T11 says what the JSON path should do. A junior AI could plausibly add the key to the JSON dict, omit it, or fail to notice the branch exists. T10 should state both explicitly: which branch receives the stamp and that the JSON writer is out of scope for the frontmatter criterion.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:202"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T14's position after T12 inverts the design's stated sequence, mitigated by explicit gating language",
+      "description": "The design's Phase 5 note is unambiguous: \"the cf `archive/`-scanning verification in Decision 7 must appear as its own checklist task in the breakdown, **sequenced before Part D lands**.\" T14 is numbered after T12/T13 and self-describes as \"gates T12 in practice even though it is numbered after it.\" The mitigation is real \u2014 T12 carries an explicit \"Do not mark this task done until T14's verification outcome is known\" instruction and T14 repeats it \u2014 so this is not a functional gap. It is nonetheless an inversion of the design's stated sequence, and the simpler fix is to renumber T14 ahead of T12 so the checklist order matches the go/no-go the design asked for.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:281"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T3's direction claim is contradicted by the code it describes",
+      "description": "T3 says `verification.py`'s `RoundDiff` import \"stays as a cross-package import in the pipeline\u2192review direction.\" The file moves to `review/addressed/` and `screens.py` stays in `pipeline/actions/findings_addressed/`, so the import runs review\u2192pipeline. This is the same defect as the FAIL finding above, recorded separately here because the mislabeled direction is what would lead a junior AI to implement it without reconsidering the design rule. Correcting the label in T3 is a prerequisite to fixing the underlying placement.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:107"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage across both files is complete",
+      "description": "All thirteen success criteria trace to at least one task, and the criteria deferred from file 1 to file 2 are explicitly declared in file 1's frontmatter (`projectState`), Context Summary, and Handoff section:\n\n- Criterion 1 (`reviewedSha` from both paths) \u2192 T9, T10, T11 (with the branch-clarity caveat above).\n- Criterion 2 (`resolve` produces artifact; review byte-identical) \u2192 T34, which asserts byte-identity directly rather than inferring it.\n- Criterion 3 (empty diff \u2192 UNADDRESSED, zero judge calls) \u2192 T21, T22.\n- Criterion 4 (`--no-judge` \u2192 UNKNOWN) \u2192 T25, T26.\n- Criterion 5 (untouched-path claim \u2192 disputed) \u2192 T27, T28.\n- Criterion 6 (legacy fallback + `--since` override) \u2192 T19, T20.\n- Criterion 7 (re-review archives prior content) \u2192 T12, T13 \u2014 covered by task, but the target function is wrong (see FAIL finding above).\n- Criterion 8 (FAIL/CONCERNS with zero CONCERN+ \u2192 UNKNOWN) \u2192 T23, T24, correctly isolated in its own task with its own test.\n- Criterion 9 (judge failure / unreadable response / injection cap) \u2192 T25, T26.\n- Criterion 10 (failed archive copy aborts) \u2192 T12, T13, with the fail-closed ERROR path and byte-identity assertion spelled out.\n- Criterion 11 (discovery excludes resolutions) \u2192 T32 (second surface missing; see CONCERN above).\n- Criterion 12 (305 suite unchanged after relocation) \u2192 T2, T4, T6, T8, with the \"same count as before\" check and the \"no test needed rewriting\" instruction in T6.\n- Criterion 13 (second run writes `-r2`) \u2192 T31, T32, T34.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with discipline, commit markers, and task sizing are sound",
+      "description": "Every implementation task in file 1 is immediately followed by its test task (T1\u2192T2, T3\u2192T4, T5\u2192T6, T7\u2192T8, T9+T10\u2192T11, T12\u2192T13; T14 is a verification checkpoint, not an implementation task). File 2 continues the pattern without exception (T15\u2192T16 \u2026 T39, T40 is closeout). Commit markers are plain lines on working, tested points \u2014 six in file 1 at T2, T4, T6, T8, T11, T13 and a dense but justified series in file 2 \u2014 not after every task and not only at the end. Task sizes are appropriate for a junior AI: the largest (T25, effort 3/5) names four distinct behaviors and one explicit \"flag to the Project Manager, do not silently add scope\" boundary; T5 similarly gives an exact function signature, a precise body boundary, and the two symbols that must stay behind. The two-file split is proportional to the slice's three-part dependency structure (Part 0 infrastructure \u2192 Parts B\u2013C consumers), and file 1's Context Summary explains why file 2 cannot start early.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Part D guard is placed on a function the success criterion's scenario never calls",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:229",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Relocation leaves the review\u2192pipeline import that the design's F002 rule exists to eliminate",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:63",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Success criterion 11 names two discovery surfaces; only one is tested",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:319",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Part A does not cover the pipeline action's second persistence branch or the JSON output path",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:202",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T14's position after T12 inverts the design's stated sequence, mitigated by explicit gating language",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:281",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "T3's direction claim is contradicted by the code it describes",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:107",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success criteria coverage across both files is complete",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Test-with discipline, commit markers, and task sizing are sound",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-16T21:40:58.990519",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 22810,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 669254,
+  "cached_tokens": 532480,
+  "cache_write_tokens": null,
+  "completion_tokens": 13725,
+  "reasoning_tokens": 5859,
+  "duration_seconds": 243.14652108307928,
+  "cost_usd": 0.08945099999999999,
+  "cost_basis": "alias_pricing"
+}

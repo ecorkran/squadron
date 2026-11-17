@@ -1,0 +1,54 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Bounds sync-back uploads positions only, so reflect/soft velocity changes never reach the GPU",
+   "description": "`apply_bounds_policy()` is passed both `positions` and `velocities`, but the only sync-back path is `notify_positions_modified()` \u2192 `upload_positions()`. Assuming REFLECT and SOFT mutate the velocities they are handed, the GPU state keeps the pre-bounds velocity. A reflected agent would then head back out of bounds every tick and be re-clamped on the host, pinning it to the wall.\n\n- **Plan requirement unmet:** the plan entry assigns \"bounds policy (sync-back \u2026 for wrap/reflect/soft)\" to this slice; only WRAP is covered correctly.\n- **Not caught by the tests:** A4 checks only \"finite, in-bounds\" on downloaded arrays, and test 7 covers WRAP only.\n- **Fix:** sync velocities as well for REFLECT/SOFT (for example a single `notify_state_modified(positions, velocities)`), and add a reflect test asserting the velocity sign after the bounce.\n- **Doc mismatch:** the `step()` snippet at lines 185-191 omits the `notify_positions_modified()` call the prose describes.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Spawn/despawn sync is under-specified and conflicts with the dirty-positions mechanism",
+   "description": "The plan assigns \"spawn/despawn (re-upload changed agent state)\" to this slice. Four gaps leave it unmet:\n\n- **Source of truth:** on the GPU path nothing in the design writes tick results back to `entity_manager.state`. `sync_from_entity_manager()` would then re-upload stale CPU state, resetting every agent to its last-synced position on any spawn. The design must say whether results are written back each tick or how the sync merges new agents with live GPU state.\n- **Field capacity:** `setup_from_server()` sizes fields from `entity_manager.count` at startup. The design does not say how a larger count fits (pre-allocate to a maximum capacity, or reallocate). Line 382 itself notes a second `qd.init()` is undefined behaviour, so reallocation is not free.\n- **Stale pending upload:** with a non-OPEN policy, `_pending_positions` from the previous tick has the old count. `sync_from_entity_manager()` runs first, then `step()` uploads the stale array over the fresh state. The sync must clear the dirty flag.\n- **Change detection:** comparing counts misses a despawn plus spawn in the same tick. A mutation flag or version counter set by the spawn/despawn operations is more reliable, and avoids putting \"last tick\" bookkeeping on `EntityManager`.\n\nTest 6 only asserts \"does not raise\", which would pass with all four defects present.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:176-201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`_select_arch()` selects by OS, not by GPU detection, contradicting A7 and the plan",
+   "description": "The plan entry and A7 say \"if neither is detected it warns and falls back to `qd.cpu`\". The function returns `qd.cuda` for any Linux host and `qd.metal` for any Darwin host; the fallback fires only on other platforms.\n\n- **Consequence:** per line 382, a Linux host without a CUDA driver makes `qd.init()` raise and the server exit. Because `quadrants` is the default, every CUDA-less Linux box or CI runner fails to start on the default config.\n- **Fix:** either catch the specific init failure and retry on `qd.cpu` with the WARNING, or probe availability before selecting. Reword the log message, which currently claims \"No supported GPU detected\" on a path that never checks.\n- **Missing test:** A7 has no corresponding test in \u00a7Testing.\n- **Minor inconsistency:** line 252 says `arch` returns `\"cuda\"` or `\"metal\"`; line 224 includes `\"cpu\"`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tier 2 gate configuration is unspecified and the default may not meet it",
+   "description": "The NFR is correctly restated (\u226560 TPS at N=50k on CUDA, A6). The gate test does not state `subdivision_factor`, bounds policy or workload density.\n\n- **Default S=1:** the plan records 38 TPS at N=50k for slice 145, with the target reached only after slices 148 and 149 (149 used S=3). The design defaults to `subdivision_factor: 1`, so the default production config may miss the gate.\n- **Added transfers:** production adds per-tick velocity and profile-index downloads, plus a position upload on non-OPEN policies. Slice 145's design point was a single position download.\n- **Fix:** pin the gate's S, bounds policy and density, and either default S to the validated value or state that Tier 2 requires S=3.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:318-320"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Production-to-bench dependency is only partly removed",
+   "description": "Moving `GpuAgentState` to `migratory.gpu` is the right direction. But `GpuSimulationDriver.step()` also calls `build_spatial_hash`, `fused_force_integrate_kernel` and `TickResult.from_quadrants_fields`, and `_select_arch()` is \"updated from the bench backend version\". The design does not say where these live.\n\n- **Kernels:** if they remain under `bench/backends/`, `migratory_server` still imports from the bench harness, which is the hidden dependency line 383 claims to eliminate. State their module, and move them to `migratory.gpu` if needed.\n- **`_select_arch()`:** say whether it is shared (which changes bench behaviour, contrary to the out-of-scope statement) or a production-only copy.\n- **Self-contradiction:** the table lists `quadrants_fused_backend.py` as changed, then line 301 says it is not.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Test plan and walkthrough contradict the design",
+   "description": "- **Line 307:** \"All tests are CPU-only\" is followed by \"skip if GPU not available\" and \"tests run on Metal/CUDA\". State which substrate CI uses; `qd.cpu` would let tests 5-8 run everywhere.\n- **Process isolation:** line 382 requires subprocess isolation because a second `qd.init()` is undefined, but tests 5-8 each call `setup()` with no isolation strategy.\n- **Coverage of A4:** it claims all four bounds policies; only WRAP has a test.\n- **Stale walkthrough:** \"CPU default (no GPU)\" (lines 358-362) says removing the `compute:` block yields the CPU path, but the default is `quadrants`. Step 5 at line 351 says \"Restore `backend: cpu`\" for the same reason.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-362"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Precision and Metal claims diverge from the slice plan's record",
+   "description": "The design says f32 GPU fields were \"established in slices 143\u2013145\". The plan's substrate notes say slice 145 uses f64 `_ti` kernels on CUDA and lists \"Metal not targeted\" for 145. A2's golden-path demo is on Metal, so confirm the fused kernel actually runs there and state the precision per arch. Otherwise A2 rests on an unverified substrate.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+  }
+ ]
+}

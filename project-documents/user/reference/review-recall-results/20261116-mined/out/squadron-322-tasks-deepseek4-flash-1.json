@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success-criteria traceability, sequencing, and commit markers",
+      "description": "Every Functional, Technical and Integration criterion in the slice design maps to at least one task: hash-narrowing regression both directions \u2192 T1/T2 + T17 step 5; advisory-only/no-mutation \u2192 T9/T10, T15/T16, T17 step 4; floor refusal with floor stated \u2192 T7/T8; unversioned refusal \u2192 T7/T8; non-empty residual offers \u2192 T13/T14; version-scoped graduation \u2192 T11/T12, T17 step 7; graduate refusal + idempotence \u2192 T15/T16; surface-agnostic core (no Typer) \u2192 T16; strict pyright/ruff \u2192 T3, T17; `graduated_config` without store migration \u2192 T11. I verified the premises the tasks depend on: `_template_content_hash` does hash `\"judge\": template.judge` (identity.py:298-323), `JudgeThresholds` is a `@dataclass` in `pipeline/actions/judge.py`, `resolve_thresholds` exists, `metrology.min_evidence_n` is registered in `config/keys.py`, `tests/metrology/test_identity.py` exists but contains no hash tests (so \"extend\" is right), and 321's `AgreementReport`/`GroupKey`/`ExclusionSummary` are consumed unchanged with no task editing them. No task adds anything the design excludes (no automatic mutation, no new gating, no 300 write-path field). The design restates no NFR, so the absence of a `tests/load/` task and CI gating is correct, not a gap. `**Commit**:` markers are plain lines (never checkboxes), one per task at a working point, consistent with CLAUDE.md's \"commit at least once per task\".",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:275-289"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's direction-band precedence contradicts itself on the floor gate",
+      "description": "The numbered precedence list puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` at step 1 and `match_rate <= tighten_rate \u2192 TIGHTEN` at step 4, while the same bullet (line 119) and the following bullet (line 121) demand that \"a below-floor cell with a low match rate still surfaces as `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\". Evaluated in the stated order, step 1 fires first and step 4 is unreachable for any `n < floor`, so the listed precedence cannot produce the behavior the task, the design's Direction Bands table, and T8's regression test all require. The parenthetical on line 119 (\"only cases 1/2 above are ... checked first only for the loosening path\") does not resolve it \u2014 the list as written gates everything. T8's `n < floor` + low match rate assertion would catch a wrong implementation, but the implementation guidance itself should be stated unambiguously (e.g. evaluate the tightening band before the floor gate, or gate only the `GRADUATE` branch).",
+      "file_ref": null,
+      "category": "logic-error",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The malformed `judge:` block failure-mode row has no task, and the Coverage Check claims it does",
+      "description": "The Coverage Check asserts \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8)\", but T8's item list (lines 132-136) contains no malformed-threshold case. The slice design's Failure Modes table requires a row for it: handling \"fall back to `resolve_thresholds`' documented merge; flag the target\", signal \"WARNING naming the template\", test \"malformed judge block \u2192 flagged, not silently defaulted\". No task implements or tests that. It is not free: `resolve_thresholds` does `float(pass_floor)  # type: ignore[arg-type]` (judge.py:57-64), so a non-numeric `pass_floor` raises `ValueError` out of `read_current_thresholds`/`recommend_thresholds` \u2014 while T7's success line only promises `None`-on-unresolvable-template, \"never raises\". Either add the malformed-block case to T7/T8 (catch, WARN naming the template, mark `current` unresolvable) or drop the row from the design; as written the criterion is unmet.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13 rests on a 320 result-discovery surface that does not exist, and its fallback cannot satisfy the non-empty-offers criterion",
+      "description": "T13 instructs the implementer to \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk\". I searched `src/`: no such surface exists. `capture.resolve_target` resolves *one* review by path or by a known slice index (`capture.py:93-95`, `reviews_dir.glob(f\"{index}-review.*\")`); `report.py` only re-reads review paths already referenced by stored samples; `store.py` lists store records. Nothing enumerates persisted judge results. The prescribed fallback is not merely a reduced scope \u2014 it is unworkable: \"unsampled\" is defined as results with no `SampleVerdict.result_ref` pointing at them, so restricting the search to store-recorded samples makes the candidate set empty by construction and breaks the design's stated architecture commitment (\"a graduated config with unsampled results yields a non-empty offer set\") that T13's own success line and T14's first test assert. The same missing source makes T14's \"pruned review file ... skipped, counted\" case incoherent (a file that does not exist is never discovered, so it cannot be counted as pruned). Fix: authorize a bounded review-result discovery (a named function over `project-documents/user/reviews` that derives `JudgeConfigId` per file, plus a way to attribute a pruned candidate) rather than leaving a fallback that silently fails the criterion.",
+      "file_ref": null,
+      "category": "requirement-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`model_dimension_note` omits the runtime-drawn-model limitation the design requires at the point of output",
+      "description": "The design requires the note to carry two things (slice design lines 201 and 270): that the recommendation is bound to this template *paired with this model* (choosing model and threshold together at config time), **and** that where a step draws its model at runtime (a 180 pool) the threshold cannot track the drawn model \u2014 \"the recommendation does not apply to that step\". T9 (line 147) specifies only the first half, and no test in T10/T16 asserts the runtime-drawn-model clause; T16 only asserts the note is *present* in the text and `--json` output. As written, an implementation can satisfy every task and still leave the criterion's second half unstated, which is precisely the case the design says \"is what stops it being silently ignored at the moment of action\".",
+      "file_ref": null,
+      "category": "requirement-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Idempotent re-graduate has no specified write path, so \"one record, not two\" is not implementable from the task text",
+      "description": "T15 requires `graduate` to \"update its evidence snapshot in place (idempotent \u2014 one record, not two, log INFO)\" for an already-graduated identity, and T16 asserts the record count stays at 1. But T11 specifies `write_graduation(store, graduated) -> str` that \"returns a generated record id\" \u2014 i.e. it always mints a new id, which is a new file. `GraduatedConfig` carries no record id, `MetrologyStore` exposes no update/delete/rewrite API, and `_record_path` is private, so nothing in the breakdown says how the existing record is located-and-overwritten (e.g. `write_graduation(..., record_id=existing)`, or a store-level `rewrite_graduation`). A junior AI must improvise the API, which is the failure mode task breakdowns exist to prevent. Specify the mechanism in T11 (store method signature) so T15/T16's idempotence assertion has something to call.",
+      "file_ref": null,
+      "category": "requirement-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is borderline but acceptable; no split or cut is required",
+      "description": "17 tasks (8 implementation, 8 test, 1 validation) in a single file for a 3/5-effort slice is on the heavy side, but each task is small and each test task traces to test coverage the design explicitly enumerates (direction bands, floor/unversioned refusal, both hash-narrowing directions, exhausted/pruned/lapsed offers, graduate refusal/idempotence, no-mutation), so no test task is \"beyond what the success criteria need\". The file is not split, and no steps dictate implementation detail the design does not require. If trimming is wanted, T4 and T6 are the thinnest (round-trip and key-registration checks) and could fold into T3 and T5 respectively; nothing else is redundant.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria traceability, sequencing, and commit markers",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:275-289",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "logic-error",
+      "raw_category": null,
+      "summary": "T7's direction-band precedence contradicts itself on the floor gate",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-feedback.md:115-121",
+      "location_verified": false
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The malformed `judge:` block failure-mode row has no task, and the Coverage Check claims it does",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "requirement-gap",
+      "raw_category": null,
+      "summary": "T13 rests on a 320 result-discovery surface that does not exist, and its fallback cannot satisfy the non-empty-offers criterion",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "requirement-gap",
+      "raw_category": null,
+      "summary": "`model_dimension_note` omits the runtime-drawn-model limitation the design requires at the point of output",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "requirement-gap",
+      "raw_category": null,
+      "summary": "Idempotent re-graduate has no specified write path, so \"one record, not two\" is not implementable from the task text",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality is borderline but acceptable; no split or cut is required",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-16T21:24:30.368649",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 201514,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 594895,
+  "cached_tokens": 528512,
+  "cache_write_tokens": null,
+  "completion_tokens": 51725,
+  "reasoning_tokens": 47728,
+  "duration_seconds": 221.2924166249577,
+  "cost_usd": 0.03807908,
+  "cost_basis": "alias_pricing"
+}

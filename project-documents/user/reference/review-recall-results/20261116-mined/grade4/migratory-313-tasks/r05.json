@@ -1,0 +1,12 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "No load test required \u2014 no restated NFR in the slice",
+   "description": "The slice discusses \"zero overhead\" for the OPEN path as a design goal rather than a formal non-functional requirement, and there is no performance NFR restated in the success criteria. No load test task in `tests/load/` is needed for this slice.",
+   "location": "tests/load"
+  }
+ ]
+}

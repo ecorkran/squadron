@@ -1,0 +1,19 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`sq auth login` and `sq auth logout` spawn the Codex runtime but are not fully bounded by a timeout",
+   "description": "The design states spawning is confined to \"a Codex turn, `sq auth login/logout`, and `sq auth status`\" (Data Flow, Runtime startup cost). The D7 table bounds `handle.wait()` with `codex.login_timeout_s` and runtime start + `account()` in `sq auth status` with `codex.account_timeout_s`. But the runtime start that precedes `login_chatgpt()`/`login_chatgpt_device_code()` is not covered by `login_timeout_s` (which per the table bounds only `handle.wait()`), and nothing at all bounds the `sq auth logout` path \u2014 its runtime spawn and `logout()` call are absent from both the D7 table and the Failure Modes table. A hung runtime during login or logout blocks the CLI command indefinitely (Ctrl-C is only handled for login, per the \"Timeout or cancellation mid-turn\" row's turn scope). The design's own standard \u2014 every new I/O path enumerated with an explicit handling strategy \u2014 is met for the turn path and status, but not for logout, and only partially for login. Fix: state that `codex.account_timeout_s` (or a dedicated key) also bounds runtime start for login, and add a logout row to the Failure Modes table (including logout when no `auth.json` exists and SDK error during logout).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "D-numbering is out of order in Technical Decisions",
+   "description": "D9 (\"Extra missing\" signal) appears before D8 (\"Turn result is checked, not trusted\"). Purely cosmetic; no content issue.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions"
+  }
+ ]
+}

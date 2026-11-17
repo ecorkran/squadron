@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Architecture principles are faithfully implemented",
+      "description": "The design upholds every load-bearing architectural principle from 400-arch. \"Measure, never gate\" is honored by the explicit exclusion of gates, pipeline hooks, and composite scores (Excluded list). \"Extend the 320 store, don't fork it\" is met via the `slice_ranges` optional sibling payload on `MetrologyRecord` with `schema_version` unchanged and existing records loading unchanged (Database/Storage Schema). \"Absent is not zero\" is maintained through `environment_unresolved`, `RangeUnresolvedReason`, and `ComparabilityBreak` enums. \"Breakdown, not a score\" is enforced by a test asserting no serialized report key contains `score` (D8, criterion 9). \"Normalize categories, not severities\" is respected \u2014 review severity stays on the review scale only (D8). \"Coarse records\" is followed by the one-record-per-project `SliceRanges` design (D1).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice plan scope and success criteria are fully covered",
+      "description": "Every success criterion from the slice plan entry (400-slices, item 4) maps to a functional criterion in the design. Durable ranges from topology (criterion 1\u20133), commit export without writing to `.git` with lockfile-gated type counts (criterion 4\u20136), full-identity-match comparability with named breaks (criterion 7, D7), LLM-sourced noise-floor display and sample sizes (criterion 8\u20139, D8), and unresolved-slice project-level-only attribution (criterion 10, D9) all have explicit coverage. The dependency list matches ([400, 402]) and the interface contract matches the plan's \"Provides slice-range record type, commit export, and report commands; Consumes snapshot, review, audit and noise-floor records, and review/git_utils.py.\"",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#success-criteria"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration points match consuming and providing slice contracts",
+      "description": "The 402 contract is consumed correctly: `None` category is treated as missing (not `other`), `read_side_mapped` records are labeled as separate columns (D8), and records without `slice_index` roll up at project level only (D9). This matches 402's \"Provides to Other Slices\" section exactly. The 420 interface provides `take_snapshot_at(commit)` and `get_slice_ranges` for slice boundaries and own commits (`fork..tip`), which is what the architecture's \"Envisioned State\" says 420 needs. The `environment_root` contract change to `AdapterContext` is minimal (one required field, in-place sets it equal to `repo_root`), justified by the architecture's \"A snapshot measures a commit\" principle, and the design explicitly notes 400's tests pass unchanged with `environment_root == repo_root`.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#integration-points"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes comprehensively enumerated for all new I/O paths",
+      "description": "The failure-mode table covers every new I/O path: `git archive`/`rev-parse` failure and hang (timeout at 30s via `run_git`), extraction `OSError`, unknown revisions, `data` filter refusals, tool hangs inside exports (bounded by existing `snapshot_tool_timeout_s`), boundary snapshot failures during reports (stop, no half before/after), reflog/merge search returning `None` (try next path, never empty range), stored landings with missing commits (`git cat-file -e` check, WARNING, other landings still reported), concurrent writes (last-write-wins, re-resolvable), and store write failures. Each has an explicit handling strategy and signal \u2014 no \"TBD\" or implicit handling.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#data-flow"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality is appropriate for a 4/5 effort slice",
+      "description": "The included scope (range resolver, commit export, three report commands, comparability module, one contract field) directly maps to the slice plan's stated deliverables. The excluded list is explicit and defensible: no audits/reviews from reports, no review noise floor, no dependency installation, no composite scores, no slice table in `report project` (no criterion needs it). The 10 technical decisions each address a real design question (multiple landings, sync-merge false positives, before/after definition, ahead-of-need persistence, export tool resolution, lockfile gating, per-measurement comparability, noise-floor states, attribution rules, command placement). The module count (~16 modules) is reasonable for the scope, and the design constrains new modules to ~300 lines and `git_utils.py` growth to only the rename, pattern function, and `first_parent` argument.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Settings-in-slice blind spot is acknowledged, not hidden",
+      "description": "The design explicitly calls out in its Risk Assessment that a slice which edits `.squadron.toml` settings won't show `limits_changed` or `exclusions_changed` between two exports, because both boundaries are measured under the live checkout's settings (D5). This is a known limitation of the \"read settings from live checkout\" approach, not a hidden dependency. The architecture doesn't require detecting in-slice settings changes, and the design states each record records which settings it used. This is correctly characterized as a risk with a stated mitigation (breaks fire against earlier snapshots taken under different settings), so no action is required.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#risk-assessment"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Architecture principles are faithfully implemented",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Slice plan scope and success criteria are fully covered",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Integration points match consuming and providing slice contracts",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#integration-points",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes comprehensively enumerated for all new I/O paths",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality is appropriate for a 4/5 effort slice",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Settings-in-slice blind spot is acknowledged, not hidden",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#risk-assessment",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-16T20:46:48.225869",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 23061,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 124469,
+  "cached_tokens": 71424,
+  "cache_write_tokens": null,
+  "completion_tokens": 6492,
+  "reasoning_tokens": 5028,
+  "duration_seconds": 34.183584708021954,
+  "cost_usd": 0.05518606000000001,
+  "cost_basis": "alias_pricing"
+}

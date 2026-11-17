@@ -1,0 +1,58 @@
+{
+ "case": "migratory-300-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "100-arch (the parent) Scope lists \"the simulation tick loop\" and says \"the engine owns what happens between ticks\"; 300-arch Overview says the world server owns \"the tick loop\" and its Tick as transaction loop calls the engine; 100-arch's own Envisioned State describes the engine as a callee of the world server. **VALID**: contradicts its parent. Needs: doc alone (both documents at the commit). Raised by the original review. The fix landed in 100-arch.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Frontmatter `dependsOn: [001-concept.migratory, ...]` and Related Work link `../project-guides/001-concept.migratory.md`. At `ecd8f65^` the repo holds only `000-concept.migratory.md`. **VALID** (minor): contradicts repo. Needs: doc (file list). Raised by the original review.",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r02": [
+     16
+    ],
+    "r03": [
+     13
+    ],
+    "r04": [],
+    "r05": [
+     0
+    ],
+    "r06": [
+     9
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Tick loop and asyncio coexistence: \"run the tick synchronously, then yield to the async event loop for I/O between ticks ... without the tick loop starving I/O\", while Tick end says to sleep for the remainder \"or log an overrun warning\". `src/migratory_server/tick.py` at `ecd8f65^` calls `await asyncio.sleep(remaining)` only in the non-overrun branch; on overrun it logs and starts the next tick with no `await`, so a sustained overrun never yields. The document's overrun path contradicts its own constraint, and the code does exactly that. **VALID**: contradicts itself and code. Needs: code. Raised by the original review (the first FAIL).",
+   "hits": {
+    "r01": [],
+    "r02": [
+     3
+    ],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "F3 r02 f3 borderline: flags starvation under overrun (tick blocks event loop, best-effort continue) without stating the no-await-on-overrun branch explicitly; counted. r05 f2 (yield mechanism underspecified) and r04 f9 (drift under overrun) not counted. F1 r01 f2 and r02 f9 cover lifecycle/return contract, not tick-loop ownership; not counted."
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Missing test for McpError / closed-stream mid-call failure mode",
+   "description": "The design's failure-mode table lists four rows and states \"Each row above has a test asserting the observable signal.\" Task 5 covers spawn failure (5.3), timeout (5.2), server `isError` (5.1 `test_server_is_error_maps_to_error_result`), and unknown tool name (5.1), but no test explicitly covers the \"Protocol/transport error mid-call (`McpError`, closed stream)\" row. The `test_unknown_tool_name` case is a server-level error for an unknown tool, not a transport-level stream break. The `call_mcp_tool` implementation handles `McpError` in Task 4.3, but that branch has no corresponding test asserting its observable WARNING signal. A test that forces the fake server to close the stream mid-call (or patches the transport to raise `McpError`) would close this gap.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md (Task 5)"
+  }
+ ]
+}

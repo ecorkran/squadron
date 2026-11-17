@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 2 (\"Durable in a fresh clone\") does not exercise the durability claim it names, and silently writes a stray store record",
+   "description": "Step 2 runs `git clone . /tmp/sq-clone`. A local-path clone's `remote.origin.url` is a filesystem path, and `derive_project_id`/`normalize_remote_url` (identity.py:101,131) will happily derive a path-shaped `ProjectId` from it \u2014 squadron's own checkout derives `github.com/ecorkran/squadron` from its GitHub remote (per 323's variance set). The clone therefore reads no stored record under the real project id, resolves slice 400 from topology alone, and passes the stated expectation (\"same before_sha/after_sha\") by accident \u2014 proving only criterion 1's fresh-topology claim, not the State Management claim that \"a range resolved in one checkout is read by a fresh clone of the same remote.\" It also writes a second `slice_ranges` record keyed on a path (`sliceranges-{sha256(path)[:12]}`), polluting the user-level store with exactly the filesystem-path-keyed record 320's architecture forbids, and the walkthrough never mentions cleanup. Fix: clone from the configured remote (`git clone \"$(git remote get-url origin)\"`) so the normalized remote \u2014 and thus the `ProjectId` \u2014 matches, and use a fast-forward slice in that step, where reading the stored record is load-bearing rather than redundant with topology.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#verification-walkthrough"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Frontmatter `dependencies` omits 323, an unconditional prerequisite",
+   "description": "The frontmatter lists only `400` and `402`, but the Prerequisites section names **323 (complete)** as an unconditional dependency \u2014 `baseline_report`, `compute_delta` and `is_within_floor` are consumed by the audit section (D8, criterion 8) with no conditional path. Sibling slice designs put cross-band prerequisites in frontmatter (400 lists `100, 320`; 402 lists `320, 323`), and dependency-aware batch tooling reads these blocks. Add `- 323`. (401 is correctly excluded: the design makes it a conditional, not a prerequisite, and handles both orderings explicitly.)",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:6-8"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "\"The 400 tests pass unchanged\" contradicts D5's required-field decision",
+   "description": "D5 makes `environment_root: Path` a required field with no default, but every existing `AdapterContext(...)` construction site omits it \u2014 `take.py:101`, `tests/metrology/snapshot/builders.py:80`, and `tests/metrology/snapshot/test_python_length.py:25` \u2014 so each fails pyright until it gains the argument. The Development Approach claim \"the 400 tests pass unchanged\" (line 389) is true only in the sense that expectations are unchanged; the constructor call sites need a mechanical edit. Rewording prevents an implementer from reading the claim literally during task 4.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:211"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "A revert merge naming the slice number persists as a permanent landing",
+   "description": "The resolver keys on any first-parent merge whose message matches the slice-number pattern. A revert of a slice's landing (or any merge message incidentally naming the number, e.g. a follow-up referencing it) on the target's first-parent line matches and \u2014 because stored landings never change \u2014 becomes permanent. The Risk Assessment names the generic consequence (\"A wrong landing stays in the store\") and offers hand-deletion, but doesn't name the revert-merge trigger or say whether the resolver rejects it (e.g. by checking that the merge's diff touches the slice's files, or by documenting it as accepted). Worth one sentence either way.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#d2--merge-commits-are-searched-on-the-targets-first-parent-line-with-no-fallback-to-main"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The \"oldest first\" landing-list invariant is stated but not enforced",
+   "description": "The schema comment promises \"each list non-empty, oldest first, unique after_sha\", but the named validator checks cover only empty lists, duplicate `after_sha`, and `merge_sha`/`method` agreement. Since display order (\"reported separately, oldest first\") depends on the invariant, sorting at read time or adding a validator check would keep it honest rather than trusting write order.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#database--storage-schema"
+  }
+ ]
+}

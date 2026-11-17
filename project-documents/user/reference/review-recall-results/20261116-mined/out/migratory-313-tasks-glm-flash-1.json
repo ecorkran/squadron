@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All 14 success criteria trace to tasks \u2014 no gaps, no scope creep",
+      "description": "Every success criterion in `313-slice.world-bounds-policy.md` (Success Criteria \u00a71\u2013\u00a714) maps to at least one task: SC1\u21921.1 (enum), SC2\u21921.2 (field + default), SC3/SC4\u21921.3+1.4 (loader validation, case-insensitivity, missing-key default, non-string and unknown-value errors), SC5\u21921.4 (`test_bounds_policy_yaml_round_trip`), SC6\u21922.3 OPEN tests + 3.4 mock test, SC7/SC8/SC9\u21922.2+2.3 (wrap half-open edge-exact, multi-width and negative overshoot, velocities unchanged, reflect clamp/flip including the inward-velocity idempotency nuance the slice's Policy Semantics section describes), SC10\u21923.2+3.4, SC11\u21923.4 (4 agents, outward velocities, 50 steps, per-policy assertions matching the half-open/closed rectangles), SC12\u21924.1/4.2, SC13\u21923.5+5.1, SC14\u21925.2 (walkthrough steps 1\u20138 mirror the slice's Verification Walkthrough 1:1, including the OPEN-drift regression guard). The deferred `SOFT` variant is correctly excluded from every task, honoring the slice's out-of-scope list \u2014 no creep. The scope-adjacent items that do appear (startup log line in 3.3, CHANGELOG in 5.4, status updates in 5.3) all trace to the slice's walkthrough step 4 and the task file's own Files-touched list plus project doc conventions. File anchors verified against the codebase: `WorldBoundsConfig` is indeed already imported in `simulation.py`, and the architecture doc line \"(313) World Bounds Policy\" exists at `project-documents/user/architecture/300-slices.worldserver-foundation.md:43` for Task 5.3's checkoff.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42-97"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with placement, and commit points are sound",
+      "description": "Dependencies flow correctly: enum (1.1) \u2192 field (1.2) \u2192 loader (1.3) \u2192 config tests (1.4); module skeleton (2.1) \u2192 helpers (2.2) \u2192 unit tests (2.3); constructor param (3.1) \u2192 step() call (3.2) \u2192 server wiring (3.3) \u2192 integration tests (3.4) \u2192 full-suite sweep (3.5). Test tasks immediately follow their implementation tasks (1.4 after 1.3, 2.3 after 2.1\u20132.2, 3.4 after 3.1\u20133.3). The one real sequencing hazard \u2014 Task 3.1 making `world_bounds` a required kwarg, which breaks every other direct `SimulationManager(...)` construction \u2014 is explicitly handled by Task 3.4 (call sites in `test_simulation.py`) and Task 3.5 (`test_force_builder.py`, `test_clients.py`, others), with the commit at 3.6 placed *after* the full suite runs in 3.5, so the commit point is green. All five commits (1.5, 2.4, 3.6, 4.3, 5.5) land at tested points: 1.5 after `test_config.py` passes, 2.4 after the new module's tests pass, 3.6 and 5.5 after full `pytest`, and 4.3 is safe because `tests/test_config.py:44-46` asserts only port on the real `default.yaml` (no policy assertion), so flipping it to `wrap` keeps the suite green. No circular dependencies; no per-task commit noise, no single end-commit either.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-236"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slightly granular task splits; Task 2.1 briefly references not-yet-defined helpers",
+      "description": "For a 2/5-effort slice, 15 tasks is on the fine-grained side. Two merges would tighten it without losing verifiability: Task 1.2 (add one dataclass field, one checkbox) folds naturally into 1.1 or 1.3, and Tasks 4.1/4.2 (each a one-line YAML edit to a different file with an identical verify command) could be a single \"update shipped configs\" task. Similarly, 2.1 and 2.2 both edit the same new file, and 2.1's `match` arms call `_apply_wrap`/`_apply_reflect` before they exist \u2014 this imports cleanly (names resolve only at call time) and the deferred test in 2.3 makes it safe, but a linter run at the 2.1 checkpoint would flag undefined names; merging 2.1+2.2 or stubbing the helpers would remove the wrinkle. None of this creates dependency or correctness risk \u2014 each task still has clear, junior-executable success criteria \u2014 so this is advisory, not blocking. Overall file count (one task file, 10 touched files) is proportionate to the slice.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:59-64"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All 14 success criteria trace to tasks \u2014 no gaps, no scope creep",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42-97",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with placement, and commit points are sound",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-236",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Slightly granular task splits; Task 2.1 briefly references not-yet-defined helpers",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:59-64",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-16T21:15:37.238481",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 114314,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 145711,
+  "cached_tokens": 110848,
+  "cache_write_tokens": null,
+  "completion_tokens": 30525,
+  "reasoning_tokens": 28717,
+  "duration_seconds": 255.39892549999058,
+  "cost_usd": 0.02381739,
+  "cost_basis": "alias_pricing"
+}

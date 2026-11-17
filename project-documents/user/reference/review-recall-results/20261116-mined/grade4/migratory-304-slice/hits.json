@@ -1,0 +1,28 @@
+{
+ "case": "migratory-304-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"SimulationManager Extension\" shows `step()` with `if self._entity_manager.count == 0: return` before `tick(...)`, so `post_tick()` is skipped when there are no entities. The note directly below (\"`post_tick()` is called even when there are no entities ... the early return is moved to wrap only `engine.tick()`\"), the first `step()` listing under \"SimulationManager as Simulation Orchestrator\", and Special Considerations all say the opposite. **VALID**: self-contradiction. Needs: doc alone. The implementation followed the note.",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     4
+    ],
+    "r05": [
+     2
+    ],
+    "r06": []
+   }
+  }
+ ],
+ "note": "No borderline calls"
+}

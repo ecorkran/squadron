@@ -1,0 +1,12 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A7 success criterion contradicts the GPU-fallback mechanism in `_select_arch()` and Open Notes",
+   "description": "The slice's A7 criterion states: \"A host with no Metal and no CUDA starts successfully with `backend: quadrants` \u2014 `_select_arch()` falls back to `qd.cpu` and logs a `WARNING` \u2026 The server does not crash; performance is CPU-bound.\" But the `_select_arch()` implementation maps by OS (`platform.system()`) rather than by GPU-hardware detection: Darwin \u2192 `qd.metal`, Linux \u2192 `qd.cuda`, else \u2192 `qd.cpu` with warning. On a Linux host without an NVIDIA GPU, `_select_arch()` returns `qd.cuda`, and per the Open Notes (\"If `qd.init()` raises (e.g. CUDA driver absent \u2026) \u2026 the server exits at startup with a clear error\"), the server crashes rather than falling back. The architecture and slice plan both state the intent as \"if neither is detected it warns and falls back to `qd.cpu`\" \u2014 detection-based, not OS-mapping. The graceful CPU fallback only fires for platforms that are neither Darwin nor Linux (e.g. Windows), leaving the Linux-without-CUDA case unsatisfied by A7 as written. Resolution: either have `_select_arch()` (or `setup()`) detect actual GPU availability \u2014 e.g. catch the `qd.init()` failure and retry with `qd.cpu` \u2014 or re-scope A7 to match the design's actual behavior (crash on CUDA-absent Linux, graceful fallback only for unsupported OS). The current text overpromises relative to what the mechanism delivers.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#success-criteria"
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Both capabilities write to `user/analysis/`\" overgeneralizes Capability 1's outputs",
+   "description": "The Output Conventions section opens: \"Both capabilities write to the existing `project-documents/user/analysis/` directory with the existing `docType: analysis`. No new directory, no new docType\u2026\" But Capability 1's own Outputs section lists three artifacts, only one of which matches this claim: the codebase-comprehension analysis doc. The other two \u2014 `project-documents/user/project-guides/000-concept.{project}.md` (`docType: concept`, different directory, `000` index) and the initiative-plan candidates (docType/path unspecified) \u2014 do not write to `user/analysis/` and are not `docType: analysis`. The index-range discussion (940-949, overflow to 950+) is framed as applying to \"both capabilities,\" but it only governs the analysis-typed outputs. The concept doc and initiative-plan candidates follow different directory and index conventions that the document never consolidates. This makes the Output Conventions section internally contradictory with the Capability 1 Outputs section.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Initiative-plan candidates have no specified output location, docType, or index",
+   "description": "Capability 1's Outputs states initiative-plan candidates are \"proposed initiatives derived from layer boundaries and complexity clustering, offered for PM review. Written only on explicit confirmation, because an initiative plan is a commitment document.\" But the document never says where they are written, what `docType` they carry, or what index they use. Existing initiative plans live in `project-guides/` (e.g. `001-initiative-plan.squadron.md`) with `docType: initiative-plan` and per-docType required frontmatter (per the CF schema referenced in slice 172). Since the frontmatter gate validates `docType` against a fixed enum and applies per-docType schemas, an unspecified path/docType is a load-bearing decision left implicit \u2014 the skill cannot emit a valid initiative-plan candidate without knowing these. The Non-Goals say squadron does not \"silently author a commitment document,\" but the confirmation-gated write still needs a concrete target.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Capability 2's concept-absent interview is mentioned but never defined; field schema Source column doesn't cover it",
+   "description": "Capability 2's Inputs section states that when the concept is absent, \"the skill degrades gracefully and sources purpose from the initiative plan plus interview.\" However, Capability 2 has no Flow section and no Interview section (the interview is described only under Capability 1). The Document field schema table assigns \"Problem\" to \"Concept Problem & Motivation\" and \"Audience\" to \"Concept Target Users\" \u2014 sources that do not exist in the concept-absent case. Neither the table nor any other section defines where those fields come from when the concept is missing, despite the document calling the concept-absent path \"the tested path, not an edge case.\" The \"plus interview\" mechanism (who is asked, what questions, how responses are attributed) is entirely unspecified for this capability.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#inputs"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Generated concept doc frontmatter must satisfy the `docType: concept` per-docType schema, which is never enumerated",
+   "description": "The concept output is declared `docType: concept` in `project-documents/user/project-guides/`. Per slice 172's investigation, Context Forge's `validateFrontmatter` applies per-`docType` schemas for eight docTypes including `concept`, with docType-specific required fields (e.g. `archIndex`/`component` for architecture). The architecture document specifies only that the concept doc carries `docType: concept` and preserves interview responses in the `## User-Provided Concept` section; it never lists the required frontmatter fields for `docType: concept` or confirms the generated doc will satisfy them. The document's own Design Goals assert output must be consumable by \"downstream phases and `cf` introspection unchanged,\" yet the gate that enforces this is treated as a non-issue without verifying the concept schema is met. This risks the generated concept being rejected by the very gate the document relies on.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Missing `tour[]` degradation is unhandled despite the document's heavy reliance on it",
+   "description": "The document's \"Critical\" note states `tour[]` is \"produced by `/understand` Phase 6 (the `tour-builder` agent)\u2026 It is *not* produced by `/understand-onboard`.\" It calls the tour \"a strong signal for a concept's Solution Approach section\" and the Interview scope table sources Solution Approach from \"Graph (layers, tour).\" Capability 1's Flow step 1 (Preconditions) only verifies the plugin is installed and `knowledge-graph.json` exists; it does not verify `tour[]` is present. The realistic failure mode \u2014 a user ran `/understand-onboard` (which renders but does not persist a tour) or an incremental/partial run omitted Phase 6 \u2014 produces a graph with no `tour[]`. The document specifies no degradation behavior for this case: does the skill fail, warn, or silently proceed without the signal it calls critical? Flow step 3 (\"Extract `project`, `layers[]`, `tour[]`\u2026\") assumes all four are present.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Provenance\" for the staleness warning is not defined in either output's structure",
+   "description": "Flow step 1 requires the staleness warning to \"appear in the generated document's provenance,\" and the Resolved Design Decisions reiterate \"the warning is recorded in the generated document's provenance.\" But neither output's structure defines a provenance section. The concept doc describes a `## User-Provided Concept` section (interview, sacred) and \"Refined Concept's Solution Approach and Initial Technical Direction\" (graph-derived). The analysis doc is described only as \"the structural findings: layers, complexity hotspots, entry points, dependency observations.\" No frontmatter field, header, or section named \"provenance\" is specified for either artifact, so the staleness-recording requirement has no concrete target.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tracking the large `knowledge-graph.json` in git is a deliberate decision whose cost is unaddressed",
+   "description": "The document declares `knowledge-graph.json`, `meta.json`, `config.json`, and `.understandignore` \"remain tracked \u2014 they are durable project knowledge,\" and explicitly scopes the `.gitignore` entry to `.trash-*/` only. Yet the same document warns the graph is \"large\" and instructs readers to \"Grep for the needed section before reading; never load the whole file into context.\" A file too large to load into an LLM context window is also a non-trivial git artifact: every `/understand` regeneration (which the plugin supports incrementally via git-diff fingerprinting) produces a large diff against the tracked version. The stated rationale \u2014 \"tracking `meta.json` makes graph staleness visible in review\" \u2014 is already satisfied by the small `meta.json` (carrying `gitCommitHash`/`lastAnalyzedAt`); tracking the full graph adds staleness visibility the small file already provides, at the cost of repo bloat and noisy regeneration diffs. The document does not weigh this tradeoff.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Overview document inherits the \"independent sample\" indexing model without addressing update lifecycle",
+   "description": "The index-range discussion says generated documents increment \"per run like the existing `940`/`941`/`942` tech-debt-audit series, where each run is an independent sample rather than a revision of the last.\" That model fits tech-debt audits (point-in-time snapshots) well. For the client-facing overview (Capability 2), a document that should stay current over a project's lifetime, the \"independent sample, never revised\" model leaves update semantics undefined: is a stale overview marked `deprecated`? Does the PM delete old ones? The document does not describe how an overview stays authoritative as the initiative plan evolves, only that each run creates a new file.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  }
+ ]
+}

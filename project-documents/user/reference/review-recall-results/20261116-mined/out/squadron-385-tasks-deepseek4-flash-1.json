@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every functional and technical success criterion has a task, and test tasks follow their implementations",
+      "description": "Cross-referencing the slice's 11 functional and 7 technical criteria against the task list: base refusal/confirmation and printed provenance \u2192 Task 5 (+13); the two push preconditions and the push commands \u2192 Task 6; slice-branch citation of design/tasks \u2192 Tasks 7, 9, 11; the merged-ancestor review rule \u2192 Task 8.2; five sections with three no-input lines in an unplanned repository \u2192 Task 11.2; presence-check failure with zero writes \u2192 Task 12 (+13.2); the three-term title incl. H1-with-no-model-call and the 72-char fallback \u2192 Task 10a; dry-run/real equality \u2192 Tasks 13.1\u201313.2 and 16.2; operator-identity refusal \u2192 Tasks 13.2, 14; timeout constants and the five-site failure matrix \u2192 Task 14; provider failure logged at ERROR creating nothing \u2192 Task 10.1\u201310.2; `review/` not importing `pr/` \u2192 Task 15.1; checkbox parser with a real-file fixture \u2192 Task 2.2; `summary_oneshot` docstring correction with a routing test \u2192 Task 15.2; ruff/pyright gate \u2192 Task 16.1; live creation recorded \u2192 Task 16.2. Test subtasks sit immediately after their implementation subtask in every task (1.2, 2.2, 3.2, 4.2, 5.2, 6.2, 7.2, 8.2, 9.2, 10.2, 10a.2, 11.2, 12.2, 13.2). No success criterion is left without a task, and no task is scope creep \u2014 Task 4's `resolve_locator` extraction and Task 15.2's docstring fix are both explicitly owed by D6/D3. The slice restates no NFR, so no load test or CI gate is required and none is missing. No `**Commit**:` markers are present; per the review rules a marker-free task file is acceptable and the project's own 384 task file is likewise marker-free.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The review-provenance verdict has no producer",
+      "description": "Task 8.1 specifies reading only `reviewedSha` from each artifact's frontmatter (\"Read each file's frontmatter for `reviewedSha` via the existing `read_frontmatter`\"), and Task 8.2 tests no verdict. But Task 9.1 requires `PrFacts` to carry \"the review artifact path, its verdict, and its reviewed sha\", and Task 11.1 requires the review-provenance section to render \"the artifact path, verdict, and reviewed sha\". The design's data flow lists `verdict` in `PrFacts` too. The `verdict:` key does exist in artifacts (`_review_frontmatter_lines` in `src/squadron/review/persistence.py` writes it unconditionally), so the field is available \u2014 but no task reads it, no input record is specified to carry it, and no test asserts it. As written, the provenance section's verdict either goes unimplemented or gets invented at render time, which is exactly what the traceability rule (\"assert nothing an input does not support\") forbids. Task 8.1 should read the artifact's `verdict` alongside `reviewedSha`, and Task 8.2/9.2 should assert it is copied.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2.2's real-file fixture assertion cannot pass against either named file",
+      "description": "Task 2.2 asks for a test \"reading an actual task file from `project-documents/user/tasks/` \u2014 this file once it exists, or `384-tasks.post-findings-to-the-pr.md` until then \u2014 and asserting both groups are non-empty\". Neither candidate can satisfy \"both groups non-empty\" at the moment Task 2 runs: `384-tasks.post-findings-to-the-pr.md` contains no `[ ]` items at all (every checkbox in it is `[x]`), so the unchecked group is empty; and this file's 33 checkboxes are all unchecked when Task 2 executes, so the checked group is empty. The fallback the task offers does not cover the case it is offered for. Fix by asserting each group's count against the file's own counts (or by building a small mixed-state fixture task file) rather than asserting both groups are non-empty, and by naming one file rather than a \"until then\" alternative.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 and Task 2 headers name the wrong dependents",
+      "description": "Task 1's header says the parser is \"needed by Task 9\" and Task 2's says \"Needed by Tasks 9 and 10\". Both are actually consumed first by Task 7.1 (`parse_slice_branch(head)` and `parse_task_items` on the first task file), with Tasks 9\u201311 downstream. The execution order is correct \u2014 Tasks 1\u20132 do land first \u2014 but a junior implementer reading the headers may defer wiring into `inputs.py` or misjudge which task proves the parser works end to end. Cheap to correct.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 12.2 asserts a host call cannot be made where there is no host",
+      "description": "Task 12.2 asks `tests/pr/test_body.py` to \"Assert the failure path creates nothing \u2014 no host call is made\". `pr/body.py` has no code-host dependency at all (the host call is `open_pull_request` in the command, Task 13), so the assertion is vacuous in that file and cannot fail. The load-bearing version already exists in Task 13.2 (\"a failed presence check exits 1 with no write\"), which is where the fake runner can record zero writes; the body-layer test should assert only that the check raises, leaving the no-write assertion to Task 13.2.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Every functional and technical success criterion has a task, and test tasks follow their implementations",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The review-provenance verdict has no producer",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:178",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 2.2's real-file fixture assertion cannot pass against either named file",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 1 and Task 2 headers name the wrong dependents",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 12.2 asserts a host call cannot be made where there is no host",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T21:28:40.859940",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 44,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 413443,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1148040,
+  "cached_tokens": 975488,
+  "cache_write_tokens": null,
+  "completion_tokens": 110147,
+  "reasoning_tokens": 105202,
+  "duration_seconds": 447.19067279202864,
+  "cost_usd": 0.08333167999999999,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope and mechanism match the slice plan entry with correct layering",
+      "description": "Every element the plan's 915 entry assigns appears in Technical Scope: the `scope` field on `CONFIG_KEYS` (`packages/core/src/config/ConfigKeys.ts` \u2014 confirmed the interface exists there today without it), project-file routing through `ConfigManager`/`configPaths.ts` (confirmed current `getProjectConfigPath`-based routing in `ConfigManager.ts:129/179/198`), the minimal one-line gitignore addition (matching the plan's \"not a full gitignore overhaul, tracked separately as Future Work\"), and a migration story for pre-existing committed personal keys. The routing-inside-`ConfigManager` decision keeps all listed callers unchanged, and MCP `configTools.ts` (which imports `getProjectConfigPath` directly, confirmed at `configTools.ts:3,40`) is the only MCP touchpoint \u2014 matching the plan's note that this slice \"touches packages/mcp-server config tools too.\" No scope creep detected; exclusions (auto-fix wiring, gitignore overhaul, CLI surface changes) are deliberate and justified against the existing closed `fixAction` union (confirmed in `ConsistencyChecker.ts:206-220`).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:25-50"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for new I/O paths are enumerated with explicit strategies",
+      "description": "The design covers the three new I/O surfaces: `migrate-personal`'s two-file rewrite (write-personal-then-delete-shared ordering, per-key failure isolation with `failed: <error>` reporting, idempotent re-runs, partial-failure leaves the key in both files rather than neither), writes to `.context-forge.local.toml` (same `writeToml` helper and throw-on-failure contract as existing files \u2014 verified accurate against `ConfigManager.ts:33-39`), and the `cf init` gitignore append (permission failure throws through the existing `handleError` path \u2014 verified `init.ts` has that top-level handler). No network/subprocess I/O is introduced, so hang/timeout classes don't apply here; the local-file failure classes are handled. No \"TBD\" remaining.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delete routing cannot clear a stale shared-file copy, contradicting the design's own collision remediation and walkthrough step 9",
+      "description": "The Delete rule states delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to.\" For a personal key (`git.integration_branch`), that is `.context-forge.local.toml` only. But the collision semantics (line 146) instruct the user to clear a skipped stale shared-file copy via \"a separate, explicit `cf config unset <key> --project`\", and Verification Walkthrough step 9 (line 259) relies on exactly that command to make `cf check` clean again. Under the design's own routing, `cf config unset git.integration_branch --project` deletes from the **personal** file \u2014 destroying the developer's local value the collision rule just protected \u2014 while the stale shared copy survives, so the `personal-config-in-shared-file` finding persists and step 9's expected outcomes fail on both counts. The design provides no user-facing path that removes a personal-scope key from the *shared* file outside `migrate-personal`'s happy path, yet the skip-case remediation and the \"cf check is clean again\" success expectation depend on one. The requirement left unmet is the plan's \"defined migration/compat story\": the collision branch of that story is not actually executable as specified. Fix in design before task breakdown \u2014 e.g. personal-key `unset --project` clears both project files, or `migrate-personal` gains an explicit overwrite/clear action for the skipped case \u2014 and update lines 146 and 259 to match.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Design declares a dependency the slice plan entry does not",
+      "description": "Frontmatter and Prerequisites declare `dependencies: [914]`, while the 900 slice plan's 915 entry says \"Dependencies: none.\" This is a benign refinement, not a contradiction: the design classifies `git.integration_branch`, which only exists under that name because of 914, and 914 is already marked complete in the plan. Worth a one-line sync in the plan entry (or a note in the design explaining the delta) so the artifact trail stays consistent, but no action blocking.",
+      "file_ref": null,
+      "category": "planning-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:44-46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cf init` gitignore insertion point is unspecified, though the walkthrough requires it in the `--lite` path",
+      "description": "The component structure lists `init.ts` but not where in `cf init`'s flow the gitignore line lands. Current `init.ts` skips guides/commands/IDE steps under `--lite`, and the Verification Walkthrough (steps 1 and 3) runs `cf init --lite` and then expects `.gitignore` to contain the line \u2014 so the addition must sit outside the `if (!opts.lite)` block, alongside project registration. The walkthrough would catch a wrong placement during implementation, but stating the placement (and that it applies in lite mode) would remove the ambiguity cheaply.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#gitignore-handling-in-cf-init"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Scope and mechanism match the slice plan entry with correct layering",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:25-50",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for new I/O paths are enumerated with explicit strategies",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-155",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Delete routing cannot clear a stale shared-file copy, contradicting the design's own collision remediation and walkthrough step 9",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "planning-consistency",
+      "raw_category": null,
+      "summary": "Design declares a dependency the slice plan entry does not",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:44-46",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`cf init` gitignore insertion point is unspecified, though the walkthrough requires it in the `--lite` path",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#gitignore-handling-in-cf-init",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-16T21:11:18.404468",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 342851,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 561284,
+  "cached_tokens": 422848,
+  "cache_write_tokens": null,
+  "completion_tokens": 78427,
+  "reasoning_tokens": 75618,
+  "duration_seconds": 417.5867551669944,
+  "cost_usd": 0.07266434,
+  "cost_basis": "alias_pricing"
+}

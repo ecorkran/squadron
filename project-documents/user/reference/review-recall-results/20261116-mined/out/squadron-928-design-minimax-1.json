@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "D9 deviates from the plan's `default.rules` instruction by placing the rule in a separate file",
+      "description": "The plan entry states \"Add the `prefix_rule` for `~/.codex/rules/default.rules`\" but D9 places the rule in its own `~/.codex/rules/squadron.rules` file and replaces README's existing `default.rules` snippet. The deviation is explicitly justified (Codex rewrites `default.rules`; a squadron-owned file is findable, replaceable on upgrade, and out of a file the host tool mutates), and the plan entry does not appear to forbid the move, but it is a literal change from the plan's instruction. Recommend the plan entry be amended to reflect the chosen location so the two documents agree for future readers.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#d9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq model list` \u2192 `sq models list` fix is scope beyond the plan entry",
+      "description": "The design includes a two-file fix (`commands/sq/review.md`, `commands/agents/sq-review/SKILL.md`) correcting a command name that does not exist. This is not assigned by the plan entry, which scopes Part A to skill-pack install/uninstall and Part B to the approval rule. It is small (one line per file, found during natural probing) and arguably in scope for \"provider access\" since the broken reference misleads Codex users, but it is technically a separate maintenance item and could have been a one-line slice of its own. Acceptable to keep bundled; worth flagging because the plan entry did not authorize it.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#overview"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part A \u2014 `CommandTarget` threading matches the plan",
+      "description": "The plan requires threading `CommandTarget`/`normalize_target`/`DELIVERIES`/`receipt_name` through `skills install` and `skills uninstall` \"the same way `install.py` does.\" The design's D1 commits to identical flag semantics, D5 generalizes receipt naming without breaking today's names, D6 introduces `PACK_LAYOUTS` so callers no longer branch on target, and D7 extracts `remove_receipt_files` for `skills uninstall`. The plan's open question (refuse vs. declare per-target content) is resolved by D2 in favor of declaration, which the plan's parenthetical (\"Installing it unconverted\u2026 is not an option\") permits.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part B \u2014 Codex approval rule documented and enumerated",
+      "description": "The plan requires the `prefix_rule` to be documented in README and QUICKSTART and the plan requires every `sq` command reaching a provider or the network to be enumerated. The design satisfies both: D9 produces the README/QUICKSTART rule with explicit authorization language (\"matching commands run outside Codex's sandbox with no prompt\"), D10 is a probe-derived table covering `pr show`, `review`, `run`, `metrology`, `skills install` (github source), the daemon-client commands, and `auth login` (marked unprobed, to be confirmed during implementation). The plan's \"doctor should detect a missing rule?\" question is answered by D11 with reasoning (cost/benefit, parsing Starlark coupling, partial-set false positives), as the plan asked.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#d9"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies and exclusions match the plan",
+      "description": "The design correctly consumes 925's `squadron.skills.targets` (`CommandTarget`, `normalize_target`, `DELIVERIES`, `receipt_name`, `write_skill_dirs`, `bundled_skill_names`) and doctor's `_command_targets_to_check`. Excluded items \u2014 #126, `copilot`/`cursor` targets, pack-name collisions \u2014 match the plan's \"Not in scope\" list. The plan-required Codex CLI \u2265 0.146 prerequisite is stated for the verification step.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#dependencies"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality",
+      "description": "The design's mechanisms are proportionate to the slice's scope: `PACK_LAYOUTS` is justified by removing duplicated path-derivation logic in three callers, `remove_receipt_files` is justified by the current `unlink` loop leaving empty nested directories behind, and the `bundled_skill_names` generalization is justified by D4's move of `commands/agents/analysis-*` to `commands/analysis/agents/`. No speculative abstractions, no configuration keys without consumers, no over-engineered error handling. The D12 hint-at-point-of-failure add is a small defensive complement to the Part B rule, not a separate capability.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#architecture"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "D9 deviates from the plan's `default.rules` instruction by placing the rule in a separate file",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#d9",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`sq model list` \u2192 `sq models list` fix is scope beyond the plan entry",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Part A \u2014 `CommandTarget` threading matches the plan",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Part B \u2014 Codex approval rule documented and enumerated",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#d9",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Dependencies and exclusions match the plan",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#architecture",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-16T21:36:54.686901",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 21187,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 44605,
+  "cached_tokens": 7040,
+  "cache_write_tokens": null,
+  "completion_tokens": 6146,
+  "reasoning_tokens": 5391,
+  "duration_seconds": 74.50063691684045,
+  "cost_usd": 0.0190671,
+  "cost_basis": "alias_pricing"
+}

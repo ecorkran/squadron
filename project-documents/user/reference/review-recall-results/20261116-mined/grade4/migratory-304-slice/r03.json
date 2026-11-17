@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Contradictory `step()` implementations on `post_tick` with zero entities",
+   "description": "The document provides two implementations of `SimulationManager.step()` that contradict each other. In the **Technical Decisions** section, `engine.tick()` is wrapped in an `if self._entity_manager.count > 0:` guard, and `post_tick()` is called unconditionally afterward \u2014 so `post_tick` runs even with zero entities. In the **Implementation Details** section, the code uses `if self._entity_manager.count == 0: return`, which is an early return that skips `post_tick()` entirely when there are no entities.\n\nThe Implementation Details section includes a note immediately after the code stating: \"post_tick() is called even when there are no entities... The early return is moved to wrap only engine.tick().\" But the code in that section does the opposite \u2014 the early return wraps everything after `pre_tick`, including `post_tick`. The Technical Decisions code block is the one that actually matches the stated intent. This inconsistency should be resolved before implementation, as a developer could implement either version and only one is correct per the design's stated semantics.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Environment context not passed to `engine.tick()` as parent documents specify",
+   "description": "Both parent architecture documents specify that environment context should reach the behavior engine through `engine.tick()`. The 500-arch integration boundary section states: \"slice 304 calls `pre_tick()`, passes the environment's `query()` method to the behavior engine, and calls `post_tick()`.\" The 100-arch states: \"The world server passes the environment (or its query method) to `engine.tick()` as the 'environmental context' parameter.\" The slice plan (300-slices) entry for 304 also says: \"Pass environment context to `SimulationManager` and `engine.tick()`.\"\n\nThe slice design deviates: it holds the `Environment` on `SimulationManager` and exposes it via a property, relying on constructor injection into future forces rather than passing environment context through `engine.tick()`. The design explicitly justifies this \u2014 the current `engine.tick()` signature (`tick(state, profiles, spatial, dt, forces)`, per slice 303) has no environment parameter, and adding one would require modifying the behavior engine's interface, which is initiative 100's responsibility. The constructor-injection approach achieves the same architectural goal (environment data reaches force evaluation) through a different path.\n\nThis is a defensible resolution of a cross-initiative interface gap, but the integration point does not match what the consuming/providing architectures describe. The 500-arch explicitly expects the environment's `query()` method to be passed to the behavior engine. The design should either explicitly flag this as a known deviation requiring alignment with initiatives 100 and 500, or the behavior engine's `tick()` interface needs to be extended to accept environment context so that the documented integration point can be honored.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#environment-access-for-forces"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`seed` config field established speculatively for future layer slices",
+   "description": "The `EnvironmentConfig.seed` field is not used by the empty environment in this slice \u2014 the design explicitly states \"Not used by the empty environment in this slice, but established now so that layer slices (501+) have it available from configuration without config schema changes.\" This is a single integer field with a documented default (42), proportionate as forward-looking configuration. It does not represent meaningful scope creep, but it is configuration that nothing in this slice consumes. The design's justification (avoiding future config schema changes) is reasonable for a single trivially-small field.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#technical-decisions"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "NOTE",
+   "title": "D9 deviates from the plan's `default.rules` instruction by placing the rule in a separate file",
+   "description": "The plan entry states \"Add the `prefix_rule` for `~/.codex/rules/default.rules`\" but D9 places the rule in its own `~/.codex/rules/squadron.rules` file and replaces README's existing `default.rules` snippet. The deviation is explicitly justified (Codex rewrites `default.rules`; a squadron-owned file is findable, replaceable on upgrade, and out of a file the host tool mutates), and the plan entry does not appear to forbid the move, but it is a literal change from the plan's instruction. Recommend the plan entry be amended to reflect the chosen location so the two documents agree for future readers.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#d9"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "`sq model list` \u2192 `sq models list` fix is scope beyond the plan entry",
+   "description": "The design includes a two-file fix (`commands/sq/review.md`, `commands/agents/sq-review/SKILL.md`) correcting a command name that does not exist. This is not assigned by the plan entry, which scopes Part A to skill-pack install/uninstall and Part B to the approval rule. It is small (one line per file, found during natural probing) and arguably in scope for \"provider access\" since the broken reference misleads Codex users, but it is technically a separate maintenance item and could have been a one-line slice of its own. Acceptable to keep bundled; worth flagging because the plan entry did not authorize it.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#overview"
+  }
+ ]
+}

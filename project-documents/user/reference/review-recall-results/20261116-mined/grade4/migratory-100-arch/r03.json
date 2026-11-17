@@ -1,0 +1,68 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Architecture's vectorization and GPU-compatibility requirements are contradicted by the force interface it sanctioned",
+   "description": "The architecture states the hot loop \"must be structured for vectorized computation over arrays of agent state, not object-by-object iteration\" (Design Goals) and that the force interface \"should remain compatible with eventual GPU offload: bulk array-in/array-out operations with no Python-level per-agent branching\" (Technical Considerations, GPU section). But the `BulkForce` protocol built under this architecture (`100-slice.agent-state-and-tick-function.md`) takes `neighbor_lists: list[NDArray[np.intp]]` \u2014 a ragged Python list with one entry per active agent \u2014 and slice 101 explicitly adopts \"a Python-level loop over active agents with vectorized NumPy operations within each agent's neighborhood computation.\" A ragged per-agent neighbor list is structurally a Python-level per-agent branch; it cannot be dispatched to a GPU kernel or fully vectorized without redesign (padded matrices or CSR-style flat index arrays), contradicting the \"without changing the engine\" claim. Worse, the stated performance goal (\"tens of thousands of agents at full behavioral fidelity on a single CPU\") is unreachable with this design: at 10K agents \u00d7 3 forces, that is ~30K Python iterations per tick, each with multi-\u00b5s NumPy overhead \u2014 several seconds per tick against a 50ms budget at 20Hz. Slice 105 only optimizes spatial queries, not the force loop, so no planned slice closes this gap. The architecture needs to either revise the BulkForce contract now (while only two force implementations exist) or explicitly downgrade the 10K-agent goal and the GPU-compat claim.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#GPU compute path for force accumulation"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Aggregation \"through the same neighbor query interface\" cannot work with the specified interfaces",
+   "description": "The document says the engine \"may need to evaluate forces between individually-simulated agents and nearby aggregates, which the world server would present through the same neighbor query interface.\" This doesn't compose with the interfaces as specified. `SpatialQuery.query_radius` returns indices into the `AgentState` arrays, and `BulkForce` computes forces from `AgentState` fields plus `profiles: list[BehavioralProfile]`. An aggregate entity (center of mass, heading, dispersion radius, count) is not in those arrays and has no `BehavioralProfile` \u2014 force computation against it needs different inputs (count-weighted cohesion, dispersion-aware separation) and different data (mass, radius) that neither protocol carries. Slice 108 will force an interface change to `SpatialQuery`/`BulkForce` (e.g., a neighbor-metadata structure or a separate aggregate-query path), i.e., the claimed extension point does not actually support the stated future work. The architecture should specify the aggregate representation at the interface level now, or stop claiming the same interface covers it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Multi-resolution simulation and aggregation"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Environmental query interface is named as a core engine interface but is unspecified and unowned",
+   "description": "\"Clean boundaries\" lists three engine interfaces \u2014 state input/output, neighbor queries, and environmental queries \u2014 but only the first two are designed anywhere. The SpatialQuery protocol has a full signature in slice 100; the environmental query interface has no protocol sketch, no signature, and no owning slice in `100-slices.behavior-engine.md` (the Environment Layer is owned by the world-server initiative, but the engine-side contract it must satisfy is defined nowhere). This gap is already load-bearing: slice 102 (Herding) requires \"momentum-based corridor movement,\" and corridors are environmental features per the concept \u2014 yet slice 102 declares dependencies on (101) only, with no environment dependency. Either the engine document must define the environmental query contract (as it did for spatial queries), or slice 102's corridor scope must be reduced until that contract exists.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Read-only environment principle precludes the fifth archetype the document claims to support",
+   "description": "The \"Environment as input surface\" principle mandates a strictly read-only interface, and the document lists swarm intelligence (stigmergy via reinforced paths) as one of the five archetypes the engine produces. Stigmergy inherently requires agents to *write* to the environment (deposit/strengthen markers). The slice plan defers (106) Swarm Intelligence to future work citing the missing environment layer, but the deferral reason is incomplete \u2014 even with an environment layer, the read-only contract as stated cannot support it. The architecture should either acknowledge that the environment interface must become read-write (or gain a separate write channel) for stigmergy, or remove swarm intelligence from the engine's claimed archetype set. As written, the \"designed for, not built\" posture fails for this archetype.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "State representation has no mechanism for per-agent attributes required by planned slices",
+   "description": "\"Data-oriented agent state\" enumerates state as \"positions, velocities, profile indices\" \u2014 and slice 100 implements exactly that (positions, velocities, accelerations, profile_indices). But the document's own archetype list requires per-agent variation beyond profile membership: herding is defined as \"leadership by experienced individuals\" (per-agent experience/rank), and territorial behavior requires \"home-range attraction\" (a per-agent home-range center). A profile index alone cannot encode \"this specific agent is the leader\" or \"this agent's home range is centered at (x,y).\" The design will need additional per-agent attribute arrays (or a secondary attribute store), and the architecture is silent on how such arrays are added, serialized, and kept in sync with agent add/remove. This should be addressed in the state representation design before slices 102 and 104 fragment it ad hoc.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Force model specification omits degenerate-case handling, threatening determinism and the explicit-failure rule",
+   "description": "The \"Forces, not decisions\" principle defines the force model but says nothing about numerical edge cases. The most dangerous one is already specified downstream: `SeparationForce` in slice 101 computes `repulsion /= distance\u00b2` \u2014 two agents at or near the same position produce division by zero and NaN/inf, which then propagate silently through force accumulation, integration, and the spatial index (NaN positions break distance comparisons nondeterministically). This violates the project's \"never use silent fallback values; fail explicitly\" convention and undermines the Tick determinism design goal, which replay and future multi-region consistency depend on. The architecture, which owns the force model, should specify degenerate-case policy (e.g., minimum separation distance, explicit error, or documented epsilon) rather than leaving it to per-force implementers.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Dimensionality \u2014 a load-bearing decision \u2014 is absent from the architecture document",
+   "description": "The Technical Considerations section covers array layout, precision, neighbor-query cost, and GPU compatibility, but never states whether the simulation is 2D or 3D. This matters: the concept's prototypes are 3D (Three.js terrain, orbit camera), the client will render in 3D, and dimensionality affects spatial hashing cell geometry, force math, `max_speed` clamping, and the GPU kernel design the document explicitly plans for. Slice 100 resolved this unilaterally as \"2D now, 3D later\" via a `DIMS` constant and claims the switch is \"a single-point change\" \u2014 a claim the architecture should either endorse and justify (and it is dubious: cell sizes, neighbor counts, and client terrain interaction all change) or override. A decision this structural should be made in the architecture document, not inherited implicitly from a slice design.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Anticipated Slices diverge from the actual slice plan",
+   "description": "The document's anticipated slices list \"Spatial query abstraction\" as a standalone slice (\"Define the neighbor query interface and implement the first concrete strategy\"), but slice 100 already delivered the interface definition and brute-force implementation, and the slice plan's corresponding item is (105) Spatial Query *Optimization*. Similarly, \"Aggregation interface support\" appears as an anticipated slice here but is deferred to Future Work (108) in the slice plan. The document should be reconciled with the plan so readers don't assume the interface definition is still pending.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Anticipated Slices"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Determinism goal does not address neighbor-ordering as part of the interface contract",
+   "description": "Tick determinism is a design goal, but force sums are order-dependent in floating point, so determinism requires that `query_radius` return neighbor indices in a deterministic order and that force accumulation order be fixed. The SpatialQuery protocol as specified makes no ordering guarantee, and slice 105's spatial-hash replacement will need one to pass its own behavioral-equivalence regression. The determinism goal should state ordering as an explicit interface contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals"
+  }
+ ]
+}

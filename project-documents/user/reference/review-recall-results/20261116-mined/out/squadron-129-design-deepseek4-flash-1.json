@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The design names `sq model list`, but the command is `sq models list`",
+      "description": "The marker is specified as \"`sq model list`\" and the same spelling recurs at lines 37, 82, 112, 173, 180, 205 and in verification step 1 (line 211). The registered command is `sq models list`: `app.add_typer(models_app, name=\"models\")` with a `list` subcommand (`src/squadron/cli/app.py:55`, `src/squadron/cli/commands/models.py:193-194`). There is no `model` command. Slice 928 already corrected exactly this error in the command trees, and slice 931 corrected it in its walkthrough. Carried into a task file, this produces a verification step and doc text that cannot be run as written. The parent slice-plan entry for 129 carries the same slip, so fix it here and in the plan entry; the hint text and the `(needs [codex] extra)` marker must be specified against `sq models list`.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part B updates the README only; the quickstart keeps the two-manual-install path this slice exists to remove",
+      "description": "The stated goal is that \"the whole path \u2014 install, check, log in, review \u2014 \\[is\\] reachable from squadron commands\" and that a ChatGPT user no longer has to find two manual installs. The README bullet is the only documentation change listed, but `docs/QUICKSTART.md` carries the same Codex setup independently: the provider table row points at `codex auth login` (line 126), the setup section says `npm i -g @openai/codex` then `codex auth login` (lines 136-140), and the doctor sample output shows the `npm i -g @openai/codex` fix hint (lines 85-86). After this slice the quickstart still teaches the npm install and the CLI login as the Codex path, and never mentions `pip install 'squadron-ai[codex]'` or `sq auth login openai-oauth`. Slice 907's design set the precedent that a quickstart review accompanies install-path changes (\"The quickstart (slice 906) should be reviewed after this slice\"). Either add `docs/QUICKSTART.md` to the Sub-part B surface list or state explicitly that it is out of scope and why.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The optional-extra design does not account for the existing pyright exclusion or for CI installing no extras",
+      "description": "The Technical Requirements demand \"`pyright` clean\" and \"at least one test imports against the real `openai_codex` types (skipped when the extra is absent)\". Three facts the design does not reconcile with those requirements:\n\n- `pyproject.toml` sets `typeCheckingMode = \"strict\"`, `reportMissingImports = true`, and excludes `src/squadron/providers/codex/agent.py` from pyright precisely because the current SDK has no stubs. The component list (lines 61-73) touches `pyproject.toml` only to add the extra; it never says whether that exclusion is removed, retained, or extended to the new `login.py`, which the design says is one of \"the only modules that use SDK types\".\n- `login.py` is new and is not covered by that exclusion. When `openai_codex` is absent \u2014 the default install, the case the design makes a success criterion \u2014 the SDK-typed imports in `agent.py`/`login.py` need either per-line suppressions or an exclusion entry. The design states \"`openai_codex` is imported only inside functions\" as the mechanism, which keeps the module graph importable but does not satisfy pyright's missing-import check.\n- CI installs `uv sync --dev` with no extras (`.github/workflows/ci.yml:33`), so neither pyright nor the real-types test sees the package. The \"skipped when the extra is absent\" wording silently converts the one guard against SDK-surface drift into a no-op in CI.\n\nName the mechanism for each: whether `pyproject.toml`'s pyright exclusion list changes, and whether CI installs the extra (or the drift test is deliberately allowed to skip). Leaving all three implicit is a hidden dependency on an environment the slice never provisions.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:199-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mechanisms beyond what the slice needs: the `--timeout` flag and a third config key for a display-only detail",
+      "description": "Two additions carry surface and tests that the plan entry for 129 does not ask for and the stated value does not require:\n\n- `sq auth login <profile> [--device-code] [--timeout SECONDS]` with \"`--timeout` overrides it\" (`codex.login_timeout_s`). The plan assigns `sq auth login` browser and `--device-code` flows only. A per-invocation override adds a flag, a precedence rule, a config-resolution path, and its own test row on top of the configured 300 s default. Cut it; the config key already covers a slow login, and adding an override later is additive.\n- `codex.account_timeout_s` as a third registered key (default 30) whose only purpose is bounding a subprocess spawn for the account email/plan string in `sq auth status` and the post-login line \u2014 a failure the design already defines as non-fatal (\"log WARNING, show validity and source without account details, never fail the command\"). One timeout key, or reuse of the login key's budget for the post-login confirmation, would meet the requirement with one fewer config key, one fewer docs row, and one fewer test matrix.\n\nThe two new Protocols (`InteractiveLogin`, `ExtraRequirement`), each with a single implementor, are not in this category: slice 128 explicitly bans profile-name and auth-type string dispatch, so a capability protocol is the boundary-correct shape here and I am not recommending cutting them. The `CodexRuntime` resolver likewise has three real consumers (agent, provider, doctor).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The same doctor module contains the `shutil.which(\"codex\")` the design says doctor does not do",
+      "description": "D9 states \"Doctor contains no import probing or `shutil.which` of its own.\" That is true of the new `codex provider` row but not of doctor as a module: `check_codex_cli` already calls `shutil.which(\"codex\")` and is explicitly retained by this slice (the Sub-part B note at line 171 keeps the `codex CLI` row). The two rows will also overlap in meaning, since the new row's runtime source can read `PATH: <path>` from the same fact the retained row reports. Worth a sentence in D9 scoping the claim to the new row and stating the intended distinction between `codex CLI` and `codex provider`, so the task file does not try to hoist `shutil.which` out of `check_codex_cli`.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for every new I/O path are enumerated with a handling strategy and a test",
+      "description": "The turn table covers the cases the review criteria ask for and more: hang on `thread.run` bounded by `asyncio.timeout` with turn cancellation, transport closed mid-turn with agent state reset, runtime start and `initialize` failure with client close, login `wait()` never completing with handle cancellation, `account()` hang or failure degrading to a WARNING rather than failing the command, not-logged-in surfaced with the exact fix command, plus `failed`/`interrupted`/empty-response, rate limiting with no squadron-side retry, and absent usage as DEBUG rather than an error. Shutdown failure reuses the existing process-boundary teardown convention. Nothing is deferred to \"TBD\", and the Technical Requirements commit to one test per row. Remaining unspecified edges are benign (`webbrowser.open` failing on a headless box is covered by the printed `auth_url`; the `sq auth logout` SDK-error path is not tabled but is lower stakes than the login paths that are).",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-138"
+    },
+    {
+      "severity": "PASS",
+      "title": "Provider boundary and dependency directions match the parent architecture and slice 128",
+      "description": "The design stays inside the boundaries the parent architecture sets. It adds no squadron-side credential store (`~/.codex/auth.json` remains the Codex runtime's own store, matching \"each provider's credential resolution is self-contained\"), and the `InteractiveLogin` addition is argued explicitly against the architecture's Authentication Patterns section rather than left as an unstated deviation, with a stated trigger for when that section should gain a sentence. Dependency directions are correct: `InteractiveLogin` lives in the shared `providers/auth.py` and is implemented by the concrete `providers/codex/auth.py`; `ExtraRequirement` lives in `providers/base.py` beside `ProviderCapabilities`; the CLI and doctor consume providers through `ensure_provider_loaded` + `get_provider` rather than reaching into `providers/codex`. Passing a `notify` callback instead of letting the strategy import Rich keeps the presentation dependency pointing one way. The component structure also respects \"the core engine never depends on provider internals\" \u2014 no core or review module is touched. The design additionally treats the subprocess-spawn cost the parent architecture calls out for SDK providers (20-30s per client) by reusing the existing lazy client per agent and spawning only on the three paths that need it, with the reasoning for setting no latency target stated rather than omitted.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:89-92"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The design names `sq model list`, but the command is `sq models list`",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Part B updates the README only; the quickstart keeps the two-manual-install path this slice exists to remove",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:174",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The optional-extra design does not account for the existing pyright exclusion or for CI installing no extras",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:199-201",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Mechanisms beyond what the slice needs: the `--timeout` flag and a third config key for a display-only detail",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The same doctor module contains the `shutil.which(\"codex\")` the design says doctor does not do",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Failure modes for every new I/O path are enumerated with a handling strategy and a test",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-138",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Provider boundary and dependency directions match the parent architecture and slice 128",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:89-92",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T21:18:58.351210",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 247733,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 944401,
+  "cached_tokens": 857600,
+  "cache_write_tokens": null,
+  "completion_tokens": 64711,
+  "reasoning_tokens": 59352,
+  "duration_seconds": 418.2783609579783,
+  "cost_usd": 0.0500534,
+  "cost_basis": "alias_pricing"
+}

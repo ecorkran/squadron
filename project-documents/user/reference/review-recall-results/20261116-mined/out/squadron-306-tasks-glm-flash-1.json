@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Overwrite guard targets `save_review_file`, but the criterion's overwrite scenario runs through `save_review_result`",
+      "description": "Verified against source: the CLI code-review save path (`src/squadron/cli/commands/review.py:746`) calls `save_review_result`, which writes via `path.write_text(...)` directly (`src/squadron/review/persistence.py:300` and `:303`) and never calls `save_review_file`. `save_review_file`'s only production caller is the pipeline action's fallback branch when `slice_info` is `None` (`src/squadron/pipeline/actions/review.py:272`). So T12 (\"In `review/persistence.py`, before `save_review_file` writes to an existing `path`\") and T13's direct-to-`save_review_file` tests guard only the minority pipeline fallback path \u2014 while the success criterion (\"Re-running `sq review code <N>` over an edited review file archives the prior content and warns\") and Verification Walkthrough step 7 exercise `save_review_result`. The same applies to the `slice`/`arch`/`tasks` CLI saves and to in-loop reviews with resolved `slice_info`. T13 would pass while the real hazard persists; file 2's T34 e2e also authors via `save_review_result`, so even the end-to-end test would not catch it.\n\nFix before Phase 6: scope the archive-and-verify logic to the shared write path \u2014 inside `save_review_result`, or a helper both persisters route writes through \u2014 and test through the real save path. Two knock-ons the revised tasks must cover: (a) `save_review_result` currently declares `-> Path` and has no `None` failure contract, so the abort contract needs to extend to it; (b) CLI callers check no `None` today (`review_code` prints `Saved review to {path}` unconditionally), and the design's \"review content is still printed to the terminal\" requirement needs a caller-side task. The slice design's Part D wording (\"overwrite guard in `save_review_file`\") shares this mis-target and likely needs the same correction.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-256"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T14 (cf archive-scanning go/no-go) is sequenced after the Part D work it gates, against the design's explicit ordering",
+      "description": "The slice design's Phase 5 note requires the cf `archive/`-scanning verification \"as its own checklist task in the breakdown, sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme.\" In this file the checklist order is T12 (implement) \u2192 T13 (test + `fix:` commit) \u2192 T14 (verify). The prose \"This task gates T12 in practice even though it is numbered after it\" (lines 293-294) mitigates only if the implementer reads ahead; a junior implementer working top-to-bottom commits the archive scheme at T13 before the go/no-go runs, and the recursive case requires retrofitting already-committed code and a renamed archived-file scheme. Reorder the verification ahead of T12 (renumber), or convert the note into an explicit ordering instruction at the top of Part D so sequence and gating prose agree.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T14's first-line consult path (`ai-project-guide/tool-guides/context-forge/`) is not present in this working copy",
+      "description": "`project-documents/ai-project-guide` lists as empty here (DEVLOG records it as a git submodule of `ecorkran/ai-project-guide`), so the guide likely cannot answer the recursive-scanning question locally. T14 already anticipates this (\"if the guide does not answer this, ask the Project Manager directly rather than guessing\"), so no change is required \u2014 but implementers should not spend time hunting the empty path; the PM fallback is the operative route.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T8's baseline figure `2832 passed, 2 skipped` is uncorroborated",
+      "description": "The number appears nowhere else in the searched portion of `project-documents` (DEVLOG entries show other baselines, e.g. 2697, and no 305 close-out entry was located in the portion searched; it may exist beyond the search cutoff). The task treats the literal as the pass condition for T8. Recommend re-baselining with an actual `uv run pytest -q` run when starting T1 and recording the observed count, rather than trusting the figure \u2014 a stale number turns a green suite into a false failure signal.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:179"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Metrology \"review discovery\" glob is not explicitly tested against resolution artifacts (file 2's T32 covers only `discover_judge_results`)",
+      "description": "The success criterion names both `discover_judge_results` and \"review discovery\"; metrology's second review-discovery glob is `resolve_target`'s `{index}-review.*` in `src/squadron/metrology/capture.py`. By construction `{index}-resolution.{type}.{name}-r{n}.md` cannot match either pattern, and T32 argues this \u2014 but only tests one glob against a real directory. A one-line assertion for `resolve_target` (or an explicit note that the by-construction argument covers both globs) would close the criterion's \"test against the real glob\" wording. NOTE-level because the construction argument is sound.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:317-326"
+    },
+    {
+      "severity": "PASS",
+      "title": "Parts 0/A/D success criteria are fully traced; test-with pairing, commit placement, and factual grounding all check out",
+      "description": "Cross-referenced against the slice design: the `reviewedSha` stamp criterion maps to T9\u2013T11 (both persistence callers, no-placeholder rule matching the project's no-silent-fallback rule); the 305-suite-unchanged/F002 criterion maps to T2/T4/T6/T8; the F003 fail-closed archive criterion maps to T12/T13 with both failure modes (copy creation and verification) and the existing unwritable-directory test idiom (verified at `tests/pipeline/test_findings_addressed_evidence.py:183`); the F005 verification exists as its own task (ordering raised separately above). Every implementation task is immediately followed by its verify/test task, and `Commit:` markers sit at working, tested points (T2, T4, T6, T8, T11, T13) rather than after every task or only at the end. The file's factual claims verified against source: the four `tests/pipeline/test_findings_addressed*.py` files exist; all seven expected importer modules import `findings_addressed.models`; `judge.py` contains `JudgeLegResult`, `_render_findings`, `_resolve_model`, and `JUDGE_BLOCK_PARAM` exactly as T5 asserts; `RoundDiff.failed_command`/`is_empty`, `screen_byte_identical`, `verify_outcomes`, and `derive_addressed_verdict` exist where cited; and `run_git`'s `CompletedProcess | None` signature matches T10/T19's usage. Part B/C criteria are covered by the companion file 2 (T15\u2013T40), whose stated prerequisite on file 1 matches the handoff section. No NFR/load-test requirement is restated by this slice design, so no load-test task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Overwrite guard targets `save_review_file`, but the criterion's overwrite scenario runs through `save_review_result`",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-256",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T14 (cf archive-scanning go/no-go) is sequenced after the Part D work it gates, against the design's explicit ordering",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-298",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "T14's first-line consult path (`ai-project-guide/tool-guides/context-forge/`) is not present in this working copy",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-298",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "T8's baseline figure `2832 passed, 2 skipped` is uncorroborated",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:179",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Metrology \"review discovery\" glob is not explicitly tested against resolution artifacts (file 2's T32 covers only `discover_judge_results`)",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:317-326",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Parts 0/A/D success criteria are fully traced; test-with pairing, commit placement, and factual grounding all check out",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-16T21:05:37.187354",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 471900,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 687517,
+  "cached_tokens": 555200,
+  "cache_write_tokens": null,
+  "completion_tokens": 115927,
+  "reasoning_tokens": 112282,
+  "duration_seconds": 646.8973927500192,
+  "cost_usd": 0.09446705,
+  "cost_basis": "alias_pricing"
+}

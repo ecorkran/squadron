@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Density signal records post-cap counts, contradicting the stated pre-cap intent",
+      "description": "The design states the density signal is \"recorded from the CSR `filtered_counts` (post-`exclude_self`, pre-cap) at the end of each tick\" and explicitly argues (citing perf journal Entry 5) that the dispatch decision must use pre-cap density, not capped density. However, the Tick Integration diagram places `spatial.record_density(filtered_counts)` as step 8 \u2014 *after* step 4's optional `apply_neighbor_cap`, which reassigns `filtered_counts`. In the actual `tick.py` flow, `apply_neighbor_cap` overwrites `filtered_counts` with the capped version, so by step 8 the variable holds post-cap counts. With `max_neighbors` set (the production config per Entry 5 uses `k=1`), `filtered_counts` would be \u22641 per agent, giving `mean_neighbors_per_agent \u2264 1`, far below the default threshold of 10. The dispatcher would switch to grid after the first tick and never switch back, defeating the slice's core value proposition (the grid loses in the clustered regime). The design needs to explicitly capture the pre-cap `filtered_counts` (e.g., save it before step 4) and record that value, or move the `record_density` call before the cap.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:156-166"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`world_bounds` type mismatch under-specified in server wiring",
+      "description": "The design lists `ServerConfig.simulation.world_bounds` as \"provides the grid's `world_bounds`\" and shows `_build_spatial` passing `world_bounds=self.config.simulation.world_bounds` to `HashGridQuery(cell_size=..., world_bounds=...)`. But `HashGridQuery.__init__` expects `world_bounds: tuple[float, float, float, float]` \u2014 a `(x_min, y_min, x_max, y_max)` 4-tuple \u2014 while `ServerConfig.simulation.world_bounds` is a `WorldBoundsConfig` dataclass with `width`, `height`, `policy`, and `soft_bounds` fields (no `x_min/y_min/x_max/y_max`; the world is implicitly `[0, width] \u00d7 [0, height]`). The `_build_spatial` helper as described would pass a `WorldBoundsConfig` object where a 4-tuple is expected, causing a runtime error. The conversion `WorldBoundsConfig \u2192 (0.0, 0.0, width, height)` is not described anywhere in the design. The `_derive_cell_size` helper is specified but the `world_bounds` conversion is not.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:228-240"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`initial_backend` claimed configurable but not exposed in `SpatialConfig`",
+      "description": "The design's Technical Decisions section states: \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator running a scattered-start scenario can choose grid-first.\" However, the `SpatialConfig` dataclass (lines 187-192) includes only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band` \u2014 no `initial_backend` field. The `_build_spatial` wiring (line 238) hardcodes `initial_backend=\"brute\"` for the adaptive case. An operator cannot actually choose grid-first without code changes, contradicting the stated design intent. Either add `initial_backend` to `SpatialConfig` or remove the configurability claim.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:142-143,298-301"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`record_density` feedback via `hasattr` is a documented, acceptable design choice",
+      "description": "The `hasattr(spatial, \"record_density\")` guard introduces a feedback channel from `tick.py` back into the spatial object \u2014 a mild departure from the architecture's unidirectional data-flow description (caller \u2192 engine). The design explicitly considered adding `record_density` to the `SpatialQuery` protocol with a no-op default and rejected it to avoid coupling the protocol to a dispatcher concern. This stays within the architecture's \"spatial index is stateful and owned by the caller\" principle (the engine itself remains stateless), and the `hasattr` guard keeps `BruteForceQuery`/`HashGridQuery` free of dispatcher-specific API. No action required; noting for the record.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:170-176"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Density signal records post-cap counts, contradicting the stated pre-cap intent",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:156-166",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`world_bounds` type mismatch under-specified in server wiring",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:228-240",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`initial_backend` claimed configurable but not exposed in `SpatialConfig`",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:142-143,298-301",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "`record_density` feedback via `hasattr` is a documented, acceptable design choice",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:170-176",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-16T20:49:54.925670",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 40055,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 539712,
+  "cached_tokens": 470720,
+  "cache_write_tokens": null,
+  "completion_tokens": 10358,
+  "reasoning_tokens": 8742,
+  "duration_seconds": 75.79661808302626,
+  "cost_usd": 0.1212565,
+  "cost_basis": "alias_pricing"
+}

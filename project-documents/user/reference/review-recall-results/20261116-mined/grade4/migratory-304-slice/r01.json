@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`step()` implementation snippet contradicts the design's own post_tick requirement",
+   "description": "The Implementation Details sketch places the zero-entity exit as an early `return` (`if self._entity_manager.count == 0: return`, line 276) *before* the `post_tick()` call at line 288 \u2014 so with zero entities and an environment present, `pre_tick()` runs but `post_tick()` never does. This directly contradicts the design's own stated behavior: \"post_tick() is called even when there are no entities. Trail decay and other time-varying layer updates should still run... The early return is moved to wrap only `engine.tick()`\" (line 291), the Architecture-section snippet that uses a `count > 0` guard instead (line 180), and Task 3.2 in `304-tasks.environment-layer-integration.md` (\"Must be called even when entity count is zero\"). The test in Task 3.4 would catch it, but the authoritative implementation section should match the stated requirement \u2014 replace the early `return` with a `count > 0` guard around the `tick()` call only.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:274-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Environment context is never passed to `engine.tick()`, deviating from the documented integration contract without flagging it",
+   "description": "Three documents specify the environment reaching the behavior engine as a `tick()` argument: the slice plan entry (\"Pass environment context to `SimulationManager` and `engine.tick()`\"), 300-arch (\"Pass current entity state and environment context to the behavior engine\"), and 500-arch (\"The world server passes the environment (or its query method) to `engine.tick()` as the 'environmental context' parameter\"; 100-arch line 64 likewise lists environmental context as a tick input). The design instead keeps `tick(state, profiles, spatial, dt, forces)` unchanged and routes the environment to future forces via constructor injection (\"This requires no changes to the `BulkForce` protocol\", line 216). Constructor injection is functionally workable and preserves read-only-during-evaluation, but it silently replaces the documented mechanism rather than resolving the deviation: when environment-aware forces arrive, the engine-side environmental-context parameter from 100-arch/300-arch/500-arch will either be added anyway or the architecture documents need updating. The design should state the deviation explicitly and name which documents get amended (or adopt the parameter now while the call site is being touched anyway).",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:206-216"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Plan-assigned \"handle post-tick environment writes\" is narrowed to a no-argument call with no named deferral",
+   "description": "The slice plan entry assigns \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" to this slice. The design establishes the `post_tick()` call site but always invokes it with no deposits or mutations (lines 190, 288), and the Excluded list (lines 43\u201349) does not mention this deferral \u2014 \"Environment-aware behavioral forces\" is excluded, but write forwarding is not. Since no swarm/predator writers exist yet, forwarding nothing is arguably correct now, but the narrowing is undocumented: nothing names when the collection-and-forwarding pathway (500-arch: \"the world server collects deposit requests from swarm-profile agents after behavior evaluation and passes them to the environment layer\") gets built, or by which slice. Add an explicit Excluded entry (e.g., \"Post-tick write forwarding (trail deposits, threat mutations) \u2014 arrives with 505/506 plus the behavior-engine writer slices\") so the gap is tracked rather than implicit.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:43-49"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Mid-season\" characterization of the 0.0 seasonal default is an unsupported assumption",
+   "description": "The design asserts `seasonal_parameter=0.0` produces \"a fixed 'mid-season' environment.\" The seasonal semantics (what 0.0 means \u2014 thaw, mid-year, or deep winter) are owned by slice 504's modulation curves and 308's advancement logic, which don't exist yet. If 504 maps 0.0 to a seasonal extreme, the default environment would be anything but mid-season once layers exist. Reword to \"fixed default value pending slice 308/504's definition of the parameter's semantics\" \u2014 the current phrasing could mislead later implementers into treating 0.0 as seasonally neutral.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:198"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Data-flow examples use a broadcast signature that doesn't match the completed 305 design",
+   "description": "The data-flow diagram shows `client_manager.broadcast(state, tick_number, entity_count)` (line 107) and the server snippet uses `broadcast(em.state, tick_number, em.count)` (line 318), but slice 305's design defines `broadcast(self, state: AgentState, tick_number: int)` \u2014 no entity-count parameter. This slice doesn't modify `broadcast`, so the illustrative code should match the established two-argument interface to avoid sending an implementer hunting for a signature change that isn't part of this slice.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:107"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Permanent `Environment | None` dual path bought for test convenience during a change that touches all call sites anyway",
+   "description": "The design declares the environment \"not optional \u2014 the server always creates one\" and motivates it by avoiding scattered `is not None` checks, yet `step()` retains two such checks because `environment` stays `None`-defaulted \"for backward compatibility with existing tests.\" Those same tests are already being updated for the breaking `step(tick_number)` signature change (Special Considerations, Task 3.3/4.2), so the compatibility benefit is marginal while the None branch becomes permanently live-but-unexercised code that silently skips the environment lifecycle if ever hit. Consider making the parameter required; at minimum, note that the None path exists solely for legacy tests and is never taken in production.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:296-310"
+  }
+ ]
+}

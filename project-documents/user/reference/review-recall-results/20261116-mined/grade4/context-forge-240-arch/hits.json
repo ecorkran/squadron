@@ -1,0 +1,92 @@
+{
+ "case": "context-forge-240-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work says 180 \"Established worktree-scoped config resolution\" and that `workflow.review_*` should resolve at worktree scope \"using the resolution chain 180 introduced\". 180's arch (`180-arch.initiative-context-worktree.md`, \"Project layer\" line 81 and \"What Stays Shared vs. Per-Context\" line 232) keeps configuration project-level and shared; its resolution chain (line 124: flag, CWD match, `default_project`) resolves which project, not which config. `ConfigManager.get` at `6c667b79` reads project config, then user config, then default, with no worktree step. **VALID**: contradicts a sibling document and code. Needs: doc (180 arch) or code (`ConfigManager.ts`).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     3
+    ],
+    "r04": [],
+    "r05": [],
+    "r06": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Renumbering of the `getNext()` cascade is assigned to two different slices: Anticipated Slices bullet 1 (discovery and config keys) \"Includes renumbering the `getNext()` priority cascade\", while Technical Considerations says \"The slice implementing the gate logic should renumber the full cascade\". **VALID**: self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [
+     9
+    ],
+    "r05": [],
+    "r06": []
+   }
+  },
+  {
+   "id": "F3",
+   "text": "The `review_unknown_as` value set is inconsistent: the config block gives `\"fail\"`; Technical Considerations uses `review_unknown_as = \"concern\"` (singular, while `review_threshold` uses `\"concerns\"`); the `pending-review` status definition says \"or verdict is UNKNOWN and `review_unknown_as` treats it as pending\", a value the doc never defines. The values are never enumerated. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [],
+    "r03": [
+     8
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "\"V1 implements only the four slice-level transitions\", but the four configured gates are `pre-slice-plan` (initiative-level, stated deferred in the same section and in the Overview), `pre-tasks`, `pre-implementation`, `pre-advance`. That is three slice-level transitions in v1. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [
+     8
+    ],
+    "r02": [],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     1
+    ],
+    "r06": []
+   }
+  },
+  {
+   "id": "F5",
+   "text": "Technical Considerations: \"`getNext()` uses integer comments (Priority 1-7)\" and renumbering is needed \"to avoid fractional priorities\". `WorkflowNavigator.ts` at `6c667b79` already has a `// Priority 2.5` branch (line 187). **VALID** (minor): contradicts code. Needs: code.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [
+     9
+    ],
+    "r05": [
+     16
+    ],
+    "r06": []
+   }
+  }
+ ],
+ "note": "Borderline: F5 r04#9 and r05#16 note the existing Priority 2.5 as argument against renumbering, which counts as identifying that the code already has fractional priorities. F1 r04#3/r05#14/r06#0 mention worktree config only as missing plumbing, not as the false claim about 180, so not counted. r05#16 and r03#9 mention renumbering but not the two-slice contradiction, so not counted for F2."
+}

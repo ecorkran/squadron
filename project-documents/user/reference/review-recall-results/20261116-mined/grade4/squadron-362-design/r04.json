@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Design's \"verified\" facts and present-tense repo claims are contradicted by the repository state",
+   "description": "The design asserts: \"Probed against this repo's real graph (v2.8.1, `gitCommitHash` `1bfbca1` ...) ... These are measurements, not assumptions, and the design's decisions rest on them.\" I verified the repo and found: (a) `.understand-anything/` does not exist at the repo root; (b) `user/analysis/` contains only 940\u2013942 \u2014 no 943 sample exists, yet walkthrough step 2 states \"943 exists, so expect **944**\" as present fact (line 368) and Implementation Notes discusses \"The 943 document generated during slice 361\"; (c) `commands/analysis/` contains only `tech-debt-audit.md` \u2014 `understand.md` does not exist, yet the design quotes 361 skill text (\"states that `nodeIds` mixes file, function, and class nodes and instructs intersecting with `type == 'file'`\") and describes the corrections as edits to \"existing text\"; the 361 design document in the repo does not contain that instruction either. The sibling 361 task checklist (same date) states unambiguously: \"No graph exists in this repo yet\" and \"`.understand-anything/` does not exist in this repo \u2014 Task 0.1 is a hard prerequisite,\" with Task 0.1 unchecked and PM-gated. Consequently, success criteria 4 and 5 hard-code measured values (34, 6, 238) for one specific graph state that nothing in the repo corroborates \u2014 and the design itself concedes \"the graph may have been refreshed.\" The design's own mitigation (walkthrough step 1 re-measures and stops on disagreement) is why this is a CONCERN and not a FAIL, but before implementation the design must either (a) state where and when the graph was probed and restate criteria 4\u20135 as reconciliation invariants (\u03a3 `nodeIds` lengths == `analyzedFiles` == file-level node count, values reported as measured at run time) rather than absolute numbers, or (b) explicitly defer measurement to 361's Task 0.1 and re-measure. As written, criteria 4\u20135 can fail on a correct implementation, and the document presents unverifiable claims as its evidentiary basis \u2014 the exact hallucination trap CLAUDE.md warns about.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#verified-graph-facts"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`.understandignore` fallback rule is self-contradictory",
+   "description": "Section 7 detail states: \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only', not as a gap.\" The parenthetical contradicts the category: the design's own Verified graph facts table records `.understandignore` active (uncommented) lines = **17**, and a file with 17 active lines is not an all-comments file. The rule as written leaves the executor two conflicting behaviors for the design's own repo: walkthrough step 4's spot-check expects the reported active-pattern count to match `grep -vE '^\\s*(#|$)' .understandignore | wc -l` (17), while the fallback rule's example says this state is reported as \"defaults only.\" \"Defaults only\" is also undefined operationally \u2014 squadron has no reference list distinguishing upstream-shipped default patterns from user-added ones, so the skill cannot determine that a pattern is a default. Since section 7 exists precisely to state the document's coverage limits, this fallback must be mechanically decidable: define it by observable state (zero active lines \u2192 \"defaults only\"; one or more \u2192 count and list them), and drop or re-measure the contradictory parenthetical.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#section-detail"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Read-discipline wording (\"no function- or class-level node is read\") conflicts with section 6's endpoint resolution",
+   "description": "Success criterion 9 states \"no function- or class-level node is read,\" and walkthrough step 7 confirms \"no function/class-level node data appears in any section.\" But section 6 (Dependency observations, lines 218\u2013219) requires that \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in different layers still counts as an inter-layer signal.\" Resolution necessarily touches function/class node identity \u2014 at minimum their ids (derivable from the type-prefixed id `function:path:name`) and their layer membership. The design carves out an explicit exception for `.understandignore` (\"the one new read that is not a `jq` selection\") but never states the corresponding carve-out for function/class id-level aggregation versus content-field reads. An executor following criterion 9 verbatim will drop inter-layer `calls` edges \u2014 the behavior section 6 forbids \u2014 or resolve the tension by reading node content. One sentence is needed: function/class nodes may be selected for id/path/layer-resolution aggregates only; their content fields (`summary`, `complexity`, `languageNotes`) are never read and never appear in any section.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#read-discipline-unchanged"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`languageNotes` is listed as a binding source field yet exempted from the binding rule",
+   "description": "Mapping row 4 lists `languageNotes` among section 4's Source fields, and the table is declared binding (\"on absence emits that fallback and nothing else\"), while Section detail 4 then permits silent omission of the annotation per node. The design's justification (per-node optional annotation vs. section source field) is sound and the intent is unambiguous, but the table's field list and the binding claim should be reconciled (e.g., mark `languageNotes` as optional annotation in the row) so an executor does not emit a gap marker per unannotated node.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#extraction-mapping"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Exclusion-based file-level selector is a deliberate, argued deviation from the architecture's nine-type enumeration",
+   "description": "The architecture enumerates nine file-level types; the design replaces the allow-list with `type != \"function\" and .type != \"class\"`, arguing future types are then included automatically. This still satisfies the architecture's hard requirement (function/class never read) and it restores the wider file-level set the architecture itself documented, with a drift cross-check (surviving node without `filePath` is reported). Acceptable as a documented correction; no action needed beyond the drift check the design already specifies.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#corrections-to-the-361-contract"
+  }
+ ]
+}

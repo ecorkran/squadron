@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope and dependency direction align with architecture and plan",
+      "description": "The design matches plan-140 entry (146) point for point: `compute` config block, `GpuSimulationDriver` owning `qd.init` once at startup, bounds sync-back via `from_numpy()`, spawn/despawn re-upload, unchanged `server.py` call site, Metal-on-macOS/CUDA-on-Linux with CPU fallback. Wire-format work is correctly excluded (architecture principle \"the wire is a separate problem\"). The fused tick operating outside `SpatialQuery`/`BulkForce` is explicitly permitted by the architecture's \"Same pattern, different backend \u2014 except the GPU fused tick\" principle. Moving `GpuAgentState` to `src/migratory/gpu/` before the production import is created is the right dependency direction (production and bench both depend on `migratory.gpu`, never production\u2192bench).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFRs restated with specific targets; failure modes for the new I/O path are explicit",
+      "description": "A6 restates the Tier 2 NFR with a concrete target (\u226560 TPS at N=50k, CUDA-only integration test through the production `SimulationManager`, which includes the per-tick download \u2014 a production-faithful measurement). The f32/f64 parity NFR (~1.37e-6 L-inf, from slices 142\u2013145) is restated in the f32/f64 contract section. GPU failure modes are enumerated rather than left TBD: `qd.init()` failure propagates and exits at startup, mid-session GPU failure is declared fatal with process-restart as the recovery unit, and the no-GPU-path behavior is specified (though see the CONCERN below \u2014 the specified behavior is internally inconsistent).",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Success Criteria"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New-client snapshots and EntityManager state reads go stale on the GPU path",
+      "description": "The design's A3 claims \"Downstream code (`client_manager.broadcast`, sim logger) requires zero changes,\" but the world server has another consumer the design never accounts for: `make_snapshot_builder()` (`src/migratory_server/clients.py:344`) constructs `TickResult.from_numpy_state(em.state, em.count)` on every new client connection, reading the CPU `AgentState` arrays directly. On the GPU path the driver owns state; nothing in the design writes GPU results back to `AgentState`, so a client connecting mid-session receives a snapshot of the state as it was at server startup (or last spawn), not current positions. The same staleness applies to `EntityManager.get_position()` and any other direct `em.state` reader. The requirement left unmet: new clients must receive a snapshot reflecting current world state. The design needs to either (a) write back GPU state to `AgentState` per tick, (b) build snapshots from the GPU path's `TickResult`, or (c) explicitly document and accept snapshot staleness \u2014 currently it is silent on this, which is exactly the \"hidden dependency\" failure mode.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#SimulationManager Changes"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No-GPU fallback (A7) is unreachable as designed \u2014 `_select_arch()` contradicts the stated failure behavior",
+      "description": "`_select_arch()` selects by `platform.system()` only: every Linux host returns `qd.cuda`, every Darwin host returns `qd.metal`, regardless of whether the device exists. But the design's own Open Notes state \"If `qd.init()` raises (e.g. CUDA driver absent, GPU OOM during field allocation), `GpuSimulationDriver.setup()` propagates the exception and the server exits at startup.\" These two statements contradict A7: \"A host with no Metal and no CUDA starts successfully with `backend: quadrants` \u2014 `_select_arch()` falls back to `qd.cpu` and logs a WARNING.\" On a Linux host without an NVIDIA GPU, the design as written raises at `qd.init(arch=qd.cuda)` and exits \u2014 A7 can never pass. The requirement unmet: the architecture's failsafe (\"quadrants backend on a host with no Metal or CUDA still runs correctly on `qd.cpu`, with a warning\") and the slice's own Scope bullet (\"falls back to CPU with a logged warning if neither is detected\"). Fix: detect at init time (e.g., attempt the preferred arch, catch the init failure, fall back to `qd.cpu` with the warning), or restrict A7 to the unsupported-platform case and restate A7 to match.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Architecture"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "REFLECT velocity sync-back is missing \u2014 `notify_positions_modified` uploads positions only",
+      "description": "`apply_bounds_policy` (`src/migratory_server/bounds_enforcement.py`) mutates both positions and velocities under `BoundsPolicy.REFLECT` (velocity sign-flip is load-bearing for the bounce behavior). The sync-back mechanism the design specifies is `gpu_driver.notify_positions_modified(result.positions[:result.count])`, which stores and later uploads only positions. Under REFLECT, the flipped velocities are broadcast to clients but never reach the GPU state, so the next tick integrates from the pre-reflection velocity \u2014 the bounce is invisible to the simulation and the GPU and client trajectories diverge. The requirement unmet: A4 requires all four bounds policies to \"produce valid positions after 100 ticks on the GPU path,\" and REFLECT's semantics require the velocity correction to persist. The interface should be `notify_state_modified(positions, velocities)` (or `upload_positions` + `upload_velocities`), with wrap uploading positions only and reflect uploading both.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Count-based change detection misses equal-count mutations and GPU field capacity is unspecified for runtime growth",
+      "description": "Two gaps in the spawn/despawn sync mechanism:\n1. `count_changed_since_last_tick()` compares only the count. `EntityManager.remove_entity()` shifts array indices (`src/migratory_server/entities.py` rebuilds `_id_to_index` with `idx - 1`), so a despawn followed by a spawn between ticks leaves the count unchanged while positions/profile indices at shifted indices differ \u2014 the GPU state is silently stale. The requirement unmet: any mutation of entity state must trigger re-upload. Track a mutation counter (or generation number) rather than the count.\n2. `GpuAgentState` fields are allocated once at `setup()` with `n = entity_manager.count` (Quadrants fields recompile on shape change; slice 145 notes the runner \"allocates once and never resizes\"). The design never states whether `sync_from_entity_manager()` handles a count *larger* than the allocated field size \u2014 an upload beyond the allocated N fails or truncates. `EntityManager.spawn_entity()` is a runtime API, so population growth past the setup-time count is a reachable path. The design must either allocate fields at `entity_manager.capacity` up front or specify reallocation on growth (and name the recompilation cost).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#SimulationManager Changes"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "f64-export claim contradicts the `GpuAgentState` implementation the design says it moves unchanged",
+      "description": "The design states: \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore carries f64, preserving the downstream contract.\" The actual implementation being moved (`src/migratory/bench/backends/quadrants_fused_state.py:242,253`) returns **f32** (`np.column_stack([x, y]).astype(np.float32)`), and `TickResult.from_quadrants_fields` (`src/migratory/engine/tick_result.py`) documents that \"Slice 145 backends pass f32 positions/velocities here.\" The design also says the moved module gets \"no logic changes.\" These cannot all be true: either the design adds an f32\u2192f64 upcast per tick (a logic change to the export path, with a per-tick allocation cost at N=50k the design does not account for), or `TickResult` carries f32 and the \"preserving the downstream contract\" claim is wrong in dtype terms. The design must pick one and state the real dtype contract, because `apply_bounds_policy` and the wire encoder both sit downstream of this boundary.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#GpuAgentState Changes"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Server-teardown claim references a path that does not exist",
+      "description": "The design says \"Shutdown: the existing server teardown path calls `simulation_manager` cleanup; add `gpu_driver.finalize()` there.\" There is no existing `simulation_manager` cleanup path in `server.py` \u2014 shutdown runs reverse-registered hooks and the `finally` block that shuts down the sim executor. The intent is clear, but the design should name the actual location (e.g., register a shutdown hook or extend the `finally` block after `self._sim_executor.shutdown(...)`), since `finalize()` calling `qd.reset()` must run before process exit on the GPU path.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Server Startup"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope and dependency direction align with architecture and plan",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "NFRs restated with specific targets; failure modes for the new I/O path are explicit",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Success Criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "New-client snapshots and EntityManager state reads go stale on the GPU path",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#SimulationManager Changes",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No-GPU fallback (A7) is unreachable as designed \u2014 `_select_arch()` contradicts the stated failure behavior",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "REFLECT velocity sync-back is missing \u2014 `notify_positions_modified` uploads positions only",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Bounds Enforcement on the GPU Path",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Count-based change detection misses equal-count mutations and GPU field capacity is unspecified for runtime growth",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#SimulationManager Changes",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "f64-export claim contradicts the `GpuAgentState` implementation the design says it moves unchanged",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#GpuAgentState Changes",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Server-teardown claim references a path that does not exist",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#Server Startup",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-16T21:13:40.725243",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 121169,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 489477,
+  "cached_tokens": 408767,
+  "cache_write_tokens": null,
+  "completion_tokens": 30910,
+  "reasoning_tokens": 27853,
+  "duration_seconds": 229.99275408312678,
+  "cost_usd": 0.03982451,
+  "cost_basis": "alias_pricing"
+}

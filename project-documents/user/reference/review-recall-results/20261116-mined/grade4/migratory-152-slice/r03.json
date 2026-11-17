@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Rewritten inner loop drops the uncapped `max_neighbors` path",
+   "description": "The slice-150 kernel handles `max_neighbors <= 0` (the encoding for `ProfileConfig.max_neighbors = None`, verified in `src/migratory/gpu/agent_state.py` `_build_profile_param_table`, which writes `0.0` for unset) with a dedicated accept-all-within-radius sub-branch (`if max_neighbors <= 0: # Uncapped: accept all directly`). The slice's \"AFTER (slice 152)\" inner loop has no such branch: with `max_neighbors == 0` and `k_nearest` (the new default per \u00a7\"Default neighbor mode is `k_nearest`\"), `heap_size < max_neighbors` is false, and `dsq < heap_dsq[0]` is true for every candidate because `heap_dsq[0]` is initialised to the `INF` sentinel \u2014 so the eviction path executes on an empty heap, reads `evicted = heap_idx[0] == -1`, and indexes `_px_c[-1]`. The doc says `radius_only` is \"identical to the `k_nearest` uncapped sub-branch \u2026 promoted to a first-class mode\", which implies uncapped is now only reachable via `radius_only` \u2014 but it never states that `max_neighbors` unset + `k_nearest` is invalid, and no error/guard is specified. Per the project convention against silent fallback, this must be either explicitly handled (retain the uncapped branch) or rejected at config/parse time with a clear error.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:283-325"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success criterion 2 misstates the existing parity test's tolerance",
+   "description": "Criterion 2 claims \"the parity test from slice 150 (`tests/bench/test_quadrants_fused_parity.py`) continues to pass. Mean speed and mean nearest-neighbor distance remain within 5% of the numpy reference at N=4500.\" The shipped test asserts a **20%** relative tolerance (`speed_rel <= 0.20`, `nn_rel <= 0.20`) and runs on `mid-flock` (N=3500), not N=4500. The slice's own Risk 3 names that test as \"the regression net\" for the heap index-space change, so the stated tolerance is the criterion that would be used to accept or reject the change. As written, implementing the 5% criterion would either require tightening a test the slice does not own or produce a permanent false failure. Restate the actual tolerance and workload, or state explicitly that this slice tightens it and why.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:353-358"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough specifies CLI surface that does not exist",
+   "description": "Steps 2\u20135 are the load-bearing gate procedure (step 4 is \"THE gate\"), and all of them are expressed as commands against a CLI that does not provide them: `src/migratory/bench/cli.py` exposes only `--workload`, `--backend`, `--workload-dir`, `--results-dir`, `--list-backends`, `--list-workloads` \u2014 there is no `parity` subcommand, no `--neighbor-mode`, and no `--ticks`. `neighbor_mode` is currently settable only via the workload YAML (`Workload.from_yaml`, `src/migratory/bench/workload.py`). The doc must either specify the real mechanism for injecting `neighbor_mode: radius_only | k_nearest` into a measured run (new workload YAMLs, or a new flag as explicit scope) or rewrite the commands, otherwise the exit criterion has no executable procedure.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:369-402"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Scope beyond the slice-plan entry: new `radius_only` mode, `k_first` removal, and default flip",
+   "description": "Slice-plan entry 13 assigns this slice the coherent reindex plus the FRNN path (\"With coalesced reads, k-nearest via FRNN (collect all within radius R, then partial-sort the small candidate set per thread) becomes viable at scale\"), with exit criteria \"k-nearest TPS at N=200k within 20% of k-first TPS at the same N; parity preserved; **no regression on k-first path**.\" The design instead (a) adds a second first-class neighbor mode (`radius_only`) with its own purpose, docs, and benchmark ladder, (b) removes `k_first` entirely from the kernel, `ComputeConfig`, `Workload` and `_NEIGHBOR_MODE_MAP`, (c) flips the default to `k_nearest`, and (d) explicitly defers FRNN to a follow-up slice. Items (a)\u2013(c) are not assigned by the plan entry and invalidate its \"no regression on k-first\" criterion; (d) defers the mechanism the entry names as this slice's deliverable. Either the plan entry is amended first, or `radius_only`/`k_first` removal/default flip is cut and shipped as a separate slice.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:57-75"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Tier target mislabelled and the performance gate has no absolute floor",
+   "description": "The Overview states this slice makes k-nearest \"viable at the architecture's Tier 3 target (N=200k)\". The parent architecture defines **Tier 3 as 250k on production-class NVIDIA hardware with server-side frustum culling**, while 200k is characterised in slices 148/145 notes as a dev-class CUDA measurement point (3 TPS at N=200k post-145). The slice's only performance gate (criterion 4, line 358) is relative \u2014 `k_nearest_tps >= 0.8 \u00d7 radius_only_tps` \u2014 with no absolute TPS floor. A run where `radius_only` is itself far below any tier milestone passes the gate. Because the parent architecture states TPS milestones for this path, this slice should restate the applicable target with a specific number (even if it is an intermediate target below Tier 3) rather than a relative ratio alone.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`profile_index_c` is written every tick and never read",
+   "description": "The reindex kernel copies `_profile_index` into `_profile_index_c` and `_bind_state_fields` binds it, but nothing reads it: the force kernel's only use of the profile index is `pi = _profile_index[i]` in the outer loop over original-order agents, which the slice explicitly leaves unchanged (\"The outer loop \u2026 are unchanged\"). In-scope item 3 nonetheless lists `_profile_index` among the fields to substitute in the inner loop. This is a dead field \u2014 extra per-tick reindex work and 0.8 MB at N=200k (the memhood cost line at 214 sums seven fields, one of which is unused). Cut it from the field set, the reindex body, and the binding.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:203-226"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Design weight: reference-reading sections, duplicated FRNN material, and non-gating probes",
+   "description": "For a plan entry rated \"Risk: Medium. Effort: 3/5\", the document carries substantial material that is not design of this slice: \u00a7\"Reference points\" (lines 36\u201344) is background reading on Babylon.js/WebGPU 16M/4M, spatial-hash and brute-force ceilings, and an \"implication for targets\" argument that is restated again in criterion 4 (line 358) and Future Work (line 456 onward). The FRNN collect-then-sort discussion appears twice (\u00a7\"Heap is the starting point\u2026\", line 187, and Future Work) while the slice explicitly does not implement it. Verification step 5 (lines 395\u2013400, `mid-flock-500k` and `mid-flock-1M`) is explicitly \"not a hard gate\" and, per the doc's own trigger condition, belongs to the FRNN follow-up slice. Cut the reference-points section to a one-line citation, state the FRNN material once under Future Work, and drop the 500k/1M probe from this slice's verification (or move it to the follow-up) \u2014 none of it changes what this slice must build.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:36-44"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "\"Three `neighbor_mode` values to two\" is inaccurate",
+   "description": "The Value section says the slice \"does not change any external interface other than collapsing three `neighbor_mode` values to two\". The current mode set is already two (`_VALID_NEIGHBOR_MODES = {\"k_first\", \"k_nearest\"}` in `quadrants_fused_kernels.py` and `config.py`); the \"third\" is the uncapped sub-branch inside the kernel, not a config value. Rephrase to avoid an incorrect interface claim.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:48"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Error type name and field-group wording do not match the code",
+   "description": "The doc says configs using `k_first` \"raise a `ConfigurationError`\"; the codebase raises `ValueError` (wrapped to `ConfigError` in `migratory_server/config.py`, plain `ValueError` in `migratory/bench/workload.py`). Separately, Risk 4 (line 427) says the new fields are placed \"in the same `qd.root.dense(qd.i, N)` group as the originals\", but the code listing at lines 210\u2013226 places the six coherent fields in their own `place()` call and `coherent_to_original` in a third \u2014 neither shares the originals' group. Both are minor but should match the implementation the slice will be reviewed against.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:199"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Prerequisite \"shipped on `main`\" conflicts with the slice plan's own record",
+   "description": "Slice 152's Dependencies says \"Slice 150 \u2026 is shipped on `main` as of 2026-05-05\", but slice-plan entry 11 (line 50) is unchecked (`[ ]`) and `150-slice\u2026md` carries `status: in_progress`. Since this slice's design removes `k_first` and depends on 150's heap/pruning internals, the base it builds on should be unambiguous. If 150 has shipped, the plan checkbox and 150's status are stale and should be updated; if it has not, this design is premature.",
+   "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:50"
+  }
+ ]
+}

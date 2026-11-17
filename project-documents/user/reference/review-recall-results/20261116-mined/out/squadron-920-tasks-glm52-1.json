@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test rewrites deferred \u2014 implementation tasks commit with a red suite",
+      "description": "The test-with pattern breaks for the four core implementation tasks. Task 6 (re-key `agent.py`) commits `refactor: re-key agent.py throttle detection` but the corresponding test rewrite is Task 10 \u2014 four tasks later. Between Task 6 and Task 10, `test_a_rejected_rate_limit_event_reaches_the_backoff` constructs a `MessageParseError` with a `rate_limit_event` payload; after Task 6 removes the `is_rate_limit_event(exc.data)` special case from `_skip_unparseable` (confirmed at `src/squadron/providers/sdk/agent.py:128`), that `MessageParseError` falls through to the generic WARNING-and-skip branch instead of re-raising, so the test expecting `ProviderRateLimitError` fails. Similarly, Task 9's commit `refactor: delete rate-limit parser shim` lands while `test_the_shim_absorbs_informational_events` and three sibling tests still call `install_rate_limit_parser_shim()` (confirmed at `tests/providers/sdk/test_agent.py` \u2014 these tests import and call the deleted function). Tasks 7 and 8 have the same gap (tests deferred to Task 11). Each of these four tasks includes a `Commit:` marker, but the suite is not green at those points. The fix is to move the test rewrites adjacent to their implementation tasks \u2014 e.g., merge Task 10's `test_agent.py` rewrites into Task 6's commit, and Task 11's `test_sdk_session.py` rewrites into Task 7's commit \u2014 or reorder so each implementation task is immediately followed by its test task. The deferred ordering is not forced by dependencies: after Task 1 raises the floor, `RateLimitEvent` is available for tests to construct, and the shim is a no-op on natively-parsed types, so tests could be rewritten before the shim is removed.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers use checkbox format instead of plain lines",
+      "description": "Every task's `Commit:` line is formatted as `- [ ] Commit: \\`...\\`` \u2014 a checkbox subitem. The review criteria specify commit markers as \"plain lines, never checkboxes.\" This conflicts with the project convention (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\"), so the format is consistent with the project's own rules, but it does not match the `**Commit**:` plain-line convention expected by this review. Minor; no action required if the project convention takes precedence.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 10 is large but cohesive",
+      "description": "Task 10 spans seven sub-steps: rewriting four existing tests onto real `RateLimitEvent`, deleting four shim-specific tests, adding a new informational-event test (criterion 10), and verifying `TestUnparseableMessages` still passes. It is the single largest task. The steps are detailed enough for a junior AI to follow, and all changes are confined to one file (`tests/providers/sdk/test_agent.py`), so the task is cohesive. If the sequencing concern above is addressed (moving test rewrites adjacent to implementation), this task's scope naturally shrinks. No split needed as-is, but worth noting it is the heaviest single task in the breakdown.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "All 11 success criteria are covered by corresponding tasks",
+      "description": "Cross-referencing each criterion: SC1 \u2192 Task 1 (floor raise, lockfile, resolved version). SC2 \u2192 Task 9 (delete shim, grep checks for `_internal`). SC3 \u2192 Tasks 6+7 (raise `RateLimitRejected` on `rejected` event in all three dispatch paths). SC4 \u2192 Tasks 6+7 (informational events don't raise), Task 8 (exclusion from dispatch text), Tasks 10+11 (tests assert no throttle). SC5 \u2192 Tasks 6+7 (only the gate changes, schedule untouched). SC6 \u2192 Task 10 (`test_exhausted_rate_limit_raises_a_distinct_error`), Task 12 (`test_audit_cli.py` confirms `AuditRunFailure.RATE_LIMITED`). SC7 \u2192 Task 2 (`_is_throttle` retains `RATE_LIMIT_MARKER` substring path), Task 3 (test for substring path). SC8 \u2192 Task 6 (retains `except MessageParseError` WARNING-skip branch), Task 10 (verifies `TestUnparseableMessages` passes). SC9 \u2192 Tasks 10+11 (rewrite fabricated-exception tests onto real `RateLimitEvent`), Task 12 (confirms other files don't need rewrite). SC10 \u2192 Task 10 (new `allowed_warning` test), Task 11 (allowed/allowed_warning test). SC11 \u2192 Task 13 (pyright, ruff). No gaps.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "All three dispatch paths addressed; pipeline asymmetry explicitly handled",
+      "description": "The slice design's key risk \u2014 the pipeline `dispatch` path using `receive_response()` directly without `_skip_unparseable` (LLD Decision D4) \u2014 is addressed in Task 7 with inline inspection before the `ResultMessage.is_error` check (confirmed the check exists at `src/squadron/pipeline/sdk_session.py:152-163`). Query mode and agent client mode are both covered by Task 6's rewrite of `_skip_unparseable` (confirmed both call sites at `agent.py:155` and `agent.py:203`). Task 8 handles the `sdk_type` exclusion-set extension (confirmed at `sdk_session.py:173`). The Notes section correctly warns against unifying the two dispatch mechanisms.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep; no load test required",
+      "description": "Every task traces to a success criterion. The Notes section explicitly fences out `StreamEvent`/`ConversationResetMessage`, `ClaudeSDKClient` 0.2.x methods, and the OpenAI provider test file \u2014 all matching the slice's out-of-scope declarations. The slice design does not restate an NFR requiring a load test; verification is handled via live end-to-end runs (Tasks 14\u201315) and a forced-throttle observation, which matches the LLD Verification Walkthrough. No `tests/load/` task is needed.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Test rewrites deferred \u2014 implementation tasks commit with a red suite",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers use checkbox format instead of plain lines",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 10 is large but cohesive",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All 11 success criteria are covered by corresponding tasks",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All three dispatch paths addressed; pipeline asymmetry explicitly handled",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No scope creep; no load test required",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-16T20:47:18.223261",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 54044,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 141819,
+  "cached_tokens": 103296,
+  "cache_write_tokens": null,
+  "completion_tokens": 15197,
+  "reasoning_tokens": 13290,
+  "duration_seconds": 64.17009387514554,
+  "cost_usd": 0.07901109,
+  "cost_basis": "alias_pricing"
+}

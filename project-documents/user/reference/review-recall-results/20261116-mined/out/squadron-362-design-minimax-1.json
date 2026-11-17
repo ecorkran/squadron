@@ -1,0 +1,207 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Architectural alignment",
+      "description": "The slice delivers exactly what the parent architecture and slice plan assign: deepening the comprehension analysis from 361's proving-consumer stub into the real extraction mapping (the architecture's `Read structure` step at lines 149-150), closing the architecture's open question on `analyze-codebase-prompt.md` reuse (lines 450-451), and resolving the deferred `[INFERRED]` governance question settled in 361 (line 95 of 361). The seven-section extraction mapping is a faithful realization of the architecture's requirement that \"every claim traces to a named graph field\" (line 129), with an explicit `naming inline` rule that operationalizes the gap-marker discipline from 361.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layer composition correction is grounded in real graph measurements",
+      "description": "The two corrections are well-supported: (1) the architecture states \"every file is assigned to exactly one layer\" (line 98), confirming that `nodeIds` should contain file-level types only \u2014 which the slice verified against the real graph (238 nodes, all file/config/pipeline, zero function/class); (2) the architecture defines file-level types as the nine-element set including `config` and `pipeline` (line 108), confirming 361's narrowed `type == \"file\"` was an under-specification, not an architectural intent. Both corrections are explicitly framed as defect fixes inside squadron, not upstream contract changes, and the design retains a cross-check that surfaces genuine upstream drift.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#corrections-to-the-361-contract"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope is proportionate and ownership boundaries clean",
+      "description": "The slice is exclusively markdown edits to `commands/analysis/understand.md` plus a single cross-reference line in `user/reference/analyze-codebase-prompt.md`. No Python, no `src/squadron/` changes, no installer/manifest edits \u2014 consistent with the architecture's \"no pipeline actions, no new agent providers\" scope (line 17) and the plan's \"No Python is added by any slice\" (slice plan line 283). Interview is correctly deferred to 363, initiative candidates to 364, dispatcher/README to 366. The seven-section mapping is the minimum that meets the architecture's \"structural findings: layers, complexity hotspots, entry points, dependency observations\" requirement (line 163).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#excluded-owned-elsewhere"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes enumerated for new I/O paths with explicit handling",
+      "description": "Each section's fallback column names the specific failure mode and response: missing `layers` \u2192 preflight rejection (inherited from 361); empty/absent `tour` \u2192 `[GAP: ...]` marker and preflight warning; absent `entry-point` tag \u2192 `[GAP: no node carries the entry-point tag \u2014 re-run /understand]`; missing `meta.json` \u2192 `[GAP: ...]` in coverage section. The verification walkthrough (steps 5 and 6) exercises the gap-marker path with a tampered graph and the coverage discrepancy path with mismatched `analyzedFiles`, both with explicit expected outcomes. No \"TBD\" placeholders.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#extraction-mapping"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration points match consumer expectations",
+      "description": "Provides to 363 (the per-section extraction mapping table needed for the extract-then-ask rule at architecture line 219) and to 364 (the corrected layer composition and file-level definition needed for initiative candidates) are correctly identified. Consumes from 361 (preflight, provenance, gap markers, index selection) all executed unchanged. The reference to slice 365 being unaffected is also correct \u2014 capability (b) reads no graph and copies conventions rather than depending on this slice.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#integration-points"
+    },
+    {
+      "severity": "PASS",
+      "title": "`config.json` partial-absence handling correctly avoids fabrication",
+      "description": "The architecture documents `config.json` as carrying both `autoUpdate` and `outputLanguage` (line 87), but the real file only has `outputLanguage`. The slice correctly chooses to \"report only what is present\" rather than treating the missing optional key as a gap, with explicit reasoning: \"squadron does not know which keys are mandatory.\" This is the correct application of the gap-marker rule from the architecture \u2014 gap markers name what the **skill** would supply, not what the **input** is missing.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#section-detail-7-coverage-and-scope-limits"
+    },
+    {
+      "severity": "PASS",
+      "title": "Open questions closed with explicit decisions",
+      "description": "The architecture explicitly assigns two open questions to this slice: `analyze-codebase-prompt.md` reuse and (with 361) `[INFERRED]` governance (architecture lines 449-453). Both are resolved here with reasoned adoption decisions, retained-unchanged alternative, and a one-line cross-reference added to the reference document \u2014 consistent with the architecture's \"Prior art (retained, not superseded)\" stance (line 372).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#analyze-codebase-prompt-md-reuse"
+    },
+    {
+      "severity": "NOTE",
+      "title": "NFRs not restated",
+      "description": "The architecture and slice plan contain no quantitative NFRs (latency, throughput) tied to this slice path \u2014 the closest performance statement is the read-discipline constraint (never load whole graph), which the slice correctly preserves and explicitly verifies in walkthrough step 7. No missing-item finding is warranted because no NFR target exists in the parent documents to restate.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Architectural alignment",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Layer composition correction is grounded in real graph measurements",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#corrections-to-the-361-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Scope is proportionate and ownership boundaries clean",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#excluded-owned-elsewhere",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes enumerated for new I/O paths with explicit handling",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#extraction-mapping",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Integration points match consumer expectations",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#integration-points",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`config.json` partial-absence handling correctly avoids fabrication",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#section-detail-7-coverage-and-scope-limits",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Open questions closed with explicit decisions",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#analyze-codebase-prompt-md-reuse",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "NFRs not restated",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-16T21:34:44.388029",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 723,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 611455,
+  "cached_tokens": 496697,
+  "cache_write_tokens": null,
+  "completion_tokens": 3754,
+  "reasoning_tokens": 183,
+  "duration_seconds": 86.65884337504394,
+  "cost_usd": 0.06873402,
+  "cost_basis": "alias_pricing"
+}

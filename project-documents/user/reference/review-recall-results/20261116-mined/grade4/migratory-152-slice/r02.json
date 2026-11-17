@@ -1,0 +1,19 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Slice removes `k_first`, violating the plan's \"no regression on k-first path\" exit criterion",
+   "description": "The slice plan entry (140-slices.simulation-scaling.md:56) assigns three exit criteria, one of which is \"no regression on k-first path.\" The design removes `k_first` entirely (lines 34, 67, 177\u2013179, 199), which makes that criterion impossible to satisfy by construction. The design's rationale \u2014 that `k_first` becomes strictly worse once coherent reads land and is a \"behavioral landmine\" \u2014 is defensible, but the slice plan entry still names k-first preservation as a gate. Either the plan entry must be updated to drop that criterion (and authorize the removal) or the slice must retain a k-first path through the transition. As written, the design silently discards an assigned exit criterion. Recommendation: reconcile the plan entry with the design's mode-set change before implementation, since the final-commit default flip (line 349) depends on it.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:34"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`radius_only` mode addition is scope beyond the plan entry's stated scope",
+   "description": "The slice plan entry frames slice 152 as a coherent-grid performance fix for k-nearest neighbor selection. The design adds a complete second neighbor mode \u2014 `radius_only` \u2014 with its own inner-loop specialization (lines 68, 181\u2013183), config/`Workload` plumbing (lines 67, 349), a new measurement baseline (criterion 3, lines 357, 383\u2013387), and repoints the load-bearing exit gate from \"within 20% of k-first\" to \"within 20% of radius_only\" (line 358). This is a real expansion of API surface and verification scope beyond what the plan assigns. The design's justification (radius_only is needed as the apples-to-apples comparison path against the published 16M reference, and as the metric/Reynolds mode) is well-argued, but the plan entry neither mentions `radius_only` nor authorizes a new mode. The added mechanism (one branch + one specialization) is lightweight, so the proportionality concern is bounded; the gap is authorization, not weight. Recommendation: confirm the plan entry is amended to scope in `radius_only` and the revised comparison baseline, or defer `radius_only` to a follow-up slice so this slice ships only the coherent reindex + k-nearest fix the plan describes.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:31"
+  }
+ ]
+}

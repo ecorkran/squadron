@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Slice removes `k_first`, violating the plan's \"no regression on k-first path\" exit criterion",
+      "description": "The slice plan entry (140-slices.simulation-scaling.md:56) assigns three exit criteria, one of which is \"no regression on k-first path.\" The design removes `k_first` entirely (lines 34, 67, 177\u2013179, 199), which makes that criterion impossible to satisfy by construction. The design's rationale \u2014 that `k_first` becomes strictly worse once coherent reads land and is a \"behavioral landmine\" \u2014 is defensible, but the slice plan entry still names k-first preservation as a gate. Either the plan entry must be updated to drop that criterion (and authorize the removal) or the slice must retain a k-first path through the transition. As written, the design silently discards an assigned exit criterion. Recommendation: reconcile the plan entry with the design's mode-set change before implementation, since the final-commit default flip (line 349) depends on it.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`radius_only` mode addition is scope beyond the plan entry's stated scope",
+      "description": "The slice plan entry frames slice 152 as a coherent-grid performance fix for k-nearest neighbor selection. The design adds a complete second neighbor mode \u2014 `radius_only` \u2014 with its own inner-loop specialization (lines 68, 181\u2013183), config/`Workload` plumbing (lines 67, 349), a new measurement baseline (criterion 3, lines 357, 383\u2013387), and repoints the load-bearing exit gate from \"within 20% of k-first\" to \"within 20% of radius_only\" (line 358). This is a real expansion of API surface and verification scope beyond what the plan assigns. The design's justification (radius_only is needed as the apples-to-apples comparison path against the published 16M reference, and as the metric/Reynolds mode) is well-argued, but the plan entry neither mentions `radius_only` nor authorizes a new mode. The added mechanism (one branch + one specialization) is lightweight, so the proportionality concern is bounded; the gap is authorization, not weight. Recommendation: confirm the plan entry is amended to scope in `radius_only` and the revised comparison baseline, or defer `radius_only` to a follow-up slice so this slice ships only the coherent reindex + k-nearest fix the plan describes.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:31"
+    },
+    {
+      "severity": "PASS",
+      "title": "Coherent reindex, heap-semantics change, and writeback invariants are well-specified with failure modes",
+      "description": "The core mechanism \u2014 `coherent_reindex_kernel`, the inverse-permutation field for self-exclusion, the `heap_idx` coherent-slot semantics change, and the invariant that writebacks go to original-order fields while coherent fields are tick-scoped scratch \u2014 is specified with concrete code, data-flow diagrams, and clear invariants. The new I/O path (reindex kernel) has its failure modes enumerated: reindex cost domination at small N (risk 1, line 424), inverse-permutation scattered-read cost (risk 2, line 426), heap slot-vs-original-ID confusion (risk 3, line 428), and allocation-order interactions (risk 4, line 430), each with a mitigation. Synchronization between reindex and force kernel is handled via kernel-boundary temporal separation, consistent with the `graph=True` discipline used by the rest of the fused-tick pipeline (slices 143\u2013149).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Architecture"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR targets and memory budget are restated with specific numbers consistent with the architecture",
+      "description": "The design restates the performance target (k_nearest TPS at N=200k within 20% of the reference path, on the dev-class CUDA box per slice 145's protocol) and the parity NFR (mean speed, mean NN distance within 5% of numpy reference), both matching the slice plan entry. Memory cost is computed concretely (5.6 MB at N=200k, line ~\"Memory cost at N=200k\") and checked against the architecture's 320 MB working-set budget at N=2M. f32 dtype is preserved across all new fields, consistent with the architecture's f32-on-GPU Tier 2+ commitment. CUDA is the validation substrate, consistent with the architecture's CUDA-primary tier-gate principle.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Success Criteria"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Slice removes `k_first`, violating the plan's \"no regression on k-first path\" exit criterion",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:34",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`radius_only` mode addition is scope beyond the plan entry's stated scope",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:31",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Coherent reindex, heap-semantics change, and writeback invariants are well-specified with failure modes",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "NFR targets and memory budget are restated with specific numbers consistent with the architecture",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Success Criteria",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-16T20:50:25.868621",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 34751,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 111564,
+  "cached_tokens": 80832,
+  "cache_write_tokens": null,
+  "completion_tokens": 10976,
+  "reasoning_tokens": 7842,
+  "duration_seconds": 38.4800970829092,
+  "cost_usd": 0.059236079999999997,
+  "cost_basis": "alias_pricing"
+}

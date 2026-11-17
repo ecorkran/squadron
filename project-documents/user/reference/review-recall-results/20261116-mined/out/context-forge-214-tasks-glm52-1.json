@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All functional success criteria have corresponding tasks",
+      "description": "Every functional requirement from the slice design maps to a task. PASS/exit-0 and FAIL/exit-1 behavior is covered by Task 4T; the docType failure by Tasks 3T and 4T; ordered multi-file checking with exit-1 by Tasks 3T and 4T; the exit-2 usage/preflight cases (no args, missing/unreadable file, missing template, no-required-headings template, valid-file-before-missing) by Tasks 3T and 4T; the `--json` contract by Task 4T; and worktree-aware template resolution by Task 4T. The missing-template message naming `cf guides update` is asserted in both test tasks.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Technical success criteria covered by the test tasks",
+      "description": "Task 2T enumerates every normalization/matching unit test the design's Technical Requirements list (case, whitespace, HTML comments, parentheticals, placeholder prefix, level mismatch, fenced-block exclusion, CRLF). Task 3T's real-template test asserts the required list is non-empty and includes `## Overview` and `### Verification Walkthrough`, matching the design's \"template-format-change surfaces as a failure\" requirement. Task 4T covers the real-slice-design command test including this document. Task 6 covers build/lint/full-suite green and the ~300-line file-size guard.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration requirement is correctly excluded, not a gap",
+      "description": "The slice design's one Integration Requirement (guide can replace `scripts/validate-slice-design` references and remove the script) is explicitly scoped as guide-side work performed after the cf release. The Context Summary records the post-release handoff as a non-task. No task is needed for it here; its absence is not a gap.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, commit markers, and proportionality are sound",
+      "description": "The dependency chain is linear and respects the pure-validator \u2192 file-layer \u2192 CLI-command build-up: Task 2's functions are consumed by Task 3, which is consumed by Task 4. Test tasks (2T, 3T, 4T) immediately follow their implementation tasks. Commit markers (2C, 3C, 4C) are plain lines placed after tested points, not after every task or only at the end; 5C and 6C are correctly conditional. Task count and step detail are proportional to a single-subcommand port \u2014 no overweight task file, no unnecessary multi-file split, no test tasks beyond what the success criteria require.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All functional success criteria have corresponding tasks",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Technical success criteria covered by the test tasks",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Integration requirement is correctly excluded, not a gap",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing, commit markers, and proportionality are sound",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T20:47:41.589437",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 4501,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 17355,
+  "cached_tokens": 0,
+  "cache_write_tokens": null,
+  "completion_tokens": 1863,
+  "reasoning_tokens": 1127,
+  "duration_seconds": 22.675678916973993,
+  "cost_usd": 0.014545949999999998,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tool guide referenced by parent plan is not linked in the slice design",
+   "description": "The slice plan's success criteria for slice 210 explicitly require that the tool guide at `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` be \"referenced in slice design, promoted to a proper published tool guide if needed\" (parent doc line 218). The slice design contains no link to or mention of that tool guide. The guide is the canonical research source for the Copilot file model that this slice implements; an explicit reference would tie the slice's translation logic (AGENTS.md vs copilot-instructions.md, applyTo glob, prompts/*.prompt.md) to its source of truth and surface the decision to \"promote to a proper published tool guide if needed.\"",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:13-135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Failure modes for new I/O paths are not enumerated",
+   "description": "The slice introduces three new I/O paths: `execFileSync('bash', [scriptPath, 'copilot'])` in the sequence, the marker-detection read of `.github/copilot-instructions.md` / `AGENTS.md`, and the `propagateToWorktrees` copy of four file/dir targets per worktree. None have explicit failure-mode handling (hang, timeout, peer disconnect, partial copy, permission denied, missing guide submodule script case). The \"Risks\" section identifies the guide-submodule coupling but does not specify the failure strategy for these I/O paths; the Claude path's error handling from slice 177 is referenced implicitly but not restated for the copilot path. Either restate the inherited error contract for each new path or add explicit handling rows.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`interfaces` frontmatter field lists an upstream dependency rather than a provided interface",
+   "description": "Conventions used by sibling slice docs (e.g., 141, 161, 181) populate `interfaces:` with downstream slices that consume interfaces this slice provides. Listing `202-smart-cf-init-composition` here is upstream of 210 \u2014 202 provides the `--ide <target>` wiring and `setupIdeAction` extraction that 210 depends on. The corresponding `dependencies: []` is also inconsistent with this listing (the slice plan says \"None (composes existing cf setup-ide infrastructure...)\"). The correct field for this relationship is `dependencies:` (or a new explicit dependency on 202's `setupIdeAction`). Frontmatter metadata only; no architectural impact.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:7"
+  }
+ ]
+}

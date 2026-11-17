@@ -1,0 +1,26 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator's three listed sweep sites are `SliceStatus.status`, which TD-3 excludes",
+   "description": "The Included table lists `introspection/WorkflowNavigator.ts | 3 | === 'complete' checks`, and Migration Plan step 4 says \"sweep 3 sites\". The only three bare `'complete'` literals in that file are `WorkflowNavigator.ts:312` (`slice.status === 'complete' && status.slicePlan`), `WorkflowNavigator.ts:345` (`slice.status === 'complete'`), and `WorkflowNavigator.ts:588` (`return { ...base, status: 'complete', taskProgress }`). In all three, `slice` is `status.activeSlice`, typed `SliceStatus` (`types.ts:262-271`), so these are `SliceStatus.status` members \u2014 precisely the union TD-3 declares out of scope (\"Its `'complete'` member is incidental overlap in spelling, not the same type. Out of scope; touching it risks conflating two independent unions.\"). 241 already swept WorkflowNavigator's genuine `NormalizedStatus` comparison (`WorkflowNavigator.ts:577` uses `STATUS.Complete`), so there is nothing left there to sweep. The design is therefore self-contradictory: executing the table sweeps the very union TD-3 forbids (the \"correctness bug\" the doc itself warns against in TD-2), and executing per TD-3 makes step 4 an empty no-op and the tabulated count wrong. This should be reconciled before implementation \u2014 either drop the WorkflowNavigator row to 0 and note the sites are `SliceStatus`, or restate the exclusion explicitly.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#technical-scope"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Success-criteria grep counts are unachievable as written (comment occurrences and SliceStatus definition not accounted for)",
+   "description": "Success Criteria requires the grep `grep -roE \"'(complete|in-progress|not-started|deprecated)'\" ... packages/core/src` to return \"zero matches in the six swept files\", and the walkthrough asserts the after-count is \"4 (only the STATUS const definition \u2026) + the intentionally-excluded frontmatterSchema.ts (3) and SliceStatus.status (4) sites\". Two occurrences in swept files are not in that accounting: `ConsistencyChecker.ts:514` (`// 'complete' | 'in-progress' | 'not-started'`) and `ProjectModelBuilder.ts:179` (`// silently coerced to 'not-started' \u2026`) \u2014 both matched by the same regex. The SliceStatus definition itself (`types.ts:269`) also matches. So the stated \"zero matches\"/after-count will not hold without either extending the exclusions or deciding whether comments are in scope. Worth tightening the verification command so the success criterion is actually checkable.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#verification-walkthrough"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Claim that no test file asserts against these literals is inaccurate",
+   "description": "The doc states \"grep confirms zero `.test.ts` files assert against these literals directly (tests exercise behavior through parsers/fixtures, not string comparison), so no test changes are needed.\" Test files do assert against these values, e.g. `packages/core/tests/introspection/taskFileParser.test.ts:48` (`expect(result.inferredStatus).toBe('in-progress')`) and many `ConsistencyChecker.test.ts` assertions (`data: { status: 'complete' }`). The *conclusion* \u2014 no test changes are required \u2014 is still correct, because those assertions check runtime values that are byte-identical after the sweep (`STATUS.X === 'x'`); only the stated justification is wrong. Correcting it avoids a reader concluding the suite provides no coverage of these values.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#technical-scope"
+  }
+ ]
+}

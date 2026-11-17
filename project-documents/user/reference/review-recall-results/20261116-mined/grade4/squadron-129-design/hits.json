@@ -1,0 +1,20 @@
+{
+ "case": "squadron-129-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design names the command `sq model list` (summary, D9, Interfaces, Success Criteria, Walkthrough). The CLI registers the group as `models` (`cli/app.py:55` `add_typer(models_app, name=\"models\")` at `c5ebaf6f`), and the README uses `sq models list`. **VALID** (minor): contradicts code. Needs: code. The original review raised it (F \"CLI command name ... does not match the shipped surface\").",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": []
+   }
+  }
+ ],
+ "note": "No borderline calls"
+}

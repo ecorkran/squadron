@@ -1,0 +1,12 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "No `**Commit**:` markers in a 16-task slice file",
+   "description": "The task file is a 16-task breakdown with no `**Commit**:` markers anywhere. While the instructions say a file with no markers is acceptable in principle, a slice this size produces numerous working, tested points (each implementation task is followed immediately by its test task) that should be checkpointed with commits. The CLAUDE.md git rules require \"git add and commit from project root at least once per task.\" With 16 tasks and no commit markers at all, the breakdown does not guide the implementing agent toward the natural commit boundaries (after each implementation-plus-test pair). For a slice with this many independently testable units, the absence of any commit guidance is a proportionality gap: not a FAIL because markers are optional, but a CONCERN because the slice is large enough that committing only at the end would produce a single enormous commit, and the project conventions explicitly say to commit at least once per task.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

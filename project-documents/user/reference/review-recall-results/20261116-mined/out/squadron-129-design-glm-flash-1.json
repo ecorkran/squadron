@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq auth login` and `sq auth logout` spawn the Codex runtime but are not fully bounded by a timeout",
+      "description": "The design states spawning is confined to \"a Codex turn, `sq auth login/logout`, and `sq auth status`\" (Data Flow, Runtime startup cost). The D7 table bounds `handle.wait()` with `codex.login_timeout_s` and runtime start + `account()` in `sq auth status` with `codex.account_timeout_s`. But the runtime start that precedes `login_chatgpt()`/`login_chatgpt_device_code()` is not covered by `login_timeout_s` (which per the table bounds only `handle.wait()`), and nothing at all bounds the `sq auth logout` path \u2014 its runtime spawn and `logout()` call are absent from both the D7 table and the Failure Modes table. A hung runtime during login or logout blocks the CLI command indefinitely (Ctrl-C is only handled for login, per the \"Timeout or cancellation mid-turn\" row's turn scope). The design's own standard \u2014 every new I/O path enumerated with an explicit handling strategy \u2014 is met for the turn path and status, but not for logout, and only partially for login. Fix: state that `codex.account_timeout_s` (or a dedicated key) also bounds runtime start for login, and add a logout row to the Failure Modes table (including logout when no `auth.json` exists and SDK error during logout).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architecture alignment: auth model deviation is explicit, minimal, and correctly scoped",
+      "description": "The architecture (100-arch.orchestration-v2.md, \"Authentication Patterns\") states squadron does not unify authentication. This slice adds `InteractiveLogin` to the shared `providers/auth.py` layer, which is net-new relative to that document, but the design dedicates a section to arguing it is an optional capability implemented by one strategy, delegates entirely to the Codex runtime, stores no credentials, and leaves the architecture text accurate \u2014 with a named trigger for updating the architecture if a second provider adopts it. This is the right way to handle a documented extension point rather than a hidden boundary violation.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency directions and string-dispatch ban are respected",
+      "description": "Both new Protocols live in the shared provider layer (`providers/base.py`, `providers/auth.py`) and are consumed by CLI/doctor \u2014 dependencies point inward, matching the architecture's \"core engine never depends on provider internals\" invariant. `openai_codex` is imported only inside functions in `runtime.py`, `login.py`, and `agent.py`, so the module graph imports cleanly without the extra and the provider still registers (satisfying the architecture's provider implementation requirements). All new dispatch is capability-based (`isinstance(strategy, InteractiveLogin)`, `isinstance(provider, ExtraRequirement)`), consistent with slice 128's ban on profile-name/auth-type string comparisons, and the technical requirements pin this with a check.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#architecture"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice-plan scope is fully carried; nothing assigned is dropped and nothing unassigned is added",
+      "description": "Every element of the slice-plan entry 129 maps to the design: port to `openai_codex` (Part A), bundled-binary-first with PATH fallback (D2), optional extra (D1), effort via `ReasoningEffort` closing #171 (D5), token usage (D6 \u2014 note the design uses the verified `TurnResult.usage` surface from SDK 0.159.3 rather than the plan's conditional `ThreadTokenUsageUpdated` phrasing, which is the more accurate form), install-hint error / doctor row / model-list marker / README (Part B), `sq auth login` browser + `--device-code`, `sq auth logout`, and email/plan in `sq auth status` (Part C). The plan's smoke test appears as walkthrough step 6. Exclusions (no squadron token store, no `login_api_key`, no streaming/tool plumbing changes, no `AuthStrategy` Protocol change) are all either things the plan leaves out or decisions the plan explicitly delegates. The three new config timeout keys are justified by the failure-mode table, not speculative abstraction.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D-numbering is out of order in Technical Decisions",
+      "description": "D9 (\"Extra missing\" signal) appears before D8 (\"Turn result is checked, not trusted\"). Purely cosmetic; no content issue.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`sq auth login` and `sq auth logout` spawn the Codex runtime but are not fully bounded by a timeout",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Architecture alignment: auth model deviation is explicit, minimal, and correctly scoped",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Dependency directions and string-dispatch ban are respected",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice-plan scope is fully carried; nothing assigned is dropped and nothing unassigned is added",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "D-numbering is out of order in Technical Decisions",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T20:51:45.720401",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 45753,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 258062,
+  "cached_tokens": 171557,
+  "cache_write_tokens": null,
+  "completion_tokens": 13063,
+  "reasoning_tokens": 11337,
+  "duration_seconds": 90.63702258304693,
+  "cost_usd": 0.02465396,
+  "cost_basis": "alias_pricing"
+}

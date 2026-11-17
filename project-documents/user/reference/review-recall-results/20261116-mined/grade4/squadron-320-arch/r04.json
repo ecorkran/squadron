@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Provenance is not persisted in the default markdown path 320 claims to read",
+   "description": "The Overview and Architectural Principles state 300 persisted results are \"self-describing (provenance) precisely so 320 could consume them,\" and the Technical Considerations say \"320 populates or reads it \u2014 it does not re-thread plumbing.\" This is factually wrong for the persistence path pipelines actually use. `ReviewAction._review` calls `save_review_result(...)` with the default `as_json=False`, which routes through `format_review_markdown`. That function carries the explicit comment `provenance is never emitted here (reserved \u2014 slice 301)` (`src/squadron/review/persistence.py:147`). `provenance` is set on the in-memory `ActionResult` (`review.py:296`) and survives in the optional JSON path (`ReviewResult.to_dict` at `models.py:116`), but the default per-run markdown files \u2014 the artifacts 320 intends to \"read and annotate\" \u2014 carry score, findings, `aiModel`, and `reviewType`, but no provenance. So 320 cannot recover the judge-derived-vs-review-produced discriminator from the persisted records it claims are self-describing. The keystone \"metrology data layer keyed to persisted judge results\" silently depends on a field that is absent from the primary persisted artifact. Either provenance must be threaded into `format_review_markdown` (a 300 write-path change 320 says it will not make) or 320 must infer judge-ness indirectly from the template name \u2014 which the document does not state.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Trend over time\" contradicts the read-side-only principle given 300's overwrite-on-rerun persistence",
+   "description": "320 commits to \"trend over time\" reporting (Design Goals, Envisioned State) and to the principle \"Read-side over 300's write path ... This component reads and annotates that record; it does not modify the judging path.\" These are in tension with how 300 actually persists. `save_review_file` writes to `{slice_index}-review.{review_type}.{slice_name}.{ext}` with no `run_id` in the filename (`persistence.py:251`), so each pipeline run overwrites the previous review file \u2014 there is no history. A purely read-side 320 that reads 300's persisted results later sees only the most recent run per artifact; it cannot reconstruct a time series of scores. Producing the promised trend therefore requires capturing each run's result into a metrology store *at run time* (a post-step hook or snapshot), which is a write-path integration into 300's execution flow \u2014 exactly what the read-side principle disclaims. The \"Where metrology data lives\" consideration acknowledges a new store is needed and that 300's persistence is per-run/per-project, but it never connects that to the overwrite problem or reconciles it with the read-side commitment. The architecture should state explicitly that trend requires run-time capture, not deferred read-back.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No stable unique key exists on 300's persisted results for the join 320 requires",
+   "description": "The keystone slice requires \"human sample verdicts keyed to persisted judge results (with judge-configuration identity),\" and Technical Considerations demands a store that can \"join against those results and aggregate across projects.\" But `ReviewResult` (`src/squadron/review/models.py:56`) carries no result identifier: no `result_id`, no `run_id` field, and the persisted filename contains no run id. The only joinable handle is the file path, which (per the prior finding) is overwritten per run and is per-project. The document identifies the cross-project aggregation gap but never names the missing per-result identity \u2014 the actual join key the keystone depends on. Giving 300's results a durable, unique, cross-project key almost certainly requires a change to 300's result model and persistence (the write path 320 says it will not touch), or 320 minting its own key at capture time and carrying enough provenance to re-associate \u2014 which loops back to the missing-provenance problem above. This load-bearing decision is left implicit.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#anticipated-slices"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The audit-normalization hard part is deferred without an architectural constraint, risking a \"magic happens\" cliff",
+   "description": "Technical Considerations states the tech-debt-audit is \"a markdown skill whose output is prose-shaped and non-deterministic run-to-run\" and must be \"normaliz[ed] findings into a persistable, comparable form (category, location, severity).\" This normalization is the central complexity of the code-quality oracle, and the document defers the mechanism entirely to slice design. 300 solved the analogous problem by *constraining the judge template to emit structured output* (score + findings, parsed by a lenient parser); 320 does not commit to the equivalent \u2014 constraining the adapted audit skill to emit a structured finding schema. Instead it speaks of normalizing free-form prose post-hoc, which given the audit's own acknowledged non-determinism (\"the audit's own variance is itself a calibration concern\") is a parsing problem of unbounded edge cases. Without an architectural commitment here (e.g., the adapted audit skill emits structured findings the way judge templates emit structured scores, so normalization is parsing a constrained format rather than extracting structure from prose), the baseline-harness slice risks discovering the normalization layer is the whole job. The audit skill is a 340 artifact 320 explicitly forks/adapts, so 320 *can* constrain its output \u2014 the document should fix that as an architectural commitment rather than leave it to slice-level discovery.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "\"criteria map\" ownership misattributed to the metrology layer",
+   "description": "The principle states \"Where a latent field exists (e.g. the reserved `criteria` map), 320 populates or reads it.\" But in 300, `criteria` is a per-criterion sub-score breakdown emitted by the *judge model* and parsed by the review parser (`ReviewResult.criteria`, `ActionResult.criteria`). It is scoring data, not metrology data. 320 \u2014 the measurement layer \u2014 has no role in populating it; it would only read it if a judge template emits it. \"Populates\" misattributes ownership of a 300 scoring field to the 320 layer and blurs the stated boundary that 320 \"does not modify the judging path.\" Minor, but it signals a conceptual conflation between the scoring path (300) and the metrology layer (320) that the rest of the document is otherwise careful to keep separate.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles"
+  }
+ ]
+}

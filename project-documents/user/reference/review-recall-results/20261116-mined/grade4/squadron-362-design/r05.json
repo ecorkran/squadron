@@ -1,0 +1,12 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "New I/O paths for `.understandignore` and `config.json` have stated fallbacks but are not walkthrough-tested",
+   "description": "Section 7's fallback column covers absent/unreadable `config.json` and `.understandignore` with gap markers (\"naming the unreadable file\"). The walkthrough tests `tour` emptying, `entry-point` tag removal, and `meta.json` removal, but does not include a scratch-copy test for absent `config.json` or absent `.understandignore`. These are the slice's only new non-graph reads. The fallback is specified in the design; a walkthrough case would confirm it executes as specified. Not blocking \u2014 the design's contract is clear \u2014 but the gap between \"stated fallback\" and \"tested fallback\" is worth closing during implementation.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#verification-walkthrough"
+  }
+ ]
+}

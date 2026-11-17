@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3.2a's \"full core suite passes\" gate cannot pass \u2014 tests of the removed rendering still exist",
+   "description": "3.1 removes the `Comprehension:` line from `SectionBuilder` and 3.2 removes the Adoption Facts section from `ContextTemplateEngine`, but 3.2a's Success criterion is `pnpm --filter @context-forge/core test` \u2014 the whole core suite. Two still-present files assert exactly the removed rendering:\n- `packages/core/tests/pipeline-integration.test.ts`, describe \"brownfield build with an injected squadron probe\": \"available probe \u2026 \u2192 the JSON block and the line are in the prompt\" and \"unavailable probe \u2192 the statement carries the reason\" assert the probe text that only the Adoption Facts section rendered, and \"comprehension document present \u2192 Comprehension line in Project Context\" asserts the `Comprehension:` line. All three fail after 3.1/3.2.\n- `packages/core/tests/adoption/adoptionBuild.integration.test.ts` cases 3, 4, 5, 6, 8, 9, 10, 11 and 13 use `expectBrownfield`, which requires `### Adoption Facts`. They fail after 3.2.\nThe file is deleted/edited only later (3.3 for `pipeline-integration.test.ts`, 4.1 for `adoptionBuild.integration.test.ts`). Either name those files in 3.1/3.2 (delete or temporarily skip the affected cases), or scope 3.2a's check to `SectionBuilder ContextTemplateEngine`, as 3.1 and 3.2 already do.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:100"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 3.7's `pnpm -r test` gate cannot pass \u2014 `adoptionBuild.integration.test.ts` survives until 4.1",
+   "description": "3.3 changes `createContextPipeline` to one argument and updates `ContextIntegrator.test.ts`, `CoreServiceFactory.test.ts`, `pipeline-integration.test.ts` and `pure-build-golden.test.ts`, but not `packages/core/tests/adoption/adoptionBuild.integration.test.ts`, which calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe: fakeProbe })` (line 68) and drives 13 brownfield expectations through it. After 3.3 the extra argument is ignored, no resolver is wired, and that file fails; it is deleted only in 4.1. So 3.7's Success (\"`pnpm -r build`, `pnpm typecheck`, `pnpm lint`, `pnpm -r test` \u2026 all four pass\") is false as written. Move the deletion of `adoptionBuild.integration.test.ts` into 3.3 (it is a test of the removed seam), or state in 3.7 that this one file is expected to fail until 4.1 and that 3.7's gate is the filtered run plus build/lint/typecheck.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:132-133"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox items, not plain `**Commit**:` lines; placement is sound",
+   "description": "The file marks commits as checklist items (`- [ ] **2.3 Commit** \u2014 \u2026`, `- [ ] Commit: \u2026`) rather than plain `**Commit**:` lines. AGENTS.md requires a `[ ]` checkbox on every item and subitem, so this is consistent with project convention; no action needed. Placement is at working, tested points: 2.3 after the golden test passes on unmodified source, 3.2a after typecheck plus a scoped test run, 3.7 after the full pass, each 4.x after typecheck/test, 5.1 after the purity test, with no commit at the very end and no merge/push task (Phase 7 owns that, as the design requires).",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  }
+ ]
+}

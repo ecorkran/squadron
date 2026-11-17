@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Listing performance criterion is turned into a flaky wall-clock load-test assertion",
+   "description": "The slice design restates the listing-time target as \u201c`sq runs list --all` stays under 1 s with a few hundred run-state files on local disk\u201d and explicitly says \u201cThere is still no assertion on time in tests.\u201d Task 22a instead requires `MAX_LISTING_S = 1.0` and asserts wall-clock completion under that value. A wall-clock upper bound is sensitive to CI scheduling, filesystem speed, and loaded runners, especially while seeding and executing a few hundred state files. This can fail despite satisfying the intended performance target. The task should validate the deterministic I/O characteristics already specified by the design\u2014bounded definition/report loads and one process check per running run\u2014and treat the one-second target as an advisory measurement unless the project deliberately intends it to be a hard CI SLA.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Load-test CI gating is asserted rather than specified as a task",
+   "description": "Task 22a states that no new CI wiring is needed because `testpaths = [\"tests\"]` collects `tests/load/`. The repository does run `uv run pytest` in `.github/workflows/ci.yml`, so ordinary collection does gate the test, but that conclusion is left implicit and is not an independently verifiable checklist item. The task should explicitly require confirmation that the new load test is collected and run by the existing CI pytest job, including the command and expected test node, rather than merely asserting that wiring is unnecessary.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:318-319"
+  }
+ ]
+}

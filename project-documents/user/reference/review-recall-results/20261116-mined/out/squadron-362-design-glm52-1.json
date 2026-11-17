@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Extraction mapping and fallback discipline match the architecture's \"never fabricate\" principle",
+      "description": "The seven-section mapping table binds every section to named graph fields with an explicit ordering rule and a gap-marker fallback \u2014 no third option. This directly implements the architecture's \"extract-then-ask\" rule at the structural-only level and its requirement that \"a claim is structural when it is supported by a named graph field.\" The `[INFERRED]` governance decision (zero markers in this flow, defect if used) is consistent with the architecture's separation of structural fact from inferred intent, and correctly defers the inference use case to slice 363 where the interview path needs it.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#extraction-mapping"
+    },
+    {
+      "severity": "PASS",
+      "title": "Corrections to the 361 contract align with the architecture, not the 361 skill text",
+      "description": "Correction 1 (`nodeIds | length` directly, with a cross-check) and Correction 2 (exclusion-based file-level selector `!= function and != class`) both bring the skill text back to what the architecture documents: the nine-type file-level set and \"every file is assigned to exactly one layer.\" The exclusion filter is a better implementation of the architecture's \"function- and class-level nodes are not read\" than a strict allow-list, because it auto-includes future file-level types rather than silently dropping them. The retained cross-check (report `function`/`class` in `nodeIds` as drift) makes the correction safe on unmeasured graphs, which the Risk Assessment explicitly addresses.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#corrections-to-the-361-contract"
+    },
+    {
+      "severity": "PASS",
+      "title": "Read discipline and no-Python constraint upheld",
+      "description": "The slice restates the architecture's read discipline (jq field-scoped selections, never load whole graph, no function/class node reads) and widens the node filter from 201 to 238 nodes while keeping 687 function/class nodes excluded. SC 9 and walkthrough step 7 verify this. The slice confirms no Python is added, matching the slice plan's and architecture's explicit constraint that any slice concluding otherwise signals scope drift.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#read-discipline-unchanged"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration points match what consuming slices expect",
+      "description": "The slice provides the extraction mapping to 363 (for the extract-then-ask rule's per-section field mapping) and the corrected layer composition / file-level definition to 364 (for candidate derivation from layer boundaries and complexity clusters). It consumes only the 361 contract, matching the slice plan's `[361]` dependency. The 365 non-relationship (capability b reads no graph) is correctly stated.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#integration-points"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New I/O paths for `.understandignore` and `config.json` have stated fallbacks but are not walkthrough-tested",
+      "description": "Section 7's fallback column covers absent/unreadable `config.json` and `.understandignore` with gap markers (\"naming the unreadable file\"). The walkthrough tests `tour` emptying, `entry-point` tag removal, and `meta.json` removal, but does not include a scratch-copy test for absent `config.json` or absent `.understandignore`. These are the slice's only new non-graph reads. The fallback is specified in the design; a walkthrough case would confirm it executes as specified. Not blocking \u2014 the design's contract is clear \u2014 but the gap between \"stated fallback\" and \"tested fallback\" is worth closing during implementation.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#verification-walkthrough"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Extraction mapping and fallback discipline match the architecture's \"never fabricate\" principle",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#extraction-mapping",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Corrections to the 361 contract align with the architecture, not the 361 skill text",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#corrections-to-the-361-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Read discipline and no-Python constraint upheld",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#read-discipline-unchanged",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Integration points match what consuming slices expect",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#integration-points",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "New I/O paths for `.understandignore` and `config.json` have stated fallbacks but are not walkthrough-tested",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#verification-walkthrough",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-16T20:46:47.879375",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 19027,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 3,
+  "prompt_tokens": 39524,
+  "cached_tokens": 2176,
+  "cache_write_tokens": null,
+  "completion_tokens": 5115,
+  "reasoning_tokens": 4058,
+  "duration_seconds": 33.837615583091974,
+  "cost_usd": 0.035036489999999997,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,296 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Output Conventions asserts a single docType for both capabilities, contradicting capability 1's own outputs",
+      "description": "Output Conventions states \"Both capabilities write to the existing `project-documents/user/analysis/` directory with the existing `docType: analysis`.\" That is false for capability 1, whose Outputs section lists `project-documents/user/project-guides/000-concept.{project}.md` with `docType: concept` \u2014 a different directory, a different docType, and a different index band (project layer `000`, not the 900 band). The \"Index range\" paragraph then compounds it by scoping \"940-949\" and \"900 band\" language as though it governed both capabilities. Slice design for capability 1 will read this section and get the wrong answer about where the concept doc's index comes from; `concept` is a valid `DocType` member (`src/squadron/documents/schema.py:40`) and `cf` validates it, so nothing downstream will catch the mistake.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-run index increment is applied to the derived client document, reversing a resolved design decision",
+      "description": "The Index range paragraph inherits the tech-debt-audit rule wholesale: generated documents \"increment[] per run like the existing `940`/`941`/`942` tech-debt-audit series, where each run is an independent sample rather than a revision of the last.\" That reasoning is correct for an *audit* \u2014 320's metrology treats a second audit as an uncorrelated sample and refuses to diff runs (`src/squadron/metrology/audit.py` `_AUDIT_ARTIFACT_PATTERN`, `INDEPENDENT_RUN_MARKER`). It is wrong for the overview, which the Design Goals define as \"derived, not authored\" and a \"restatement of existing approved artifacts.\" Per-run accumulation means a project re-overviewing after each initiative-plan change produces `941-analysis.overview.md`, `942-analysis.overview.md`, \u2026 with no rule for which is current, directly contradicting the Resolved Design Decision that rejected per-audience variants on the grounds that \"three variants would mean three artifacts to keep true.\" Same failure mode, different axis. Nothing in the document says whether a re-run replaces the prior overview, versions it, or leaves both.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-254"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graph `summary`, `tags`, and `complexity` are model-authored prose, but the design reads them as structure and attributes them as fact",
+      "description": "The node schema is `{id, type, name, filePath?, summary, tags[], complexity, languageNotes?}`. `summary` and `languageNotes` are written by the plugin's file-analyzer LLM subagents; `complexity` and `tags` are at least partly interpretive. Capability 1 step 3 then reads \"file-level nodes with their `summary`, `filePath`, and `complexity`,\" and the Draft step attributes \"structural claims to the graph and intent claims to the interview.\" So a model's prose interpretation of a file becomes, in the output concept doc, a graph-derived structural fact. This collides with the document's own principle that \"a knowledge graph describes structure, not purpose\" and with the prior-art `[INFERRED]` convention the doc itself flags as useful \"for separating known facts from inference\" \u2014 yet leaves the reuse question open (\"Open Questions for Slice Design\": \"How much of its analysis template and `[INFERRED]` convention transfers to the graph-backed path\"). Deciding which graph fields are fact and which are inference is the load-bearing decision for \"never fabricate intent,\" and it is deferred.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Status and Roadmap derivation assumes a status encoding the required input does not have",
+      "description": "The field schema sources Status from \"Initiative statuses\" and Roadmap from \"Initiative plan + dependencies,\" with translation rules stripping indices and keeping status honest. The actual required input, `001-initiative-plan.squadron.md`, encodes status three incompatible ways and contains a contradiction: item 11 (340) carries no `Status:` token at all; item 12 (360) is `Status: not_started`; item 13 is `13. [x] **(900) Maintenance and Refactoring** \u2014 \u2026 Status: not_started` \u2014 checked *and* not-started. Item 1 is `[x] \u2026 Status: in_progress`. Any derivation rule has to pick one encoding, and picking the checkbox yields \"not started work described as planned\"\u2026 for work marked done; picking the prose token discards the checklist. The document says nothing about which wins, which is not a slice-design detail given CLAUDE.md's explicit \"never use silent fallback values\" and the project's lenient-parsing rule for structured text: the walkthrough must handle all three shapes, and a project with a genuine conflict has no defined rendering. There is also no validation backstop, because the document declares independence from 300/320's judges.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Document field schema"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Generated frontmatter's required fields and the provenance carrier are unspecified",
+      "description": "The document's argument for \"no gate change\" rests on the output being gate-clean: \"the frontmatter gate validates `docType` and `status` against a fixed enum.\" It then constrains only `status` values (\"Generated frontmatter uses only enum members\") and names no other field. `cf validate frontmatter` also validates `YYYYMMDD` dates and the required universal fields \u2014 slice 172 records both (\"five status values, fifteen `docType` values, `YYYYMMDD` dates, five universal required fields\"), and 172's drift test parses them from the conventions file. None of those five fields is named here. Separately, the staleness rule requires the drift warning to \"appear in the generated document's provenance,\" but no field carries it \u2014 the existing analysis docs carry `project`, `topic`, and `model` (`940-analysis.tech-debt-audit.md`, `942-analysis.tech-debt-audit.md`), and nothing in this design reuses or extends that shape. Both capabilities are therefore being designed with an output schema that would fail the repo's own pre-commit gate as written.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:245"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new outputs land inside the glob-resolved namespace the metrology audit oracle treats as its own",
+      "description": "Dependencies states 360 is \"Independent of 140, 180, 240, 260, 280, 300, and 320 \u2014 no pipeline, judging, or agent-provider machinery is involved.\" That is true in the dependency-graph sense and false in the resource sense. `src/squadron/metrology/audit.py` locates its own product with `_AUDIT_FILE_GLOBS = (\"project-documents/user/analysis/*-analysis.*.md\", \"analysis/*-analysis.*.md\")` and `find_audit_file()` returns `max(candidates, key=mtime)` \u2014 a single newest file, with no discriminator beyond that glob. Both of this document's analysis outputs (`{index}-analysis.codebase-comprehension.md`, `{index}-analysis.overview.md`) match that pattern. A comprehension or overview doc written during an audit window is selected by `find_audit_file()`, then fails `parse_audit_findings()` with `AuditBlockMissingError`, and `run_audit` returns `BLOCK_MISSING` and persists nothing \u2014 a wasted paid run reported as \"no findings block.\" The same glob drives `_AUDIT_ARTIFACT_PATTERN`, so no trivial fix is available from squadron's side alone. The document also notes 320 is a *consumer* of the `analysis` pack (per 340) and so does not treat the shared namespace as a boundary to respect.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The 940 slot accounting omits an existing producer, and the overflow is declared without the convention's owner being changed",
+      "description": "\"Ten slots with three already consumed is not enough\" counts only `940`/`941`/`942` tech-debt audits. The repo's `.claude/skills/analyze/SKILL.md` already directs a second producer into the same range with the same name shape and the same docType: \"nnn starts at 940 (analysis range)\" and `analysis/nnn-analysis.{project-name}{.subproject?}.md`. The Prior Art section enumerates `analyze-codebase-prompt.md` and `tech-debt-audit` but never mentions this skill, so the arithmetic and the collision surface are both understated. Worse, the section then sanctions overflow \u2014 \"generated documents take remaining slots in the 900 band as needed rather than stopping at 949\" \u2014 while simultaneously claiming \"no new convention, no change to `file-naming-conventions.md`.\" Those are incompatible: 940-949 is a range in a document squadron does not own. Per slice 172 and `project-documents/DEVLOG.md:119`, that file lives in the `project-documents/ai-project-guide` submodule (`ecorkran/ai-project-guide`), is owned by Context Forge, and its values are parsed by a drift test that fails (not skips) when the submodule is absent. Re-cutting the band is a change to an external artifact, deferred as \"not a blocker,\" and no coordination step is named.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-254"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Interview answers are written into the section the conventions freeze as human-authored",
+      "description": "The concept output is specified as `docType: concept`, \"with the interview responses preserved verbatim in the **User-Provided Concept** section (which is sacred per project convention and never rewritten).\" The convention (CLAUDE.md) is \"Preserve sections titled '## User-Provided Concept' exactly as written \u2014 never modify or remove,\" with the historical rationale that these sections \"contain the human's original vision and must be preserved exactly as written.\" Placing AI-elicited Q&A into that section makes machine-transcribed, question-shaped-by-the-graph text permanently immutable: if the PM's answer is mis-transcribed, if the interview is declined and the section receives the \"explicit unknown\" markers, or if the concept later needs correction, the correction path is blocked by the same rule the design invokes. Nothing in the document distinguishes between \"the human's own authored concept text\" (what the section is for) and \"the skill's record of what it asked and heard.\"",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:148-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No defined behavior when a concept already exists at the output path",
+      "description": "Capability 1 targets \"a codebase that was never planned in squadron\" and writes `000-concept.{project}.md`. Nothing defines what happens when that path is already occupied \u2014 whether the skill overwrites, appends, or stops. Both cases are reachable: a second run of the skill, and a project that has a human-authored concept (which capability 2 explicitly contemplates as its optional input). Overwriting a human-authored concept is exactly the outcome the doc's \"Never fabricate intent\" principle exists to prevent, and the doc's non-goal list protects a generated *initiative plan* from silent authorship while leaving the concept unguarded. The document also disagrees with the repo about the concept's index: it uses `000-concept.{project}.md` throughout, while `001-initiative-plan.squadron.md` declares `source: user/project-guides/001-concept.squadron.md`. Whichever is right, the \"already exists\" check has to know.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Outputs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plugin-installation detection is required but has no mechanism, and two distinct failure modes share one remediation",
+      "description": "Preconditions says \"Verify the plugin is installed and `knowledge-graph.json` exists. If the graph is missing, report the exact command to run (`/understand`) and stop,\" while Non-Goals requires that \"The skill detects absence and instructs.\" A prompt-only markdown skill has no stated means of detecting a Claude Code marketplace plugin's presence \u2014 no path, env var, or `CLAUDE_PLUGIN_ROOT` check is named, and 340's resolution notes that the plugin's value depends on `CLAUDE_PLUGIN_ROOT` being set (i.e., it may be installed but not resolvable in a given session). The two failure modes also need different instructions (install the plugin vs. run `/understand`) and the text collapses them into one. Given that everything in this design is enforced by prose in a markdown file, the \"how do you know\" question is the whole mechanism.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The stated read discipline is inconsistent with the stated read requirement",
+      "description": "Read discipline says \"Grep for the needed section before reading; never load the whole file into context.\" But Capability 1 step 3 requires `project`, `layers[]`, `tour[]`, and *file-level nodes with their `summary`, `filePath`, and `complexity`* \u2014 i.e. the bulk of `nodes[]` after type-filtering, for a graph the document itself calls large. Grep cannot bound a read whose requirement is \"most file-level nodes,\" and the approach assumes line-oriented JSON: on a compact single-line `knowledge-graph.json`, a grep match is the entire file. No extraction tool is named anywhere (the scope section says \"Neither adds runtime machinery to the engine\"), so the mechanism by which a large graph becomes a bounded context is left implicit in the one place the document says the design's feasibility depends on it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`/sq:analysis understand` matches the upstream name while doing the opposite thing",
+      "description": "The naming rationale is \"The name deliberately matches the upstream plugin's `/understand`, because the two are the same concept at different stages.\" That is in tension with the document's own section on the relationship: `/understand-onboard` and `/understand-explain` are *descriptive*, squadron's capability is *prescriptive*, and \"Squadron does not replace or wrap either skill.\" More concretely, the skill's own failure path tells the user to run `/understand` to build the graph, while the squadron command named `understand` is the thing that consumes it and stops without it. The document's \"dispatcher namespacing keeps the names distinct in use, so there is no collision\" answers the literal string-collision question but not the trap: two near-identical invocations with inverted preconditions is the shape CLAUDE.md's \"hallucination traps in prompts\" rule warns about (a reader reaching for the nearest plausible token from the source).",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Delivery"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The two halves share a framing, not a component, and the [100] dependency is unsubstantiated for one of them",
+      "description": "The Overview justifies one document with \"Two capabilities share that shape and nothing else.\" Nothing in the design is actually shared: capability 1 has an external graph dependency, a staleness check, an interview protocol, and `.gitignore` hygiene; capability 2 has none of those, a different input contract, and its own translation rules (written under capability 2 only). The result is a document with two preconditions, two failure models, and two delivery mechanisms (pack skill vs. `commands/sq/` command) whose only commonality is that both write markdown. Separately, Dependencies lists \"[100] \u2014 CLI command registration for any command surface,\" but Delivery describes capability (b) as a first-party file in `commands/sq/`, which per 340 and `src/squadron/cli/commands/install.py` is a markdown file copied by `install-commands` with no CLI registration at all. If `/sq:overview` needs a `sq` subcommand instead, the document does not say so, and \"no installer, manifest, or CLI change\" is asserted only for capability (a). Either way, that dependency claim is doing sequencing work it cannot support as written.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Overview"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Output Conventions asserts a single docType for both capabilities, contradicting capability 1's own outputs",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Per-run index increment is applied to the derived client document, reversing a resolved design decision",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-254",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Graph `summary`, `tags`, and `complexity` are model-authored prose, but the design reads them as structure and attributes them as fact",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Status and Roadmap derivation assumes a status encoding the required input does not have",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Document field schema",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Generated frontmatter's required fields and the provenance carrier are unspecified",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:245",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The new outputs land inside the glob-resolved namespace the metrology audit oracle treats as its own",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output Conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The 940 slot accounting omits an existing producer, and the overflow is declared without the convention's owner being changed",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-254",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Interview answers are written into the section the conventions freeze as human-authored",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:148-149",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No defined behavior when a concept already exists at the output path",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Outputs",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Plugin-installation detection is required but has no mechanism, and two distinct failure modes share one remediation",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The stated read discipline is inconsistent with the stated read requirement",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The understand-anything Output Contract",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "`/sq:analysis understand` matches the upstream name while doing the opposite thing",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The two halves share a framing, not a component, and the [100] dependency is unsubstantiated for one of them",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Overview",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-16T21:25:16.468735",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 61,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 368188,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 1218866,
+  "cached_tokens": 1097344,
+  "cache_write_tokens": null,
+  "completion_tokens": 91979,
+  "reasoning_tokens": 84738,
+  "duration_seconds": 462.39813237497583,
+  "cost_usd": 0.069706,
+  "cost_basis": "alias_pricing"
+}

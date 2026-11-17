@@ -1,0 +1,30 @@
+{
+ "case": "squadron-197-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design D12 (slice 197 design at `e87b2474^`, lines 413-418 and 398) says: a lock-time `rev-parse --git-dir` failure raises `GitEnvironmentError` and exits 2 (nothing ran); any other lock `OSError` exits 2 for both item resume and `sq run`; a report temp write or rename `OSError` ends item resume with exit 3. The tasks: Task 24 only says \"held lock -> exit 2\"; Task 26 only says \"held -> REJECTED\"; Task 28 maps every `GitEnvironmentError`/`GitStateUnknownError` to HALTED and never maps the report-write `OSError` to HALTED. A lock-time `GitEnvironmentError` would exit 3 (halted), contradicting D12. **VALID**: the tasks contradict the parent design. Needs: doc (design plus tasks). Raised by the original review (F001).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 3 requires a test that a failed `set_arch` reports `outputs[\"failure\"] = other` from the branch action, but `set_arch` is a separate `cf-op` step that `branch: { plan: }` inserts before the branch action, and that step is not added until Task 7 (Task 7 itself says \"expansion emits `cf-op(set_arch, plan)` before the branch action\"). The branch action's outputs cannot carry that failure, and Task 3 precedes Task 7. **VALID**: self-contradiction and a test that cannot be written as ordered. Needs: doc alone. Raised by the original review (F002).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": []
+   }
+  }
+ ],
+ "note": "No borderline calls; all six reviews contain only identical spurious \"merge step\" findings, none addressing D12 exit-code mapping or the Task 3 / Task 7 ordering."
+}

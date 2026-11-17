@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Recommendation vocabulary contradicts the arch/plan's `review`/`blocked` contract",
+   "description": "The architecture fixes the new `recommendation` string values as `\"review\"` (pending-review) and `\"blocked\"` (review-failed): `{ recommendation: \"review\", rationale: \"Review required before advancing \u2014 no review artifact found for slice NNN (type: code).\", ... }`, and the slice plan entry explicitly says the branch returns \"`review`/`blocked` recommendations.\" TD-7 instead shows the value of the `recommendation` field as full sentences (`recommendation: 'Review required before advancing'`, `recommendation: 'Blocked: review verdict does not clear threshold'`) and moves the arch's rationale text into the recommendation field. The design is internally inconsistent on this: \"Provides to Other Slices\" and the Success Criteria refer to \"`review` / `blocked` recommendation vocabulary \u2014 the stable strings runners route on.\" Since Amoeba/the arch require \"structured `recommendation` values with a stable vocabulary\" that runners route on, the actual field value matters. TD-7 must state unambiguously that `recommendation` is exactly `review` / `blocked` (with the sentence text belonging in `rationale`), or the ratified vocabulary is silently broken.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7: Recommendation vocabulary \u2014 additive only"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Config-read failure mode is not enumerated",
+   "description": "The gate introduces a new I/O path into the navigator: `resolveGateConfig(this.config)` calls `ConfigManager.get(...)`. `ConfigManager.get` \u2192 `readToml` re-throws any non-`ENOENT` error (malformed TOML, permission/encoding error \u2014 verified in `packages/core/src/config/ConfigManager.ts:19-27`). The design only covers \"no config / `review_enabled` false,\" which is not the same as a read error. Because TD-3 folds gate evaluation into `deriveSliceStatus()` \u2014 whose existing `catch { return base; }` (verified at `packages/core/src/introspection/WorkflowNavigator.ts`) returns a `no-active-slice`/`needs-design` base status \u2014 a thrown config error would either propagate out of `getStatus`/`getNext` or be silently swallowed and skip the gate entirely. The latter is a silent pass, violating the arch's \"must not silently pass\" and \"Fail-fast on configuration errors\" principles. The design should state the intended handling (e.g., surface a config error rather than defaulting to gating-off).",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Data Flow (pre-advance / code example)"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Present-but-unparseable rationale cannot name the parse failure, as the arch requires",
+   "description": "The architecture requires, for a review file that exists but cannot be parsed: \"It is treated as `UNKNOWN` and `review_unknown_as` applies. The rationale returned to the caller names the parse failure explicitly.\" The design leans the opposite way, deliberately collapsing the distinction: it notes `parseFrontmatter` \"never throws \u2014 it returns `{ found: false, data: {} }` on any read/parse error\u2026 a read failure and a missing frontmatter both surface as 'no `verdict` present.'\" With that collapse, the gate cannot distinguish and therefore cannot name the parse failure; TD-7 only requires the rationale to name review type, verdict, and threshold. The \"not silently pass\" half of the arch requirement is met, but the explicit-rationale half is unreachable under the chosen interface. The design should either restore a parse-failure signal or explicitly record this as a deliberate deviation from the arch.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Interfaces Required"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Arch/pre-slice-plan boundary under-specifies which index locates the review artifact",
+   "description": "For the `slice`, `tasks`, and `code` boundaries the index is the active-slice index, and the design says so. For the `pre-slice-plan`/`arch` boundary there is no active slice, yet the design says only \"extend the no-active-slice / pre-slice-plan path for the `arch` gate\" and relies on `detectDocuments(projectPath, index, 'arch')`, which requires an index to build the `NNN-review.arch.*.md` prefix (per 240's detector). The source of that index (presumably `extractSliceIndex(project.fileArch)`, the arch's own index, not a slice index) is never stated. Success Criteria require \"the correct review type is looked for automatically\" at the `arch` boundary and a fixture \"for at least the code and arch/slice types,\" so this index derivation is required to implement and test the boundary. It is inferable from sibling code but is a genuine hidden dependency in an otherwise fully specified design.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Boundary \u2192 signal (how CF knows a phase is done)"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Case/wording divergence from the arch on `pending-review` vs `review-failed` for UNKNOWN",
+   "description": "The arch's `pending-review` definition parenthetically allows \"verdict is UNKNOWN and `review_unknown_as` treats it as pending,\" but no `review_unknown_as` value (`fail`/`concerns`/`pass`) maps to \"pending,\" so the clause is vacuous. The design's choice \u2014 present-but-UNKNOWN always yields `review-failed` (never `pending`) \u2014 is consistent with the arch's own `review-failed` definition (\"artifact present, verdict does not clear the threshold\") and is the more coherent reading. No change needed; flagging so the arch wording is reconciled in 243 rather than treated as a contradiction later.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-2: The decision matrix"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`score` read/store behavior has no owning slice",
+   "description": "The architecture states CF \"reads `verdict` and (when present) `score`\" and that score is \"read and stored when present but not enforced in v1.\" The design excludes only \"numeric `score` enforcement (out of v1 per arch),\" and neither the 241 plan entry nor any other slice assigns the read/store behavior a home. Since nothing consumes it in v1, this is not blocking, but the named arch behavior is currently unowned and should be either assigned or explicitly declared out of scope.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Technical Scope"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Arch doc still describes v1 as slice-level-only; plan supersedes it",
+   "description": "The design implements all four boundaries including the `arch`/pre-slice-plan gate, which the arch text still defers (\"its gate logic is a later slice within 240; v1 implements only the four slice-level transitions\"). The slice plan explicitly supersedes this (slice 244 folded into 241, Phase 4 decision), so the design is correctly aligned with the plan. Recorded so the stale arch statement is reconciled in documentation slice 243.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Overview"
+  }
+ ]
+}

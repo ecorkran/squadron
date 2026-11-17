@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 12 covers only `plan-status-vs-entries`, not the sibling `arch-status-vs-plans` rule",
+   "description": "Success criterion #6 explicitly names both `plan-status-vs-entries` and `arch-status-vs-plans` rules. Task 12 tests only the first. Both rules consume the same `completedSlices`/`totalSlices` from `parseSlicePlan()` (per the slice design's Current Behavior section), so testing one is representative of the arithmetic fix in Task 4 \u2014 this is not a blocker. A symmetric `arch-status-vs-plans` case would close the coverage loop directly; worth considering if test time permits, but not required.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:task 12"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 7 assumes `statusDerivation.test.ts` exists",
+   "description": "Task 7 instructs adding cases \"in `packages/core/tests/introspection/statusDerivation.test.ts`\" and references \"lines 6-22\" of an existing frontmatter-deprecated test. The slice design explicitly hedges this with \"statusDerivation.test.ts if it exists (or add coverage \u2014 planLineStatus precedence)\". If the file does not exist, the task instructions don't tell the implementer to create it. Minor; the file almost certainly exists given the slice design's confidence, but the task could either be agnostic (\"add coverage in or for `statusDerivation.test.ts`\") or the file's existence could be verified before the task is executed.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:task 7"
+  }
+ ]
+}

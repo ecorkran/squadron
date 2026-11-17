@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Architecture's large-scale-evaluation NFR is dropped rather than restated",
+   "description": "The architecture's \"Efficient large-scale evaluation\" goal states a specific target: \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process.\" The slice contains no restatement of this target \u2014 a grep for performance/scale/throughput terms over the slice doc returns only line 173, which claims the brute-force query is \"acceptable for the hundreds-of-agents scale this slice targets.\" Two problems: (1) the NFR is nowhere restated with a target, so nothing in this slice's success criteria validates the array pipeline at the architecture's stated scale; (2) the only scale claim present (\"hundreds\") contradicts the architecture without acknowledging that the brute-force query is a *temporary* bottleneck pending slice 105 \u2014 the SoA state and vectorized tick pipeline itself should be viable well past hundreds. Fix: restate the NFR in the slice (e.g., \"state layout and tick pipeline support \u226510,000 agents; brute-force spatial query is the acknowledged temporary bottleneck, replaced in slice 105\") and add a coarse smoke check (tick at 10K agents completes) to the verification walkthrough. The structural half of the NFR \u2014 \"no Python-level per-agent loops in the hot path\" \u2014 is present; the measurable target is what's missing.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tick\u2194force seam is internally inconsistent and under-specified on integration semantics",
+   "description": "Three interlocking gaps in the force-accumulation contract, which is this slice's core deliverable and the interface slices 101\u2013104 implement first:\n\n1. **`dt` never reaches force functions.** `BulkForce` (lines 141\u2013150) receives `state`, `neighbor_lists`, `profiles`, `active_indices` \u2014 but not `dt`. The placeholder `VelocityDrag` computes force opposing velocity proportional to a drag coefficient; whether that coefficient is a per-tick damping factor or a physical force multiplied by `dt` inside integration is undefined. If drag is applied as a raw force, agent behavior changes with tick rate, which undermines the architecture's fixed-timestep determinism requirement and makes profiles non-portable across tick rates. The protocol needs `dt` (or forces must be documented as pure accelerations with no dt dependence \u2014 but drag is inherently dt-coupled).\n2. **Units/semantics of \"force\" are unspecified.** Data flow step 5 says `velocity += force * dt`, i.e. forces are treated as accelerations, but the doc never states this or how mass enters. Slice 101's cohesion/separation/alignment weights will be tuned against whichever convention is chosen; leaving it implicit guarantees inconsistency across archetype slices.\n3. **Three mutually inconsistent accounts of force evaluation.** Data flow step 4 describes per-agent evaluation (\"Each registered force function receives the active agent's state... Forces are summed per active agent\"); `tick()`'s signature accepts only `list[BulkForce]` (line 185); and line 152 says the tick loop \"prefers the bulk variant when available\" \u2014 which is meaningless when the signature admits nothing else. Related: `neighbor_lists: list[NDArray[np.intp]]` implies a Python-level per-agent list construction between `query_radius` and the force call, which sits in tension with the slice's own technical requirement \"No Python-level per-agent loops in the hot path.\" The doc should state how the accumulator assembles per-agent neighbor lists (or note the accepted cost explicitly at this scale).\n\nNone of these changes the file layout, but all three change the signature slice 101 codes against. Pin them now, in this document.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:127-152"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`accelerations` array is declared but never written",
+   "description": "`AgentState` declares an `accelerations` (N\u00d72 float64) array, and the plan's state list is only \"positions, velocities, profile indices\" \u2014 so this is slice-added scope. Nothing in the data flow, tick signature, integration module, or task list ever populates it: forces go straight into `velocity += force * dt`. Either wire it (accumulate forces into `state.accelerations`, then integrate reads it \u2014 arguably the cleaner SoA story) or cut the field. Keeping an unused N\u00d72 array that every future reader assumes is meaningful is exactly the kind of quiet dead weight to avoid.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Per-agent `Force` protocol is dead surface \u2014 cut or defer to the first consumer",
+   "description": "`tick()` accepts only `list[BulkForce]`, and no component in this slice or any later slice consumes the per-agent `Force` protocol \u2014 its sole stated justification is \"used for testing, reference implementations.\" That elevates a testing convenience to public protocol surface that must be maintained and that every future contributor must reconcile against `BulkForce` (two parallel contracts for the same concept). Consider deferring `Force` until a consumer exists (slice 101 can introduce it if a genuine per-agent need appears), or at minimum document explicitly that it is a test-only reference contract, not an engine input path.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:127-139"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Self-neighbor semantics of `query_radius` are undocumented",
+   "description": "The `query_radius` docstring says \"Return indices of all agents within radius of position\" without stating whether the querying agent's own index is included. The task file itself flags this as an undecided point (\"Test that an agent is not its own neighbor (or is, depending on design decision \u2014 document which)\"). It matters immediately: a separation force computed against a self-neighbor at distance zero is undefined, and slice 101 hits this on day one. Document the decision (and the corresponding brute-force behavior) in the protocol contract.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:159-171"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Force protocol will need an environment parameter \u2014 record the planned evolution",
+   "description": "The architecture's \"Environment as input surface\" principle means forces will eventually receive environmental context (flight response from threat zones, home-range attraction from terrain). `BulkForce` currently has no such parameter, and correctly so \u2014 no environment layer exists yet and the plan assigns none to this slice, so adding a placeholder context object now would be speculative. But since 101\u2013104 will each implement against the current signature, a one-line note in the slice doc that the force protocol signature will gain an environment/context parameter in a later slice would prevent surprise rework and keep the extension story honest.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:141-150"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Markdown indentation defect on the integration section",
+   "description": "The `### Integration: Semi-Implicit Euler` heading and its code block are indented four spaces (unlike every other heading in the document, e.g. `### Force Protocol`), which many markdown parsers will render as literal code or fold into the preceding fence. This section defines the core update equations; restore it to column 0 so it parses as a proper section.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:222-236"
+  }
+ ]
+}

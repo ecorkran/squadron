@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`accelerations` array is carried in state but has no consumer in the design",
+   "description": "`AgentState` exposes an `accelerations` (N\u00d72 float64) array (also listed at line 35), but the tick data flow (lines 87-91) accumulates forces and integrates directly (`velocity += force * dt`); no step writes to or reads from `accelerations`. Neither the architecture nor the slice plan entry mentions an acceleration array (both enumerate positions, velocities, profile indices). This is dead state that must be kept consistent through add/remove operations for nothing. Cut it, or specify its role (e.g., where accumulated forces land before integration); if nothing needs it until a later slice, defer it to that slice.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Per-agent `Force` protocol has no consumer, and \"prefers the bulk variant when available\" is unimplementable as specified",
+   "description": "The tick signature accepts only `forces: list[BulkForce]` (line 185), yet line 152 says \"The tick loop prefers the bulk variant when available\" \u2014 implying mixed force lists, which the signature forbids. The per-agent `Force` protocol (lines 124-135) is justified only as \"used for testing, reference implementations,\" and the success criteria require placeholder forces to \"exercise both the Force and BulkForce protocol paths\" \u2014 but only the BulkForce path is reachable from `tick()`. This is a dual-protocol mechanism with one consumer. Either cut the per-agent `Force` protocol from this slice (tests can conform to `BulkForce`), or specify how a per-agent force is adapted into the bulk path so \"prefers when available\" has a defined meaning.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-156"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Two conflicting integration mechanisms are specified for `active_indices`",
+   "description": "Line 152 states the full-population force array \"keeps the integration step simple (add force to velocity for all, but only active agents have non-zero forces),\" while line 215 states \"integration applies only to those agents. Implemented via NumPy fancy indexing: `state.velocities[active_indices] += ...`.\" These are different mechanisms with different cost profiles (the first integrates all N agents and applies the `max_speed` clamp to inactive agents every tick; the second touches only the subset). The outcomes are numerically equivalent for zero forces, but an implementer must pick one, and the docs disagree. Specify one \u2014 the fancy-indexing variant (line 215) matches the \"don't over-engineer / fancy indexing\" guidance at line 316 \u2014 and remove or reconcile the other.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Tick return contract contradicts the architecture's stated interface",
+   "description": "The architecture's Envisioned State (100-arch.behavior-engine.md, step 5) says the engine \"Returns the updated state array,\" and the slice's own Included scope says the tick function will \"return updated state\" (line 39) \u2014 but the actual signature is `-> None` with in-place mutation (line 187, \"state: Agent state arrays, mutated in place\"). In-place mutation is a legitimate choice consistent with \"stateless between ticks,\" but the architecture's contract and the slice's own scope bullet say otherwise. Reconcile: either return the (mutated) `AgentState` so the world-server-facing contract matches the architecture, or amend the scope bullet and note the deviation from the architecture's step 5.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:187"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Architecture's performance NFR is not restated; the slice self-targets \"hundreds of agents\" with a per-agent Python query loop",
+   "description": "The architecture states a specific NFR: \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process... the hot loop must be structured for vectorized computation... not object-by-object iteration\" (100-arch.behavior-engine.md, Design Goals). This slice touches exactly that hot loop but never restates the target; instead it claims the brute-force design is \"acceptable for the hundreds-of-agents scale this slice targets\" \u2014 three orders of magnitude below the architecture's figure \u2014 and the data flow (line 88) plus the `BulkForce` signature's `neighbor_lists: list[NDArray]` (line 145) mandate a Python-level per-agent neighbor-query loop, which sits in tension with the Technical Requirement at line 247. Deferring spatial optimization to slice 105 is correct per the slice plan, but the doc should restate the tens-of-thousands NFR, state explicitly that brute-force does not meet it, and name slice 105 as the recovery point (as the slice plan's note about pulling 105 earlier already does).",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Environment input surface is neither included nor excluded",
+   "description": "The architecture lists \"Environment as input surface\" as a core architectural principle and the Envisioned State tick receives \"environmental context\" \u2014 but this slice doc never mentions environment at all, in either the Included or Excluded list. Deferring is defensible: the Environment Layer initiative does not exist yet, slice 106/107 depend on it, and a future environment force can conform to the `BulkForce` protocol without changing `tick()`. No action required beyond adding an Excluded bullet naming environmental queries (with the force-protocol path named as the future integration route) so later slices don't assume the environment interface was forgotten.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Technical Scope"
+  }
+ ]
+}

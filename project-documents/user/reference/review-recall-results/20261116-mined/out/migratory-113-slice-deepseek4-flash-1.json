@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Default threshold contradicts its own derivation and the cited benchmark evidence",
+      "description": "The slice's central tunable is `grid_threshold_mean_neighbors = 10.0`, and the \"Default Threshold Choice\" section justifies it with two bullets that describe the *same* distribution and give contradictory answers. Bullet 1 computes the uniform-distribution mean as `(\u03c0 \u00d7 35\u00b2 / 90000) \u00d7 3100 \u2248 132` and concludes \"far above threshold, so brute-force is selected.\" Bullet 2 then says \"at the same N but in an expansion phase where agents are spread uniformly across the whole world \u2026 mean neighbors can drop below 10 \u2014 so grid is selected.\" Uniform over 300\u00d7300 with r=35 is exactly the case computed at 132; it cannot also be below 10.\n\nBullet 1 also mis-cites the evidence. Perf journal Entry 4's synthetic benchmark and Entry 4 addendum both establish that at *uniform* distribution the hash grid wins (3.3\u00d7 faster; \"20 TPS through tick 1000\"), which is the whole premise of the slice. The bullet labels the uniform case as the one where brute-force wins.\n\nThe practical consequence: at the slice's own verification config (`test.yaml`: 2500 entities on 300\u00d7300, `query_radius` 35 and 15 \u2014 see `config/test.yaml`), the uniform mean is ~107, an order of magnitude above 10.0. With `t = 10` and `h = 2`, the dispatcher would essentially never select the grid for the config the walkthrough uses, so the slice would ship a dispatcher that never dispatches, while walkthrough step 4 expects the optimum to land \"in the 5\u201320 range.\" Either the arithmetic in bullet 1 is wrong, or the default is wrong, or the sweep expectation is wrong \u2014 the document asserts all three. The threshold derivation needs to be reconciled with Entry 4/Entry 5 before implementation, since the chosen `t` is the only thing that makes the slice deliver value.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-212"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Bit-exact position equality against brute-force-only\" is unachievable when both backends are exercised",
+      "description": "Implementation step 5 requires an integration test that \"confirms bit-exact position equality against brute-force-only over N ticks\" while also requiring that \"the test injects a mocked density sequence that exercises both backends in one run.\" These two requirements are mutually exclusive. `BruteForceQuery` produces `flat_neighbors` in column order from `np.nonzero` on the `(n_active, n)` mask, while `HashGridQuery` produces edges in cell-gather order; the CSR consumers reduce with `np.add.reduceat` (see `src/migratory/engine/flocking.py`), whose floating-point result depends on edge order within a row. Additionally, brute force classifies boundary pairs with the identity squared-distance form (`|a-b|\u00b2 = |a|\u00b2 + |b|\u00b2 - 2\u00b7a\u00b7b`, `src/migratory/spatial/brute_force.py:121`) while the grid uses a direct distance test, so borderline pairs can land on different sides of the radius comparison.\n\nThe document is internally inconsistent about this: the unit-test strategy correctly says \"order within a row may differ for grid, so compare as sets\" (:431), and walkthrough step 2 hedges with \"modulo documented determinism caveats in the hash grid\" (:359). Only step 5 demands bit-exactness. The acceptance criterion should be stated as set-equality per agent (or a tolerance), matching the unit-test strategy \u2014 as written it is an unmeetable gate that will be discovered during implementation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`hasattr`-based dispatch in the tick hot path is a hidden dependency on a concrete backend",
+      "description": "The design adds `if hasattr(spatial, \"record_density\"): spatial.record_density(filtered_counts)` to `tick.py` (verified at `src/migratory/engine/tick.py:60-78` as the surrounding pipeline). The behavior-engine architecture's \"Pluggable spatial queries\" principle states the engine \"depends on a neighbor-query interface, not a specific spatial data structure,\" and the engine's whole reason for a `SpatialQuery` protocol (`src/migratory/spatial/interface.py`) is that any backend can be substituted. A `hasattr` probe inverts that: the engine's behavior now depends on whether the *concrete object* happens to expose an attribute named `record_density`, and any future backend that defines a same-named attribute with different semantics is silently invoked. That is the hidden-dependency antipattern the protocol exists to prevent.\n\nThe document considers the protocol-based alternative and rejects it on the grounds that it \"couples the protocol to a dispatcher concern\" (:164) \u2014 a fair objection, but the lighter option not considered is to keep the engine pure and let the *server* feed the signal back. `SimulationManager.step` already owns the post-tick sequence (`src/migratory_server/simulation.py:100-135`) and is the natural place to call a dispatcher hook; the only thing needed is for `tick()` to surface `filtered_counts` (or the derived mean) rather than the engine reaching into backend identity. The current design pushes a server-orchestration concern into the engine's hot path to save one return value.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Density signal is defined over the evaluated subset but drives a whole-population decision",
+      "description": "The signal is specified as `mean_neighbors_per_agent = counts.sum() / n_active` computed from `filtered_counts`, which is post-`exclude_self` output for `eval_indices` only. The architecture's \"Subset-evaluable tick\" principle requires the tick interface to accept an agent subset (the foundation for the world server's multi-resolution simulation), and `spatial.build()` is explicitly documented to always receive the FULL population (`src/migratory/spatial/interface.py:29-33`). So under subset evaluation the dispatcher would make a single global backend choice for the entire population from the density of an arbitrary evaluated slice \u2014 a subset that is spatially prioritized (near observers) will systematically over- or under-report the population's density, and the backend selection applies to all agents including those outside the subset.\n\nThe slice never mentions subset evaluation. Either the signal should be computed over the full population (e.g. from the backend's own build state) or the document should state explicitly that the adaptive path is only valid for full-population ticks and what happens when `active_indices is not None`. Given that subset evaluation is the stated scaling mechanism for this engine, silently picking a backend from a biased sample is a correctness-of-selection gap.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`initial_backend` is config surface the slice plan does not assign and nothing uses yet",
+      "description": "The slice-plan entry for (113) assigns exactly three config knobs: `backend`, `grid_threshold_mean_neighbors`, `hysteresis_band` (`project-documents/user/architecture/100-slices.behavior-engine.md`, item 11). This design adds a fourth, `initial_backend`, exposed \"so an operator running a scattered-start scenario can choose grid-first\" (:301) \u2014 a scenario no current config expresses (`config/default.yaml` and `config/test.yaml` both spawn across the full world). The document's own risk section states the safe default is `\"brute\"` and that the trade-off only needs documenting, which is the definition of a knob with no user. Dropping the config field and keeping the constructor parameter (defaulting to `\"brute\"`, which the unit tests need anyway to cover first-tick selection) removes a validated YAML field, a `_validate_spatial` case, a `_build_spatial` branch, and a documented operator hazard from the slice.\n\nTwo smaller overweight items in the same vein: \"Data Flow (Unchanged for Consumers)\" (:240-254) restates the Tick Integration pseudocode at :145-159 almost verbatim, and walkthrough step 2's `MIGRATORY_SPATIAL_BACKEND` env-var mechanism (:356-357) is not part of the designed config surface \u2014 it is a fourth backend-selection path introduced only to satisfy a test-pinning requirement the config already covers. Naming is also inconsistent between the config field (`grid_threshold_mean_neighbors`) and the class parameter (`threshold_mean_neighbors`, `hysteresis_band`) at :88-89 versus :238, which will read as two different concepts in review.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:37"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hysteresis default differs between class and config",
+      "description": "The `AdaptiveSpatial` signature gives `hysteresis_band: float = 0.0` while `SpatialConfig` defaults the same concept to `2.0` (:175). The class default is defensible as \"pure single-threshold decision,\" but the slice argues throughout that a \u00b12 dead zone is needed to prevent flip-flop. Two different defaults for one parameter invites the classic bug where a directly-constructed `AdaptiveSpatial` (as the unit tests will do) behaves differently from the server path. Pick one and have the other reference it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Build-contract hazard is documented rather than designed away",
+      "description": "The risk section correctly identifies that delegating `build()` only to the selected backend bakes in an assumption about brute-force's `build()` being a no-op (`src/migratory/spatial/brute_force.py:51` currently only stores positions). The stated mitigation is \"document the dispatcher's one-build-per-tick contract.\" That is honest, but it is a latent correctness hazard whose only defense is a comment. Delegating `build()` to both backends unconditionally would cost the grid's counting-sort on brute ticks \u2014 which the design rightly wants to avoid \u2014 so the trade is real; a cheaper defense would be an assertion or a documented `SpatialQuery` requirement that `build()` must be idempotent and side-effect-free beyond indexing. Raising this as a NOTE rather than a CONCERN because the failure mode is named, bounded, and deferred to a hypothetical future backend.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:402-405"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Default threshold contradicts its own derivation and the cited benchmark evidence",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-212",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"Bit-exact position equality against brute-force-only\" is unachievable when both backends are exercised",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "`hasattr`-based dispatch in the tick hot path is a hidden dependency on a concrete backend",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Density signal is defined over the evaluated subset but drives a whole-population decision",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-118",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`initial_backend` is config surface the slice plan does not assign and nothing uses yet",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:37",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Hysteresis default differs between class and config",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Build-contract hazard is documented rather than designed away",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:402-405",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-16T21:47:30.719798",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 599599,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1239900,
+  "cached_tokens": 1075200,
+  "cache_write_tokens": null,
+  "completion_tokens": 144172,
+  "reasoning_tokens": 138882,
+  "duration_seconds": 1051.1473614161368,
+  "cost_usd": 0.09971856,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,242 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Wire-track \"Current State\" describes a protocol that no longer exists",
+      "description": "The document states \"The wire protocol is currently uncompressed JSON over WebSocket. At N=3,500 this is approximately 84 KB/tick (24 bytes \u00d7 3,500 agents).\" Slice 306 (State Serialization and Protocol) is complete and replaced JSON with a binary frame protocol \u2014 STATE_UPDATE is `9 + N\u00d732` bytes (float64 positions + velocities). The \"24 bytes/agent\" figure matches neither format (binary update is 32 B/entity; JSON would be far larger), and the N=10,000 projection (~240 KB/tick, \"still viable\") inherits the error \u2014 the real figure is ~320 KB/tick, i.e. ~19 MB/s (~154 Mbps) per client at 60 Hz, which is not obviously viable over WiFi for the multi-client envelopes in 300-arch's NFRs. Worse, Tier 2 says \"Binary WebSocket replaces JSON\" \u2014 this redoes completed work and signals the whole wire track was drafted against a pre-306 world. Every wire number and milestone in this document needs re-derivation from the actual binary protocol.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The tick return type contract \u2014 the document's stated deliverable \u2014 is deferred, not defined",
+      "description": "The Overview claims \"this architecture document defines the shared boundary \u2014 the tick return type contract,\" and the initiative plan (001) says the same. But the Technical Considerations section only enumerates three options and concludes \"the architecture should support all three behind an abstraction, with the choice made per-platform.\" That is a deferral of the load-bearing decision this document exists to make. It is also speculative generality against the project's core principle of resisting complexity: option (a) (`field.to_numpy()`) is correct on unified memory and merely costs a PCIe transfer on CUDA, where option (c) can be introduced later behind a narrow interface if profiling shows the transfer matters. Building a three-way abstraction now, before the \"Quadrants substrate evaluation\" slice has produced a single measurement, is abstraction for a future that may not arrive. Pick (a), document (c) as the extension point.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wire slices duplicate and conflict with already-planned world-server slices 319 and 311",
+      "description": "The \"Anticipated Slices\" section lists unnumbered world-server slices: \"Delta compression \u2014 int16 delta encoding with large-delta fallback,\" \"Decoupled stream rate,\" and \"Server-side frustum culling.\" But 300-slices.worldserver-foundation.md already contains (319) STATE_UPDATE Delta Encoding (dead-band omission + periodic keyframes + DELTA 0x06 message type) and (311) Client Spatial Culling (per-client region of interest). These are different designs for the same problem: 319 omits sub-threshold entities and keyframes periodically; 140 quantizes all deltas to int16 with no keyframe mechanism. 311 has the client \"declare a viewport\"; 140 adds a per-frame camera control channel inverting the v1 server-push-only data flow that 300-arch states as a principle (\"Nothing flows back from clients... in v1\"). None of 140's wire slices appear in the 300 slice plan, and 140's frontmatter `relatedSlices` lists only [118, 119]. The document must either amend 300-slices (superseding/merging with 319 and 311) or reference them; as written, two teams could implement two incompatible delta schemes from two authoritative documents.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Client-side delta accumulation is incompatible with slice 318's drop-oldest backpressure policy",
+      "description": "The delta compression design says \"The client reconstructs by accumulating deltas onto its last-known positions,\" handling only \"large delta events (teleportation, spawn).\" But slice 318 (complete) explicitly implements drop-oldest frame dropping on STATE_UPDATE queues under saturation \u2014 up to 5% drops are acceptable per 300-arch's NFRs. A dropped delta frame under accumulation-based reconstruction permanently diverges the client's position state for every affected agent; there is no keyframe/resync mechanism in 140's design (319 has one \u2014 another reason to reconcile with it). Additionally, int16 quantization error accumulates on the client even with no drops, since the server quantizes against its true float state while the client accumulates quantized values. Neither failure mode is addressed.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism waiver for staggered updates contradicts the determinism guarantees that replay is built on",
+      "description": "100-arch lists \"Tick determinism \u2014 Given the same state and inputs, a tick produces the same outputs. This enables replay, debugging, testing...\" as a core design goal, and 300-arch's logging/replay design (slice 307) depends on it: \"logging only the initial state plus any non-deterministic inputs... is sufficient\" for reconstruction. Slice 119's staggered neighbor updates break tick-level determinism (cached neighbor data makes tick N's output depend on stale state), and this document waves it off as \"acceptable for emergent-behavior simulation... must be documented as a behavioral change\" without analyzing the replay consequence \u2014 a log of initial state + config no longer reconstructs the run unless the full stagger/cache state is also captured per tick. The fidelity claim is also overbroad: \"flocking forces average over neighbors, smoothing out slightly stale data\" holds for cohesion/alignment, but the planned flight/pursuit forces (slice 103, status not_started) are exactly the forces where a 2\u20133 tick delay in seeing an approaching predator destroys the behavior. The waiver should be scoped to the forces that tolerate staleness, and the replay format impact should be specified.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Quadrants is a single point of failure for every tier above 10k, and the stated mitigation covers only Tier 1",
+      "description": "All scaling from 50k through the 2M demo rests on Quadrants, a Taichi fork whose 0.7.2 release date (2026-04-27) is the same day this document was written, with a \"young fork (June 2025)... limited community history.\" The stated mitigation \u2014 \"the Numba tier provides a working fallback at 10k\" \u2014 mitigates nothing above Tier 1. If Quadrants stalls, breaks Metal support, or diverges from Taichi, there is no named fallback GPU substrate (parent Taichi, CuPy, wgpu) and no exit criterion for the \"Quadrants substrate evaluation\" slice that would trigger a pivot. Given that the design intentionally preserves \"same CSR-walk pattern\" structure for the port, the evaluation slice should define kill criteria and the alternative candidate, since the entire tier structure above 10k collapses without it.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tier milestones have no quantitative acceptance criteria or verification method",
+      "description": "300-arch establishes the project's verification convention: \"Verification is via load tests in CI, not assumed,\" with an NFR section, a `tests/load/` tier, and a hard-floor regression alarm. This document, whose explicit purpose includes defining \"the scaling tier milestones that sequence the work,\" defines tier completion as \"a demonstrable artifact \u2014 screenshot, video, or live demo.\" No tier states its performance gate (Tier 1 implies 10k @ 60 TPS only via slice 118/119 prose in a different document), the hardware it must hold on, the formation states to be measured (the journal's Entries 4/7 show single-point TPS numbers lie when performance is formation-dependent \u2014 a lesson this document itself cites), or which load tests gate tier transition. \"Regression testing against the existing force implementations is mandatory at each tier transition\" also needs a tolerance definition: Numba reassociation and GPU parallel reductions will not be bit-exact against the NumPy `reduceat` reference, so \"verifiable against\" is undefined until a numerical tolerance is specified.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Decoupled stream rate requires client-side interpolation that the document's own scope excludes",
+      "description": "The Scope section excludes \"viewer/client rendering optimization,\" yet the Anticipated Slices include \"Decoupled stream rate \u2014 sim tick rate independent of client stream rate... client interpolation.\" Streaming at 30 Hz while the simulation runs at 60 Hz produces visibly chopped motion unless the client interpolates \u2014 that interpolation is client work, has no owner in any slice plan, and the document assigns the slice to the world-server track anyway. Either the scope exclusion needs a carve-out naming the client initiative that owns interpolation, or the tier-2 milestone (which depends on it looking right) is blocked on work this architecture doesn't place anywhere.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#overview"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Staggered-update speedup claim ignores the per-tick tree build",
+      "description": "The staggered neighbor update slice claims spatial cost is cut \"by roughly `stagger_period`\u00d7.\" The cKDTree build is O(n log n) over the full population every tick and cannot be staggered (all agents move, so the tree must be rebuilt for the subset query to be valid against current positions). At N=2492 the build is 0.35 ms of a 9.42 ms tick \u2014 but the slice's target regime is 10k, where the build grows while the query share shrinks, so the realized speedup will be meaningfully below `stagger_period`\u00d7. The claim should be restated as applying to the query phase only.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter deviates from sibling architecture documents",
+      "description": "The frontmatter omits fields present in both 100-arch and 300-arch (`phase`, `phaseName`, `guideRole`, `audience`, `description`, `dependsOn`) despite depending on both documents, and adds `relatedSlices: [118, 119]`, a field no sibling uses \u2014 while the document's own Anticipated Slices section depends on world-server slices it doesn't list there. I could not verify the required frontmatter schema because `file-naming-conventions.md` is not present in the tree; flagging the inconsistency with siblings, not a confirmed convention violation.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:1-13"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Wire-track \"Current State\" describes a protocol that no longer exists",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The tick return type contract \u2014 the document's stated deliverable \u2014 is deferred, not defined",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Wire slices duplicate and conflict with already-planned world-server slices 319 and 311",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Client-side delta accumulation is incompatible with slice 318's drop-oldest backpressure policy",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Determinism waiver for staggered updates contradicts the determinism guarantees that replay is built on",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Quadrants is a single point of failure for every tier above 10k, and the stated mitigation covers only Tier 1",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Tier milestones have no quantitative acceptance criteria or verification method",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Decoupled stream rate requires client-side interpolation that the document's own scope excludes",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Staggered-update speedup claim ignores the per-tick tree build",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Frontmatter deviates from sibling architecture documents",
+      "location": "project-documents/user/architecture/140-arch.simulation-scaling.md:1-13",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/140-arch.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-140-arch"
+  },
+  "timestamp": "2026-11-16T20:51:47.100991",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 80320,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 256956,
+  "cached_tokens": 203264,
+  "cache_write_tokens": null,
+  "completion_tokens": 21924,
+  "reasoning_tokens": 19008,
+  "duration_seconds": 232.24050008296035,
+  "cost_usd": 0.11928195999999999,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Combined effect with slice 148 (shared-memory tiling) is not measured by this slice's success criteria",
+   "description": "Slice 149 measures against the slice 145 baseline, not against slice 148's tiled kernel. Since 148 (shared-memory tiling) is marked complete in the parent plan and 149 depends only on 145, the two optimizations are designed to compose independently. The slice correctly claims the two interventions compose multiplicatively with each other but does not claim or measure composition with 148's tiling. This is consistent with the parent plan's independent-shipping model; it is noted here only as an observation, not a gap \u2014 the parent plan allows slices to ship and be measured independently.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-2-configurable-cell-subdivision"
+  }
+ ]
+}

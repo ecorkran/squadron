@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All 12 success criteria are covered by tasks with no gaps or scope creep",
+      "description": "Cross-reference of success criteria against tasks:\n\n- **SC1** (flow selection: `concept`/no-arg/`comprehension`/else) \u2192 Task 1 (selector authoring), Task 8.5 (live selection test)\n- **SC2** (only two fixed questions + single confirmation, extraction precedes interaction) \u2192 Task 5 (interview + confirmation), Task 8.1 (happy path check), Task 8.2 (decline path)\n- **SC3** (prose cites file, structural names graph field, Dev Approach from filesystem) \u2192 Task 3 (three-source extraction), Task 4 (per-section mapping), Task 8.1\n- **SC4** (dropped topics nowhere) \u2192 Task 4.1 (dropped-topics rule stated), Task 8.1\n- **SC5** (declined question \u2192 gap marker + provenance entry) \u2192 Task 5.1, Task 8.2\n- **SC6** (User-Provided Concept verbatim, pre-existing survives) \u2192 Task 6, Task 8.4\n- **SC7** (guide absent \u2192 loud stop) \u2192 Task 6.1, Task 8.3\n- **SC8** (existing concept never overwritten, default stop) \u2192 Task 6.2, Task 8.4\n- **SC9** (frontmatter valid, filename uses cf project name) \u2192 Task 7.2, Task 8.1\n- **SC10** (provenance carries full outcome set) \u2192 Task 7.3, Task 8.1\n- **SC11** (whole graph never loaded, no function/class node read) \u2192 Task 3.1 (discipline statement), Task 8.6\n- **SC12** (PM would edit rather than discard) \u2192 Task 8.1 (happy path against squadron)",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task sequencing respects dependencies with no circular references",
+      "description": "Task 0 (branch/premise) \u2192 Task 1 (selector) \u2192 Task 2 (preconditions) \u2192 Task 3 (sources) \u2192 Task 4 (mapping) \u2192 Task 5 (interview) \u2192 Task 6 (contract) \u2192 Task 7 (governance/output) \u2192 Task 8 (verification walkthrough) \u2192 Task 9 (close). Each task builds on prior outputs; no task depends on a later one.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers are placed correctly at tested points",
+      "description": "`Commit:` markers (plain lines) appear at the end of Tasks 1.2, 2.2, 3.4, 4.2, 5.3, 6.3, 7.4, and 8.6 \u2014 all points where work has been verified, not after every subtask and not only at the end. A file with no markers is acceptable; these are correctly scoped.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task 8 verification walkthrough is appropriately sized for the slice complexity",
+      "description": "Task 8 has 6 subtasks covering happy path (8.1), decline path (8.2), contract failure (8.3), re-run (8.4), flow selection (8.5), and discipline/scope (8.6). Each maps to specific success criteria. The 3/5 effort on 8.1 is justified as the integration verification point exercising the correction outcome. No subtask is too large to be independently completable.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality \u2014 task count, detail, and file scope fit the slice",
+      "description": "The slice edits one skill file (`commands/analysis/understand.md`) and generates one concept document. Nine tasks with ~30 subtasks, including thorough verification, matches the complexity. especially given the design's emphasis on verbatim wording, loud-failure contracts, and provenance completeness.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load test required \u2014 slice has no NFRs",
+      "description": "The slice design contains no non-functional requirements or performance constraints. It is a markdown-editing slice; no `tests/load/` task is needed. and none is missing.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/363-slice.concept-generation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All 12 success criteria are covered by tasks with no gaps or scope creep",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task sequencing respects dependencies with no circular references",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers are placed correctly at tested points",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 8 verification walkthrough is appropriately sized for the slice complexity",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality \u2014 task count, detail, and file scope fit the slice",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No load test required \u2014 slice has no NFRs",
+      "location": "project-documents/user/slices/363-slice.concept-generation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T20:47:09.230894",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 5856,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 19925,
+  "cached_tokens": 3264,
+  "cache_write_tokens": null,
+  "completion_tokens": 2580,
+  "reasoning_tokens": 1520,
+  "duration_seconds": 19.62890079105273,
+  "cost_usd": 0.016832859999999998,
+  "cost_basis": "alias_pricing"
+}

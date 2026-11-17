@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The \"third copy\" of the category vocabulary is not in review templates, and the templates' existing vocabularies are semantically incompatible with `AuditCategory`",
+   "description": "The document states the write-time option \"is a write-path change to review templates and output parsing\" and that \"the vocabulary then has a third copy (enum, audit skill, review templates), and 323's sync test extends to cover it.\" Both claims are false against the repo, and the second one is not a copy problem at all:\n\n- The category instruction every review actually receives is a Python constant, `_STRUCTURED_OUTPUT_INSTRUCTIONS` (`src/squadron/review/review_client.py:74-90`, appending `category: error-handling` / `location: src/module.py:45`), assembled by `assemble_system_prompt` for *every* template. `src/squadron/data/templates/code.yaml` contains no `category` token at all. So a sync test extended \"to cover review templates\" would not see the emission site, and editing the real site changes all reviews at once.\n- `src/squadron/data/templates/arch.yaml:85-89` already carries a *different, closed* nine-value category vocabulary (`consistency, completeness, feasibility, technology, abstraction, extension-points, dependencies, antipattern, other`). These are design-review categories for documents. They have no counterpart in `AuditCategory` (`architectural-decay, consistency-rot, type-contract-debt, \u2026`), so `antipattern` or `technology` must fall through to `other` \u2014 which 323 treats as a vocabulary-health signal.\n- Worse, because `_STRUCTURED_OUTPUT_INSTRUCTIONS` is appended *after* the template system prompt, an arch review would receive two contradicting closed lists in one prompt.\n\nThe Design Goal \"One category vocabulary. Audit findings and code-review findings count in the same ten categories, so a report can say 'error-handling findings: 4 from review, 2 from audit'\" is therefore not reachable by the stated mechanism, and the report example mixes document-review findings with a code-issue taxonomy (`error-handling-observability` on a slice-design finding means something else entirely). The architecture needs to scope normalization (code reviews only?) and name the real emission site and the reconciliation of `arch.yaml`'s vocabulary before slices are planned.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The rule set is named on the snapshot but never versioned, contradicting the document's own \"tool identity is part of the measurement\" principle",
+   "description": "\"Tool identity is part of the measurement \u2026 Snapshots record the tool and version per metric, and reports refuse to diff across a tool change without flagging it.\" But lint and type-error counts depend at least as much on the *rule configuration* as on the binary: squadron's rule set lives in `pyproject.toml` (`[tool.ruff.lint] select = [\"E\",\"F\",\"W\",\"I\",\"UP\",\"BLE\",\"ASYNC\",\"B\"]`, and `[tool.pyright] include = [\"src\"]`, `typeCheckingMode = \"strict\"`). The document only says a count \"must name the rule set each count came from\" \u2014 a name, not a content hash. An edit to `select` or to `include` silently changes every count with no incomparability flag, which is exactly the failure 322 solved for judge templates (`template_content_hash`) and 323 solved for the audit (`audit_prompt_hash`, `src/squadron/metrology/identity.py:287`). The snapshot's comparability key must include a rule-set content hash, by the precedent this document cites as its model.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Measuring a fork-point commit with working-tree analyzers is asserted, not mechanized",
+   "description": "\"A slice's before and after is the snapshot at its fork point against the snapshot at its merge\" and \"Taking a snapshot doesn't modify the measured repository.\" Ruff, pyright and any coverage reporter read the *working tree*, not a commit object. At merge time HEAD is the merge commit and the tree is correct; at fork time the tree holds the slice branch, not the ancestor commit. The document never says how the snapshot obtains the fork-point tree \u2014 a detached worktree, a `git stash`/checkout dance, or a temporary clone \u2014 nor what happens when the tree cannot be materialized, nor how the dirty-marker rule interacts (a fork-point checkout is by construction \"dirty\" relative to the branch). Since slice 3's whole value (\"per-slice before and after\", the plan's capability (c)) depends on this, it is the keystone's hidden mechanism, not a slice detail. Note squadron already has worktree machinery (`cf worktree`) that this should name instead of leaving implicit.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The snapshot record type is high-cardinality and lands in a store whose every query scans and validates every record",
+   "description": "\"Extend the 320 store, don't fork it \u2026 No new store, no schema migration\" is correct as far as the envelope goes (`src/squadron/metrology/models.py:264-276`), but the store is one flat directory of JSON read by `MetrologyStore._iter_records` (`store.py:174-186`), which globs `*.json` and Pydantic-validates *every* file for *every* query; `list_samples`, `list_audit_runs`, `list_graduations` all pay that cost. Snapshots are per-commit records with per-metric tool identity \u2014 the highest-cardinality record type this store would carry, and the one most likely to be written automatically at fork and merge for every slice. The document asserts the store's \"join and aggregation \u2026 are satisfied by per-record JSON\" (store docstring) without revisiting it, and never mentions record volume, retention, or the SQLite trip-wire 323 explicitly declined to trip. Either bound the snapshot write rate/prune policy or name the measured migration trigger.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Overview"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Limits come from the project['s] own config\" has no workable home in this repo",
+   "description": "The principle is right (no squadron default), and the Current State correctly notes limits are \"Stated in prose in CLAUDE.md\" (`CLAUDE.md:26`). But squadron's only machine-readable project config is `.squadron.toml`, and it is in `.gitignore` (\"Per-developer squadron project config\") \u2014 so limits declared there are per-checkout, are not committed, and would not exist on another machine or in CI, meaning two snapshots of the same commit record different limit sets and the recorded exclusions/limits are not reproducible for anyone else. The alternative, parsing the prose from `CLAUDE.md`/`AGENTS.md`, is an unmentioned parser with its own lenient-parsing obligation under the project's parsing rules. The document defers this entirely; it is load-bearing for capability (a)'s \"file and function length against the project's limits.\"",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The pluggable adapter \u2014 the component's central extension point \u2014 has no shape and no language-detection step",
+   "description": "\"each language is a pluggable adapter\" and \"The adapter contract has to define each metric well enough that adapters agree on what they report\" is the whole design for extension, yet the document never says: what an adapter *is* (callable, class, protocol), where it is registered (a squadron registry exists for providers and tools; none is named here), whether third-party adapters are installable or first-party only, or how \"selects a language adapter for each language present\" detects languages (extension census? a project-declared list?). \"Which languages ship first is a slice decision\" answers ordering, not shape. Compare 323, which named its modules, function signatures and models; without at least the protocol and the registration surface, the keystone slice has to invent them, and the stated future (440 relying on a non-Python adapter) cannot be checked against a contract that does not exist.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The review-ingest source location is no longer `project-documents/user/reviews/`",
+   "description": "\"`sq review code` writes review files under `project-documents/user/reviews/` with structured findings in frontmatter\" is now only rule 2 of four. `resolve_reviews_dir` (`src/squadron/review/reviews_dir.py`) selects, in order: `--reviews-dir`, the checkout's existing `project-documents/user/reviews/`, the `review.external_reviews_dir` config key, then `~/.config/squadron/reviews/<host>/<owner>/<repo>/` \u2014 and slice 383 exists precisely because a PR review has no project to live in. The ingest step in \"Envisioned State\" (\"An ingest step reads review files into the store as normalized finding records tied to project, commit and slice where known\") therefore cannot just glob one directory: for the user-level and external cases the file lives outside the project, and its `reviewedSha` (`src/squadron/review/persistence.py:554`) is HEAD of a scratch worktree, not a project commit. Neither the \"commit and slice where known\" hedge nor the reviews-dir resolution is addressed, and the PR path is exactly the brownfield/enterprise case 440 depends on.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Current State"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The stated consumption contract for 420 cannot be met by the design as written",
+   "description": "\"420 reads snapshots and normalized review findings to score implementation replays\" \u2014 but 420's replays are \"P6 run per config in an isolated worktree\" (initiative plan, entry 15) producing synthetic commits that exist in no project history. A snapshot of a replay worktree keys on `(ProjectId, commit_sha)` where `ProjectId` derives from the git remote (so it equals the project's id) and the SHA is an artifact of the replay. Nothing in the document covers this: the dirty-tree rule does not apply to a committed replay worktree, and \"This component is the only writer\" means 420 cannot legitimately write snapshots either. Result: either 420 has no snapshot source, or replay commits leak into the same per-project \"over-time\" trend the document promises. This cross-initiative interface needs to be settled here, since 420's dependency on 400 is recorded in the plan.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\"Rollup and trend\" re-creates reporting that 320/321 already built, with no reuse statement",
+   "description": "The slice \"Rollup and trend reports. Per-slice, per-project and over-time breakdowns across all three sources, with slice attribution and noise-floor display\" is a second implementation of trend reporting over the same store. `src/squadron/metrology/report.py` already provides `agreement_report` / `dispersion_report` / `trend_report`, a configurable bucketing key (`metrology.trend_bucket`), an exclusion summary, and the comparability grouping (`_comparability_key`) the document's principles mirror. The document cites 320's *store* repeatedly but never 321's report layer or `metrology.trend_bucket`, so the architecture neither reuses nor explicitly diverges from them \u2014 the classic path to two bucketing conventions and two comparability keys over one dataset.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Anticipated Slices"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Slice attribution \u2014 the hard part of the rollup \u2014 is left as an unresolved slice decision with no fallback beyond \"unattributed\"",
+   "description": "\"The mapping source (git topology, cf slice records, or both) is a slice decision. Guessing a slice from commit messages is not acceptable.\" That is the correct negative constraint, but the document supplies no positive mechanism for the case its own consumers live in: 420's replays, PR-branch work (380), and brownfield history have no squadron slice branch, and \"fix commits land directly on the target.\" With \"unattributed commits roll up at project level only,\" the per-slice report \u2014 the primary artifact of capability (c) and of the \"measured before and after\" claim \u2014 degrades to project-level for most of the externally consumed data. The parent architecture's own precedent (320's \"Where metrology data lives\") fixed load-bearing commitments rather than deferring the keystone's shape; this one is deferred.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Squadron-authored synthetic findings are outside any model vocabulary and will land in `other`",
+   "description": "\"Normalize categories, not severities\" assumes categories come from the model via the prompt. Three finding sources are injected into `ReviewResult` by squadron itself, after parsing, and their categories are squadron constants: `COVERAGE_CATEGORY = \"review-coverage\"` (`src/squadron/review/coverage.py:7`, applied by `impose_diff_coverage`/`impose_output_coverage`), `TASK_GATE_CATEGORY = \"merge-step\"` (`src/squadron/review/task_gate.py:25`), and a `category: tooling` finding for git-range failures (`src/squadron/review/git_utils.py:170`). Under a write-time-only vocabulary these normalize to `other` with a `raw_category`, inflating precisely the bucket 323 uses as its \"the vocabulary is wrong\" signal, and they enter the review-finding counts indistinguishable from model findings. The ingest step needs a source discriminator (tool-generated vs model) or these need first-class categories.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The dirty-tree rule is left as an unresolved either/or where a precedent already decided it",
+   "description": "\"A dirty working tree is either refused or recorded with an explicit dirty marker, never silently attributed to the HEAD commit.\" 323 decided this for the analogous case \u2014 refusal, `ERROR`, not a warning (\"Dirty worktree (variance only) \u2026 Refuse the series\"). Since snapshots feed the same before/after deltas against the same noise-floor discipline, leaving both options open invites the weaker one to be picked per slice; naming the refusal (with the dirty-marker escape hatch reserved for on-demand CLI use) would keep the two measurement paths consistent.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  }
+ ]
+}

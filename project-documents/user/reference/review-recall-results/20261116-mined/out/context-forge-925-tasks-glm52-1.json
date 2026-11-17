@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are inline within checkbox lines rather than standalone plain lines",
+      "description": "The review format expects `**Commit**:` markers as plain lines, never checkboxes. In this file every commit marker (e.g. Task 4 line 100, Task 6 line 127, Task 8 line 153, etc.) is appended inline to the success-criteria checkbox subitem as plain `Commit:` text rather than rendered as a bold standalone line. This is a minor format deviation driven by the project's \"all task files use checklist format\" convention in CLAUDE.md, which creates tension with the plain-line expectation. The substantive placement requirement is fully met: markers sit at working, tested points (always after the paired test task), are not emitted after every task, and are not deferred to the end. No action required; flagged only for format consistency awareness.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Malformed-config failure is tested at the core layer, not the CLI `cf guides install` surface",
+      "description": "The functional success criterion \"a malformed shared config file makes `cf guides install` fail with the config error\" is covered by Task 6's core-level test in `GuideManager.test.ts` (a `ConfigManager.get()` that throws causes `install()` to reject with no install attempted). There is no dedicated CLI-level test asserting `cf guides install` surfaces that error to the user. Because the CLI install action delegates directly to `manager.install()` and the core test exercises the rejection path, the behavior is adequately verified; the gap is only at the integration surface and does not leave the requirement unmet.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:117"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers are inline within checkbox lines rather than standalone plain lines",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Malformed-config failure is tested at the core layer, not the CLI `cf guides install` surface",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:117",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-16T20:48:58.423033",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 23599,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 3,
+  "prompt_tokens": 36362,
+  "cached_tokens": 21696,
+  "cache_write_tokens": null,
+  "completion_tokens": 6340,
+  "reasoning_tokens": 5758,
+  "duration_seconds": 75.41478429199196,
+  "cost_usd": 0.02979904,
+  "cost_basis": "alias_pricing"
+}

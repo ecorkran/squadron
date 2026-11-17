@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Review categories are conflated onto the tech-debt `AuditCategory` vocabulary",
+   "description": "The Design Goal \"One category vocabulary\" and the Architectural Principle \"Normalize categories, not severities\" both commit to mapping review *categories* onto `AuditCategory`. Verified in code, `AuditCategory` is nine **tech-debt** dimensions (architectural-decay, consistency-rot, type-contract-debt, test-debt, dependency-config-debt, performance-resource, error-handling-observability, security-hygiene, documentation-drift) plus `other`. Code-review findings are correctness/design findings at a different grain \u2014 a \"[CONCERN] returns None for empty input\" finding is not any of those nine. 323 made the *severities* disjoint on the exact grounds that \"the two grade different things on different artifacts\" (`test_audit_severity_is_disjoint_from_review_severity`); the same argument applies to categories, yet 400 merges them. The Non-Goals hedge (\"if the vocabulary turns out not to fit review findings, that's a finding to report\") concedes the fit is unproven, while the Design Goal pre-commits to it. In practice most review findings will land in `other`, defeating the rollup's stated purpose of counting \"error-handling findings: 4 from review, 2 from audit\" in shared buckets.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Review-finding counts are LLM-sourced but get no noise floor, breaking 320's core principle",
+   "description": "The principle states \"LLM-sourced numbers are shown against their noise floor; deterministic numbers need none,\" and the rollup is said to show \"LLM-sourced numbers\u2026 against their noise floor; deterministic numbers need none.\" But review findings are LLM judgments (the review is an LLM run), and the Envisioned State's ingest path counts them per category with no variance floor specified \u2014 unlike 323's `AuditNoiseFloor` for audits. 320 established that LLM signals carry run-to-run noise that must be measured before any delta is credible; a re-review after a fix produces a different finding count for reasons unrelated to the code. Treating review-finding counts as floor-less while treating audit-finding counts as floor-bound is an inconsistency with the parent's central discipline. Either review counts need a floor (3-run re-review, like 323), or the architecture must state explicitly why a review is a single point measurement where an audit is not.\n\n### [CONCER] `dependencies: [100, 320]` understates the real dependency surface\n\n\nThe frontmatter declares `dependencies: [100, 320]`, but the body reuses 323 (the audit harness, `AuditCategory`, `AuditSeverity`, `AuditNoiseFloor`, the noise-floor method, and the fork-sync test), 324's delta method, and explicitly stays out of 300's gating path. Verified: `RECORD_TYPE_AUDIT_FINDING`/`audit_run`/`audit_noise_floor` and the `AuditCategory`/`AuditSeverity` enums all live in `src/squadron/metrology/models.py` and were added by 323; the store writers (`write_audit_run`, `write_noise_floor`, `list_audit_runs`, `list_noise_floors`) are 323's. The component cannot build its \"Review-finding normalization\" or \"Adoption baseline\" without 323's vocabulary and noise floor, yet 323 is absent from the declared dependencies. 300 (gating) and 140 (dispatch, for any snapshot-at-boundary pipeline action) are also referenced but undeclared.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Adoption baseline\" / \"full baseline\" overstates what the keystone delivers for 440",
+   "description": "The Overview's fourth capability promises \"a static snapshot plus an audit baseline with its noise floor\u2026 so every later slice on that project is a measured before and after,\" and 440 (Brownfield Adoption) is named as a consumer. But Technical Considerations make coverage \"optional per snapshot\u2026 recorded as absent with a reason when not taken,\" and require \"at least one non-Python language\u2026 before 440 relies on this.\" Brownfield projects are the explicit use case for 440 and are \"not Python\" by Design Goal (\"Works on code squadron didn't write\"). So the baseline command \u2014 the 5th, explicitly *exploratory* slice \u2014 cannot deliver a \"full baseline\" until the 2nd slice (a non-Python adapter) ships, and even then coverage may be absent. The capability claim and the slice ordering do not reconcile: the keystone (Python-only) does not deliver what 440 needs.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Overview"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The language adapter contract and snapshot record shape are load-bearing but entirely deferred to the keystone slice",
+   "description": "\"Works on code squadron didn't write\" and \"each language is a pluggable adapter\" are Design Goals, and the comparability guarantee (\"a snapshot identifies\u2026 language, tool versions, rule set and exclusions\") is a core Architectural Principle. Yet the adapter contract is described only as \"has to define each metric well enough that adapters agree\" with the concrete contract, the snapshot `record_type` payload, and the per-metric tool/rule-set identity all pushed to the keystone slice (\"which languages ship first is a slice decision\"). The comparability mechanism that the \"refuse to diff across a tool change\" principle depends on lives on a record whose shape is unspecified here. Deferring it to the slice that *proves* it on Python means the cross-language requirement (slice 2) depends on a contract that is discovered, not designed, in the keystone \u2014 and \"no schema migration\" is only true for the `MetrologyRecord` envelope discriminator, not for the new snapshot payload the comparability fields must live on.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Slice attribution is deferred, but the rollup slice depends on it",
+   "description": "\"Per-slice rollup needs a commit range per slice\u2026 The mapping source (git topology, cf slice records, or both) is a slice decision.\" The 4th anticipated slice (\"Rollup and trend reports\") produces per-slice before/after \u2014 which requires exactly this attribution. Fix commits land on the target and brownfield history has no slices, so \"unattributed commits roll up at project level only\" is the fallback, but which mechanism supplies slice ranges is left open. The rollup slice therefore has a hidden prerequisite (a slice-attribution mapping) that is not in its own stated scope and is not guaranteed by the keystone, creating an ordering dependency the \"Anticipated Slices\" list does not surface.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2.2's real-file assertion fails on the file it names",
+   "description": "Task 2.2 says to read `384-tasks.post-findings-to-the-pr.md` \"until then\" and assert both groups are non-empty. That file has 166 checked items and 0 unchecked, so the assertion fails as written. Switching to the 385 task file only defers the failure: Task 16.4 marks every item `[x]` at close, emptying the unchecked group.\n\nFix: copy a mixed-state snapshot of a real task file into `tests/pr/fixtures/` and assert against that. This still satisfies the \"actual production format\" rule. Alternatively, drop the \"both non-empty\" assertion and keep only the count-sum check.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Refusal exception types are never named, and the detached-HEAD instruction conflicts with the import boundary",
+   "description": "Tasks 3.1, 5.1, 6.1 and 12.1 each say \"raise\" without naming a type. Task 13.1 never says how the command turns these into exit 1; the only catch pattern named anywhere is `except CodeHostError` (Task 14). An implementer must invent the contract across five tasks, and the project's rule requiring specific exception types makes that choice matter.\n\nThe detached-HEAD case is the sharpest instance:\n- **What the task says:** Task 3.1 puts `current_branch` in `src/squadron/review/git_utils.py` and says to match `github_cli._branch_for`.\n- **What that code does:** `_branch_for` raises `TargetUnresolvableError`, a `codehost` error (`src/squadron/codehost/github_cli.py:188`).\n- **Why it cannot be copied:** `tests/codehost/test_import_boundaries.py:74-87` forbids `review/` importing `squadron.codehost.errors`. Following the instruction literally breaks the guard that Task 15.1 extends.\n\nThree smaller gaps of the same kind:\n- Task 13.2 has no command-level detached-HEAD case.\n- Task 6.2's \"`ls-remote` timing out \u2192 refusal\" does not say which exception surfaces.\n- Task 6.2 lists \"`ls-remote` returning no matching ref\" with no expected outcome.\n\nFix: name the exception type each refusal raises (a `CodeHostError` subclass in `pr/`, or a local type) and add the catch-and-exit step plus a detached-HEAD test to Task 13.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:79"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Model prompt shape and design-content input are unspecified in Tasks 9\u201311",
+   "description": "Three things an implementer cannot determine from the tasks:\n\n- **Call shape.** D4 says the body is \"not one model response parsed into sections\" and that squadron \"requests prose per section\". Task 11.1 never says whether `compose_body` makes one call per section or a single call that is split. Its \"the model's own headings\u2026 are discarded\" line and Task 11.2's `##`-heading test read like single-response parsing. The choice sets the command's token cost and how Task 12's \"missing section\" can arise.\n- **What the model sees for \"Why\".** `PrFacts` (Task 9.1) carries only the design *path*, and Task 10.1 gives the model no tools. Task 7.1 reads the task file but not the design file. No task reads the design text or passes it to the prompt, yet \"Why\" is sourced from the design, and Task 10a.1 needs the design's H1.\n- **Undefined types and truncation.** `PrInputs` is used by Tasks 7\u20139 and never given fields. Task 7.1 reads only \"the first task file\", which silently drops checked and unchecked items from any further task files `resolve_slice_info` returns.\n\nFix: add sub-items stating the per-section call contract, where the design text is read and how it reaches the prompt, the `PrInputs` fields, and all-task-files handling (or an explicit reason for first-only).",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-264"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Local git reads bypass the fake-runner seam the command tests rely on, and `local_sha` has no source",
+   "description": "Task 3.1 builds `current_branch` and `commits_in_range` on `git_utils.run_git`, which is a direct subprocess call. Tasks 13.2 and 14.1 test the command \"against the fake runner\". The fake runner will not intercept these calls, nor Task 8's `git rev-list`. This is the \"half a seam\" that `src/squadron/codehost/github_cli.py:144-154` warns about.\n\nSeparately, `check_head_pushed(..., local_sha=...)` in Task 6.1 takes a local head sha that no task produces. `git_utils` has only the private `_resolve_rev`.\n\nFix: state in Task 13.2 how local git is supplied (a real fixture repository, or injected helpers), and add the local-sha read to Task 3 or Task 6.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:75-83"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 5.1's `cf`-unavailable bullet contradicts itself",
+   "description": "The bullet opens \"**Do not degrade an unreachable `cf` to a default base**\" and then specifies that an unavailable `cf` proceeds to the host default. Task 5.2 pins the actual behaviour (host default, no raise), so the outcome is determinable. Reword the lead so it does not state the opposite. The wording is inherited from D1.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Slice success criterion and D2 disagree on the push command; tasks follow D2",
+   "description": "The functional criterion says a sha mismatch \"fails the same way with the same command\". D2 and Task 6.2 require different commands (`git push -u` versus `git push`). The tasks take the more specific reading; the criterion's wording should be corrected in the slice design.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 4.1's return shape drops the parsed target",
+   "description": "`resolve_and_fetch_pull_request` passes `parsed` to `host.resolve_pull_request` (`src/squadron/cli/commands/pr.py:53-56`). The specified `resolve_locator(...) -> tuple[CodeHost, RepositoryLocator]` does not return it, so `show`'s helper would have to parse the target a second time. Either return the parsed target as well or state that re-parsing is intended.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:97"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 16.4 mixes close-out ordering and a Project Manager wait",
+   "description": "`status: complete` and the plan-entry check-off are listed before the required code review. The review item is \"Ask the Project Manager how they want it run\", which leaves the final task uncompletable by the implementer alone. Reorder so the review precedes the status flip, and name a review command.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:369-373"
+  }
+ ]
+}

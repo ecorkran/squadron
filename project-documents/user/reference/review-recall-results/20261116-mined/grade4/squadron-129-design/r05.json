@@ -1,0 +1,103 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Startup hang is unbounded, but the design says it is bounded",
+   "description": "Line 82 says a hang is \"already bounded by `codex.turn_timeout_s`\". The failure table applies that timeout only around `thread.run` (line 125). `AsyncCodex.__aenter__`, `initialize`, and `thread_start` (line 80) run before it. `codex.account_timeout_s` covers runtime start only for `sq auth status` and post-login confirmation (line 126). A runtime that hangs on start during a review turn has no bound, and neither does start during `sq auth login` (line 84). Either bound start with a named timeout key or widen the existing one. Add a row for it and a test.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Missing token usage is logged at DEBUG, not WARNING",
+   "description": "The table preface (line 118) says every row is logged at WARNING or above. The \"usage absent\" row logs at DEBUG and says \"not an error.\" Project rules require each failure mode to be observable at WARNING or above. Slice 931 already set the precedent for a backend that reports no usage: one WARNING per call (931 D12). Change this row to match and add a test.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:134"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Logout and login-start paths have no failure rows or timeout",
+   "description": "`sq auth logout` calls `AsyncCodex.logout()` (line 54), which starts the runtime. D7 (lines 103\u2013111) gives logout no timeout, and the failure table (lines 122\u2013135) has no logout row. Also missing: an SDK error from `login_chatgpt()` or `login_chatgpt_device_code()` before a handle exists, and a browser-open failure (line 84). Logout clears `~/.codex/auth.json`, which the plan entry says the Codex CLI also uses, so a failed or partial logout could leave the Codex CLI signed in. Each path needs a timeout or an explicit statement that it is unbounded, plus a signal and a test.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:38"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Teardown error swallowing does not meet the exception rule",
+   "description": "Line 135 says teardown errors are \"logged with `logger.exception`, not re-raised (process-boundary teardown).\" The rule allows three forms: re-raise after logging at ERROR, a named specific exception with a comment explaining the swallow, or a top-level handler at a process boundary. Logging without re-raising fits none of them unless the exception is named. `shutdown()` is called from review and daemon code, not at a process boundary. Name the caught SDK exception and comment why swallowing it is safe, or re-raise.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`base_instructions` conflicts with slice 128's declared capability",
+   "description": "The review data flow passes `base_instructions` to `thread_start`. Slice 128's capability table (line 119) declares `CodexProvider.supports_system_prompt = False` (\"instructions via prompt\"). This design does not say what fills `base_instructions`. If it carries the agent's configured system prompt, 128's declaration is wrong and must become `True`, which changes a providing slice's contract. If nothing is passed, say so and drop the parameter from the flow.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Provider and profile name differs from slice 128",
+   "description": "This design names the provider and profile `openai-oauth` throughout (lines 17, 156, 190). Slice 128 keeps the Codex registry key as `\"codex\"` (128 line 228) and verifies with `--profile codex` (128 line 251). The plan entry for 129 also uses `openai-oauth`. State which name is in force after 128 shipped. If 128's key was renamed, say so. Otherwise the CLI surface and success criteria reference a name the prerequisite doesn't register.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:17"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Install command uses a distribution name that is not verified",
+   "description": "The hint and README use `pip install 'squadron-ai[codex]'` (lines 25, 171, 209). The plan entry for 117 records the published name as `squadron` (`pipx install squadron`). Line 171 defers confirmation to implementation. The hint is user-facing, and the success criteria require the exact install command (line 190). Confirm the name against `pyproject.toml` now, and reconcile it with the plan.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:171"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Slice 931 is a prerequisite that the plan does not list",
+   "description": "The design depends on 931 for `Effort`, `applies_effort`, and `core/usage.py` (line 50; frontmatter line 6). The plan entry for 129 lists only `Dependencies: [128]`, and 931 belongs to initiative 900, so the initiative 100 plan cannot show it. Record it in the plan entry or note the cross-initiative dependency. The design also reverses behavior 931 shipped: the Codex effort WARNING, `applies_effort = False`, the 931 test `test_codex_artifact_has_no_effort_key`, and 931 walkthrough step 9 (931 line 457). Name those as superseded so the implementer knows which tests change.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:50"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Doctor bypasses the abstraction the design says it uses",
+   "description": "D9 says the doctor row goes \"through the same two abstractions rather than around them.\" But the row's version and runtime source come from `resolve_codex_runtime()` directly, which is Codex-specific code. That resolver also raises for the no-binary and missing-package cases (line 80). The design does not say what the row renders for those states. Line 172 covers only the installed case and the missing-extra WARN. Either expose the source through the provider's `ExtraRequirement` (or a sibling method) so doctor uses one interface, or specify each rendered state.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Speculative reuse claims and an unplanned flag add scope",
+   "description": "\"Provides to Other Slices\" says `InteractiveLogin`, `ExtraRequirement`, and `CodexRuntime` serve any future provider or feature. The frontmatter (line 7) says no planned slice consumes them. Keep the Protocols for the reasons D3 and D9 give (ISP on `AuthStrategy`, no string dispatch) and drop the reuse framing. Also cut `--timeout SECONDS` on `sq auth login` (line 149; D7 line 108). The plan entry does not mention it, and `codex.login_timeout_s` already bounds the wait.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Architecture auth table has no row for the subscription path",
+   "description": "Lines 88\u201389 say the architecture \"stays accurate\" and defer any update until \"a second provider adopts `InteractiveLogin`.\" The Authentication Patterns table in `100-arch.orchestration-v2.md` (lines 235\u2013241) lists OpenAI as API key only and has no `openai-oauth` row, which slice 128 already needed. The trigger is wrong: the gap is the provider this slice makes user-facing, not a second provider. Add the row, or record that the table is stale from 128 and assign the update.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Subprocess-init cost is handled by reuse but has no stated figure for `status`",
+   "description": "The architecture (`100-arch.orchestration-v2.md`, line 347) calls out subprocess init cost and asks for reuse, not per-message creation. The design restates reuse per agent (line 82), which complies. The architecture gives no numeric target for Codex, so \"no latency target\" is consistent. However, `sq auth status` (line 86) now starts the runtime on every run for each valid `openai-oauth` profile, a new cost on an existing command. State its expected typical cost, not only the 30 s cap.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82-86"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Model-list marker text is specified two ways",
+   "description": "Line 173 gives the marker as `(needs [codex] extra)`, then says \"the hint text is the marker's source.\" These differ: one is a fixed label, the other would print the install command. The literal `[codex]` also repeats the hint string that line 139 says is defined once. Pick one source.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:173"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "D9 is listed before D8",
+   "description": "Renumber so the decisions read in order.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112-114"
+  }
+ ]
+}

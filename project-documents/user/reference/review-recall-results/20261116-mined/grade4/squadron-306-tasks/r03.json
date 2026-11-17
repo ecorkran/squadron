@@ -1,0 +1,12 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "T14 (cf scanning verification) sequenced after T12 (Part D implementation) despite design requiring it before",
+   "description": "The slice design's Phase 5 note states the cf `archive/`-scanning verification \"must appear as its own checklist task in the breakdown, sequenced before Part D lands.\" T14 is this task and is correctly its own checklist item, but it is numbered after T12 (Part D's implementation) rather than before. The task file mitigates this with explicit gating language in both T12 (\"Do not mark this task done until T14's verification outcome is known\") and T14 (\"This task gates T12 in practice even though it is numbered after it\"). A junior AI executing top-to-bottom would implement T12's filename scheme, run T13's tests, then reach T14 \u2014 and if T14 finds recursive scanning, would need to revise T12/T13. The task notes the non-recursive case is expected (matching squadron's own non-recursive glob pattern), so rework is unlikely, but reordering T14 before T12 would eliminate the risk entirely and satisfy the design's stated sequence.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+  }
+ ]
+}

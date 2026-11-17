@@ -1,0 +1,189 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Authentication model alignment is correctly framed",
+      "description": "The architecture HLD (\"Authentication Patterns\") states squadron does not unify authentication and each provider's credential resolution is self-contained. The design explicitly addresses this, framing `InteractiveLogin` as an optional per-provider capability that only the Codex strategy implements, delegating entirely to the Codex runtime with no squadron-side token store. The design correctly notes the architecture text stays accurate and that a second provider adopting it would warrant a sentence \u2014 not an edit here. This is a capability addition, not a shared auth layer, consistent with the architecture's principle.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and import boundaries are correct",
+      "description": "The design confines `openai_codex` imports to inside functions in `runtime.py`, `login.py`, and `agent.py`, so the module graph imports cleanly without the extra and the provider still registers (raising an install hint rather than \"unknown provider\"). The dependency direction is correct: the provider layer consumes `core/usage.py` (`TokenUsage`/`RunTelemetry` from slice 931), never the reverse. The review layer is not made to import the concrete codex provider package. This matches the architecture's invariant that the core engine never depends on provider internals and the 931-established boundary that `review/` imports no concrete provider package.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#component-structure"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry and avoids scope creep",
+      "description": "The design's three parts (A: port + packaging, B: discoverability, C: interactive login) map exactly to the slice plan entry 129's three parts. The Excluded list is explicit and well-justified: no squadron-side token store, no `login_api_key`, no streaming/tool/approval changes, no `AuthStrategy` Protocol modification (D3). The `InteractiveLogin` and `ExtraRequirement` Protocols are both *consumed by this slice itself* (CLI auth dispatch, `sq model list`, `sq doctor`), and defined as runtime_checkable Protocols to honor the architecture's \"program to interfaces\" and \"no string dispatch\" principles (slice 128 banned profile-name/auth-type string checks). Defining them as Protocols rather than Codex-specific methods is consistent with the architecture's multi-provider extensibility constraint, not scope creep.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes are enumerated with explicit handling for each I/O path",
+      "description": "The design provides a full failure-mode table for the Codex turn (missing package, missing binary, runtime start failure, hang/timeout, transport close mid-turn, rate limiting, not-logged-in, failed/interrupted/empty turn, absent usage, teardown error) plus separate handling for login `wait()` timeout (handle cancelled via `handle.cancel()`), login `success=False`, and `account()` failure in status (logged WARNING, never blocks the command or other profiles). Each row has a stated signal and the Technical Requirements mandate a test per row. No \"TBD\" or implicit handling. The timeouts are config keys (D7) with defaults and bounds, not silent constants.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#failure-modes-codex-turn"
+    },
+    {
+      "severity": "PASS",
+      "title": "Effort and usage consumption aligns with dependency slice 931",
+      "description": "Slice 931 established `AgentConfig.effort`, `applies_effort`, and `core/usage.py` (`TokenUsage`, `RunTelemetry`), and explicitly deferred Codex effort to issue #171 with a WARNING. This slice implements exactly that deferred work (D5: `applies_effort=True`, `ReasoningEffort` mapping; D6: `TurnResult.usage.last` \u2192 `TokenUsage`), closes #171, and reuses the same metadata stamping keys the OpenAI agent uses (\"so review artifacts need no change\"). The consumption is consistent with what 931 provides.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technology-choices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "NFR: runtime startup cost acknowledged without a target",
+      "description": "The architecture HLD notes SDK agent initialization cost (20-30s for Claude SDK subprocess spawn) as a design consideration. The design discusses the analogous Codex app-server subprocess startup cost, states no latency target is set (justified: dominated by the agentic turn, bounded by `turn_timeout_s`), confines spawning to three explicit places, and logs startup duration at DEBUG for diagnosability. The architecture does not state a specific NFR target for this path, so no target is restated; the acknowledgment and the bounding timeout are proportionate.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#data-flow"
+    },
+    {
+      "severity": "PASS",
+      "title": "Unverified external fact (OPENAI_API_KEY fallback) is resolved, not deferred",
+      "description": "The design identifies that `OAuthFileStrategy`'s `OPENAI_API_KEY` fallback is unverified and explicitly makes its resolution the first implementation task (a real check against the runtime), with two fully-specified outcomes (keep + label + test, or remove from all four methods) and a requirement that neither be left unverified. This follows the project convention against silent fallback values and is recorded rather than deferred.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#special-considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Authentication model alignment is correctly framed",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Dependency direction and import boundaries are correct",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#component-structure",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry and avoids scope creep",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes are enumerated with explicit handling for each I/O path",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#failure-modes-codex-turn",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Effort and usage consumption aligns with dependency slice 931",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technology-choices",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "NFR: runtime startup cost acknowledged without a target",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Unverified external fact (OPENAI_API_KEY fallback) is resolved, not deferred",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#special-considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T20:46:30.915462",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 1508,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 94316,
+  "cached_tokens": 57792,
+  "cache_write_tokens": null,
+  "completion_tokens": 2942,
+  "reasoning_tokens": 362,
+  "duration_seconds": 16.892968792002648,
+  "cost_usd": 0.03417538,
+  "cost_basis": "alias_pricing"
+}

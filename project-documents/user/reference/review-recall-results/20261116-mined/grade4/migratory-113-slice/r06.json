@@ -1,0 +1,12 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`hasattr` guard in `tick.py` is a documented boundary compromise",
+   "description": "The `if hasattr(spatial, \"record_density\"): spatial.record_density(filtered_counts)` line in `tick.py` introduces a duck-typed backdoor to the spatial layer that is not part of the `SpatialQuery` protocol. The slice doc explicitly considers the alternative (add `record_density` to the protocol with a default no-op) and rejects it as \"couples the protocol to a dispatcher concern that no other backend needs.\" The trade-off is well-reasoned and documented, and the per-tick cost is trivial \u2014 but `tick.py` now carries implicit knowledge that some spatial implementations may expose a density-record hook. This is the right call given the constraints, and the rationale is sound; raising as a NOTE for visibility, not as an action item.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#tick-integration"
+  }
+ ]
+}

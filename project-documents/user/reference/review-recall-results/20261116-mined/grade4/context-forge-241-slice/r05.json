@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Rationale for unparseable review files does not carry forward the arch's \"names the parse failure explicitly\" requirement",
+   "description": "The architecture states, under \"File-read failure modes\": *\"A review file that exists but cannot be parsed\u2026 must not silently pass. It is treated as UNKNOWN and `review_unknown_as` applies. The rationale returned to the caller names the parse failure explicitly.\"* The slice design handles the *status* side of this correctly (TD-2, Special Considerations: present-but-unparseable \u21d2 UNKNOWN \u21d2 `review_unknown_as`, surfaced as `review-failed`, never `pending`). However, TD-7 \u2014 which is the slice's normative spec for what the rationale must contain \u2014 enumerates only \"the review type; for `review-failed`, also the verdict and threshold that produced the block.\" For an unparseable file the normalized verdict is `UNKNOWN`, so under this spec the rationale would say \"verdict UNKNOWN does not clear threshold \u2026\" rather than naming the parse/read failure. The arch's requirement that the rationale *name the parse failure explicitly* is therefore left unmet by the slice's rationale contract. Success Criteria likewise only asserts the file is \"treated as UNKNOWN (never silently cleared)\" and does not require parse-failure-naming in the rationale. TD-7 should be extended to require, for the present-but-unreadable case, a rationale that names the parse/read failure (e.g. \"review artifact could not be parsed\"), distinct from a clean `UNKNOWN`-verdict rationale.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Inert `review_type` per-gate keys in tension with arch's fail-fast principle, sanctioned by slice plan",
+   "description": "The architecture lists \"Fail-fast on configuration errors\" as a principle: *\"an unrecognized per-gate config is a config error surfaced immediately, not a silent pass or silent block.\"* TD-4 leaves the 240-shipped `workflow.review_gates.{gate}.review_type` keys *defined but unread*, delegating deprecation docs to 243 \u2014 so a user who sets a malformed `review_type` value gets no immediate error. This is a mild tension with the arch's fail-fast principle, but it is explicitly sanctioned by the slice plan (\"241 leaves them defined-but-unread\u2026 OR 241 removes them; the design makes that call\"), and the backward-compatibility rationale is sound. No action required; flagged only so the trade-off is visible. If the team prefers the clean removal path TD-4 also offers, that would also satisfy fail-fast.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-4"
+  }
+ ]
+}

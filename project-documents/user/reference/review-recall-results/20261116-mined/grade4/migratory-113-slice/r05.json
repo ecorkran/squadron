@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Default threshold contradicts the design's own density arithmetic and cited journal data",
+   "description": "The \"Default Threshold Choice\" section is internally contradictory. Line 210 computes that at N=3100 uniform on a 300\u00d7300 world with radius \u224835, mean neighbors \u2248132 \u2014 \"far above threshold, so brute-force is selected.\" Line 211 then claims that \"at the same N but in an expansion phase where agents are spread uniformly across the whole world\u2026 mean neighbors can drop below 10 \u2014 so grid is selected.\" Both bullets describe N=3100 spread uniformly over 300\u00d7300 with radius 35; they cannot both be true, and line 210's arithmetic is the correct one (uniform distribution is the *minimum*-density configuration, so at that N/world the mean cannot drop below ~132 while the population scatters \u2014 clustering only raises it). The same error propagates to walkthrough step 4 (line 370), which expects \"a clear optimum in the 5\u201320 range\" on the N=2500 test.yaml scenario where uniform mean is \u2248107\u2013218 depending on radius. The journal evidence cited in the doc makes the consequence concrete: Entry 4 addendum shows the grid *winning* the pre-flock phase (20 vs ~14 TPS) \u2014 i.e., the real crossover lies well *above* the uniform-density mean, not near 10. With `grid_threshold_mean_neighbors = 10.0`, the dispatcher selects brute-force in every regime this deployment reaches, making it behaviorally identical to `backend: \"brute\"` and nullifying the Value claim (\"Adaptive dispatch keeps both,\" the slice's headline). The knob's existence is the hedge, and the step-4 sweep would discover the true optimum \u2014 but the design's calibration narrative, its two mutually exclusive bullets, and its expected sweep result must be corrected (e.g., default scaled to the deployment's uniform mean, or threshold expressed relative to it) before an implementer calibrates from this document.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Density-signal variable collides with slice 112's cap rebinding \u2014 signal would read capped counts",
+   "description": "The Tick Integration sketch (lines 149\u2013159) ends with `spatial.record_density(filtered_counts)`, while step 4 is `[optional] apply_neighbor_cap(...)  # unchanged`. Slice 112's tick integration rebinds exactly that name when the cap engages: `filtered_flat, filtered_counts = apply_neighbor_cap(...)` (112-slice.topological-neighbor-cap.md, \"tick.py Integration\", step 6). So after step 4, `filtered_counts` holds *post-cap* counts whenever any profile sets `max_neighbors` \u2014 contradicting the prose at line 116 (\"post-`exclude_self`, pre-cap\") and the orthogonality claim at line 27 (\"not anything capped\"). This is not hypothetical in the slice's own verification scenario: walkthrough step 5 runs test.yaml with `max_neighbors=1`, where capped counts \u2261 1 for every agent with a neighbor. The signal collapses to \u22481, permanently below `t \u2212 h`, pinning the dispatcher to the grid \u2014 precisely in the clustered steady state where the journal shows brute-force winning (6\u20137 vs ~9 TPS), and failing the slice's own success criterion that steady-state TPS match the brute baseline (line 380). The fix is one sentence: capture the mean before the cap step (or invoke `record_density` between steps 3 and 4, with an explicit pre-cap variable name). As written, prose and sketch specify different things and the sketch specifies the wrong one.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-162"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Bit-exact cross-backend integration test is unspecifiable given documented hash-grid ordering differences",
+   "description": "Implementation step 5 requires an integration test that \"swaps `AdaptiveSpatial` into a representative tick scenario and confirms bit-exact position equality against brute-force-only over N ticks. The test injects a mocked density sequence that exercises both backends in one run.\" This cannot hold: the design's own testing strategy (line 431) and slice 105 establish that the hash grid produces the same neighbor *sets* but a different within-row *order* than brute force (\"order within a row may differ for grid, so compare as sets\"). The force reductions are floating-point sums over those rows (`np.add.reduceat`), which are order-dependent \u2014 so once the mocked sequence flips the dispatcher to grid mid-run, positions diverge from the brute-only run at ULP level and compound over ticks. The requirement as stated is either unimplementable or silently weakened. Related overclaim: walkthrough step 1 (line 352) states \"any divergence indicates a dispatcher correctness bug,\" while step 2 (line 359) already concedes \"modulo documented determinism caveats in the hash grid.\" Restate the integration criterion as set-parity of neighbor structures plus tolerance-based trajectory comparison (or restrict bit-exactness to ticks where the selected backend matches the baseline), and soften step 1 accordingly.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`initial_backend` promised as operator-configurable but absent from the config surface",
+   "description": "Line 301: \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator running a scattered-start scenario can choose grid-first.\" But `SpatialConfig` (lines 168\u2013187) exposes only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band`, and `_build_spatial` hardcodes `initial_backend=\"brute\"` (line 238). `backend: \"grid\"` is not equivalent \u2014 it pins the backend permanently and disables adaptation. As specified, the promised operator scenario (grid-first, then adapt) is unreachable through the only operator surface (YAML). Either add the field to `SpatialConfig` or drop the claim; the Technical Scope \"Included\" list (line 38) currently promises \"initial backend choice\" as a tunable.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`record_density` behavior unspecified for zero active agents",
+   "description": "The signal is `counts.sum() / n_active` (line 116). Both `n_active == 0` cases are valid: slice 302 allows a server with zero entities (\"server starts with no entities\"), and the architecture's subset-evaluable tick permits an empty eval subset (\"graceful degradation under load\"). Division by zero yields a crash or NaN feeding the hysteresis comparator (NaN comparisons are silently False, so a NaN signal silently freezes backend selection). Slice 112 \u2014 same code path family \u2014 explicitly requires early-return handling for `n_active == 0` and `total_edges == 0` and tests it; this slice should state the equivalent rule (skip recording when `n_active == 0`).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Dispatcher introduces cross-tick hidden state not covered by the statelessness/replay model",
+   "description": "The dispatcher holds strong references for its lifetime and persists selection state (`_mean_neighbors`, current backend) across ticks inside the spatial object the caller owns. The architecture states \"the engine is stateless between ticks \u2014 all state lives in the arrays passed to it, including the spatial index; the caller owns the spatial index, rebuilds or updates it between ticks.\" Dispatch is still reproducible from initial conditions (no RNG), but the stronger same-state-same-output property, and any checkpoint/resume or region-handoff replay (worldserver slices 307+), now depend on dispatcher state that is invisible to the state snapshot. A one-paragraph note \u2014 that dispatcher state must be serialized with the spatial index or divergence accepted \u2014 would close the gap with the architecture's determinism goal.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:111-113"
+  }
+ ]
+}

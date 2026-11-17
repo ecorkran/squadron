@@ -14,8 +14,9 @@ recommendations:
   design_review:        # slice designs, task breakdowns, architecture
     default: haiku-xhigh
     second_pass: fable-medium
+    cheap_second_pass: glm-flash   # OpenRouter, $0.06; run 1 only, precision unmeasured
     comb: none
-    avoid: [sonnet-high, sonnet-medium, sonnet]
+    avoid: [sonnet-high, sonnet-medium, sonnet, minimax, glm52]
     confidence: medium
     why: haiku-xhigh $0.34 per review ties dearer configs on recall; haiku plus fable find 66 of 82 flaws against 58 for haiku alone over three runs.
     evidence: [RESULTS 15, RESULTS 16, RESULTS 18]
@@ -41,7 +42,7 @@ recommendations:
     best: unmeasured
     blocked_by: "issue #368 (sq replay has no arch phase)"
   pipeline_defaults_p4_p5_p6:
-    status: not yet decided; data supports a recommendation; issue #339 open
+    status: set 2026-11-17 (commit 5cb15bc0) - reviewers haiku-xhigh; slice design writer fable-medium; arch and tasks writers opus-high; implementation writer still sonnet (unmeasured); issue #339 open until compared
 
 answers:
   - id: worst_reviewer
@@ -54,6 +55,12 @@ answers:
     answer: "Per run of 82 flaws: fable-medium 46.3, haiku-xhigh 43.7, opus-high 42.7, opus-medium 38.7, sonnet-high 33, sonnet-medium 32. The first three are inside the 3-6 flaw run-to-run spread. Over three runs the union is haiku-xhigh 58, fable-medium 55, opus-high 53, opus-medium 49."
     confidence: medium
     evidence: [RESULTS 16]
+  - id: cheap_reviewers
+    question: Are the cheap OpenRouter models usable as design reviewers?
+    answer: "glm-flash yes: 37 of 82 flaws for $0.06 a review (haiku-xhigh 43 for $0.24, fable-medium 47 for $2.27), best of all on slice designs (19 of 32), weak on tasks (10) and arch (8). deepseek4-flash 33. glm52 19 and minimax 13 no. glm-flash plus haiku-xhigh 55 of 82 on run 1, equal to fable-medium plus haiku-xhigh."
+    confidence: medium
+    caveats: one run each; precision not measured; minimax and glm52 returned no findings on 4 of 43 cases each
+    evidence: [RESULTS 19]
   - id: design_review_value
     question: Best design reviewer per dollar?
     answer: haiku-xhigh. $0.34 per review against $0.79 (opus-medium), $0.96 (opus-high), $2.10 (fable-medium). It is slow, about 314 s median.
@@ -141,7 +148,8 @@ not_measured:
   - fable and opus as code reviewers
   - design review precision (only recall measured)
   - combs on fable-medium or pooled design reviews (skipped by decision)
-  - defaults for P4, P5, P6 pipelines (issue #339)
+  - implementation writers (which model writes the best code for P6)
+  - defaults for P4, P5, P6 pipelines against the old ones (issue #339)
   - judge other than opus-high for writers
 
 known_limits:
@@ -156,7 +164,7 @@ data:
   summary: review-recall-results/SUMMARY.md
   code_grids: [20261112-grid2, 20261113-grid3, 20261113-comb]
   design_grids: [20261115-design, 20261116-mined]
-  mined_flaws_and_grades: [20261116-mined/grade, 20261116-mined/grade2, 20261116-mined/grade3]
+  mined_flaws_and_grades: [20261116-mined/grade, 20261116-mined/grade2, 20261116-mined/grade3, 20261116-mined/grade4]
   design_comb: 20261116-mined/comb
   writers: 20261117-writers
   mined_case_files: [reference/design-review-recall-cases.md, reference/design-review-recall-cases-2.md, reference/design-review-recall-cases-3.md, reference/design-review-recall-cases-context-forge.md, reference/design-review-recall-cases-migratory.md]

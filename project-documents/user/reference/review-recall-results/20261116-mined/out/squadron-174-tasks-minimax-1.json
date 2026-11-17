@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Listing performance criterion is turned into a flaky wall-clock load-test assertion",
+      "description": "The slice design restates the listing-time target as \u201c`sq runs list --all` stays under 1 s with a few hundred run-state files on local disk\u201d and explicitly says \u201cThere is still no assertion on time in tests.\u201d Task 22a instead requires `MAX_LISTING_S = 1.0` and asserts wall-clock completion under that value. A wall-clock upper bound is sensitive to CI scheduling, filesystem speed, and loaded runners, especially while seeding and executing a few hundred state files. This can fail despite satisfying the intended performance target. The task should validate the deterministic I/O characteristics already specified by the design\u2014bounded definition/report loads and one process check per running run\u2014and treat the one-second target as an advisory measurement unless the project deliberately intends it to be a hard CI SLA.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load-test CI gating is asserted rather than specified as a task",
+      "description": "Task 22a states that no new CI wiring is needed because `testpaths = [\"tests\"]` collects `tests/load/`. The repository does run `uv run pytest` in `.github/workflows/ci.yml`, so ordinary collection does gate the test, but that conclusion is left implicit and is not an independently verifiable checklist item. The task should explicitly require confirmation that the new load test is collected and run by the existing CI pytest job, including the command and expected test node, rather than merely asserting that wiring is unnecessary.",
+      "file_ref": null,
+      "category": "ci-cd",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:318-319"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Listing performance criterion is turned into a flaky wall-clock load-test assertion",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "ci-cd",
+      "raw_category": null,
+      "summary": "Load-test CI gating is asserted rather than specified as a task",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:318-319",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T21:33:31.067092",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 123,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 387703,
+  "cached_tokens": 327680,
+  "cache_write_tokens": null,
+  "completion_tokens": 1421,
+  "reasoning_tokens": 31,
+  "duration_seconds": 34.25519658322446,
+  "cost_usd": 0.039372899999999995,
+  "cost_basis": "alias_pricing"
+}

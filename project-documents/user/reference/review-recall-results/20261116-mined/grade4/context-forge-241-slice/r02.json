@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Parse-failure rationale requirement from the architecture is unreachable with the chosen parser contract",
+   "description": "Architecture line 149 explicitly states: *\"A review file that exists but cannot be parsed (malformed YAML, unreadable encoding, permission error) must not silently pass. It is treated as `UNKNOWN` and `review_unknown_as` applies. **The rationale returned to the caller names the parse failure explicitly.**\"* The \"must not silently pass\" half is satisfied (present-but-unreadable maps to `UNKNOWN`), but the rationale-naming half is structurally unmet: the slice relies on `parseFrontmatter` which \"never throws\" and returns `{ found: false, data: {} }` on any error, so by the time the gate sees it, the parse-failure reason has been discarded. The slice should either (a) propose extending the parser to surface parse errors so the gate can name them in the rationale, or (b) explicitly call out this as a partial gap against the arch principle.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Technical-Decisions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Config resolution path has no explicit failure-mode treatment or delegation note",
+   "description": "Architecture principle line 48: *\"Fail-fast on configuration errors. An invalid `workflow.review_threshold` value or an unrecognized per-gate config is a config error surfaced immediately, not a silent pass or silent block. The `validate` hook in `ConfigKeyDefinition` is the enforcement point.\"* The slice doc's `resolveGateConfig` reads `review_enabled` / `review_threshold` / `review_unknown_as` via `ConfigManager.get(key)` and consumes them through TypeScript-typed token unions (`'pass' | 'concerns'`), which catches invalid values at compile time but not at runtime if a non-token string slips through (e.g., user hand-edits `.context-forge.toml`, env override, worktree-scope value not yet validated). The slice correctly delegates fail-fast enforcement to the `ConfigKeyDefinition.validate` hook shipped by slice 240, but does not acknowledge this delegation anywhere \u2014 leaving an unstated assumption about which slice owns the validation gate. A one-line note in `resolveGateConfig` or its caller pointing back to 240's validation would close this.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Architecture"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`score` / `criteria` / `provenance` field handling is passive but unacknowledged",
+   "description": "Architecture lines 46 and 100 require CF to read and store `score` when present and carry `criteria` / `provenance` as opaque fields. The slice doc only describes reading `verdict` and explicitly excludes numeric score enforcement. Preservation of the other two fields is implicit (the frontmatter parser already preserves them and the slice doesn't strip them), but the slice doc never states this. A brief acknowledgement would confirm alignment with the \"Frontmatter as cross-project contract\" principle.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Technical-Decisions"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "NFR: runtime startup cost acknowledged without a target",
+   "description": "The architecture HLD notes SDK agent initialization cost (20-30s for Claude SDK subprocess spawn) as a design consideration. The design discusses the analogous Codex app-server subprocess startup cost, states no latency target is set (justified: dominated by the agentic turn, bounded by `turn_timeout_s`), confines spawning to three explicit places, and logs startup duration at DEBUG for diagnosability. The architecture does not state a specific NFR target for this path, so no target is restated; the acknowledgment and the bounding timeout are proportionate.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#data-flow"
+  }
+ ]
+}

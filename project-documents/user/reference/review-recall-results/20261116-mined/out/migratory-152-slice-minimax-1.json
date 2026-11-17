@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "k_first removal is scope creep beyond the slice plan entry",
+      "description": "The slice plan entry for 152 (in `140-slices.simulation-scaling.md:56`) describes only the coherent reindex and explicitly states the exit criterion as \"no regression on k-first path.\" Slice 150 (shipped on `main` 2026-05-05 per this slice's Dependencies \u00a781) introduces k_first as the default mode. The slice design removes k_first from the kernel, `ComputeConfig`, `Workload`, and `_NEIGHBOR_MODE_MAP`. That is a breaking change to the shipped slice 150 contract surface, not a coherent-grid change. It belongs in its own slice (or in a revised slice 150) so the slice plan entry can be updated to authorize it.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adding radius_only as a new mode is scope creep",
+      "description": "The slice design adds `radius_only` as a first-class `neighbor_mode` value. The slice plan entry for 152 does not mention `radius_only`. The justification (\"structurally the slice 150 uncapped sub-branch promoted to a first-class mode\") is correct but the promotion is a public API addition that requires its own slice-plan entry or a coordination update to slice 150. Bundling it with the reindex mixes two separable concerns (perf fix + new mode).",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exit criterion silently changed from the slice plan entry",
+      "description": "The slice plan entry (`140-slices.simulation-scaling.md:56`) states: \"Exit criteria: k-nearest TPS at N=200k within 20% of k-first TPS at the same N\". The slice design changes this to \"k_nearest TPS at N=200k within 20% of radius_only TPS at N=200k\" \u2014 using a reference mode (`radius_only`) that doesn't exist in the plan. The slice plan is the authoritative source for exit criteria; the design should either match it or be accompanied by a plan update.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tier 3 NFR misquoted as N=200k",
+      "description": "The architecture document (`140-arch.simulation-scaling.md:74` and `140-slices.simulation-scaling.md:81`) defines Tier 3 as **N=250k** with 60 TPS on production-class NVIDIA CUDA plus frustum culling. The slice design repeatedly states \"the architecture's Tier 3 target (N=200k)\" (lines 17, 44, etc.) and uses N=200k as the gating scale throughout the verification walkthrough. The architecture's Tier 3 NFR (60 TPS at N=250k on production-class NVIDIA) is not restated in this slice doc; instead the slice invents its own relative gate. Either align the gate with the architecture's Tier 3 NFR or document explicitly why the slice targets a different N.",
+      "file_ref": null,
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture principle violation: incremental migration / breaking change to default mode",
+      "description": "Architecture principle \"Incremental migration with no big-bang transitions\" (`140-arch.simulation-scaling.md:30`) requires that slice-level changes preserve the existing API surface. The slice design removes the default mode `k_first` shipped by slice 150, replaces it with `k_nearest` as new default, and raises `ConfigurationError` for any user still on `k_first`. Even with the explicit-error path, removing a shipped default is a breaking change; the architecture expects this to be either (a) a separate slice or (b) gated behind a deprecation cycle the plan entry describes. The slice plan entry does not authorize this.",
+      "file_ref": null,
+      "category": "architectural-principle",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Over-specification: extensive reference discussion and future-work content",
+      "description": "The \"Two neighbor modes, one kernel pipeline\" section and the \"Reference points (the design anchors)\" section (lines 33-46) include lengthy discussion of the Babylon.js/WebGPU M1 Max numbers, Hoetzlein 2014, and a comparison of 16M reference vs the slice's exit criterion. None of this analysis gates the slice's deliverable. Likewise, the \"Future Work\" section (lines 455-460) commits the slice to FRNN replacement, Tier 3+ production measurement, LBVH, and \"double-coherent writeback\" \u2014 none of which are in the slice plan. The Verification Walkthrough \u00a75 (\"Headroom probe at N=500k and N=1M\") adds measurement work not in the slice plan entry. All of this can be cut or deferred; the slice should focus on the reindex + the slice-plan-aligned exit gate.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:33-46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "f32 throughout is consistent with architecture",
+      "description": "The slice uses f32 for all coherent fields, matching the architecture's commitment that \"f32 on GPU\" (`140-arch.simulation-scaling.md:72`). The inverse-permutation field is i32 (qd.i32), consistent with the existing field types.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:449"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Coherent fields as tick-scoped scratch consistent with tick return type contract",
+      "description": "The slice states coherent fields are tick-scoped and regenerated from originals each tick; integration writebacks go to original-order fields. This keeps the canonical state in the original-order fields, consistent with the tick return type contract option (a) \u2014 engine returns NumPy via `field.to_numpy()` \u2014 which the architecture commits to.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:113-117"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Configuration error path for k_first removal is explicit, not silent",
+      "description": "The slice raises `ConfigurationError` at parse time for configs still setting `neighbor_mode: k_first`, with a message pointing to both valid values and a one-line behavior summary. This matches the project convention \"Never use silent fallback values. Fail explicitly with errors\" from CLAUDE.md. The failure mode for the new mode set is explicit, not implicit.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:199"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New GPU kernel uses graph=True discipline consistent with prior slices",
+      "description": "`coherent_reindex_kernel` is declared `@qd.kernel(graph=True)` with only index-bounded loops, no early returns, no Python objects \u2014 consistent with the graph=True discipline established by slices 143\u2013150 and required for integration into the `run_fused_tick` pipeline.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:236"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "k_first removal is scope creep beyond the slice plan entry",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Adding radius_only as a new mode is scope creep",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Exit criterion silently changed from the slice plan entry",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "summary": "Tier 3 NFR misquoted as N=200k",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-principle",
+      "raw_category": null,
+      "summary": "Architecture principle violation: incremental migration / breaking change to default mode",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Over-specification: extensive reference discussion and future-work content",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:33-46",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "f32 throughout is consistent with architecture",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:449",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Coherent fields as tick-scoped scratch consistent with tick return type contract",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:113-117",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Configuration error path for k_first removal is explicit, not silent",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:199",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "New GPU kernel uses graph=True discipline consistent with prior slices",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:236",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-16T21:43:50.377383",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 324474,
+  "cached_tokens": 254136,
+  "cache_write_tokens": null,
+  "completion_tokens": 4707,
+  "reasoning_tokens": 0,
+  "duration_seconds": 96.26785545796156,
+  "cost_usd": 0.041997959999999994,
+  "cost_basis": "alias_pricing"
+}

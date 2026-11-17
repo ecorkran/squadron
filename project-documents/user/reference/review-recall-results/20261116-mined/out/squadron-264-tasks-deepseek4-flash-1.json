@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion maps to a task; sequencing and commit points are sound",
+      "description": "Cross-referenced all seven success criteria in `264-slice.context-forge-mcp-tool-bridge.md`:\nSC1 (registration + load-time pipeline validity) \u2192 Tasks 6, 7.1, 7.4; SC2 (mapped MCP call/args, result\nmapping) \u2192 Tasks 7.2\u20137.3; SC3 (real stdio round-trip, `isError`, timeout + WARNING) \u2192 Tasks 3, 5.1\u20135.2,\n5.4; SC4 (spawn failure never raises) \u2192 Task 5.3; SC5 (live contract test) \u2192 Task 8; SC6 (live status\nsmoke, non-SDK model demo) \u2192 Tasks 9.1/9.3, with walkthrough step 4 correctly left open exactly as the\ndesign states; SC7 (full suite, pyright, ruff) \u2192 Task 9.2 plus each task's scoped command. No task is\nuntraceable scope creep \u2014 Task 2 and Task 3 are test infrastructure the design's \"Tests:\" scope names.\nSequencing is acyclic and dependency-correct (config leaf \u2192 fixture \u2192 bridge \u2192 bridge tests \u2192 descriptors\n\u2192 descriptor tests \u2192 live contract \u2192 close-out), and tests immediately follow their implementation\n(Task 5 after 4, Task 7 after 6). Commit instructions sit at tested, working points, one per task, not\nafter every step and not only at close-out; they are carried inside the success-criteria checkboxes rather\nthan as plain `**Commit**:` lines, which matches this project's mandated checklist format (same shape as\n263) and is acceptable. No NFR is restated in the parent slice/arch, so absence of a `tests/load/` task and\nCI gating for one is correct.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Registering the five CF tools breaks an existing test the plan never updates",
+      "description": "`tests/tools/test_package.py:11` asserts `set(tools.list_tools()) == {\"read_file\", \"write_file\", \"bash\"}`\nand line 22 asserts `len(executors) == 3` after materializing every registered tool. Task 6.4 adds the\nside-effect import that registers five more tools at package import, so the full suite goes red at Task 6's\ncommit \u2014 yet no task in the file mentions `tests/tools/test_package.py` (grep for the filename across the\ntask file returns nothing). This contradicts two of the file's own invariants: \"Each task leaves the suite\ngreen\" (Sequencing note) and Task 1's \"Existing config tests still green\" framing for the whole run. Task 6's\nsuccess criteria even restate the expected set as \"the five `cf_*` names plus the three builtins\" without\nnoting the file that encodes the old expectation. Add an explicit step to Task 6 (or 7.1) to widen\n`test_exactly_the_three_builtin_tools_are_registered` / `test_materialize_binds_every_registered_tool` to\nthe eight-name registry \u2014 ideally deriving the expected builtin set from the registry as the file's own\n\"never hard-coded\" principle asks, rather than writing a new magic literal.",
+      "file_ref": null,
+      "category": "regression-coverage",
+      "raw_category": null,
+      "location": "tests/tools/test_package.py:11-22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two tasks both claim ownership of the spawned process environment",
+      "description": "Task 4.1 states the bridge should \"use the SDK's `get_default_environment()` as the spawned process env\"\nwhile also saying \"callers construct `StdioServerParameters`; the bridge does not read config\"; Task 6.3\nthen has the executor build `StdioServerParameters(command, args, cwd=..., env=get_default_environment())`.\nBoth layers cannot own `env`: if the bridge sets it, it silently overrides whatever a caller put in the\n`server: StdioServerParameters` it was handed \u2014 which matters because `mcp_bridge.py` is explicitly the\nreusable seam for future MCP servers (design D1/Value), where a caller may legitimately need a custom env.\nIf instead the bridge passes `server` through untouched, Task 4.1's instruction is dead text. Pick one\nowner (the caller, consistent with the design's data-flow diagram and Task 6.3) and delete the other\nsentence, or state explicitly that the bridge only supplies the default when `server.env is None`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Result-mapping branches are implemented with no test that asserts them",
+      "description": "Task 4.2 requires two behaviors beyond the happy path: joining **all** text blocks with `\\n`, and noting\nnon-text blocks by type rather than dropping them. Task 5's fake server only exposes `echo` (single\n`TextContent`), `fail`, `sleep`, and `empty`; no tool emits multiple text blocks or a non-text block, and\nTask 7 mocks `call_mcp_tool`, so it never exercises `CallToolResult` mapping. Result: a regression that\nsilently drops image/resource blocks \u2014 the exact silent-no-op class the design calls out as the slice-909\nlesson \u2014 passes the whole suite. Slice success criterion 2 says results are \"mapped per the Result mapping\nrules\", so name the requirement in a test: either add one fixture tool returning two text blocks plus one\nnon-text block, or unit-test the mapping helper directly against hand-built `CallToolResult` values.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:137"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Design decision D4 is not pinned by any test",
+      "description": "Task 7.1's `test_all_five_registered` runs in whatever environment the developer has, so a registration path\nthat probed launchability (`shutil.which(\"npx\")`) would still pass on any machine with node \u2014 the thing D4\nexists to prevent (\"a pipeline's validity cannot depend on what's installed on this machine\"). One cheap\nassertion \u2014 set `cf.mcp_command` to an unlaunchable command and assert the five names are still registered \u2014\nwould pin it. Non-blocking, but it is the cheapest available defense of the decision.",
+      "file_ref": null,
+      "category": "design-conformance",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:217"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fixture justification names a consumer that does not use it",
+      "description": "\"Test infrastructure first: tasks 5, 6 both need a real stdio peer\" \u2014 only Task 5 needs `fake_mcp_server.py`;\nTask 6 is descriptor implementation and its tests (Task 7) explicitly run \"with no network and no node\", while\nTask 8 uses the real CF server. A junior implementer following that note could wire `test_cf_tools.py` to the\nfake server and break Task 7's stated isolation. Correct the note to \"Task 5's tests need a real stdio peer\".",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Every success criterion maps to a task; sequencing and commit points are sound",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "regression-coverage",
+      "raw_category": null,
+      "summary": "Registering the five CF tools breaks an existing test the plan never updates",
+      "location": "tests/tools/test_package.py:11-22",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Two tasks both claim ownership of the spawned process environment",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Result-mapping branches are implemented with no test that asserts them",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:137",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "design-conformance",
+      "raw_category": null,
+      "summary": "Design decision D4 is not pinned by any test",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:217",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Fixture justification names a consumer that does not use it",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-16T21:24:28.997263",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 232511,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 579170,
+  "cached_tokens": 489216,
+  "cache_write_tokens": null,
+  "completion_tokens": 61724,
+  "reasoning_tokens": 57196,
+  "duration_seconds": 293.52738400013186,
+  "cost_usd": 0.045314160000000006,
+  "cost_basis": "alias_pricing"
+}

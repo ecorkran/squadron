@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every slice-design success criterion maps to at least one task",
+      "description": "Cross-reference of the slice design's Success Criteria section against tasks:\n- Indexed `[~]` \u2192 `status: 'deprecated'`, `isChecked: false`, description captured \u2192 Tasks 2, 3, 5.\n- Unindexed form equivalence \u2192 Tasks 2, 3, 5.\n- `totalSlices` includes / `completedSlices` counts deprecated as resolved \u2192 Tasks 4, 5.\n- `cf list slices` renders `\u2298 deprecated`, never `\u2190 next` \u2192 Tasks 9, 10 (rendering itself is already handled at `packages/cli/src/output/entryStatusDisplay.ts:17-19`, so asserting the derived status is sufficient).\n- `cf next` / `findFirstNotCompleteEntry` skip \u2192 Task 11.\n- `ConsistencyChecker` false-positive avoidance \u2192 Task 12.\n- `[ ]`/`[x]`/`[X]` byte-identical regression \u2192 Task 5.\nNo task fails to trace back to a success criterion, no circular or violated dependencies (Task 1 before 2\u20133 is deliberately test-first; `dependencies: [910]` matches the design), and no load-test/CI item is required because the design restates no NFR.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 1 mutates a shared fixture whose blast radius the breakdown does not account for",
+      "description": "Task 1 adds one indexed and one unindexed `[~]` line to `sample-slice-plan.md`, which is consumed by five other test files. Task 5 only plans to update the `totalSlices`/`completedSlices` assertion (`slicePlanParser.test.ts:44`). Two consequences are unaddressed:\n1. The new *unindexed* line enters `parseSlicePlan()`'s unindexed branch with no prior unindexed match in that fixture, so `unindexedCounter` yields `index: 1` and the index-ascending sort (`slicePlanParser.ts`, `entries.sort((a, b) => a.index - b.index)`) puts it **first**. That breaks the pre-existing exact-shape assertions `slicePlanParser.test.ts:12` (`entries[0]` \u2192 index 101) and `:22` (`entries[2]` \u2192 index 103), and contradicts the task's stated expectation that lengths/indices shift only by \"two new fixture entries alongside the existing 5\".\n2. `slicePlanParser.test.ts:126` (\"tags every entry indexSource: 'explicit' when the plan uses only the indexed format\") and `ArtifactIntrospector.test.ts:52` (`expect(result.totalSlices).toBe(5)`) also fail; neither is mentioned in Task 5, whose stated success criterion is scoped to `pnpm --filter @context-forge/core test -- slicePlanParser` only.\nThe slice design explicitly permits the alternative (\"extend the existing `sample-slice-plan.md` fixture **or add a sibling fixture**\"). Put the `[~]` lines in a new sibling fixture (e.g. `deprecated-slice-plan.md`) so the shared fixture's five consumers are untouched, or enumerate the four affected assertions as explicit Task 5 steps.",
+      "file_ref": null,
+      "category": "test-scope",
+      "raw_category": null,
+      "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9's `derivedStatus` initializer change is a no-op with an incorrect rationale",
+      "description": "Task 9 justifies its second edit \u2014 the initializer at `slice.ts:91` (`entry.isChecked ? STATUS.Complete : STATUS.NotStarted`) \u2014 by claiming that \"a filesystem error would incorrectly report it as `not-started` instead of `deprecated`\". That is not what the code does: every path through the `try` assigns `derivedStatus` (lines 122 or 124), and any throw \u2014 including `detectDocuments` failing \u2014 lands in `catch { derivedStatus = 'degraded'; }` (lines 125\u2013127). The initializer value can never be observed, so the proposed change alters nothing while attributing a bug to the code that does not exist. Either drop this sub-step, or (if the fallback is being made robust for some future refactor) state that intent without the incorrect failure claim.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/slice.ts:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 12 cannot verify its success criterion in the harness it targets",
+      "description": "Task 12 places the `plan-status-vs-entries` test in `ConsistencyChecker.test.ts`, whose harness mocks both `node:fs/promises` (module-scope `vi.mock` providing only `readdir`) and `parseSlicePlan` via `makeMockIntrospector` \u2014 the checker under test consumes only those mocks. `rulePlanStatusVsEntries` (`ConsistencyChecker.ts:726`) reads nothing but `completedSlices`/`totalSlices`, which a mock supplies verbatim, so the test as described (\"a slice plan with frontmatter `status: complete` where every entry is either `[x]` or `[~]`\") passes identically before and after Task 4's arithmetic change. It therefore does not demonstrate the slice design's success criterion (\"`plan-status-vs-entries` \u2026 do not false-positive when \u2026 the only non-checked entry is a `[~]` deprecated one\"). Make the task state the hand-constructed `SlicePlanResult` counts explicitly as the real parser produces them (with a cross-reference to Task 4), or move the end-to-end check to a real-filesystem harness such as the scratch-project pattern in `packages/cli/tests/commands/list-derived-status.test.ts`. Also note the design names `arch-status-vs-plans` alongside `plan-status-vs-entries`; both share the same `allComplete` arithmetic, so say explicitly whether the one case is accepted as covering both.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:29-33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 2\u20134 are granular enough to merge",
+      "description": "Tasks 2, 3 and 4 are each a 1\u20133 line edit inside the same `parseSlicePlan()` function, share a single test task (5) and a single `**Commit**:` marker, with no verification between them. Merging them into one \"parse `[~]` as a deprecated plan entry\" task would read cleanly and lose nothing; keeping them split is acceptable but adds no reviewable boundary.",
+      "file_ref": null,
+      "category": "task-sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 10's commit lands Task 8's core change before its test exists",
+      "description": "Task 10's `feat(core,cli): thread plan-line deprecated status through resolveEntryStatus and cf list slices` commits Task 8's `WorkflowNavigator.resolveEntryStatus` change, but the only test for that core path is Task 11, which comes after. The CLI test in Task 10 exercises `slice.ts`'s inline duplicate, not `resolveEntryStatus`. Swapping Tasks 10 and 11 (or re-scoping the commit to the CLI change only) would keep each commit marker at a point where the code it introduces is covered.",
+      "file_ref": null,
+      "category": "commit-sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Plan-only entries in `ProjectModelBuilder` will not report `deprecated`",
+      "description": "`buildModel()` fills planned-but-unwritten slices with `deriveEntryStatus({ isChecked: entry.isChecked })` (and, in the plan-only initiative loop, with raw `entry.status`). With Task 4 adding fallback resolution elsewhere, a `[~]` plan line will still surface as `not-started` in model-driven output (e.g. the `archListFromModel` path). This is outside the slice design's stated Scope and outside every success criterion, so no action is required \u2014 recorded only so the divergence from the `\u03a3` deprecated rendering in `cf list slices` is a known, deliberate boundary rather than a surprise.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Every slice-design success criterion maps to at least one task",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-scope",
+      "raw_category": null,
+      "summary": "Task 1 mutates a shared fixture whose blast radius the breakdown does not account for",
+      "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 9's `derivedStatus` initializer change is a no-op with an incorrect rationale",
+      "location": "packages/cli/src/commands/slice.ts:91",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 12 cannot verify its success criterion in the harness it targets",
+      "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:29-33",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "task-sizing",
+      "raw_category": null,
+      "summary": "Tasks 2\u20134 are granular enough to merge",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "commit-sequencing",
+      "raw_category": null,
+      "summary": "Task 10's commit lands Task 8's core change before its test exists",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Plan-only entries in `ProjectModelBuilder` will not report `deprecated`",
+      "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-16T21:32:26.834252",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 221213,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 412914,
+  "cached_tokens": 330112,
+  "cache_write_tokens": null,
+  "completion_tokens": 58707,
+  "reasoning_tokens": 54744,
+  "duration_seconds": 320.8143892090302,
+  "cost_usd": 0.041416720000000004,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Subset-evaluable tick design matches the architecture's core interface requirement",
+      "description": "The tick signature with optional `active_indices`, combined with the explicit invariant that `SpatialQuery.build()` always receives the full population (lines 88-91, 160-163), directly implements the architecture's \"Subset-evaluable tick\" principle and the slice plan's requirement that \"the full population remains visible for neighbor queries.\" The world-server-facing interface exists from day one as the plan requires, and the Excluded section correctly defers serialization, float32 conversion, and scaling strategies to their owning initiatives.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:184-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`accelerations` array is carried in state but has no consumer in the design",
+      "description": "`AgentState` exposes an `accelerations` (N\u00d72 float64) array (also listed at line 35), but the tick data flow (lines 87-91) accumulates forces and integrates directly (`velocity += force * dt`); no step writes to or reads from `accelerations`. Neither the architecture nor the slice plan entry mentions an acceleration array (both enumerate positions, velocities, profile indices). This is dead state that must be kept consistent through add/remove operations for nothing. Cut it, or specify its role (e.g., where accumulated forces land before integration); if nothing needs it until a later slice, defer it to that slice.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-agent `Force` protocol has no consumer, and \"prefers the bulk variant when available\" is unimplementable as specified",
+      "description": "The tick signature accepts only `forces: list[BulkForce]` (line 185), yet line 152 says \"The tick loop prefers the bulk variant when available\" \u2014 implying mixed force lists, which the signature forbids. The per-agent `Force` protocol (lines 124-135) is justified only as \"used for testing, reference implementations,\" and the success criteria require placeholder forces to \"exercise both the Force and BulkForce protocol paths\" \u2014 but only the BulkForce path is reachable from `tick()`. This is a dual-protocol mechanism with one consumer. Either cut the per-agent `Force` protocol from this slice (tests can conform to `BulkForce`), or specify how a per-agent force is adapted into the bulk path so \"prefers when available\" has a defined meaning.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two conflicting integration mechanisms are specified for `active_indices`",
+      "description": "Line 152 states the full-population force array \"keeps the integration step simple (add force to velocity for all, but only active agents have non-zero forces),\" while line 215 states \"integration applies only to those agents. Implemented via NumPy fancy indexing: `state.velocities[active_indices] += ...`.\" These are different mechanisms with different cost profiles (the first integrates all N agents and applies the `max_speed` clamp to inactive agents every tick; the second touches only the subset). The outcomes are numerically equivalent for zero forces, but an implementer must pick one, and the docs disagree. Specify one \u2014 the fancy-indexing variant (line 215) matches the \"don't over-engineer / fancy indexing\" guidance at line 316 \u2014 and remove or reconcile the other.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick return contract contradicts the architecture's stated interface",
+      "description": "The architecture's Envisioned State (100-arch.behavior-engine.md, step 5) says the engine \"Returns the updated state array,\" and the slice's own Included scope says the tick function will \"return updated state\" (line 39) \u2014 but the actual signature is `-> None` with in-place mutation (line 187, \"state: Agent state arrays, mutated in place\"). In-place mutation is a legitimate choice consistent with \"stateless between ticks,\" but the architecture's contract and the slice's own scope bullet say otherwise. Reconcile: either return the (mutated) `AgentState` so the world-server-facing contract matches the architecture, or amend the scope bullet and note the deviation from the architecture's step 5.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture's performance NFR is not restated; the slice self-targets \"hundreds of agents\" with a per-agent Python query loop",
+      "description": "The architecture states a specific NFR: \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process... the hot loop must be structured for vectorized computation... not object-by-object iteration\" (100-arch.behavior-engine.md, Design Goals). This slice touches exactly that hot loop but never restates the target; instead it claims the brute-force design is \"acceptable for the hundreds-of-agents scale this slice targets\" \u2014 three orders of magnitude below the architecture's figure \u2014 and the data flow (line 88) plus the `BulkForce` signature's `neighbor_lists: list[NDArray]` (line 145) mandate a Python-level per-agent neighbor-query loop, which sits in tension with the Technical Requirement at line 247. Deferring spatial optimization to slice 105 is correct per the slice plan, but the doc should restate the tens-of-thousands NFR, state explicitly that brute-force does not meet it, and name slice 105 as the recovery point (as the slice plan's note about pulling 105 earlier already does).",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Environment input surface is neither included nor excluded",
+      "description": "The architecture lists \"Environment as input surface\" as a core architectural principle and the Envisioned State tick receives \"environmental context\" \u2014 but this slice doc never mentions environment at all, in either the Included or Excluded list. Deferring is defensible: the Environment Layer initiative does not exist yet, slice 106/107 depend on it, and a future environment force can conform to the `BulkForce` protocol without changing `tick()`. No action required beyond adding an Excluded bullet naming environmental queries (with the force-protocol path named as the future integration route) so later slices don't assume the environment interface was forgotten.",
+      "file_ref": null,
+      "category": "scope-completeness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Technical Scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Subset-evaluable tick design matches the architecture's core interface requirement",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:184-202",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`accelerations` array is carried in state but has no consumer in the design",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Per-agent `Force` protocol has no consumer, and \"prefers the bulk variant when available\" is unimplementable as specified",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:122-156",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "Two conflicting integration mechanisms are specified for `active_indices`",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "Tick return contract contradicts the architecture's stated interface",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:187",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Architecture's performance NFR is not restated; the slice self-targets \"hundreds of agents\" with a per-agent Python query loop",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "scope-completeness",
+      "raw_category": null,
+      "summary": "Environment input surface is neither included nor excluded",
+      "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#Technical Scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-slice"
+  },
+  "timestamp": "2026-11-16T20:52:13.751723",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 93254,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 102686,
+  "cached_tokens": 72448,
+  "cache_write_tokens": null,
+  "completion_tokens": 21783,
+  "reasoning_tokens": 19881,
+  "duration_seconds": 227.95071729202755,
+  "cost_usd": 0.09206697,
+  "cost_basis": "alias_pricing"
+}

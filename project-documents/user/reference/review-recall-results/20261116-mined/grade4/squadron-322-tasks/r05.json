@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T7's direction-band precedence contradicts itself on the floor gate",
+   "description": "The numbered precedence list puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` at step 1 and `match_rate <= tighten_rate \u2192 TIGHTEN` at step 4, while the same bullet (line 119) and the following bullet (line 121) demand that \"a below-floor cell with a low match rate still surfaces as `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`\". Evaluated in the stated order, step 1 fires first and step 4 is unreachable for any `n < floor`, so the listed precedence cannot produce the behavior the task, the design's Direction Bands table, and T8's regression test all require. The parenthetical on line 119 (\"only cases 1/2 above are ... checked first only for the loosening path\") does not resolve it \u2014 the list as written gates everything. T8's `n < floor` + low match rate assertion would catch a wrong implementation, but the implementation guidance itself should be stated unambiguously (e.g. evaluate the tightening band before the floor gate, or gate only the `GRADUATE` branch).",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-feedback.md:115-121"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The malformed `judge:` block failure-mode row has no task, and the Coverage Check claims it does",
+   "description": "The Coverage Check asserts \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8)\", but T8's item list (lines 132-136) contains no malformed-threshold case. The slice design's Failure Modes table requires a row for it: handling \"fall back to `resolve_thresholds`' documented merge; flag the target\", signal \"WARNING naming the template\", test \"malformed judge block \u2192 flagged, not silently defaulted\". No task implements or tests that. It is not free: `resolve_thresholds` does `float(pass_floor)  # type: ignore[arg-type]` (judge.py:57-64), so a non-numeric `pass_floor` raises `ValueError` out of `read_current_thresholds`/`recommend_thresholds` \u2014 while T7's success line only promises `None`-on-unresolvable-template, \"never raises\". Either add the malformed-block case to T7/T8 (catch, WARN naming the template, mark `current` unresolvable) or drop the row from the design; as written the criterion is unmet.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T13 rests on a 320 result-discovery surface that does not exist, and its fallback cannot satisfy the non-empty-offers criterion",
+   "description": "T13 instructs the implementer to \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk\". I searched `src/`: no such surface exists. `capture.resolve_target` resolves *one* review by path or by a known slice index (`capture.py:93-95`, `reviews_dir.glob(f\"{index}-review.*\")`); `report.py` only re-reads review paths already referenced by stored samples; `store.py` lists store records. Nothing enumerates persisted judge results. The prescribed fallback is not merely a reduced scope \u2014 it is unworkable: \"unsampled\" is defined as results with no `SampleVerdict.result_ref` pointing at them, so restricting the search to store-recorded samples makes the candidate set empty by construction and breaks the design's stated architecture commitment (\"a graduated config with unsampled results yields a non-empty offer set\") that T13's own success line and T14's first test assert. The same missing source makes T14's \"pruned review file ... skipped, counted\" case incoherent (a file that does not exist is never discovered, so it cannot be counted as pruned). Fix: authorize a bounded review-result discovery (a named function over `project-documents/user/reviews` that derives `JudgeConfigId` per file, plus a way to attribute a pruned candidate) rather than leaving a fallback that silently fails the criterion.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`model_dimension_note` omits the runtime-drawn-model limitation the design requires at the point of output",
+   "description": "The design requires the note to carry two things (slice design lines 201 and 270): that the recommendation is bound to this template *paired with this model* (choosing model and threshold together at config time), **and** that where a step draws its model at runtime (a 180 pool) the threshold cannot track the drawn model \u2014 \"the recommendation does not apply to that step\". T9 (line 147) specifies only the first half, and no test in T10/T16 asserts the runtime-drawn-model clause; T16 only asserts the note is *present* in the text and `--json` output. As written, an implementation can satisfy every task and still leave the criterion's second half unstated, which is precisely the case the design says \"is what stops it being silently ignored at the moment of action\".",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Idempotent re-graduate has no specified write path, so \"one record, not two\" is not implementable from the task text",
+   "description": "T15 requires `graduate` to \"update its evidence snapshot in place (idempotent \u2014 one record, not two, log INFO)\" for an already-graduated identity, and T16 asserts the record count stays at 1. But T11 specifies `write_graduation(store, graduated) -> str` that \"returns a generated record id\" \u2014 i.e. it always mints a new id, which is a new file. `GraduatedConfig` carries no record id, `MetrologyStore` exposes no update/delete/rewrite API, and `_record_path` is private, so nothing in the breakdown says how the existing record is located-and-overwritten (e.g. `write_graduation(..., record_id=existing)`, or a store-level `rewrite_graduation`). A junior AI must improvise the API, which is the failure mode task breakdowns exist to prevent. Specify the mechanism in T11 (store method signature) so T15/T16's idempotence assertion has something to call.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Proportionality is borderline but acceptable; no split or cut is required",
+   "description": "17 tasks (8 implementation, 8 test, 1 validation) in a single file for a 3/5-effort slice is on the heavy side, but each task is small and each test task traces to test coverage the design explicitly enumerates (direction bands, floor/unversioned refusal, both hash-narrowing directions, exhausted/pruned/lapsed offers, graduate refusal/idempotence, no-mutation), so no test task is \"beyond what the success criteria need\". The file is not split, and no steps dictate implementation detail the design does not require. If trimming is wanted, T4 and T6 are the thinnest (round-trip and key-registration checks) and could fold into T3 and T5 respectively; nothing else is redundant.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  }
+ ]
+}

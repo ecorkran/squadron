@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "SC 10's \"its other metrics are unchanged\" clause has no corresponding test step",
+      "description": "Success Criterion 10 (slice design, line 278) reads: \"\u2026gets `duplicated_lines` as `tool_failed` with a WARNING naming the count and the ceiling, **and its other metrics are unchanged.** A test lowers the constant to trigger it.\" Task 11 (bullet at the cited line) tests the tool_failed outcome and WARNING at the `measure_duplication` module level, where \"other metrics\" don't exist; Tasks 13 and 15 exercise the adapters but not the ceiling scenario. The failure-mode table's second row likewise ends with \"Other metrics are unaffected\", and the Technical Requirement says \"Failure-mode tests assert both the signal and the outcome for each row\" \u2014 so this clause of row 2 is left unmet by name. The structural separation (D1: duplication is its own pass returning one measurement) makes the risk low, but the criterion explicitly asks for the assertion. Cheapest fix: add one bullet to Task 13 \u2014 with `DUPLICATION_MAX_TOKENS` patched small, assert through `PythonAdapter` that `duplicated_lines` is `tool_failed` and file/function length and lint are identical to an unpatched run (and mirror it in Task 15 for TypeScript, since SC 10 says \"a language\", not \"Python\").",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+    },
+    {
+      "severity": "PASS",
+      "title": "All success criteria trace to tasks, and the breakdown's code premises are real",
+      "description": "Cross-reference results: SC 1\u2192Tasks 8/9/12/14 (counting texts); SC 2\u2192Task 9; SC 3\u2192Tasks 4, 5, 6; SC 4\u2192Tasks 11 and 15 (cross-language clause); SC 5\u2192Task 22 (all three absences, stale detail names the file); SC 6\u2192Tasks 20/24; SC 7\u2192Tasks 20/24; SC 8\u2192Task 20; SC 9\u2192Task 17; SC 11\u2192Task 26; SC 12\u2192Tasks 7/8. Both integration requirements are guarded twice (Task 25's unchanged-file list and Task 30's enum-only diff check), and docs/CHANGELOG \u2192 Task 28. Every failure-mode table row is covered: rows 1\u2192Tasks 13/15, row 2\u2192Task 11 (modulo the CONCERN above), row 3\u2192Task 9, rows 4\u20136\u2192Tasks 20/24 and 21/22. Every task cites its decision (D1\u2013D6) and no task lacks a trace to the slice design \u2014 no scope creep. The breakdown's claims about slice-400 code all check out: `PythonAdapter.metrics = frozenset(SnapshotMetric)` (`src/squadron/metrology/snapshot/python_adapter.py:105`, making Task 2's \"would claim the new metrics\" premise true), `FunctionLength` (`lengths.py:38`), `_measure_source` (`lengths.py:156`), `_is_counted` (`typescript_length.py:110`), `FIXTURE_ROOT_TOKEN` (`builders.py:28`), the render wording Task 27 makes metric-aware (`render.py:62`), the `CONFIG_KEYS` pattern (`keys.py:24`, `metrology.max_function_lines` at `:247`), `run_git` (`git_utils.py:28`), and `.gitignore:56` ignores `coverage.xml` (walkthrough step 3's premise). Task 2's \"suite passes unchanged\" is also plausible: existing tests iterate the enum (`test_take.py:25` `frozenset(SnapshotMetric)`, `test_snapshot_models.py:61` `list(SnapshotMetric)`) rather than pinning the four current members. Sequencing has no cycles; helper-forward-references (Task 7's read-and-decode helper used by Task 10) are ordered correctly; proportionality is good \u2014 30 tasks, one task file, every task Effort 1\u20134.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:32-290"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load-test task exists, and none is required here",
+      "description": "The slice restates one resource bound \u2014 the D3 memory estimate (133 bytes/token, ~530 MiB at 4M tokens) \u2014 but the design discharges it as an enforced ceiling (`DUPLICATION_MAX_TOKENS`) that converts the overload into an explicit `tool_failed` absence, tested by lowering the constant (SC 10, Task 11) rather than by generating a multi-gigabyte corpus. The repository has no `tests/load/` convention (slice 400 introduced none), and adding one would be scope creep. Recording this so the omission is read as a deliberate design choice, not a gap.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 10 is the largest task (Effort 4) but is correctly left unsplit",
+      "description": "Task 10 (the window pass: id mapping, rolling hash with collision confirmation, overlap rule, ceiling, `counting` text) is the algorithmic core and carries the module's ~300-line budget on its own. Splitting it (e.g. hash step vs. window index) would create an intermediate state that can't be tested end-to-end; the spec is exhaustive and each sub-bullet is independently verifiable, and the hash step is already isolated for collision testing. At the other end, no task is too granular \u2014 the Effort 1 tasks (1, 17, 28, 30) are each single-commit units.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:116-133"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "SC 10's \"its other metrics are unchanged\" clause has no corresponding test step",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All success criteria trace to tasks, and the breakdown's code premises are real",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:32-290",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No load-test task exists, and none is required here",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 10 is the largest task (Effort 4) but is correctly left unsplit",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:116-133",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-16T21:01:21.864070",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 502027,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 412646,
+  "cached_tokens": 373376,
+  "cache_write_tokens": null,
+  "completion_tokens": 124909,
+  "reasoning_tokens": 128828,
+  "duration_seconds": 630.4098304579966,
+  "cost_usd": 0.07954628,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope and non-goals mirror the slice plan entry 210 exactly",
+      "description": "All seven scope bullets of plan entry 210 (`200-slices.developer-onboarding.md:195-200`) appear in the slice's Technical Scope with matching specifics: `VALID_TARGETS` extension, `isManagedCopilot` marker convention, the four-path worktree propagation block, guides-side `scripts/setup-ide` backend, `paths[]` \u2192 `applyTo` comma-string translation with `**` default, unchanged `cf init` detection matrix, and the additive-only write set (\"never to `.claude/` or `CLAUDE.md`\", line 17). The plan's ordering caveat (instruction files combine with no guaranteed order) is correctly converted into a design decision \u2014 always-on content compiled into a single `.github/copilot-instructions.md` + `AGENTS.md` (lines 58-84). All four plan non-goals are preserved in \"Not included\" (lines 51-55), and the dependency stance (`dependencies: []` in frontmatter; `interfaces: [202-smart-cf-init-composition]` as the consumer of `setupIdeAction`) matches the plan's \"Dependencies: None\".",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29-55"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep beyond the architecture's composition principle",
+      "description": "The design honors the parent plan's Notes principle (\"Composition over new infrastructure... No new storage backends, no new protocols, no new package boundaries\"): CF core only validates the target, checks guide installation, performs the managed-marker check, shells out, and propagates \u2014 while compilation stays in the ai-project-guide submodule, matching how slice 177 delegated the 400+ line bash script. The explicit \"No changes to\" list (init.ts, `packages/core/`, `packages/mcp-server/`) is proportionate; the \"Not included\" list correctly defers Cursor (Future Work #1) and bidirectional sync. Mechanism count is minimal \u2014 one new helper, one new target branch, one script backend.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#files-changed"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes of the new I/O path are enumerated, not TBD",
+      "description": "The Risks section addresses the two failure modes of the shell-out path concretely: missing `copilot` case in the guide script fails at the script step \"with a clear error\" (consistent with slice 177's established `UserError` contract for script-not-found and non-zero exit, `177-slice.ide-setup-command.md:106-108`), and the CF-invented managed-marker convention degrading if VS Code strips comment markers is analyzed down to its consequence (\"worst case is a more verbose re-run experience, not data loss\"). Test coverage additionally pins the no-guides error, unmanaged-file prompt, and `--yes` bypass (lines 121-127).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-135"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR restatement required \u2014 parent architecture states none for this path",
+      "description": "The parent architecture (`200-arch.developer-onboarding.md`) states no measurable NFR targets (latency, throughput, etc.) on the `setup-ide`/init path \u2014 its Technical Considerations cover detection edge cases, skill maintenance, and `cf next` hot-path cost, none of which this slice touches. There is therefore no NFR that needed restating with a specific target.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Managed-marker overwrite protection covers only 2 of the 4 Copilot write targets",
+      "description": "The slice declares (line 17) that the Copilot target writes to `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/`, and `.github/prompts/`, but the safety check \u2014 `isManagedCopilotFiles(projectPath)` \"checks marker in `.github/copilot-instructions.md` and `AGENTS.md`\" (line 109; sequence step 4, lines ~99-100) \u2014 guards only the first two. Nothing defines the overwrite policy for `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`: if a user has hand-authored instruction/prompt files there, step 5 (the script run) can overwrite them with no prompt and no backup. The parent plan's success criterion is unqualified: \"Re-running on a project with existing unmanaged files prompts before overwriting (same safety as Claude path)\" (`200-slices.developer-onboarding.md:214`). This also conflicts with the project principle \"Never use silent fallback values. Fail explicitly.\" Fix is one sentence: either extend the marker/backup policy to the two directories (per-file check, or an explicit \"directories are CF-owned, backed up on first collision\" rule), or state the script-side per-file policy the guide backend implements \u2014 but the design must specify it, since the plan criterion leaves it unmet as written.",
+      "file_ref": null,
+      "category": "data-safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tool-guide deliverable from the plan's success criteria is dropped",
+      "description": "Plan entry 210's success criteria require the tool guide be \"referenced in slice design, promoted to a proper published tool guide if needed\" (`200-slices.developer-onboarding.md:218`). The slice design does not reference `user/tool-guides/copilot-vscode/setup-ide.md` at all \u2014 no docs task, no test-coverage line. The existing file is a raw AI-chat capture (a Perplexity answer with citations), not a published guide, so the \"promoted if needed\" clause is likely active \u2014 especially since the slice's own Value section names an external user as the driver, and that user needs instructions for the new flow. This is a small, cheap deliverable to add back; dropping it leaves the plan criterion partially unmet without a stated reason.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Worktree propagation writes have no stated overwrite policy",
+      "description": "Sequence step 6 runs `propagateToWorktrees(project, 'copilot')` after the root-level managed check, satisfying the plan criterion that propagation copies to all registered worktrees \"after root setup-ide\" (`200-slices.developer-onboarding.md:215`). However, the slice doesn't state whether per-worktree copies respect the managed-marker/backup policy or are silent writes, nor whether propagation still runs when the user declined the root overwrite prompt. Two unspecified behaviors on a write path that multiplies by the worktree count; one clarifying sentence would pin it.",
+      "file_ref": null,
+      "category": "data-safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Unless it lands cleanly\" clause on custom agents is an unlocked conditional",
+      "description": "\"Not included: Copilot custom agents translation (... defer implementation unless the instruction + prompt layer lands cleanly)\" matches the plan's non-goal wording, but the escape clause has no criterion \u2014 it leaves the door open to pulling agent translation into this slice mid-flight. Deferral is the conservative and correct call (the plan's table also hedges with \"implement if backend is stable\"); consider making the deferral unconditional here and recording agent translation as its own follow-up.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Skill \u2192 prompt-file frontmatter translation contract is unspecified",
+      "description": "The plan's file-mapping table lists the prompt-file frontmatter surface (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`), but the slice only shows file-layout examples and gives no mapping rule for skill frontmatter (which has no `argument-hint`/`agent`/`model`/`tools` equivalents). The `applyTo` translation gets a dedicated design-decision section; this one doesn't. The guide-script implementer will have to invent defaults \u2014 which the project rules forbid (\"Do not hard-code magic defaults\", \"Never use silent fallback values\"). One line (e.g., \"skill `name`/`description` carry through; unsupported fields omitted, never defaulted\") closes it.",
+      "file_ref": null,
+      "category": "spec-completeness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:46-47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Helper described with two different signatures",
+      "description": "Technical Scope introduces `isManagedCopilot(filePath)` (line 29) while Files Changed names `isManagedCopilotFiles(projectPath)` checking two files (line 109). Same convention, different shape \u2014 trivial editorial drift, but worth unifying to one name and signature so the implementation and tests reference a single definition.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope and non-goals mirror the slice plan entry 210 exactly",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29-55",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "No scope creep beyond the architecture's composition principle",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#files-changed",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes of the new I/O path are enumerated, not TBD",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-135",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR restatement required \u2014 parent architecture states none for this path",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "data-safety",
+      "raw_category": null,
+      "summary": "Managed-marker overwrite protection covers only 2 of the 4 Copilot write targets",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:109",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Tool-guide deliverable from the plan's success criteria is dropped",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "data-safety",
+      "raw_category": null,
+      "summary": "Worktree propagation writes have no stated overwrite policy",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:102",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "\"Unless it lands cleanly\" clause on custom agents is an unlocked conditional",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "spec-completeness",
+      "raw_category": null,
+      "summary": "Skill \u2192 prompt-file frontmatter translation contract is unspecified",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:46-47",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Helper described with two different signatures",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-16T21:04:52.646977",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 144242,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 13,
+  "prompt_tokens": 265059,
+  "cached_tokens": 206080,
+  "cache_write_tokens": null,
+  "completion_tokens": 36169,
+  "reasoning_tokens": 33384,
+  "duration_seconds": 209.20828233310021,
+  "cost_usd": 0.03311375,
+  "cost_basis": "alias_pricing"
+}

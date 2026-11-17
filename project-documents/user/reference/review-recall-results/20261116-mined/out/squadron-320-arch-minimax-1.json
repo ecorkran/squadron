@@ -1,0 +1,278 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cross-project metrology storage is treated as a slice-design detail even though it is a load-bearing architectural commitment",
+      "description": "The document explicitly requires metrology data to \"aggregate **across projects**\" while 300/140 persistence is per-run/per-project (`~/.config/squadron/runs/<run>.json` per `140-arch.pipeline-foundation.md#Pipeline State & Resume`). The \"Where metrology data lives\" paragraph then defers whether to extend existing storage or add a metrology store to slice design. That is not merely an implementation detail: the keystone slice, all cross-project reporting, the trend dimension, and the code-quality baseline all depend on a durable store whose identity, scope, and join keys exist. The document commits only to \"queryable and joinable,\" without specifying what the join key is, how a human sample references a persisted judge result across projects, or how project identity is carried. Slice design cannot choose this without changing the data model and public query contract. This should be an architectural commitment, or explicitly an early spike.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Judge-configuration identity cannot be derived from the existing persisted result record",
+      "description": "The document requires that \"metrology records must therefore identify the judge configuration (template identity/version, model)\" and that reports not blend incompatible configurations. The existing persistence path writes score/criteria into review markdown frontmatter and the pipeline `ActionResult`, but neither the persisted review frontmatter nor the state file carries a template identity or a template version. `ActionResult.metadata` does carry `template`/`model`, but the `RunState` hoist in `src/squadron/pipeline/state.py` persists `score`/`verdict` per completed step without hoisting `metadata`, and review files are named by slice/template and can be overwritten. Moreover, `ReviewTemplate` (`src/squadron/review/templates/__init__.py`) has no version field at all, and user templates in `~/.config/squadron/templates/` can override built-ins by name. So the version dimension the architecture calls \"fixed here\" does not exist and must be added to 300's persisted contract \u2014 a change to the write path the document claims it will not make. The architecture must state who adds and where template identity/version is persisted.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dispersion path depends on two capabilities that do not exist",
+      "description": "\"Dispersion needs repeated measurements\" asserts that \"the execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`\". Neither exists as described. 300's slice plan lists multi-sample judging as unchecked Future Work item 1 and explicitly says it \"is implemented as a `fan-in` reducer ... not as new judge-specific looping\"; `fan_out`/fan-in lives in initiative 180 (slice 182), not 140, and slice 189's `merge_findings`/`unanimous` reducers are still planned. This document's frontmatter and Related Work both attribute `fan_out` to 140 and treat multi-sample as available. The keystone dependency for the cross-judge dispersion goal is therefore understated and misassigned. The document should depend on 180/182 (and, if multi-sample median reduction is needed, on 300 FW1 implemented via the fan-in reducer), and it must specify whether the metrology consumes raw repeated `ActionResult`s rather than a median-reduced result \u2014 because dispersion cannot be computed from a median.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The tech-debt oracle is not a machine-readable interface and the normalization contract is deferred to a later slice",
+      "description": "The code-quality oracle is the `tech-debt-audit.md` markdown skill shipped by initiative 340 (see `342-slice.analysis-pack-bundled.md`: the deliverable is a single `.md` file with a dispatch router; the skill is invoked by a human in a Claude Code session). 320's \"Normalizing an LLM-authored audit\" paragraph acknowledges the output is \"prose-shaped and non-deterministic\" but leaves the normalization contract (category/location/severity vocabulary, stable finding identity across runs, parser or structured-output requirement) as an unspecified implementation detail. Without a stable finding identity and a fixed output schema, the two headline metrics \u2014 \"audit-findings-per-project\" and the pre-emption delta \u2014 are not computable: repeated audits of the same issue must match it, and findings counts must not be inflated by the auditor paraphrasing or splitting the same defect. This is the hard part of the code-quality half of the initiative and it is currently a one-line \"requires normalizing findings into a persistable, comparable form\". A concrete normalization contract (or a hardened structured-output template for the audit skill) belongs in the architecture.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Running the code-quality audit through the 340 skill-pack path is architecturally incompatible with a batch, cross-project harness",
+      "description": "The \"Tech-debt-audit baseline harness\" is specified as running the audit \"across squadron-managed projects\" and persisting normalized findings. The 340 mechanism is explicitly a *file-copy* delivery primitive: skills are markdown copied into `~/.claude/commands/analysis/` and \"invoked by a human in a Claude Code session\" (340 architecture \"Architectural Principles\"; `342-slice.analysis-pack-bundled.md`). There is no programmatic skill-invocation API in squadron, and the document never states how the harness invokes the skill headlessly, under which provider/profile, with what working directory, or how it captures output. As written, the harness either shells out to Claude Code (introducing an undeclared external runtime dependency, auth requirement, and non-determinism) or reimplements the audit as a squadron action (duplicating the skill). The architecture must pick one; the \"one metrology shape, two oracles\" framing hides that the two oracles have completely different execution substrates.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-emption prompt's causal claim is stronger than the design can support",
+      "description": "The \"Attribution of the pre-emption delta\" paragraph correctly labels the before/after as observational, but the design goal states the baseline \"proves the metrology can detect an intervention's effect\" and the Envisioned State asks \"Is the code my pipelines produce getting better?\" \u2014 with a raw findings-count delta as the metric, while acknowledging confounders (different projects, models, slice difficulty) and no control arm, no normalization for codebase size, no deduplication of findings, and no matching of before/after runs. A drop in raw counts is fully consistent with the auditor's run-to-run variance, which the document itself says \"is itself a calibration concern\". The document needs a defined comparison unit (same project/slice, normalized per finding-category, ideally repeated audits), or the claim must be reduced to \"directional signal only\". As written the architecture's headline code-quality goal is not derivable from the specified measurement.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sampling bias is acknowledged but no unbiased sampling frame or probability-of-inclusion is committed",
+      "description": "\"Sampling capture ergonomics\" notes that the selection policy (random vs. disagreement-triggered vs. escalation-triggered) \"has statistical consequences \u2014 a biased sample yields a biased agreement number\", then defers the choice to slice design. But the sample selection policy is not merely ergonomic: it determines whether the resulting agreement rate is an unbiased estimate of judge reliability at all. Disagreement-triggered sampling conditions on the outcome and would inflate or otherwise bias agreement; escalation-triggered sampling conditions on a gate outcome. The architecture commits to reporting agreement and feeding thresholds from it, so it must commit to a design-time sampling frame (e.g. uniform random over all judge results in a defined window, with the sampling *frame* recorded) and require the sampling policy to be stored with the sample. Deferring this risks the keystone slice baking in an estimator that cannot be corrected later without discarding data.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No minimum-evidence floor or refusal semantics are defined, despite being called load-bearing",
+      "description": "The document says \"the calibration-to-threshold feedback must define a minimum-evidence floor below which it refuses to recommend loosening a threshold\", but never specifies the floor, who computes it, what the recommendation object looks like, or what happens when the floor is not met. The slice plan calls this \"Calibration-to-threshold feedback \u2014 the documented, evidence-floored path \u2026 how a judge graduates from advisory to auto-gate at an artifact level\", i.e. the entire slice's contract is the undefined thing. A \"recommendation\" needs at least: judge configuration, artifact level, metric value, n, floor, and a verdict of recommend/do-not-recommend \u2014 and the non-goal \"no automatic threshold mutation\" means the output must be a consumable configuration artifact, not merely a report line. Without that contract, the slice cannot be designed or verified.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Artifact-level identity is a free-text notion with no registry or derivation rule",
+      "description": "\"Calibration is per artifact level\" and the grain list \"(tasks-vs-slice, slice-design-vs-arch, arch-vs-concept)\" is the axis on which every report and threshold recommendation is keyed. But nothing in the design says where artifact level comes from at capture time, and CLAUDE.md forbids using user-accessible labels as logical structure. Existing judge templates are selected by template name (`judge.slice-vs-arch`, `judge.tasks-vs-slice` in `src/squadron/data/templates/`), and the `arch-vs-concept` level has no shipped judge template at all. If the metrology store keys on template names, artifact level is implicit in a fragile string; if it keys on a separate field, the field must be populated at capture. The architecture should define an enum-like artifact-level identity and its derivation from the judge/template configuration, otherwise the \"never one global judge accuracy number\" commitment is unenforceable and report partitioning will drift.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"one metrology shape, two oracles\" framing conflates two different data models",
+      "description": "Human-sampled agreement produces a labelled comparison against an existing judge result (judge score/verdict vs. human verdict, one sample per result, keyed to a persisted result ID). The tech-debt baseline produces a set of normalized findings per project/run (no human label, no verdict, no join to a 300 judge result), and its \"report\" is counts and trends, not agreement. Calling these \"two oracles, one metrology shape\" and asserting \"the reporting layer is built once\" overstates the shared surface: the shared parts are persistence, identity, and n-carrying reporting; agreement/dispersion mathematics apply only to the first. The document risks building a generic \"oracle/verdict\" abstraction to accommodate the second, which is the kind of premature unification the project's conventions prohibit. The architecture should state the genuinely shared substrate (records, identity, evidence floor, trend reporting) and keep agreement/dispersion scoped to judge-vs-human/judge-vs-judge.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-emption prompt is a scope-heavy, weakly-motivated addition that should be deferred",
+      "description": "The initiative's stated value is \"how much can I trust these judges?\" \u2014 but the plan adds five slices, and the last two (baseline harness + pre-emption prompt and its delta measurement) introduce a second oracle, a cross-project execution harness, a skill-invocation substrate, a finding-normalization format, and a dispatch-side prompt change with a causal-inference problem. That is arguably a separate initiative (code-quality measurement/intervention) stacked onto a judge-calibration initiative, with its own dependencies and its own metrics. The document also defines no mechanism by which the baseline \"issue classes\" become the pre-emption prompt content (manual authoring? auto-generated prompt? per-category injection?), and no mechanism for retiring the prompt when the baseline changes. Cut or defer the pre-emption prompt and delta measurement to a follow-on initiative; ship the metrology substrate, human-sampled agreement/dispersion, and threshold feedback first. If the code-quality baseline is retained, scope it to capture-and-normalize only.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The document claims the tech-debt skill ships in 340, which matches the shipped slice plan but is a cross-initiative dependency not recorded in frontmatter",
+      "description": "The document relies on initiative 340's analysis pack (\"The tech-debt-audit analysis skill \u2026 shipped in the 340 analysis pack\"), but the frontmatter `dependencies: [100, 140, 300]` omits 340. The initiative plan explicitly says \"320 is a consumer (analysis pack is the first customer of the tech-debt-audit skill)\". Since 340's slice plan marks the analysis pack as complete, this is not currently blocking, but the dependency list should be corrected so downstream slice planning does not treat 340 as optional.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Related Work"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Cross-project metrology storage is treated as a slice-design detail even though it is a load-bearing architectural commitment",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Judge-configuration identity cannot be derived from the existing persisted result record",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The dispersion path depends on two capabilities that do not exist",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The tech-debt oracle is not a machine-readable interface and the normalization contract is deferred to a later slice",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Running the code-quality audit through the 340 skill-pack path is architecturally incompatible with a batch, cross-project harness",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The pre-emption prompt's causal claim is stronger than the design can support",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Sampling bias is acknowledged but no unbiased sampling frame or probability-of-inclusion is committed",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No minimum-evidence floor or refusal semantics are defined, despite being called load-bearing",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Artifact-level identity is a free-text notion with no registry or derivation rule",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The \"one metrology shape, two oracles\" framing conflates two different data models",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The pre-emption prompt is a scope-heavy, weakly-motivated addition that should be deferred",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The document claims the tech-debt skill ships in 340, which matches the shipped slice plan but is a cross-initiative dependency not recorded in frontmatter",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Related Work",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-320-arch"
+  },
+  "timestamp": "2026-11-16T21:37:16.138568",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 204,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 973232,
+  "cached_tokens": 802304,
+  "cache_write_tokens": null,
+  "completion_tokens": 4656,
+  "reasoning_tokens": 53,
+  "duration_seconds": 92.24397858302109,
+  "cost_usd": 0.10500384,
+  "cost_basis": "alias_pricing"
+}

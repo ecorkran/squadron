@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion maps to a task, and no task is scope creep",
+      "description": "Functional requirements map cleanly: empty/scaffold-only \u2192 Task 12 items 1\u20132; brownfield + persisted `in_progress` \u2192 items 3, 9 and Task 9 step 5; shallow clone \u2192 item 4 and Task 5T; concept-only \u2192 item 6; planned \u2192 item 7; monorepo scoping and root CI \u2192 item 5; resume \u2192 item 8; overrides and `\"\"` re-detect \u2192 item 9 plus Task 1T; non-concept phase and `--it brownfield-adoption` \u2192 items 10\u201311; `template_preview` read-only \u2192 item 13 and Task 11; missing guide profile/prompt \u2192 item 12 and Task 9T. Technical requirements map to Tasks 3T/4T/5T/6T/7T/8T/9T one-for-one, and the parity test to Task 13. Integration requirements map to Task 8 (`renderSquadronFact()` isolated for 262), Task 2 (`writeAdoptionState`/`ADOPTION_STATES` for 263/264), and Task 15 walkthrough step 1 (byte-identical prompt for this planned repo). The only edits to existing files outside the wiring tasks are Task 6's `INITIATIVE_PLAN_FILE_PATTERN` extraction, which the slice's D6 requires (\"reusing `resolveInitiativePlanPath`\") and the task file justifies by the swallowed-`readdir` conflict with D6. Nothing in the task list widens the Excluded list (no squadron probe, no `cf next` change, no `complete` transition, no onboarding change).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Performance NFR correctly handled without a load test or CI gate",
+      "description": "The slice restates a performance target (D2: \"under one second\" on a Phase 0 build) but also decides that tests assert the caps, not timings. I verified the load-test tier rule exists only in `project-documents/ai-project-guide/project-guides/rules/python.md:57`, whose `paths` frontmatter scopes it to Python files; this is a TypeScript repo, so the rule does not apply and no `tests/load/` task or CI gating task is owed. The cap tests in Task 3T (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`) bound the worst case as D2 requires. No finding.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers use the project's checkbox form, not plain `**Commit**:` lines",
+      "description": "The markers appear as checklist items (`- [ ] **Task 2C: Commit** \u2014 \u2026`) rather than the plain `**Commit**:` lines the review schema names, and the label is a `Task NC: Commit` row. This matches the established convention in the sibling, completed slice file `project-documents/user/tasks/260-tasks.onboarding-consolidation.md`, and AGENTS.md requires checklist format for every item and subitem. Placement is sound regardless: 2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C each sit after a tested, buildable point, no marker follows every task, and none is deferred to the end only.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 9T's guide fixture needs a complete `context_profiles:` block, not only a profile line",
+      "description": "Task 9 step 4 requires a `brownfield-adoption` key from `ContextProfileParser.parseProfiles(content)`, and `parseProfiles` finds nothing unless the file contains a fenced block with the literal `context_profiles:` header (`PROFILE_KEY`). The existing `test-project` fixture's `prompt.ai-project.system.md` has no such block at all, so the new `packages/core/tests/fixtures/brownfield-guide/` copy must add the whole fenced block, not just the profile line Task 9T describes. Without it `parseProfiles` returns `{}` and the D9 success path cannot be exercised. Small specification gap, easily resolved by the implementer.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextProfileParser.ts#parseProfiles"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3T's entry-cap case creates 20,001 files",
+      "description": "The `MAX_WALK_ENTRIES` case writes 20,001 empty `.txt` files across subdirectories, which is the slowest test in the file. It is nonetheless the only way to exercise the D2 cap that the design's Technical Requirements demand, and the effort is bounded. Acceptable as written; noting it so it is not mistaken for an oversight.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 15 combines automated verification and the live walkthrough",
+      "description": "Slice 260 split \"full verification\" (its Task 16) from \"live runs\" (its Task 17); Task 15 here folds format/lint/typecheck/build/test, the file-size check, the `main`-vs-branch `diff`, four local-build walkthrough steps, a `claude -p` live run, and an MCP-client run into one task. That is a large task, but it is the standard final-verification shape, it carries an explicit `BLOCKED:` escape for the MCP client case, and the live runs are pre-authorized, so no approval step is introduced. Splitting it would be tidier but is not required by the slice.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Every success criterion maps to a task, and no task is scope creep",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Performance NFR correctly handled without a load test or CI gate",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers use the project's checkbox form, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 9T's guide fixture needs a complete `context_profiles:` block, not only a profile line",
+      "location": "packages/core/src/services/ContextProfileParser.ts#parseProfiles",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 3T's entry-cap case creates 20,001 files",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 15 combines automated verification and the live walkthrough",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T21:30:48.839510",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 45,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 315852,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1007936,
+  "cached_tokens": 749312,
+  "cache_write_tokens": null,
+  "completion_tokens": 86227,
+  "reasoning_tokens": 81814,
+  "duration_seconds": 360.3132462920621,
+  "cost_usd": 0.07991696,
+  "cost_basis": "alias_pricing"
+}

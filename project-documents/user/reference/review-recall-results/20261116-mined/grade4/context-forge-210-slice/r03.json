@@ -1,0 +1,19 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Agent mapping acknowledged but not documented",
+   "description": "The slice plan entry 210 file-mapping table explicitly lists `.claude/agents/*.md` \u2192 Copilot custom agents with the note \"Distinct VS Code concept \u2014 document mapping, implement if backend is stable.\" The design's \"Not included\" section paraphrases this as \"document the mapping but defer implementation unless the instruction + prompt layer lands cleanly,\" yet the design document itself contains no mapping for agents \u2014 no table row, no paragraph, no reference to where the mapping is documented. The tool guide at `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` does contain agent-mapping information (prompt files vs. custom agents vs. agent skills), but the design never references it. The slice plan asks for the mapping to be documented even when implementation is deferred; this design acknowledges the obligation and then drops it. A brief mapping note (source format \u2192 target concept \u2192 why deferred) or an explicit pointer to the tool guide would close this gap.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#technical-scope"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Tool guide not referenced in the design",
+   "description": "The slice plan's success criteria states: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed.\" The design document's frontmatter lists only `interfaces: [202-smart-cf-init-composition]` and `dependencies: []`, and no section of the design body references the tool guide file, even though the design's file mapping, frontmatter translation, and ordering caveats are clearly derived from it. Adding a reference (frontmatter or a line in the Overview or Design Decisions section) would satisfy this success criterion and make the design's source of truth traceable.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  }
+ ]
+}

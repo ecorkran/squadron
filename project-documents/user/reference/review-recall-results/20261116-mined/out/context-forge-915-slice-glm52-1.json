@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Migration/compat story fully satisfies the plan's explicit requirement",
+      "description": "The plan entry requires \"a defined migration/compat story for projects that already committed personal keys \u2026 into an existing shared `.context-forge.toml`.\" The design delivers a three-part story that is complete without being overweight: (1) read-time fallback so a personal key still sitting in the shared file keeps resolving (compat, no silent regression), (2) a new `ConsistencyChecker` rule that surfaces the stale shared-file copy as a `warning` so the condition is discoverable rather than silent, and (3) a dedicated, idempotent `cf config migrate-personal` command that performs the explicit, reviewable move. The collision semantics (absent-in-personal \u2192 move; different-value \u2192 skip-and-report; identical \u2192 dedupe) and the write-personal-then-delete-shared ordering with per-key failure isolation are specified concretely, not left as \"TBD.\" A lighter interpretation (fallback-only with no detection or command) would leave the migration requirement under-specified, so the added mechanisms are justified by a named requirement.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#implementation-details"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality \u2014 new file-routing extends the existing merge pattern rather than inventing one",
+      "description": "The plan instructs the slice to route reads/writes \"reusing the existing user-vs-project two-file-precedence merge pattern rather than inventing a new one.\" The design honors this: it reuses the existing `readToml`/`writeToml`/`resolveKey`/`setKey`/`deleteKey` helpers unchanged, preserves file-not-found-means-empty semantics, and extends the precedence to `project-personal \u2192 project-shared \u2192 user \u2192 default` by inserting one more-specific layer governed by the same \"more specific scope wins\" principle \u2014 not by building a new resolution engine. The `.context-forge.local.toml` sibling file is the lightest option that actually solves the gitignore problem (a `[personal]` table inside one file was correctly rejected because a file cannot be half-gitignored). The `scope` field is made required with no default so future keys force an explicit classification at review time, which is a cheap compile-time guard rather than added runtime mechanism. The `cf init` gitignore addition is correctly limited to the one line this feature needs, with the broader template deferred to the plan's Future Work item.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes enumerated for each new I/O path",
+      "description": "For the new `.context-forge.local.toml` write path, the design states `ConfigManager.set` reuses the existing `writeToml` helper so write failures (permission, disk full) throw exactly as for the existing files \u2014 no new error-handling path. For `migrate-personal`, it enumerates permission-denied / disk-full / TOML-serialization failures, specifies the write-personal-then-delete-shared ordering that leaves keys present-in-both on partial failure, states idempotent re-runnability, and requires per-key continue-on-failure with `failed: <error>` reporting rather than whole-run abort. For `cf init`'s gitignore append, it specifies the file read-modify-write failure path surfaces through the existing `handleError`. None are left implicit.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#implementation-details"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"916 prerequisite fix\" label is non-load-bearing but potentially confusing",
+      "description": "The design refers to \"the 916 prerequisite fix (already merged to main) established `--project`/`--global` as the CLI's explicit scope-selection flags.\" Per the parent slice plan, entry 916 is \"Guide Update Branch Guard\" \u2014 a different concern \u2014 so the attribution is not obvious to reconcile. This does not affect correctness: the design's actual load-bearing assumption is only that the `--project`/`--global` flags already exist, which the plan entry for 915 itself confirms (`cf config set --project` is described as existing behavior), and the slice explicitly states it does not change that CLI surface. Flagging only so a reviewer does not waste time trying to map the prerequisite onto 916's actual scope.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#dependencies"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Migration/compat story fully satisfies the plan's explicit requirement",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#implementation-details",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality \u2014 new file-routing extends the existing merge pattern rather than inventing one",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes enumerated for each new I/O path",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#implementation-details",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "\"916 prerequisite fix\" label is non-load-bearing but potentially confusing",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#dependencies",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-16T20:48:29.153617",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 27378,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 17957,
+  "cached_tokens": 1728,
+  "cache_write_tokens": null,
+  "completion_tokens": 7236,
+  "reasoning_tokens": 5965,
+  "duration_seconds": 47.5736482499633,
+  "cost_usd": 0.03110662,
+  "cost_basis": "alias_pricing"
+}

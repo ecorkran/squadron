@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 6's informational-event instruction contradicts LLD D4 and leaves the drop/forward decision unpinned",
+   "description": "The bullet reads \"log at DEBUG and continue the loop **without yielding it** to the caller as a raw SDK type \u2014 **let it flow to translation as normal**\". Both cannot hold: if `_skip_unparseable` does not yield the message, translation never sees it. LLD D4 is explicit on the intended behavior \u2014 \"informational events **must not reach translation** and must not terminate the stream\" \u2014 while Task 7's equivalent bullet for the pipeline path says the opposite (\"let it continue to `translate_sdk_message` as normal ... informational events must become observable per Task 4, not dropped\"), which is consistent with D6. The design itself is inconsistent between D4 and D6, and the task file has inherited both readings rather than resolving one. Task 10's new informational test (\"must not raise, must not increment throttles, stream must continue\") passes under either reading, so nothing in the breakdown discriminates the two. This needs one explicit decision, because the answer determines whether a translated `rate_limit_event` message reaches the four consumers that append translated content unfiltered (see next finding). Compounding it: Task 4 requires returning a `Message` \u2014 whose `content: str` is mandatory (`src/squadron/core/models.py:88`) \u2014 but never specifies what that content should be, so the pollution outcome is decided by an unspecified detail.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The `sdk_type` exclusion-set fix covers `dispatch` only, while Task 14 asserts a review-artifact-level guarantee no task implements",
+   "description": "Task 8 adds `\"rate_limit_event\"` to `sdk_session.py`'s exclusion tuple, and its Success criterion is scoped to \"`dispatch`'s returned response string\" \u2014 matching LLD criterion 4 and D6's \"Consumer check required\". But three other consumers append `response.content` with the same three-value filter and would therefore concatenate a translated rate-limit notice into their prose: `review_client.py:263` (into `raw_output`, which `parse_review_output` then parses), `summary_oneshot.py:139`, and `metrology/audit.py:557` (`_collect_audit_output`, feeding `parse_audit_findings`, where the findings block is required to be the file's last content). This is issue #23's defect class, which the design explicitly says must not recur. Task 8 does contain a grep instruction (\"Verify no other `sdk_type` exclusion list exists elsewhere\"), but no Success criterion covers those files, and Task 14's confirm step \u2014 \"no `rate_limit_event` text appears in the artifact's prose\" \u2014 depends on the review path being protected, which no task's success criterion requires. Either add the three lists to Task 8's scope (and its success check), or state the drop-in-`_skip_unparseable` decision from the previous finding. Note this only bites if informational events are forwarded; if they are dropped per D4, the review/summary/audit paths are safe by construction and only `dispatch` needs the exclusion.",
+   "location": "src/squadron/review/review_client.py:263"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Three commit markers land on a red test suite",
+   "description": "Task 1 raises the floor and runs `uv sync`, but the shim tests it leaves in place fail at the new floor: `test_the_shim_absorbs_informational_events` asserts `isinstance(message_parser.parse_message(payload), SystemMessage)` and `test_the_shim_lets_a_rejected_event_raise` asserts `MessageParseError` is raised \u2014 per the LLD probe findings, 0.2.152 parses both payloads natively and \"neither raises\", so both tests fail as soon as the floor moves. Task 1 runs no pytest, so its commit (line 28) is the first red point. Task 6 (commit at line 66) removes the `is_rate_limit_event(exc.data)` re-raise, which makes `test_a_rejected_rate_limit_event_reaches_the_backoff` (which fabricates a `MessageParseError` with a `rejected` payload and expects `ProviderRateLimitError`) fail, since the event is now skipped with a warning. Task 9 (commit at line 89) deletes `install_rate_limit_parser_shim` while `tests/providers/sdk/test_agent.py:701,720,743,758` still import it, turning four tests into `ImportError`s. Per the commit-marker rule these must sit at working, tested points. Remedy: interleave the test work \u2014 move the four shim-test deletions into Task 1 (or Task 9, before its commit), and move Task 10's fabricate-to-typed rewrites ahead of Task 6's commit \u2014 or merge Tasks 6\u20139 with Task 10 into fewer, green commits.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The retained `RATE_LIMIT_MARKER` substring path loses its only end-to-end test",
+   "description": "Success criterion 7 (\"a genuine 429 surfaced as a plain `ClaudeSDKError` containing `rate_limit` still triggers backoff \u2014 the substring path is retained, not replaced\") is a deliberate mitigation for this slice's headline risk (D4). Task 10 rewrites every loop-level test that could exercise it \u2014 `test_retries_actually_sleep` (`test_agent.py:526`), `test_stats_accumulate_across_retries` (`:612`), `test_exhausted_rate_limit_raises_a_distinct_error` (`:639`), `test_budget_resets_when_work_comes_through` (`:562`) \u2014 onto typed events, and Task 11 rewrites the one pipeline-path test (`test_sdk_session.py:208`). Afterwards, criterion 7 rests only on Task 3's predicate-level unit tests of `_is_throttle`. A gate left as `RATE_LIMIT_MARKER in str(exc)` in any of the three loops would go unnoticed if the `RateLimitRejected` message happens to contain `rate_limit` (Task 2/Task 6 do not specify the raised message). Consider keeping one loop-level substring-path test, e.g. in `test_sdk_session.py`, where it costs a few lines.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:94"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Commit markers are checkboxes rather than plain `**Commit**:` lines",
+   "description": "All seven markers use the form `- [ ] Commit: \\`chore: ...\\`` \u2014 a checkbox with an unbolded label. The expected form is a plain `**Commit**:` line, never a checkbox; a checkbox makes the marker look like a completable work item and invites it to be ticked independently of the commit landing. This is a formatting-only issue (the repository's own task files are inconsistent here, and `CLAUDE.md` mandates checkboxes for items generally), so no rework is needed beyond de-checkboxing the marker lines.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  }
+ ]
+}

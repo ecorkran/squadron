@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Performance NFR correctly handled without a load test or CI gate",
+   "description": "The slice restates a performance target (D2: \"under one second\" on a Phase 0 build) but also decides that tests assert the caps, not timings. I verified the load-test tier rule exists only in `project-documents/ai-project-guide/project-guides/rules/python.md:57`, whose `paths` frontmatter scopes it to Python files; this is a TypeScript repo, so the rule does not apply and no `tests/load/` task or CI gating task is owed. The cap tests in Task 3T (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`) bound the worst case as D2 requires. No finding.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers use the project's checkbox form, not plain `**Commit**:` lines",
+   "description": "The markers appear as checklist items (`- [ ] **Task 2C: Commit** \u2014 \u2026`) rather than the plain `**Commit**:` lines the review schema names, and the label is a `Task NC: Commit` row. This matches the established convention in the sibling, completed slice file `project-documents/user/tasks/260-tasks.onboarding-consolidation.md`, and AGENTS.md requires checklist format for every item and subitem. Placement is sound regardless: 2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C each sit after a tested, buildable point, no marker follows every task, and none is deferred to the end only.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 9T's guide fixture needs a complete `context_profiles:` block, not only a profile line",
+   "description": "Task 9 step 4 requires a `brownfield-adoption` key from `ContextProfileParser.parseProfiles(content)`, and `parseProfiles` finds nothing unless the file contains a fenced block with the literal `context_profiles:` header (`PROFILE_KEY`). The existing `test-project` fixture's `prompt.ai-project.system.md` has no such block at all, so the new `packages/core/tests/fixtures/brownfield-guide/` copy must add the whole fenced block, not just the profile line Task 9T describes. Without it `parseProfiles` returns `{}` and the D9 success path cannot be exercised. Small specification gap, easily resolved by the implementer.",
+   "location": "packages/core/src/services/ContextProfileParser.ts#parseProfiles"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 3T's entry-cap case creates 20,001 files",
+   "description": "The `MAX_WALK_ENTRIES` case writes 20,001 empty `.txt` files across subdirectories, which is the slowest test in the file. It is nonetheless the only way to exercise the D2 cap that the design's Technical Requirements demand, and the effort is bounded. Acceptable as written; noting it so it is not mistaken for an oversight.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 15 combines automated verification and the live walkthrough",
+   "description": "Slice 260 split \"full verification\" (its Task 16) from \"live runs\" (its Task 17); Task 15 here folds format/lint/typecheck/build/test, the file-size check, the `main`-vs-branch `diff`, four local-build walkthrough steps, a `claude -p` live run, and an MCP-client run into one task. That is a large task, but it is the standard final-verification shape, it carries an explicit `BLOCKED:` escape for the MCP client case, and the live runs are pre-authorized, so no approval step is introduced. Splitting it would be tidier but is not required by the slice.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All success criteria trace to tasks with no gaps",
+      "description": "Every functional requirement has a home: owner/heartbeat at start (Tasks 11, 13, 14), owner-from-creating-write + kill-before-first-heartbeat (Tasks 11, 14, 42 walkthrough step 6), active_step/active_item + finalize clear (Tasks 11, 12), kill -9 \u2192 orphaned + wait exit 8 (Tasks 10, 19, 20), v4 UNOWNED keeps waiting (Tasks 8, 10, 19, 20), stale + WARNING + not in default prune (Tasks 10, 19, 20, 33), foreground stall interrupt + dispatch stalled + next-dispatch-succeeds (Tasks 15\u201318), prune preview/--yes/live-never/unowned/paused protections (Tasks 33\u201339), no per-run warnings + summary line + -v (Tasks 21, 25, 26), TTY fit + piped no-truncate (Tasks 23\u201326), pipelines list aligned + params -v (Tasks 27, 28), pipelines show (Tasks 29\u201331), and the <1 s listing NFR (Task 22a). Technical requirements (liveness row coverage, init_run owner test, RunHeartbeat test, show CLI tests, observer call-order tests, sdk_session fakes, dispatch mapping test, plan_prune/apply_prune tests, fit_widths tests, wait ORPHANED/STALE tests, 199 I/O-bounds 20-running-runs extension, hermetic fixtures, ruff/pyright) all map to their test tasks. Integration requirements (existing 932/199 tests pass, 199 hidden-running tests updated) are addressed in Tasks 17, 22, 26. The traceability table in the Context Summary (D1\u2013D13 \u2192 tasks) matches the actual task content.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Load test and CI gating are handled, not left implicit",
+      "description": "The slice restates the listing-time NFR (`sq runs list --all` under 1 s, a few hundred files). Task 22a adds `tests/load/test_run_listing_scale.py` with a `MAX_LISTING_S = 1.0` wall-clock assertion and a row-count assertion, satisfying both the success criterion and `.claude/rules/python.md`'s load-test tier (which requires latency/resource-bound assertions, not just functional correctness). CI gating is addressed explicitly in the task: the existing `testpaths = [\"tests\"]` in `pyproject.toml:82` collects `tests/load/`, and the CI `test` job runs `uv run pytest` with no marker deselection, so a load-test failure fails CI. The existing load tests (`test_usage_reader_loop.py`, `test_grep_timeout.py`, etc.) are gated the same way, so no new CI wiring task is needed; Task 22a states this rather than leaving it implicit.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 32 has no commit marker; its work folds into Task 35's commit",
+      "description": "Task 32 (StateManager.scan_runs + report-file pattern, with its own inline tests) is a tested, working point but carries no `**Commit**:` marker. Its changes are bundled into Task 35's commit (`feat: add plan_prune selection and protection`). This is acceptable per the commit-marker guidance (markers are not required after every task, and a file with none is acceptable), and the bundle is still a coherent, tested point. No action required; noted for completeness.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing respects dependencies with no circular ordering",
+      "description": "The parts follow the design's Development Approach order: spike (Task 2) \u2192 no-behavior-change RunObserver refactor (Part A, Tasks 4\u20137) \u2192 schema v5 + liveness core (Part B, Tasks 8\u201314) \u2192 foreground stall (Part C, Tasks 15\u201318) \u2192 wait/listing (Part D, Tasks 19\u201322a) \u2192 renderer (Part E, Tasks 23\u201328) \u2192 show/prune (Part F, Tasks 29\u201339) \u2192 docs/issues/verification (Part G, Tasks 40\u201342). Dependencies are honored: ActiveItem is defined in Task 4 before run_liveness (Task 9) and the recorder progress writes (Task 11) consume it; the liveness core (Task 9) precedes its consumers in wait (Task 19), listing (Task 21), and prune (Task 33); the columns renderer (Task 23) precedes the runs/pipelines view moves (Tasks 25, 27) and the prune preview (Task 38, which references \"columns renderer, UI spec\"); resolve_pipeline (Task 29) precedes show (Task 30). Test tasks consistently follow their implementation tasks (test-with pattern). Commit markers sit at tested points throughout.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All success criteria trace to tasks with no gaps",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Load test and CI gating are handled, not left implicit",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 32 has no commit marker; its work folds into Task 35's commit",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing respects dependencies with no circular ordering",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T20:47:33.691907",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 50229,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 262607,
+  "cached_tokens": 166592,
+  "cache_write_tokens": null,
+  "completion_tokens": 14435,
+  "reasoning_tokens": 12783,
+  "duration_seconds": 79.63726650015451,
+  "cost_usd": 0.11263582999999999,
+  "cost_basis": "alias_pricing"
+}

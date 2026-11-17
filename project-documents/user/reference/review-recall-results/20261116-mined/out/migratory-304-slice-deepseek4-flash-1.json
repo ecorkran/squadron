@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Environment is never passed to `engine.tick()` as environmental context",
+      "description": "The parent slice plan entry for (304) states: \"Pass environment context to `SimulationManager` **and `engine.tick()`**.\" The environment architecture repeats this twice \u2014 `500-arch.environment-layer.md:52` (\"The world server passes the environment (or its query method) to `engine.tick()` as the 'environmental context' parameter\") and `500-arch.environment-layer.md:137` (\"slice 304 ... passes the environment's `query()` method to the behavior engine\"). The behavior engine architecture also describes `tick()` as receiving \"the current agent state array, environmental context, and an optional active-agent subset\" (`100-arch.behavior-engine.md:64`).\n\nThis design instead chooses constructor injection into individual forces (`class TerrainResistance.__init__(self, environment)`) and explicitly keeps the `BulkForce` protocol and the `tick(...)` call unchanged. That may be a defensible simplification, but the document never states that the engine's environmental-context parameter is being deferred, nor which slice then owns it. As written, a stated integration point in the plan and in two architecture documents goes unaddressed, and a downstream behavior-engine slice will have no signal that the 304 contract deliberately chose a different mechanism. Either adopt the context-parameter path or record the deferral and its owner explicitly.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`post_tick()` write inputs are undefined \u2014 nothing collects trail deposits or threat mutations",
+      "description": "The parent slice plan assigns this slice to \"Handle post-tick environment writes (e.g., stigmergic trail deposits),\" and `500-slices.environment-layer.md` says \"the world server collects deposit requests from swarm-profile agents after behavior evaluation and passes them to the environment layer.\" The design calls `self._environment.post_tick()` with no arguments (line 190 and line 288), and the data-flow section shows the same. It never defines where `trail_deposits` / `threat_mutations` would originate, nor states that collection is deferred to the behavior-engine slices that produce them. Since `Environment.post_tick` accepts optional arguments, the call is valid, but the write pathway's inputs are left undefined with no named owner \u2014 the exact \"hidden dependency\" the plan entry anticipated. Add an explicit statement of what produces deposits/mutations and whether the pass-through is wired here or deferred (with the owning slice named).",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:176-191"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`client_manager.broadcast()` is shown with an arity/argument list that does not match the completed slice 305 interface",
+      "description": "The data flow shows `client_manager.broadcast(state, tick_number, entity_count)` and the server-integration snippet (line 318) shows `client_manager.broadcast(em.state, tick_number, em.count)`. Slice 305 is marked complete and defines the interface as `def broadcast(self, state: AgentState, tick_number: int) -> None` (`305-slice.websocket-client-layer.md:244`) with the implemented tick body calling `client_manager.broadcast(em.state, tick_number)` (`:295`). This design's own component table also says `clients.py # Unchanged`, so the three-argument call is an error, not a proposed change. It should be corrected so the integration snippet matches the shipped interface; otherwise an implementer may \"fix\" `broadcast` to match the doc.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:107"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_seasonal_parameter` is dead state that contradicts the design's own `step()` implementation",
+      "description": "The State Management section declares `_seasonal_parameter: float` on `SimulationManager`, \"fixed at 0.0 until slice 308.\" The `SimulationManager` code in Implementation Details (lines 252-289) contains no such attribute \u2014 `seasonal_parameter` is a `step()` parameter defaulting to `0.0` and is passed straight to `pre_tick()`. Nothing reads a stored field. This is state nothing uses, and it contradicts the code shown two sections later. Cut the field and keep the parameter; slice 308 can add a stored value when it actually owns the clock.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No failure policy for exceptions raised by `pre_tick()` / `post_tick()` inside the tick loop",
+      "description": "This slice inserts two new calls into the per-tick path of a component whose contract is explicitly fail-fast: `Environment.pre_tick()` raises `ValueError` when `seasonal_parameter` is outside [0, 1] and `Environment.query()` raises `ValueError` for out-of-bounds positions (`500-arch.environment-layer.md` \"Explicit failure at boundaries\"; `500-slice.grid-infrastructure-and-world-coordinates.md` success criteria). The design's `step()` has no exception handling and no statement of what happens when a lifecycle call raises mid-tick \u2014 whether the exception propagates out of the tick body and terminates the loop, or is logged and the tick continues. The architecture requires \"Explicit lifecycle ... No silent failures, no undefined states\" (`300-arch.worldserver-foundation.md`), and slice 308 will begin feeding real seasonal values through this same path, so an out-of-range value is a live possibility rather than a hypothetical. State the policy (fail fast and shut down vs. log-and-continue) and, if fail-fast, say so explicitly.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:252-291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`EnvironmentConfig.seed` is configuration nothing in this slice consumes",
+      "description": "The design concedes the field is unused: \"Not used by the empty environment in this slice, but established now so that layer slices (501+) have it available.\" It nonetheless carries a dedicated dataclass, YAML section, validation branch, five config tests, and two of the five development steps (slice lines 397-402; `304-tasks.environment-layer-integration.md` Section 1). The justification is weak on its own terms: the design also states that layer configuration \"will be added as layers are implemented, likely under `simulation.environment.layers.*` or in a dedicated environment specification file (slice 507),\" and the environment architecture places terrain/biome generation parameters in the environment specification (507), not in server config. So the field is unlikely to be the stable schema it claims to be. Cut `EnvironmentConfig`/`seed` from this slice and let 507 define where construction parameters live, or wire the seed to something that reads it.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:145-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment construction hardcodes `layers={}`, so layers will not \"plug in without server changes\"",
+      "description": "The Overview promises \"server-side orchestration infrastructure ... so that when layers arrive they plug in without server changes,\" and `server.py` is shown constructing `Environment(bounds=world_bounds, layers={})` directly from bounds. Initiative 500's slice plan states the opposite expectation: \"Environment specification timing: ... It must be stable before world server slice 304 integrates\" (`500-slices.environment-layer.md`, Notes), and `500-arch.environment-layer.md` describes the server loading a specification and passing it to the environment constructor. As designed, adding any layer requires editing `server.py` (to build/parse the spec and populate `layers`), which is exactly the change the Overview claims will not be needed. Either acknowledge that the construction site changes when 507 lands, or define the seam now (e.g., a spec-loading function the server calls) so the claim holds.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:89-107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tick-budget/overrun NFR is not restated for the newly added per-tick calls",
+      "description": "This slice adds two calls to the per-tick path. The parent architecture states a target operating rate of 20\u201360Hz, a tick budget derived from `tick_rate`, and a warn-on-overrun policy (`300-arch.worldserver-foundation.md`, \"Tick loop and asyncio coexistence\" and step 6 of the tick cycle). The slice's Technical Requirements state only \"No new external dependencies.\" With an empty environment the added cost is trivially zero, so this is not a correctness gap today \u2014 but one line stating the expectation (lifecycle calls must fit inside the tick budget once layers are registered) would make the constraint explicit for 501-507.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#technical-requirements"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Environment is always present\" is contradicted by `Optional` typing and the `is not None` guards it claims to avoid",
+      "description": "The section argues the environment is never optional and that this \"avoids `if environment is not None:` checks scattered through the codebase,\" yet the property returns `Environment | None` and `step()` contains exactly those guards twice (lines 273, 287). The optionality exists solely for test backward compatibility. That is a reasonable trade, but the stated rationale does not match the code; consider saying the guards exist for test-only construction sites, or make the environment required and update the existing tests.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`interfaces` frontmatter omits 504 (Seasonal Interpretation)",
+      "description": "The frontmatter lists 308 (Temporal Orchestration) as an interface and the design correctly provides the `seasonal_parameter` pass-through, but 504 (Seasonal Interpretation) is the consumer of that value \u2014 `500-slices.environment-layer.md` states the seasonal parameter \"is received from the world server via `environment.update()` (owned by server slice 308).\" Listing 308 without 504 leaves the chain 308 \u2192 304 \u2192 504 incomplete in the declared interface set.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:7"
+    },
+    {
+      "severity": "PASS",
+      "title": "Lifecycle ordering and interface conformance with the delivered slice 500 contract",
+      "description": "The slice builds against the interface 500 actually delivered: `Environment(bounds, layers)`, `pre_tick(tick_number, seasonal_parameter)`, `post_tick(...)`, `WorldBounds(origin_x, origin_y, extent_x, extent_y)`, and the zero-filled `EnvironmentQuery` contract for unregistered layers. The enforced ordering `pre_tick` \u2192 `engine.tick` \u2192 `post_tick`, the decision to run `post_tick` even at zero entities (time-varying layers still advance), and the immutable-during-evaluation rationale all match `500-arch.environment-layer.md`. Dependency direction is correct (server orchestrates the environment; the environment is not aware of the server), and the `WorldBoundsConfig \u2192 WorldBounds` conversion helper keeps the server's config type out of the environment package.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:56-62"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Environment is never passed to `engine.tick()` as environmental context",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`post_tick()` write inputs are undefined \u2014 nothing collects trail deposits or threat mutations",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:176-191",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`client_manager.broadcast()` is shown with an arity/argument list that does not match the completed slice 305 interface",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:107",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`_seasonal_parameter` is dead state that contradicts the design's own `step()` implementation",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No failure policy for exceptions raised by `pre_tick()` / `post_tick()` inside the tick loop",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:252-291",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`EnvironmentConfig.seed` is configuration nothing in this slice consumes",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:145-153",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Environment construction hardcodes `layers={}`, so layers will not \"plug in without server changes\"",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:89-107",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Tick-budget/overrun NFR is not restated for the newly added per-tick calls",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#technical-requirements",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Environment is always present\" is contradicted by `Optional` typing and the `is not None` guards it claims to avoid",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`interfaces` frontmatter omits 504 (Seasonal Interpretation)",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:7",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Lifecycle ordering and interface conformance with the delivered slice 500 contract",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:56-62",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+    "against": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-304-slice"
+  },
+  "timestamp": "2026-11-16T21:35:09.439099",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 206713,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 345948,
+  "cached_tokens": 291968,
+  "cache_write_tokens": null,
+  "completion_tokens": 50962,
+  "reasoning_tokens": 46924,
+  "duration_seconds": 259.33944858284667,
+  "cost_usd": 0.03385904,
+  "cost_basis": "alias_pricing"
+}

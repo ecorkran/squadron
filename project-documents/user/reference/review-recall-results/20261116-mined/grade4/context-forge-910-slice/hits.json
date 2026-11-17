@@ -1,0 +1,22 @@
+{
+ "case": "context-forge-910-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Migration Plan step 1 says \"retyping alone would leave `taskFileParser.ts`'s still-bare-string assignments failing to compile\", and that steps 1 and 2 \"must land together, or the intermediate state fails to build\". `taskFileParser.ts:60-68` assigns the literals `'not-started'`, `'complete'`, `'in-progress'` to a `let` typed `TaskFileResult['inferredStatus']`; retyping that field to `NormalizedStatus` (a superset) accepts the same literals, so retyping alone compiles. **VALID** (minor): contradicts code. Needs: code. The reviewer raised a concern about the earlier wording of this step (step 1 \"may surface type errors\", contradicting \"each step independently buildable\"), so this is the same sentence but not the same point: the reviewer accepted the compile-error premise; I checked it and it is false. The text at `67ab9c58` has already reworded the contradiction away.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [
+     3
+    ],
+    "r06": [
+     4
+    ]
+   }
+  }
+ ],
+ "note": "No borderline calls"
+}

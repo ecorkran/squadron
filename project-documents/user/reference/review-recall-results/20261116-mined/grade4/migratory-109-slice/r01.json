@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Profile-weight lookup reintroduces the per-agent Python loop the slice forbids",
+   "description": "The design builds weights with `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`, which is an n-iteration Python loop inside every `BulkForce.__call__`. This conflicts with three things:\n- **The slice's own criterion** (line 198): \"No Python-level per-agent loops in any `BulkForce.__call__` implementation (the defining constraint)\".\n- **The slice plan entry**: \"O(1) Python overhead regardless of agent count\".\n- **The slice's own verification grep** (lines 220-225): the pattern `for.*eval_indices` matches this comprehension, so step 4 fails as designed.\n\nThe fix is lighter than what is written: build a per-profile table (`np.array([p.cohesion_weight for p in profiles])`, length = number of profiles) and index it with `state.profile_indices[eval_indices]`. That is also the \"lookup tables indexed by profile\" form the architecture names for the GPU path. Drop the \"can be precomputed per tick if needed\" deferral.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Padded-array memory is mis-estimated against the architecture's scale goal",
+   "description": "The design says CSR has \"no benefit at n <= 10K\" and that memory only matters at 100K+. The slice's own premise is that clustering drives neighbor count toward n, so the padded structure is O(n\u00b2):\n- At 10K clustered agents, `indices` alone is 10K \u00d7 10K \u00d7 8 B \u2248 800 MB.\n- Each gathered `(n_active, max_neighbors, 2)` float64 temporary is \u2248 1.6 GB, allocated per force, per tick.\n\nThe architecture's goal is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\", and its GPU consideration asks for \"no dynamic allocation\" in the hot loop. `max_neighbors` also changes every tick, so the shapes are not stable.\n\nThis does not require CSR now. The design should state the real bound (the n \u00d7 k_max product it is valid for) and say what holds it there, either a `max_neighbors` cap or an explicit dependency on 105 plus query-radius limits. The \"regardless of agent count or clustering density\" claim in the Overview should be qualified to match.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Protocol change conflicts with the existing 103 design and is not reconciled",
+   "description": "The slice lists 103 in `interfaces` and says predator-prey forces \"consume this instead of raw lists\". The 103 design (not started) contradicts this in three ways:\n- `FlightForce` and `PursuitForce` take `neighbor_lists` and run per-agent `for list_idx, agent_idx in enumerate(eval_indices)` loops.\n- They self-exclude in-force, and 103 lists \"Forces perform self-exclusion\" as a success criterion, where 109 moves self-exclusion into `build_neighbor_data`.\n- The slice plan gives 103 no dependency on 109.\n\nWhichever lands second breaks the other, and a loop-based 103 landing after 109 would reintroduce the pattern this slice removes. The design should state the ordering and that the 103 design must be revised to the `NeighborData` signature. A one-line note here plus a plan dependency is enough.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-180"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Output scatter and the hard-case semantics are left implicit",
+   "description": "- **Output shape:** the slice 100 contract is a full-population N\u00d72 return with zeros for inactive agents. The cohesion sketch stops at an `(n_active, 2)` array and never shows the scatter back through `eval_indices`.\n- **Hard cases:** the two riskiest rewrites are described only as \"slightly more complex\". `LeadershipForce` does not say what happens when total neighbor leadership weight is zero, and `SeparationForce` does not say what happens at zero distance (coincident agents).\n\nThe equivalence tests will catch errors, but a sentence each would remove guesswork in task breakdown.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:103-125"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Equivalence tolerance versus tick determinism and the N-tick integration test",
+   "description": "Vectorized reductions change summation order, so output is close to the loop version (`atol=1e-12`) but not bit-identical. Same-input-same-output determinism still holds after the slice. Two consequences are unstated:\n- Replays or logs recorded before the slice will not reproduce exactly.\n- The \"positions/velocities after N ticks match\" integration test has no stated N or tolerance, and small differences amplify in flocking dynamics.\n\nState both, or limit the integration test to a small N.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:256-260"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "MomentumForce is classified inconsistently",
+   "description": "Scope and Success Criteria call it one of \"five neighbor-dependent forces\", while line 125 says it \"does not use neighbors at all\". The criterion at line 201 (\"does not regress\") is also unclear, since the force currently loops. Reword to \"five loop-based forces\".",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35"
+  }
+ ]
+}

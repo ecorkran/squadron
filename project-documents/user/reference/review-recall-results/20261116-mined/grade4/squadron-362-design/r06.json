@@ -1,0 +1,75 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Dependency observations need function- and class-level node data that the architecture forbids",
+   "description": "Section 6 says function- and class-level edge endpoints are \"resolved to their owning file's layer rather than dropped,\" so a `calls` edge between two functions counts as an inter-layer signal. The design never says how. The design's own measurement (lines 101-102) shows `layers[].nodeIds` holds only file-level nodes, so function IDs are not in any layer. Resolving them means reading function nodes or parsing their IDs, and the design does neither.\n\nThis conflicts with three sources:\n- The architecture: \"function- and class-level nodes are not read\" (`360-arch:107-110`).\n- The design's own success criterion 9: \"no function- or class-level node is read\" (lines 332-333).\n- The Correction 1 cross-check (lines 138-141), which classifies `nodeIds` entries as function or class nodes.\n\nSection 6 is a required output (`360-arch:162-163`, success criterion 3), so the conflict has to be settled.\n\nOptions: (a) resolve only file-level endpoints and report the count of excluded function/class-endpoint edges as a stated number. This is the cut I recommend. (b) Amend the architecture and SC 9 to allow id/type-only lookups, and define the ID-to-file mapping. Option (b) also needs SC 9 reworded, since the Correction 2 selector already reads `.type` on every node.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218-220"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Edge types for dependency observations are inconsistent",
+   "description": "Line 216 counts inter-layer `imports` and `depends_on` only. Lines 219-220 then count `calls` edges. The design never says what happens to `contains`, `configures`, or `documents`, which the architecture lists (`360-arch:96-97`). \"Ties by `weight`\" also does not say how weight aggregates across multiple edges between one layer pair (sum, max, or mean). Fix: one explicit list of counted edge types and one aggregation rule. This falls out of the FAIL resolution.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"closing observation\" exception reopens the inference the design bans",
+   "description": "The `[INFERRED]` section forbids inference, then allows a \"closing observation\" per section under a test: it must be \"derivable from the table directly above it.\" The example, \"complexity concentrates in the seams where squadron meets an external SDK,\" is not derivable from complexity tiers and file paths. It is interpretation. The architecture defines a claim as structural only when a named field supports it, and as intent otherwise (`360-arch:225-226`).\n\nThe design also adopts the fact/inference discipline from `analyze-codebase-prompt.md` (lines 262-263), then removes the marker that enforces it. Under CLAUDE.md's hallucination-trap rule, a sample sentence like this will be reproduced whatever the data says. Fix: drop closing observations, or allow only a fixed template filled from named fields (for example, \"N of M files are `complex`; the top tier sits in layers X, Y\"). Remove the example.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-248"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "363 cannot reuse the mapping for two of its concept sections",
+   "description": "The design says 363 reuses the mapping \"verbatim\" (lines 36-38, 299-301), and the slice plan assigns 363 Solution Approach and Initial Technical Direction (`360-slices:132-133`). The architecture names two inputs these need that row 5 does not supply:\n- `tour[]` **node ordering** (`360-arch:219`). This needs `nodeIds`, which the architecture says squadron reads (\"reads the tour as structured data with node IDs,\" `360-arch:103`). Row 5 (line 178) selects only `order`, `title`, `description`.\n- `config` nodes for Initial Technical Direction (`360-arch:220`). The design has no row for them.\n\nFix: add `nodeIds` to row 5. Then either add config-node sourcing or record that 363 owns it.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:299-301"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The file-level selector changes the architecture's definition without amending it",
+   "description": "The architecture defines file-level as a closed set of nine types (`360-arch:107-109`). Correction 2 replaces that allow-list with \"not function, not class\" (lines 154-161). That is an open set that admits any future node type carrying a `filePath`. The design says neither correction is \"an upstream contract change\" (lines 115-117). That is true, but the change is to squadron's own definition, which the architecture states.\n\nOn this graph the two selectors agree on 238 nodes, so today's output is the same. They diverge on the next upstream release. Fix: either amend the architecture's file-level definition and its `layers[]` contract line (`360-arch:98`) and record the decision, or keep the allow-list and warn when unknown types appear.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-161"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure modes for the two new file reads are not enumerated",
+   "description": "Coverage adds reads of `config.json` (JSON) and `.understandignore` (text). The design defines only \"unreadable\" (row 7 \u2192 `[GAP]`). It does not say what happens if `config.json` is absent (gap or not?), if it is not valid JSON, or if `.understandignore` is absent. An absent `.understandignore` is the normal state for a project with no ignore file. Lines 230-231 (\"do not report an absent optional setting as a gap\") cover config keys, not the file itself.\n\nThe architecture requires absence and malformation to get different outcomes (`360-arch:135-136`). Each case needs a distinct, observable outcome (a gap marker in the body and provenance, or a warning). Walkthrough step 5 covers only the `meta.json` case. Fix: enumerate absent / unreadable / malformed / empty for each file, and add one walkthrough case per file.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Coverage section exceeds the slice plan entry, and config.json reporting is low-value",
+   "description": "The slice plan entry for 362 (`360-slices:85-109`) does not assign coverage, `config.json`, or `.understandignore`. The architecture supports two of them: `analyzedFiles` as a staleness signal (`360-arch:86`), and `.understandignore` \"when explaining coverage gaps\" (`360-arch:89`). `config.json` is read-only and here holds one key (`outputLanguage`, line 107). Neither 363 nor 364 consumes it.\n\nThe design says 361 \"explicitly deferred\" these three fields (lines 54-55, 222-223). I searched the 361 design for `defer`, `analyzedFiles`, `config.json`, `understandignore`, and `coverage`, and found no matches. Fix: keep the `analyzedFiles` reconciliation (it is the verifiable part, and it matches the architecture). Keep `.understandignore` as one optional line. Drop the `config.json` bullet and its failure modes. Remove the deferral claim, or point it at where it is actually recorded.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:222-231"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Design weight: restated read discipline and repeated figures",
+   "description": "The 473-line design is large for a slice plan entry of about 25 lines rated 3/5 effort. Specific cuts:\n- The \"Read discipline, unchanged\" section (282-293) restates 361's read discipline. It then changes the filter, so \"unchanged\" is inaccurate. Replace it with a reference to 361 plus the one changed filter.\n- The counts 34, 6, and 238 appear in the facts table (98-109), the corrections (132-133), success criteria 4-5 (322-326), and walkthrough steps 1-2 (367-369). Keep them in the facts table and reference that table elsewhere, so a graph refresh changes one place.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The `model:` frontmatter has no defined source",
+   "description": "The `model:` field, inherited from 361 as `{generating model id}`, has no source. The skill would have to self-report its model ID, which invites a plausible value. Walkthrough step 3 checks that it \"is not a placeholder,\" but no mechanism produces the value. Specify the source, or emit a gap marker when it is unavailable.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:380-381"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "\"Retained unchanged, as the architecture requires\" misstates the architecture",
+   "description": "The architecture says the `analyze-codebase-prompt.md` document is \"retained, not superseded\" (`360-arch:369-371`). It does not require the document to be unchanged. The same paragraph adds a cross-reference line, and success criterion 7 expects that line. Reword to \"retained; gains one cross-reference line.\"",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280"
+  }
+ ]
+}

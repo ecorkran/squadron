@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Profile-weight pattern contradicts the slice's own \"no Python-level per-agent loops\" defining constraint",
+   "description": "The Technical Requirements state \"No Python-level per-agent loops in any `BulkForce.__call__` implementation (the defining constraint)\" (line 198), but the Per-Agent Profile Weight Vectorization section presents exactly that: `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` is a Python-level loop over agents, executed inside `BulkForce.__call__`, five times per tick (once per force). The design dismisses it as \"negligible for n=100\" and defers precomputation to \"if needed\" \u2014 but the slice plan's own text says the goal is \"O(1) Python overhead regardless of agent count.\" A strictly better pattern costs the same design effort: build a `(n_profiles,)` weight table once per tick (or once per force call) and index it with `state.profile_indices[eval_indices]` \u2014 a pure array gather, no comprehension. This also removes the redundant per-force recomputation. The constraint as written and the pattern as shown cannot both hold; the design should pick one and make the other conform.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:131-136"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Scaling claim (\"O(1) Python overhead regardless of agent count\") has no verification step beyond n=100",
+   "description": "The slice plan entry for (109) states the slice delivers \"O(1) Python overhead regardless of agent count or clustering density.\" The Verification Walkthrough runs only the default config (100 agents, `query_radius: 50.0`) for 5 minutes. There is no timing assertion at any larger n (e.g., 1K or 10K) that would substantiate the O(1) claim, and no test that clustering density (k \u2192 n) no longer degrades tick duration. This is cheap to add \u2014 a single timing test at a larger n comparing tick duration before and after simulated clustering \u2014 and it is the one property that distinguishes this slice from \"just made 100 agents faster.\" Without it, the slice's headline claim is unverified.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:208-222"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "\"Never dereferenced thanks to mask\" is inaccurate for the gather pattern shown",
+   "description": "The padded `-1` entries *are* dereferenced in the shown gather: `state.positions[neighbor_data.indices]` uses the full padded index array (including `-1`, which wraps to the last agent) before the mask zeroes those rows. This is harmless in the cohesion pattern shown, but the claim should be corrected \u2014 a future force author implementing a pattern that computes distances or validates indices before masking (e.g., SeparationForce's distance filter) could rely on the \"never dereferenced\" statement and produce wrong results or index errors on the padded rows.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:80"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "MomentumForce is misclassified as \"neighbor-dependent\"",
+   "description": "The Technical Scope lists MomentumForce under \"Rewrite of all five neighbor-dependent forces,\" but the Vectorized Force Patterns section correctly states it \"does not use neighbors at all.\" Its success-criteria bullet (line 190) also references equivalence \"for the same input state and neighbor data,\" which MomentumForce doesn't consume. Wording inconsistency only \u2014 the design's treatment of MomentumForce is otherwise correct.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Vectorized template doesn't cover the profile-keyed gather that slice 103 will need",
+   "description": "The \"Provides to Other Slices\" section correctly hands `NeighborData` to future predator-prey and territorial forces. However, the gather-mask-reduce template shown doesn't cover the per-neighbor profile lookup pattern that slice 103's `FlightForce`/`PursuitForce` will need (interaction-matrix-keyed neighbor filtering, which the architecture's GPU section describes as index-based dispatch into lookup tables). Since slice 103 is not started and will consume this slice's interface, a brief note in the template section describing the profile-index gather variant would give that slice a pattern to follow rather than leaving it to rediscover.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:174-181"
+  }
+ ]
+}

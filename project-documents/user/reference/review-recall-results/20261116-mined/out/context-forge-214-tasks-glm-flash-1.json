@@ -1,0 +1,117 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion traces to at least one task",
+      "description": "Cross-referencing the slice design's Success Criteria against the tasks:\n\n- **Functional requirements:** PASS-per-file and exit 0 \u2192 Task 4 + Task 4T real-design tests + Task 5 walkthrough step 1. FAIL with `missing:` lines and exit 1 \u2192 Task 4 output bullets, Task 4T broken-copy test, Task 5 step 2. Doctype failure \u2192 Task 3 (per-file `reason: 'doctype'`), Task 3T (quoted and missing `docType`), Task 4T, Task 5 step 3. Multi-file in-order with later files still checked \u2192 Task 3, Task 3T, Task 4T. All exit-2 triggers (no args, missing/non-regular file, template errors, empty stdout in both modes, valid-before-missing ordering, `cf guides update` message) \u2192 Task 3 preflight bullet (line 77), Task 3T errors bullet (line 91), Task 4 exit-2 bullet, Task 4T exit-2-with-empty-stdout tests, Task 5 step 4. `--json` contract with `template` absolute and `reason` only-when-set \u2192 Task 4 and Task 4T. Worktree-own-guide template \u2192 Task 4 resolution bullets and Task 4T's worktree-aware template test.\n- **Technical requirements:** all four unit-test categories (normalization cases, level mismatch, fenced-block ignore, CRLF) \u2192 Task 2T; real-template file-level test asserting non-empty required list including `## Overview` and `### Verification Walkthrough` \u2192 Task 3T; real-slice-designs command test including the 214 document \u2192 Task 4T; build/lint/full-suite and ~300-line limits \u2192 per-task success criteria plus Task 6. I verified the named anchors exist: `GUIDE_RELATIVE_PATH` at `packages/core/src/guides/types.ts:313`, the template with `<!-- required -->` markers at `project-documents/ai-project-guide/project-guides/templates/slice-design.md`, the bash parity script in `project-documents/ai-project-guide/scripts/`, `parseFrontmatter`, the pure/file split (`frontmatterSchema.js` in `index.ts`, `frontmatterFileValidator.js` in `node.ts`), `withJsonOption`/`withProjectOption` (`packages/cli/src/options.ts`), `handleError` (`packages/cli/src/utils/errors.ts`), and both cited test-pattern files in `packages/cli/tests/commands/`.\n- **Integration requirement** (guide repoints references and removes the script) is explicitly guide-session work per the design's Excluded list; the cf-side enabler is the output-contract parity Task 5 verifies, and the post-release handoff is correctly noted in the Context Summary as not a task here.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, granularity, and commit placement are sound",
+      "description": "Ordering is dependency-correct with no cycles: branch (Task 0) \u2192 constant (Task 1) \u2192 pure validator \u2192 its tests \u2192 commit \u2192 file layer \u2192 its tests \u2192 commit \u2192 subcommand \u2192 its tests \u2192 commit \u2192 walkthrough/parity \u2192 docs/full validation. Each test task immediately follows its implementation (2\u21922T, 3\u21923T, 4\u21924T), and commit markers sit at working, tested points after each implementation+test pair, with conditional commits only for the tasks that may not change files (Task 5C, 6C) \u2014 Task 1's change rides into the 2C commit, which is an acceptable working point. Effort sizes (1\u20133) match the content; no task needs splitting and none is so granular it should merge (Task 0 is the standard branch gate). Test volume matches exactly what the design's Technical Requirements enumerate \u2014 no surplus test tasks. No NFRs appear in the slice, so no `tests/load/` or CI-gating task is owed. I verified no scope creep: Task 2T's `#hashtag` case traces to the design's heading-regex decision, Task 3T's quoted-`docType` case traces to the leniency decision, and the breakdown keeps all four design exclusions (no `cf check` wiring, no guide edits, no content checks, no env override) out of the tasks.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"unreadable file\" preflight branch is implemented but never exercised by any test",
+      "description": "The slice's functional requirement lists \"a missing, non-regular or unreadable file\" among the exit-2 triggers, and Task 3's preflight bullet implements all three checks. Task 3T's error list covers missing (valid-file-then-missing), non-regular (directory passed as file), and both template error cases \u2014 but no task tests an existing-but-unreadable file, so that preflight branch ships unverified. The design's own Technical Requirements don't enumerate an unreadable-file test and the walkthrough doesn't exercise it, so this is a minor gap, not a blocker: adding one line to Task 3T's errors bullet (e.g., a file with permissions stripped, guarded for root-running environments) would close it.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Every success criterion traces to at least one task",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, granularity, and commit placement are sound",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The \"unreadable file\" preflight branch is implemented but never exercised by any test",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T21:04:19.365068",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 65249,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 172815,
+  "cached_tokens": 132800,
+  "cache_write_tokens": null,
+  "completion_tokens": 17903,
+  "reasoning_tokens": 16923,
+  "duration_seconds": 97.84688733401708,
+  "cost_usd": 0.018937749999999996,
+  "cost_basis": "alias_pricing"
+}

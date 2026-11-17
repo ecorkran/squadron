@@ -1,0 +1,75 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Scope exceeds the plan's Part A; `list` and doctor status are the cut",
+   "description": "The plan entry (`project-documents/user/architecture/900-slices.maintenance-and-refactoring.md`, entry 26, lines 454-455) scopes Part A to `sq skills install/uninstall --ide`. The design adds `skills list --ide` (line 37), a shared layout table consumed by `list` and doctor (line 40), per-target doctor skill-pack rows (D8, line 140), and a skill-pack failure hint in three agent skills (line 43). Issue #125 names `list` and doctor, so there is a basis, but the plan entry does not include them. Requested cut: defer `list --ide` and D8 to a follow-up. `installed_path` (lines 104-109) and the status half of `PACK_LAYOUTS` exist only for those two surfaces, so cutting them removes the table's second consumer. The D12 hints and the `sq model list` fix are a few lines each in files the slice already touches, so they can stay. If list and doctor stay in 928, amend the plan entry first.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:37-44"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Install status checks a shared directory by glob, against the design's own receipt rule",
+   "description": "For an agents prefix pack, \"installed\" means the first `root/p-*/SKILL.md` (line 108). The agents root is shared with `install-commands`, the user's own skills, and other sources (line 123). A pack with prefix `p` therefore reports installed for any unrelated skill whose name matches `p-*`. Line 176 states the opposite rule: \"Receipts remain the only authority for what squadron owns in a shared directory (#65).\" The plan entry for 925 (architecture line 425) requires uninstall to remove \"what that target's install wrote and nothing else.\" Agents status should come from the pack's receipt, which the design already writes. The Claude directory check predates this slice and can stay.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:104-109"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Agents install writes into a shared root with no overwrite guard",
+   "description": "Line 52 excludes pack-name collisions as \"pre-existing on the Claude path and unchanged here.\" That holds for Claude, but this slice creates a new pack destination, `~/.agents/skills`, which the design calls shared (line 123). Nothing in the install flow checks for an existing directory before `write_skill_dirs` (line 96). An install can replace a user's own skill directory, and the receipt then records it as squadron's, so a later uninstall deletes the user's content. Concrete case: a `dispatch_file = \"review\"` pack maps to `sq-review/` (line 126), which is squadron's own skill name. The architecture's 918 Part C (lines 316-318) treats loss of user-owned files in a shared command directory as a defect. The design should refuse to overwrite a directory with no receipt, or state why overwrite is accepted, and test whichever it chooses.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:52"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Receipts do not have exclusive ownership of paths or names",
+   "description": "Two gaps in D5:\n\n1. **Shared paths.** D4 adds `analysis/agents` to the AGENTS install-commands bundle (line 132). After this slice, `sq install-commands --ide codex` and `sq skills install analysis --ide codex` both write `~/.agents/skills/analysis-*` under two receipts (`squadron-commands-agents.toml` and `analysis-agents.toml`). Uninstalling one deletes files the other still records. The same double-ownership already exists on the Claude side (line 252), so the design extends an existing gap. It should still state one rule for shared paths and cover it in tests.\n2. **Names.** `receipt_name` appends `-agents` and `-local` to the pack name. Claude pack `x-agents` and Codex pack `x` both map to `x-agents.toml`. The design's receipt-name table (line 233) does not test this collision.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134-135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Integration Points says 925's deliveries are unchanged, but the design changes them",
+   "description": "Lines 213-215 say the slice consumes 925's deliveries \"unchanged in meaning.\" The component table changes `TargetDelivery.receipt_base` to `receipt_suffix` (line 72), changes the `receipt_name` signature (line 72, D5), and changes AGENTS `bundle_subdirs` and `bundled_skill_names` (lines 72, 132). That is a changed contract on a complete slice. The architecture requires the Claude default to stay byte-for-byte unchanged (line 428), which the design can still promise. The Integration Points section should list these as explicit changes to 925's surface and name the 925 callers updated: install-commands, uninstall, and doctor.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:213-215"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure modes are not enumerated for the new install and removal I/O",
+   "description": "The data flow gives the success path. The only named failures are validation errors (lines 94-95) and the `--commands-dir` mismatch (line 194). Not stated:\n\n- **Install.** A write error partway through `write_skill_dirs` (permission, disk full) leaves some skill directories written. The receipt is written last (line 97), so no receipt exists, and receipts are the only authority, so those files cannot be uninstalled. The design needs incremental receipt writes or rollback, and a non-zero exit that names the path.\n- **Uninstall.** A recorded file is already gone (removed by the other receipt above, or by hand). A permission error occurs mid-removal. The receipt does not parse. A skill directory is a symlink. The design says the routine is unchanged (line 75), but nested-directory removal is new in `skills uninstall` (D7).\n\nEach failure needs an explicit handling strategy and an observable signal (WARNING or higher, or a non-zero exit), with a test asserting the signal.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:85-102"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The rule's subcommand list is undecided, and `sq doctor` is missing from the probe table",
+   "description": "Part B requires enumerating every `sq` command that reaches a provider or the network (architecture line 455). D10's table is a candidate list. Three rows say \"confirm by probe\" or \"probe,\" and `sq auth login` is unprobed. The rule pattern (line 146) is a placeholder, `<subcommands from D10>`, and the final list is deferred to the implementation DEVLOG. Probing at implementation time is a sound method. The design should still commit to a provisional list and say what happens if a probe contradicts it.\n\n`sq doctor` is absent from the table. The 905 entry (architecture line 94) describes doctor checking whether each provider profile is \"reachable,\" which suggests a network call. I have not verified doctor's behavior. If it does reach the network, it fails under the sandbox, and the enumeration is incomplete. The table should probe it or state why it is excluded.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Test plan misses the new paths and does not require a real-world parser fixture",
+   "description": "- Line 233 says the shared removal routine is covered because \"existing uninstall-commands tests cover it by moving with it.\" Those tests exercise the flat `sq/` case. Nested skill-directory pruning is the reason D7 exists, and it is new in `skills uninstall`. It needs its own test.\n- D3 parses SKILL.md YAML frontmatter, but the design does not name the parser or its inputs. The project's parsing rules (project CLAUDE.md, \"Parsing & Pattern Matching\") require lenient handling of format variation and a test fixture taken from real content. Name the parser and use the bundled `analysis` SKILL.md files as the first fixture.\n- The collision and overwrite behaviors above, and the failure-mode signals, need tests (per the review rule that each failure mode has one asserting its observable signal).",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:231-235"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "D9 departs from the plan's named file, and the rule's justification understates its reach",
+   "description": "The plan names `~/.codex/rules/default.rules` (architecture line 455). D9 writes `squadron.rules` and gives a sound reason. The design should say it supersedes the plan entry, so the plan can be amended. The justification in the template (line 148), \"squadron commands that call a model provider or GitHub,\" does not match what the rule reaches. `sq run` runs pipelines that include commit steps (architecture 911, line 152) and tool-enabled agents. `sq skills install` clones an arbitrary GitHub source. The \"what it authorizes\" paragraph (line 153) should describe that reach, not only the provider and GitHub wording.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:142-153"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Risk is not stated, and the plan's Low rating does not cover the new shared-root writes",
+   "description": "The plan says Risk: Low (architecture line 456). The design adds writes to a shared root, a new overwrite path, and a changed uninstall routine built on 925. The architecture rated a comparable destructive-path change Medium (918, line 326). The design should state its own risk under Special Considerations and cite the points above that raise it.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:312-315"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Malformed judge block failure mode claims a test in T8 that T8 does not contain",
+   "description": "The Coverage Check section states \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8),\" and the slice design's Failure Modes table (line 242) lists this as a distinct boundary with an explicit test column: \"malformed judge block \u2192 flagged, not silently defaulted.\" However, T8's checklist contains no malformed-judge-block test case. T8 covers parametrized direction bands, floor-gated loosening, non-floor-gated tightening, unversioned refusal, and `read_current_thresholds` for registered/unregistered templates \u2014 but not a template whose `judge:` block has a non-numeric floor value. A junior AI following T8's checklist will not write this test, yet the coverage check gives false assurance that it is covered. Fix: add a checklist item to T8 such as \"malformed `judge:` block (non-numeric `pass_floor`) \u2192 `read_current_thresholds` flags the template with a WARNING and falls back to `resolve_thresholds`' documented merge, never silently defaults.\"",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Lapsed-graduation signal mechanism is deferred to the implementer",
+   "description": "T13 states the lapsed-graduation case must be \"distinguishable from 'config not yet due for sampling' at the CLI layer\" but leaves the mechanism open: \"return enough information (or have the CLI re-derive it via `find_graduation` against current results).\" T14 mirrors this flexibility: \"assert on whatever signal T13 produces for this \u2014 a return-value field, a paired lookup, or a logged WARNING.\" While the success criterion (lapse distinguishable from exhausted) is clear, the exact return-type shape is unspecified, which risks T13 and T14 being implemented by different agents with incompatible contract assumptions. Not blocking \u2014 the success criterion is testable either way \u2014 but pinning the signal (e.g., a `lapsed: list[GraduatedConfig]` return field or a documented side-channel) before implementation would prevent a cross-task integration mismatch.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:139"
+  }
+ ]
+}

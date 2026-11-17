@@ -1,0 +1,89 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Architectural contradiction: engine \"register/remove agents\" is owned by the server",
+   "description": "The \"Envisioned State\" section states: \"the engine presents a narrow interface: tick the simulation forward, query agent state, register/remove agents.\" But the same document's Scope says \"The engine does not own persistence, networking, or rendering,\" and slices 302/303 place agent registration, ID assignment, and removal in `EntityManager` (server side), with `engine.tick()` mutating a borrowed `AgentState` array. The engine API in the slice design (`tick(state, profiles, spatial, dt, forces, active_indices=None)`) has no register/remove methods. This contradiction will mislead downstream architecture work unless resolved.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "\"GPU-compatible BulkForce\" claim is not supported by the actual interface",
+   "description": "The document claims the BulkForce pattern is \"structurally identical to a GPU compute dispatch\" and requires \"no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop.\" The slice-design `BulkForce` protocol (slice 100) and every implemented force (slice 101) contradict this: the signature is `BulkForce(state, neighbor_lists, profiles, active_indices)` where `neighbor_lists: list[NDArray[np.intp]]` \u2014 a Python list of variable-length NumPy arrays built by an explicit Python-level loop over active agents in `tick()`. GPU compute kernels cannot consume variable-length neighbor lists without flattening/padding, and the per-agent Python loop is exactly the \"Python-level per-agent branching\" the architecture forbids. Either the architecture needs to describe the padded/flattened neighbor representation that makes GPU dispatch real, or the GPU claim needs to be downgraded to \"the BulkForce abstraction *could* be redesigned for GPU, but v1 is CPU-only.\"",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations (GPU compute path for force accumulation)"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`accelerations` array is dead state in `AgentState`",
+   "description": "The architecture describes engine state as \"positions, velocities, profile indices.\" The slice-design and task list for slice 100 allocate a fourth array `accelerations (N\u00d72 float64)`. No force in slice 100 or 101 writes to it; integration in slice 100 uses `velocity += force*dt` directly. CLAUDE.md's \"resist adding complexity\" principle and \"never use silent fallback values\" (the accelerations array is initialized to zeros and silently never used) apply. Either remove the array or document a concrete consumer (e.g., explicit acceleration storage for logging/replay, force accumulation staging).",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State (referenced via slice 100, `state.py`)"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No world-boundary handling in the engine",
+   "description": "The world server architecture mentions \"boundary-driven (entities leaving world bounds)\" as a future event source and treats world bounds as a configured simulation parameter. The behavior engine architecture does not address what happens when an agent's integrated position falls outside world bounds. `BruteForceQuery` and the integration step are bounds-agnostic; nothing in the architecture specifies whether the engine clamps, wraps, reflects, ignores, or leaves boundary enforcement to the caller. Slice 100's success criteria don't cover it either. This needs an explicit decision because it affects determinism, replay, and the spatial query's correctness at edges.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No error-handling/failure-mode strategy for the tick function",
+   "description": "The architecture states the tick \"receives\" inputs and \"returns\" state, but never specifies behavior when invariants are violated: mismatched array sizes between `state`, `profiles`, and `active_indices`; profile index out of range; `forces` list containing non-`BulkForce` objects; empty `profiles` list with non-empty `state.profile_indices`; NaN/Inf inputs from a buggy force implementation. CLAUDE.md mandates explicit failure (\"Never use silent fallback values\"), but the architecture provides no contract for what `tick()` does in these cases. Downstream slices/tests will have to invent their own semantics.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Envisioned State"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`BehavioralProfile` extension strategy is an unaddressed breaking-change pattern",
+   "description": "The architecture defines profiles as \"a set of named weights, ranges, and thresholds\" \u2014 a flat extensible bag. In practice (slice 101) `BehavioralProfile` is a `@dataclass` with no defaults, and each new archetype slice adds required fields, breaking every existing instantiation site (slice 101 explicitly notes: \"Adding new required fields... will break any existing instantiation\"). The architecture doesn't describe how profiles compose, version, or extend without global recompilation. With five anticipated archetypes plus future ones, this becomes a perpetual breaking-change treadmill. A profile-as-dict with schema validation, or profile-composition (sub-profiles like `FlockingProfile`, `PredatorProfile` aggregated at runtime), would address this \u2014 but the architecture never considers it.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles (Profile as data)"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Profile-to-profile interaction rules have no design",
+   "description": "The architecture identifies the \"combinatorial dimension to the parameter space\" of cross-profile interactions but provides no mechanism. How does a CohesionForce know that one neighbor is a wolf and another is an elk and produce qualitatively different separation? Slice 103 (predator-prey) is marked not_started and the slice plan says only \"Profile-to-profile interaction rules define how agents of different archetypes affect each other's forces.\" The `BulkForce` protocol receives `profiles: list[BehavioralProfile]` and `state.profile_indices`, but `BulkForce` implementations don't have a defined mechanism for asking \"is this neighbor a predator?\" There is no role/mask/tag field on profiles, no interaction matrix, no per-pair rule registry. This is a load-bearing decision the architecture punts on but that no slice has claimed.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations (Inter-archetype interactions)"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`np.delete` in `remove_agent` violates hot-path performance intent",
+   "description": "The architecture's design goals include \"Support tens of thousands of agents at full behavioral fidelity on a single CPU process.\" The slice 302 design for `EntityManager.remove_entity` calls `AgentState.remove_agent()` which the slice notes uses `np.delete()` \u2014 this allocates a fresh array and copies the entire population on every removal. With multi-resolution simulation involving entity lifecycle events (future work per the world server architecture), removals could become frequent. The architecture should specify whether agent removal is a hot path (and thus precludes `np.delete`) or a rare operation. Right now the slice and the architecture don't agree on the scale/frequency of removals.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals (Efficient large-scale evaluation) \u2014 contradicted by slice 302"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Forward-looking GPU/multi-machine scaling discussion is over-specified for v1",
+   "description": "Roughly a third of the architecture document discusses scaling tiers from 1M\u20134M+ entities, GPU compute kernels, multi-machine distribution, predictive partition rebalancing, and \"the BulkForce pattern \u2014 structurally identical to a GPU compute dispatch.\" None of this is in the near-term slice plan (100, 101, 102, 103, 104, 105, 108). CLAUDE.md says \"resist adding complexity. Ensure it is truly necessary.\" The architectural principles section would be stronger if it confined itself to: (1) the subset-evaluable tick contract that *enables* future scaling and (2) the interface boundaries that *should not preclude* it. The detailed multi-tier discussion reads as premature optimization baked into the design, and the GPU claim is unbacked (see the FAIL above). Drop the tier-by-tier narrative and keep the interface guarantees.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals / #Technical Considerations (multi-resolution, GPU compute path)"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "`Force` per-agent protocol is dead weight alongside `BulkForce`",
+   "description": "The architecture introduces force accumulation as the central abstraction but doesn't explain why both a per-agent `Force` protocol and a bulk `BulkForce` protocol exist. Slice 100 defines both; slice 101 (and every subsequent behavioral slice) implements only `BulkForce`; the slice notes the per-agent `Force` exists for \"testing, reference implementations.\" If the only consumer is tests, the production architecture shouldn't define it \u2014 testing can construct forces directly. The \"tick loop prefers the bulk variant when available\" dispatch logic isn't actually implemented (Protocol-based dispatch can't distinguish them at runtime cleanly). This is a two-protocols-for-one-concept situation that should collapse to `BulkForce` only.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Architectural Principles (Forces, not decisions)"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Tick determinism claim is undermined by non-seeded RNG in the server's spawn path",
+   "description": "The architecture lists \"Tick determinism\" as a goal: \"Given the same state and inputs, a tick produces the same outputs.\" The tick function itself is deterministic (verified in slice 100 tests). However, slice 302 explicitly states: \"Initial entity positions use `numpy.random`. For now, no seed is configured (non-deterministic).\" So two runs from identical configuration produce different initial states. The architecture doesn't acknowledge that engine determinism is necessary but not sufficient for run-to-run reproducibility, and it doesn't specify where the seed enters (server-level RNG, or environment seed propagated to entity spawning). This is a gap between the goal and the system.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Design Goals (Tick determinism)"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Float32 vs Float64 internal precision is deferred in architecture but decided in slice",
+   "description": "The architecture discusses the float32/float64 trade-off at length but concludes only that \"the engine should define its internal precision and provide an efficient conversion path.\" The slice design (slice 100) decides float64 internal + float32 at serialization boundary. The architecture should state the decision; downstream readers shouldn't need to cross-reference slices to learn what precision their forces will operate on.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#Technical Considerations (State serialization boundary)"
+  }
+ ]
+}

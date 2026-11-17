@@ -1,0 +1,12 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Sub-second NFR verified by cap tests, not a load test",
+   "description": "The slice design restates a sub-second detection NFR (D2: \"detection adds under one second to a Phase 0 build on a local disk\") and explicitly resolves it with cap tests rather than timings: \"Tests assert the caps, not timings.\" The task breakdown honors that decision via Task 3T's early-exit and `MAX_WALK_ENTRIES` cases, and the task file's Context Summary documents the rationale (the `tests/load/` tier is `rules/python.md`-only). No load test task is required by the slice design's own decision; flagging this only so reviewers see the linkage between the NFR and the cap-based verification.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

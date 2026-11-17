@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 1 mutates a shared fixture whose blast radius the breakdown does not account for",
+   "description": "Task 1 adds one indexed and one unindexed `[~]` line to `sample-slice-plan.md`, which is consumed by five other test files. Task 5 only plans to update the `totalSlices`/`completedSlices` assertion (`slicePlanParser.test.ts:44`). Two consequences are unaddressed:\n1. The new *unindexed* line enters `parseSlicePlan()`'s unindexed branch with no prior unindexed match in that fixture, so `unindexedCounter` yields `index: 1` and the index-ascending sort (`slicePlanParser.ts`, `entries.sort((a, b) => a.index - b.index)`) puts it **first**. That breaks the pre-existing exact-shape assertions `slicePlanParser.test.ts:12` (`entries[0]` \u2192 index 101) and `:22` (`entries[2]` \u2192 index 103), and contradicts the task's stated expectation that lengths/indices shift only by \"two new fixture entries alongside the existing 5\".\n2. `slicePlanParser.test.ts:126` (\"tags every entry indexSource: 'explicit' when the plan uses only the indexed format\") and `ArtifactIntrospector.test.ts:52` (`expect(result.totalSlices).toBe(5)`) also fail; neither is mentioned in Task 5, whose stated success criterion is scoped to `pnpm --filter @context-forge/core test -- slicePlanParser` only.\nThe slice design explicitly permits the alternative (\"extend the existing `sample-slice-plan.md` fixture **or add a sibling fixture**\"). Put the `[~]` lines in a new sibling fixture (e.g. `deprecated-slice-plan.md`) so the shared fixture's five consumers are untouched, or enumerate the four affected assertions as explicit Task 5 steps.",
+   "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 9's `derivedStatus` initializer change is a no-op with an incorrect rationale",
+   "description": "Task 9 justifies its second edit \u2014 the initializer at `slice.ts:91` (`entry.isChecked ? STATUS.Complete : STATUS.NotStarted`) \u2014 by claiming that \"a filesystem error would incorrectly report it as `not-started` instead of `deprecated`\". That is not what the code does: every path through the `try` assigns `derivedStatus` (lines 122 or 124), and any throw \u2014 including `detectDocuments` failing \u2014 lands in `catch { derivedStatus = 'degraded'; }` (lines 125\u2013127). The initializer value can never be observed, so the proposed change alters nothing while attributing a bug to the code that does not exist. Either drop this sub-step, or (if the fallback is being made robust for some future refactor) state that intent without the incorrect failure claim.",
+   "location": "packages/cli/src/commands/slice.ts:91"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 12 cannot verify its success criterion in the harness it targets",
+   "description": "Task 12 places the `plan-status-vs-entries` test in `ConsistencyChecker.test.ts`, whose harness mocks both `node:fs/promises` (module-scope `vi.mock` providing only `readdir`) and `parseSlicePlan` via `makeMockIntrospector` \u2014 the checker under test consumes only those mocks. `rulePlanStatusVsEntries` (`ConsistencyChecker.ts:726`) reads nothing but `completedSlices`/`totalSlices`, which a mock supplies verbatim, so the test as described (\"a slice plan with frontmatter `status: complete` where every entry is either `[x]` or `[~]`\") passes identically before and after Task 4's arithmetic change. It therefore does not demonstrate the slice design's success criterion (\"`plan-status-vs-entries` \u2026 do not false-positive when \u2026 the only non-checked entry is a `[~]` deprecated one\"). Make the task state the hand-constructed `SlicePlanResult` counts explicitly as the real parser produces them (with a cross-reference to Task 4), or move the end-to-end check to a real-filesystem harness such as the scratch-project pattern in `packages/cli/tests/commands/list-derived-status.test.ts`. Also note the design names `arch-status-vs-plans` alongside `plan-status-vs-entries`; both share the same `allComplete` arithmetic, so say explicitly whether the one case is accepted as covering both.",
+   "location": "packages/core/tests/introspection/ConsistencyChecker.test.ts:29-33"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Tasks 2\u20134 are granular enough to merge",
+   "description": "Tasks 2, 3 and 4 are each a 1\u20133 line edit inside the same `parseSlicePlan()` function, share a single test task (5) and a single `**Commit**:` marker, with no verification between them. Merging them into one \"parse `[~]` as a deprecated plan entry\" task would read cleanly and lose nothing; keeping them split is acceptable but adds no reviewable boundary.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 10's commit lands Task 8's core change before its test exists",
+   "description": "Task 10's `feat(core,cli): thread plan-line deprecated status through resolveEntryStatus and cf list slices` commits Task 8's `WorkflowNavigator.resolveEntryStatus` change, but the only test for that core path is Task 11, which comes after. The CLI test in Task 10 exercises `slice.ts`'s inline duplicate, not `resolveEntryStatus`. Swapping Tasks 10 and 11 (or re-scoping the commit to the CLI change only) would keep each commit marker at a point where the code it introduces is covered.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Plan-only entries in `ProjectModelBuilder` will not report `deprecated`",
+   "description": "`buildModel()` fills planned-but-unwritten slices with `deriveEntryStatus({ isChecked: entry.isChecked })` (and, in the plan-only initiative loop, with raw `entry.status`). With Task 4 adding fallback resolution elsewhere, a `[~]` plan line will still surface as `not-started` in model-driven output (e.g. the `archListFromModel` path). This is outside the slice design's stated Scope and outside every success criterion, so no action is required \u2014 recorded only so the divergence from the `\u03a3` deprecated rendering in `cf list slices` is a known, deliberate boundary rather than a surprise.",
+   "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445"
+  }
+ ]
+}

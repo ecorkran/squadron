@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`_select_arch()` keys off OS, not GPU availability \u2014 Linux without CUDA crashes at startup, contradicting A7",
+      "description": "The updated `_select_arch()` returns `qd.cuda` for `platform.system() == \"Linux\"` unconditionally and only warns/falls back for platforms that are neither Darwin nor Linux. The parent slice plan's (146) entry requires: \"`quadrants` uses Metal on macOS and CUDA on Linux; **if neither is detected** it warns and falls back to `qd.cpu`\" \u2014 detection of GPU availability, not of the OS string. The doc's own Open Notes (line 382) state that `qd.init()` raises when \"CUDA driver absent\", and `setup()` propagates that exception, so on a Linux host with no CUDA the server exits at startup. A7 (\"A host with no Metal and no CUDA starts successfully with `backend: quadrants` \u2026 falls back to `qd.cpu`\") is therefore unachievable as specified \u2014 a Linux laptop or `ubuntu-latest` CI runner is the most likely \"no GPU\" case.\n\nThis interacts badly with the default: because `ComputeConfig.backend` defaults to `quadrants` (lines 51-63), every existing config that omits the block \u2014 including `config/default.yaml`, `tests/load/conftest.py`, and the `ServerConfig` fixtures in `tests/test_server.py` / `tests/test_main.py` \u2014 now requires a working GPU. Combined with `addopts = \"-m 'not load'\"` and the CI workflow running `uv run pytest -m load` on `ubuntu-latest` (no GPU), the existing jobs would begin failing rather than skipping. The design specifies no test/config migration and no capability probe.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-118"
+    },
+    {
+      "severity": "FAIL",
+      "title": "REFLECT's velocity correction is silently dropped on the GPU path",
+      "description": "Line 209 states: \"For `BoundsPolicy.REFLECT` and `BoundsPolicy.SOFT`: same sync-back pattern.\" That pattern (line 213) is `notify_positions_modified(...)` \u2192 `state.upload_positions(...)` \u2014 positions only. But `apply_bounds_policy` for `REFLECT` mutates **both** positions and velocities (`_apply_reflect` in `src/migratory_server/bounds_enforcement.py` writes `positions[x_low_mask, 0]`, `velocities[x_low_mask, 0]`, etc.). On the GPU path the arrays passed in come from `TickResult.from_quadrants_fields` and are host-side copies, so the velocity flip affects only the serialized wire message \u2014 the device keeps the outward-pointing velocity and the next tick integrates the agent back out of bounds. The client and the simulation would then disagree about velocities. A4 (\"All four `BoundsPolicy` variants produce valid \u2026 positions after 100 ticks on the GPU path\") fails for `reflect` as specified.\n\nEither the sync-back must carry velocities too (the driver's public interface currently has no such method), or `reflect` should be rejected at startup on the GPU path. Given the doc's own note that reflect/soft \"are rare at the N values this slice targets,\" the lighter option \u2014 fail explicitly for non-`wrap`/non-`open` policies on the `quadrants` backend, per the project's \"fail explicitly, never silent fallback\" rule \u2014 would remove `_positions_dirty` complexity that only `wrap` actually needs.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-213"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Soft bounds and predator-prey interactions are silently ignored on the GPU path",
+      "description": "`build_forces()` appends a `WorldBoundsRepulsor` when `world_bounds.policy is BoundsPolicy.SOFT`, and appends `FlightForce`/`PursuitForce` when `simulation.interactions` is non-empty (`src/migratory_server/force_builder.py`). The fused kernel accumulates only cohesion, separation, alignment, leadership, momentum and propulsion (`quadrants_fused_kernels.py::fused_force_integrate_kernel`) \u2014 it has no repulsor and no predator/prey terms. Meanwhile `apply_bounds_policy` returns immediately for `SOFT` (\"No-op: WorldBoundsRepulsor handles this via forces\"), so on the GPU path soft bounds are enforced by *nothing*: agents drift outside `[0, width] \u00d7 [0, height]`. The doc asserts the opposite at line 209 and in A4, and even plans a pointless per-tick host\u2192device upload for a policy under which `apply_bounds_policy` modifies nothing.\n\nThe same silent-divergence applies to configured `interactions`, which the doc never mentions at all. This violates the architecture's \"Preserve behavioral fidelity across scaling tiers\" goal (140-arch \u00a7Design Goals) and the project rule against silent fallbacks. The design needs an explicit supported-configuration gate for `backend: quadrants` (reject `soft` and `interactions` at startup with a clear error, or implement them), stated in \u00a7Scope.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-213"
+    },
+    {
+      "severity": "FAIL",
+      "title": "New-client SNAPSHOT reads `EntityManager.state`, which the GPU path never updates",
+      "description": "A3 claims \"Downstream code (`client_manager.broadcast`, sim logger) requires zero changes\" and \u00a7Scope/\u00a7Architecture claim the server call site is unchanged. But the connect-time snapshot path is a *separate* consumer of engine state: `make_snapshot_builder(em, world_bounds)` closes over the entity manager and calls `TickResult.from_numpy_state(em.state, em.count)` (`src/migratory_server/clients.py`). On the CPU path this is current because `tick()` mutates those arrays in place. On the GPU path nothing writes back to `em.state`: `setup_from_server()` uploads from it once, downloads go into a fresh `TickResult`, and `notify_positions_modified()` stores the array inside the driver. Every client connecting after the first tick therefore receives a SNAPSHOT of the spawn-time state, while subsequent STATE_UPDATEs carry correct GPU positions \u2014 a visible \"jump\" on connect and a divergence between the two message types.\n\nThe design needs to specify one of: write downloaded positions back into `em.state` each tick, or change `make_snapshot_builder` to consume the latest `TickResult` (which re-opens the `TickResult` lifetime rule the slice 140 contract documents). This is a genuine missing integration point, not a restatement, and should be listed in \u00a7Files Changed.",
+      "file_ref": null,
+      "category": "integration-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:328"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The production\u2192bench dependency is not eliminated by moving `GpuAgentState`",
+      "description": "The Open Note claims the move \"eliminates the production\u2192bench import dependency before it is created.\" It does not. The driver's `step()` must run `build_spatial_hash(state)` and `fused_force_integrate_kernel(...)` (line 122), and those live in `src/migratory/bench/backends/quadrants_fused_kernels.py`, which is not moved and is explicitly declared unchanged (\"The bench backends \u2026 are **not changed**\", line 301). So `src/migratory_server/gpu_driver.py` imports the bench package regardless. Additionally, the relocated module still carries bench dependencies: `quadrants_fused_state.py` imports `migratory.bench.backends.numpy_backend._build_initial_state` and `migratory.bench.workload.Workload` (for the unchanged `setup(workload)`), so `src/migratory/gpu/agent_state.py` would import `migratory.bench.*` at module scope \u2014 a production package depending on the bench harness.\n\nThe design should either move the kernel module (and split the workload-dependent initializer) into `migratory/gpu/`, or state plainly that the production GPU path depends on the bench kernels for this slice and record it as accepted debt with the cut-over deferred.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:383"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Files Changed understates the move's blast radius; A5 is inconsistent with it",
+      "description": "The Files Changed table lists only `quadrants_fused_backend.py` as updating its import, then states the bench backends are \"not changed\" and A5 requires \"All existing bench tests pass without modification.\" But `src/migratory/bench/backends/quadrants_fused_kernels.py` imports `GpuAgentState` from `quadrants_fused_state`, and `tests/bench/test_quadrants_fused.py` and `tests/bench/test_quadrants_fused_kernels.py` import `from migratory.bench.backends.quadrants_fused_state import GpuAgentState` directly. Moving the module without a re-export shim means at least three more files change or those tests fail to import \u2014 so either A5's \"without modification\" is false, or a compatibility shim (a thinner, cheaper option for this slice) must be specified.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sync_from_entity_manager()` is under-specified for a count change",
+      "description": "`sync_from_entity_manager()` is documented only as \"Re-upload CPU state after spawn/despawn,\" and `setup_from_server()` derives `n` from `entity_manager.count` \u2014 the per-agent fields and `sorted_agent_ids` are sized to that `N`. A count change is therefore not a data re-upload: it requires field reallocation (and Quadrants recompiles kernels on shape change, as the slice 145 design already documents), plus re-binding of the module-global field aliases that `_bind_state_fields` maintains. The doc also only justifies \"`qd.init()` called once at server startup\" (line 32); it says nothing about the cost or recurrence of reallocation. Separately, nothing in the live server changes the count after startup (grep shows `spawn_population` only, at `server.py` startup; `spawn_entity`/`remove_entity` have no production call sites), so this machinery is currently unexercised even though plan (146) assigns the behavior \u2014 specify the resize semantics and note the slice ships it unexercised by the live loop, or defer it with the plan's intent recorded.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Driver tests cannot run as specified: \"CPU-only\" vs a GPU-only setup, in a shared pytest process",
+      "description": "Line 307 says \"All tests are CPU-only (skip if `quadrants` not importable or if GPU not available),\" while test 5 is \"GpuSimulationDriver.setup + step (GPU-required, skip if unavailable)\" and the driver has no CPU arch on Darwin/Linux by construction (see the first finding). Worse, Open Note line 382 states that a second `qd.init()` in the same process is undefined behavior and that tests exercising `setup()` \"must either use `finalize()` + process isolation or be marked to run in a subprocess\" \u2014 yet `tests/server/test_gpu_driver.py` places tests 5\u20138 in the ordinary in-process suite that `pytest tests/ -q` runs alongside everything else. As written, the slice's core paths are skipped everywhere except a GPU dev box, and on a GPU host they risk the UB the note itself warns about. Specify the isolation mechanism (subprocess-marked, or a single process-scoped setup/teardown fixture) and correct the \"CPU-only\" claim.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-316"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config error type contradicts the existing validation convention and the walkthrough's expected output",
+      "description": "Tests 3 and 4 specify `ValueError` for an invalid backend and an out-of-range `subdivision_factor`, and the error walkthrough (line 356) expects the server to \"exit with a clear `ValueError` naming the invalid value.\" The established convention in `src/migratory_server/config.py` is `ConfigError` with a full field path (e.g. the analogous `simulation.spatial.backend` validation), and `__main__.py` catches only `ConfigError`, printing \"Configuration error: \u2026\" and exiting 1. As written, the specified tests would fail and the walkthrough would observe a different message than documented. State `ConfigError` and the expected `simulation.compute.backend` field path.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:311"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`_select_arch()` keys off OS, not GPU availability \u2014 Linux without CUDA crashes at startup, contradicting A7",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-118",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "REFLECT's velocity correction is silently dropped on the GPU path",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-213",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Soft bounds and predator-prey interactions are silently ignored on the GPU path",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-213",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "integration-boundary",
+      "raw_category": null,
+      "summary": "New-client SNAPSHOT reads `EntityManager.state`, which the GPU path never updates",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:328",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "The production\u2192bench dependency is not eliminated by moving `GpuAgentState`",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:383",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Files Changed understates the move's blast radius; A5 is inconsistent with it",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:301",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`sync_from_entity_manager()` is under-specified for a count change",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Driver tests cannot run as specified: \"CPU-only\" vs a GPU-only setup, in a shared pytest process",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-316",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Config error type contradicts the existing validation convention and the walkthrough's expected output",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:311",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-16T21:39:56.987678",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 439079,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 1358827,
+  "cached_tokens": 1143552,
+  "cache_write_tokens": null,
+  "completion_tokens": 109264,
+  "reasoning_tokens": 103993,
+  "duration_seconds": 573.6330325419549,
+  "cost_usd": 0.08971524,
+  "cost_basis": "alias_pricing"
+}

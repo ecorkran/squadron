@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Numba backend misattributed to slice 144",
+   "description": "The slice doc states \"Slice 144 registers `numba` by adding `bench/backends/numba_backend.py`\" and \"Numba backend runner (slice 144 / 118 territory; one-row registry add)\". Per the parent slice plan `140-slices.simulation-scaling.md:30` (line 28\u201329 in the `Anticipated Cross-Initiative Work` section) and `100-slices.behavior-engine.md`, the Numba Force JIT slice is **118**, not 144. Slice 144 is Quadrants Force Kernels. The two slice numbers are conflated in three places: the in-scope bullet about the Numba runner, the architecture section's \"Slice 144 registers numba\" line, and the integration-requirements success criteria (\"Slice 144 can register a `numba` backend...\"). Correct this \u2014 Numba belongs to slice 118 in plan 100; the integration requirement should say \"slice 118 can register a numba backend\" and the architecture section should attribute the Numba runner to slice 118.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:54"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Quadrants registration slice attribution is muddled",
+   "description": "The slice doc says \"Slice 142/145 registers `quadrants` similarly\" and \"Slice 142/145 registers `quadrants`\" and the integration-requirement reads \"Slice 142 can register a `quadrants` backend by adding one file under `src/migratory/bench/backends/`\". Per the parent plan, slice 142 is the Quadrants Substrate Evaluation (registers a CohesionForce-only Quadrants runner, per-force timings introduced here), slice 143 is the Quadrants Spatial Kernel (a SpatialQuery backend, not a bench backend), slice 144 is Quadrants Force Kernels (registers a full Quadrants force runner), and slice 145 is Quadrants Integration and Tick Pipeline (registers the full-tick Quadrants runner). The `/` grouping obscures which slice adds what. Recommend naming each registration point explicitly so slice 142 / 144 / 145 designers know which harness call site they own.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:54"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Workload schema omits PropulsionForce",
+   "description": "The workload YAML example and the \"engaged forces\" list name `cohesion / separation / alignment / momentum / leadership` (five forces). The parent plan's slice 144 description (`140-slices.simulation-scaling.md:34`) explicitly enumerates \"CohesionForce, SeparationForce, AlignmentForce, MomentumForce, LeadershipForce, **PropulsionForce**\" as the six forces that slice 144 ports and benchmarks. PropulsionForce exists today per `100-arch.behavior-engine.md` and `100-slices.behavior-engine.md:51` (slice 114 Self-Propulsion Force). Slice 142 only needs cohesion for its substrate evaluation, but slice 144 will require PropulsionForce benchmarking and the workloads shipped in slice 141 do not engage it. Either add `propulsion` to the default `forces:` list in the example workload (with `propulsion_weight > 0` on at least one profile preset), or explicitly mark PropulsionForce as \"future workload addition, slice 144\" so the slice-144 designer knows to extend the workloads rather than expecting slice 141 to have shipped it.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:226"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Architecture's TPS NFR is implicit in the slice, not restated",
+   "description": "The architecture (`140-arch.simulation-scaling.md:34`) names 57 TPS at N=3500 as today's baseline and 60 TPS as the tier target. Slice 141's success criteria include a JSON schema with `tps_observed` and the verification walkthrough step 9 references the per-phase profile shape at N=2492, but the slice does not restate the 57 TPS / 60 TPS NFR as an explicit benchmark target the harness is meant to validate. This is a minor gap: the slice's purpose is to *produce the numbers* rather than *gate against them*, but a one-line callout under Technical Decisions or Success Criteria noting that the harness is the empirical gate for the 60 TPS NFR would tighten alignment.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:309"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Per-phase budget restatement is informal",
+   "description": "The architecture (`140-arch.simulation-scaling.md:48\u201358`) explicitly states the per-tick budget: spatial_build 0.35 ms, spatial_query 5.67 ms, csr_assembly 0.21 ms, force_total 3.14 ms, integrate 0.06 ms (at N=2492, Entry 8). The slice restates these in the JSON example and verification step 9, but they appear as illustrative numbers rather than as an explicit \"this harness validates against the architecture's N=2492 per-tick budget\" restatement. Given the architecture's \"Profile before you optimize, profile after\" principle, formal restating the NFR targets as benchmark expectations would strengthen the slice's role as the architecture's empirical gate.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:182"
+  }
+ ]
+}

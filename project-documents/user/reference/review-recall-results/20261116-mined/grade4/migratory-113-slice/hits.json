@@ -1,0 +1,24 @@
+{
+ "case": "migratory-113-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The density signal is described three times as \"the CSR's raw `counts` output ... pre-cap\", \"`filtered_counts` (post-`exclude_self`, pre-cap)\", and `record_density(filtered_counts)` as step 8, after the force and integrate steps. In `src/migratory/engine/tick.py` at `a0b2418`, `filtered_counts` is reassigned by `apply_neighbor_cap` whenever any profile has `max_neighbors > 0`, so at step 8 it is the capped count. With the cap on (the `test.yaml` run the walkthrough names has `max_neighbors=1`), mean density is at most 1, below the default threshold of 10, so the dispatcher is pinned to grid, the opposite of the stated \"the cap cannot perturb backend selection\" (Non-Risks). **VALID**: contradicts code. Needs: code. The implementation added `pre_cap_counts = filtered_counts` before the cap (`tick.py` at `8ed2760`).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [
+     0
+    ],
+    "r04": [
+     7
+    ],
+    "r05": [
+     1
+    ],
+    "r06": []
+   }
+  }
+ ],
+ "note": "r04 finding 7 is borderline: it says slice 112 cap \"may rebind\" filtered_counts and the pseudo-code does not say, without asserting the post-cap outcome or the grid-pinning consequence; counted."
+}

@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "PR-keyed review frontmatter is under-specified",
+      "description": "`format_review_markdown` in `src/squadron/review/persistence.py` derives `slice_name`, `slice_index`, `project_name`, and `sourceDocument` from a `SliceInfo` (`slice_info[\"slice_name\"]`, `slice_info[\"index\"]`, `slice_info[\"project\"]`, `slice_info[\"design_file\"]`). The arch claims \"A PR-keyed name must still satisfy the review docType frontmatter\" but never states what fills these fields when no `SliceInfo` exists. `sq review arch` only escapes this by *fabricating* a minimal `SliceInfo` from the initiative index \u2014 the doc explicitly rejects that pattern (\"The existing pattern of fabricating a minimal slice record ... is not extended to PRs\"). But the alternative \u2014 a new frontmatter shape \u2014 is not drawn. The downstream readers (resolution path `locate_review`, metrology `discovery`, the `reviewedSha`-based diff anchor) all glob by `{index}-review.*` and rely on `reviewedSha`/`sourceDocument`. Without a concrete frontmatter shape and filename pattern, the \"Sequenced after 916 and 917 land on main\" slice has no testable contract.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Persistence takes a PR target. Not a slice."
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Interface parity\" claim contradicts the existing review pre-flight",
+      "description": "The arch claims `sq review pr` produces \"the ordinary `ReviewResult`, displayed and gated exactly as today\" and inherits \"every fix that lands on the code path.\" But `sq review code`'s pre-flight (`assert_reviewable_scope` in `src/squadron/review/git_utils.py:409`) and rules loading (`load_review_rules` via `resolve_rules_dir` in `src/squadron/review/rules.py`) both assume a Squadron-planned repository: `REVIEWS_DIR = Path(\"project-documents/user/reviews\")` is hard-coded relative to cwd, and the arch itself acknowledges \"Outside such a project the rules and persistence steps have no defined behavior.\" The document says rules and persistence \"degrade explicitly, not silently\" \u2014 which is correct \u2014 but the `ReviewResult` parity claim leaves no room for that degradation. Either the parity claim is overstated, or the design needs a flag/signaling path that the CLI can read to know when \"ordinary\" was not what happened.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Worktree ownership, lifecycle, and concurrency are deferred to a slice but the document is vague about the contract",
+      "description": "The arch says \"a squadron-owned scratch worktree provides one and is removed afterward. Concurrency with the operator's own worktrees, disk use, and cleanup on failure are the slice-level questions.\" That's appropriate deferral *if* the keystone slice enumerates them, but the keystone slice's description (\"head fetch into a namespaced ref, doctor checks, and the enumerated failure modes with their tests. Read-only\") does not list worktree lifecycle at all \u2014 that's filed under the later `sq review pr` slice. Two related concerns: (1) the existing `git worktree` plumbing in the project (see `src/squadron/metrology/audit.py` \"Refuses a dirty worktree\") is sensitive to a dirty operator worktree, and the PR review must coexist with a *clean* one; (2) \"Concurrency with the operator's own worktrees\" \u2014 squadron already has one worktree per repo and the operator can have several. The namespacing scheme and the cleanup hook on review-failure (uncaught exception vs. SIGTERM vs. Ctrl-C) need to be specified at arch level or the slice will redefine it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Isolated checkout for tool-enabled reviews."
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--diff` and `resolve_diff_base` semantics for a PR are not described",
+      "description": "The arch says the PR's reviewed range \"must be merge-base to head, as 916 established for `--diff`.\" But `normalize_diff_spec` rewrites a *bare ref* to merge-base form. For a PR, the base ref is the host's `baseRefName` (not necessarily `main` or the integration branch). The PR adapter resolves this base from the host \u2014 but the arch doesn't say which `git merge-base` invocation runs against which local ref. If the PR is against an integration branch that doesn't exist locally yet, `git fetch` must precede the merge-base call. The arch's \"Concurrency with the operator's own worktrees\" bullet is silent on this. Either `resolve_diff_base`'s contract needs a new entrant (\"the PR's base branch\") or the arch needs to say the adapter's responsibility ends at producing the base ref string and the review path treats it as a bare ref.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Base semantics."
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Description composition silently reintroduces slice guessing",
+      "description": "\"a branch that does not match gets a commits-only description, not a guessed slice.\" Good. But the slice *number* is not in the branch name format (`{index}-slice.{name}`), so `sq pr create` must parse the leading numeric segment to know what to query. `cf`'s `list_slices` does the inverse mapping; the architecture describes this as a \"detection\" without specifying the parser. Since the branch-name convention is the input, and the convention allows any kebab-case name (e.g. `916-slice.pull-request-workflow`), the parser is unambiguous here \u2014 but the doc doesn't name it. More importantly, \"structured for both human readers and AI reviewers ... a stable section structure that an AI reviewer, including `sq review pr` itself, can parse for intent and claimed verification\" is a *contract*, and contracts need a schema. The arch names the sections (what changed, why, how it was verified, known gaps, review provenance) but not the keys or delimiters. Without that, the later \"interface parity\" claim \u2014 that `sq review pr` can parse what `sq pr create` writes \u2014 is \"step 3: magic happens.\"",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Squadron's own PR conventions."
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prompt injection from PR metadata is bounded by analogy, not by a number",
+      "description": "The arch says \"sized with the same truncation discipline as file injection.\" File injection has a real cap: `review.max_total_injection_bytes` is read by `injection_cap_if_exceeded` in `src/squadron/review/resolution_evidence.py:212`. The PR path needs to enumerate which fields contribute to the budget (title, body, linked issues, unresolved threads, comments?), how each is sized, and where the cap is enforced. Title+body alone for a long PR can dwarf file content. As stated, \"same discipline\" is a hand-wave; the responsible slice must enumerate the inputs and the budget split before the keystone slice lands, otherwise PR review is the silent way past the cap that the resolve path enforces.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Prompt inputs from the PR."
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq pr create`'s identity check conflicts with existing dry-run style",
+      "description": "\"A write operation that cannot confirm the operator's identity refuses rather than posting anonymously.\" `gh` is authenticated, but `gh api graphql ... viewer { login }` is a separate round-trip; the dry-run form (\"prints what would be sent\") is described as if identity check happens at write time, but the doc also says \"dry-run, and creation through the adapter\" \u2014 so dry-run must *also* confirm identity (otherwise it prints whatever and the operator never learns the post would fail). This is a small consistency bug but it's worth pinning: dry-run = resolve + compose + confirm-identity + print; write = resolve + compose + confirm-identity + post. The \"doctor check\" bullet is for *presence*, not *who*, so a write-time identity confirmation step is the right place. The doc should state it once.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Reads before writes, and writes are explicit."
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Anticipated Slices list describes files outside the architecture's stated scope",
+      "description": "\"Slash-command and documentation parity. `/sq:review pr` and `/sq:pr` transports, README and quickstart coverage, and a live run against a real PR recorded as evidence.\" The first three are appropriate. The last \u2014 \"a live run against a real PR recorded as evidence\" \u2014 is not a slice deliverable; it's a process step. Recording evidence is a Project-Manager-facing artifact, not a code-mergeable unit. Splitting it out invites a slice that ships a markdown file rather than functionality, and \"live run\" implies an external dependency (a real PR) the test harness doesn't control. Either move evidence-recording to the testing harness of an earlier slice (the keystone or the `sq review pr` slice), or remove it.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Anticipated Slices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Document claims \"designed for, not built\" capabilities in two places",
+      "description": "\"A later invocation on the same PR updates or supersedes rather than stacking\" and \"A pipeline input for PR review is a later decision, taken only after the CLI has proven the shape.\" Both are reasonable deferrals. The idempotent-update mechanism is plausibly built on the same `archive_existing_review` machinery the persistence layer already has for single-slot overwrite, so it composes. The pipeline input is a genuine second consumer and the \"interface parity\" principle explicitly anticipates it. No issue here other than noting the keystone's `posted-comment marker` mechanism (the \"marked so squadron can find and update its own prior comment\") should be defined as an opaque identifier the persistence layer also stores, not a comment-shape convention \u2014 otherwise the update path couples to comment formatting.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Overview"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Review parser's `finding.location` is the diff-membership check anchor",
+      "description": "The arch notes slice 904 (Finding Location Required) and 266/267 apply unchanged. Worth flagging that the scratch worktree is what makes 904's location check meaningful \u2014 the location must point to a path in the worktree, and the diff must be computed against that same worktree. The arch says this in passing (\"a correct tree to read\") but the link between the worktree path, the diff range, and the parser's path validation should be made explicit in the keystone slice so the test fixtures don't diverge.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Related Work"
+    },
+    {
+      "severity": "PASS",
+      "title": "Adapter protocol boundary is the right place for the host seam",
+      "description": "Putting every hosting interaction behind one protocol and isolating `gh` behind it is the right move. The arch explicitly forbids `gh`-specific shapes from leaking across the boundary, which is what keeps a second host implementable. The decision to make the adapter's job end at \"diff range + head ref + metadata\" is also the right cut \u2014 it matches the existing review engine's input contract (`diff`, `cwd`, model-provided metadata) and means the adapter doesn't need to learn about review semantics. This is the strongest part of the design.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "PR-keyed review frontmatter is under-specified",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Persistence takes a PR target. Not a slice.",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Interface parity\" claim contradicts the existing review pre-flight",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Worktree ownership, lifecycle, and concurrency are deferred to a slice but the document is vague about the contract",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Isolated checkout for tool-enabled reviews.",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`--diff` and `resolve_diff_base` semantics for a PR are not described",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Base semantics.",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Description composition silently reintroduces slice guessing",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Squadron's own PR conventions.",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Prompt injection from PR metadata is bounded by analogy, not by a number",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Prompt inputs from the PR.",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`sq pr create`'s identity check conflicts with existing dry-run style",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Reads before writes, and writes are explicit.",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Anticipated Slices list describes files outside the architecture's stated scope",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Anticipated Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Document claims \"designed for, not built\" capabilities in two places",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Review parser's `finding.location` is the diff-membership check anchor",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Related Work",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Adapter protocol boundary is the right place for the host seam",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-16T21:38:02.002207",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 446,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 819958,
+  "cached_tokens": 629893,
+  "cache_write_tokens": null,
+  "completion_tokens": 4216,
+  "reasoning_tokens": 97,
+  "duration_seconds": 111.66375983390026,
+  "cost_usd": 0.09987228,
+  "cost_basis": "alias_pricing"
+}

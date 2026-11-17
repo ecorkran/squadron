@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force timing is assigned to this slice by the plan but deferred to slice 142",
+   "description": "The slice plan entry for 141 specifies timings \"broken down by phase (spatial build, spatial query, CSR assembly, force totals per force, integration)\". The slice emits a single `force_total_ns` and states \"Slice 142 introduces per-force timings\".\n\n- **Unmet downstream need:** Slice 142 benchmarks one force (cohesion) against NumPy and Numba. Slice 144 validates each force individually \"with the harness providing timing\". A single aggregate cannot isolate either.\n- **Internal contradiction:** Lines 586-591 promise 142 and 144 can register a backend with \"zero changes elsewhere in the harness\". Adding `force_breakdown` means changing `PhaseTimings`, every backend, the JSON schema (version bump, line 531) and the Markdown renderer.\n\nDeliver per-force timings here, keyed by force name, with `force_total` as their sum.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`tick_instrumented()` benchmarks a duplicate of the tick, and the backend axis does not match the architecture's seams",
+   "description": "Decision B re-implements the tick body inside `bench/`. This has three consequences:\n\n- **The harness does not measure production code.** The principle \"profile before you optimize, profile after\" needs the shipped `tick()` measured. The slice concedes phase-boundary drift \"is not detectable mechanically\" (lines 691-695).\n- **The document contradicts itself.** Lines 131-132 and 541 say the NumPy runner \"calls `tick()` directly\"; lines 255-267 and 496-501 say it runs a parallel implementation.\n- **The backend axis is wrong for 143 and 144.** The architecture places backends behind the existing `SpatialQuery` and `BulkForce` interfaces, selected by config (`spatial.backend: \"quadrants\"`, per-force engine config). Under this design each of those slices adds another whole-tick copy. The NumPy backend also hard-wires `KDTreeQuery`, with no spatial-backend field in the workload or CLI.\n\nA lighter option fits the architecture better: wrap the injected `SpatialQuery` and each `BulkForce` in timing decorators and call the unmodified `tick()`. This gives spatial and per-force timings with no duplicated tick and no engine change, and it covers 143 and 144 as config selections. CSR assembly and integrate would need attributing by residual, or the deferred `profiler=` hook. If Decision B stays, the slice should say how 143 and 144 select spatial and force implementations without copying the tick again.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:244-272"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The parity hash cannot serve the cross-backend role the slice assigns it",
+   "description": "Line 533-534 says \"Slice 145's tick-level parity test consumes the harness's NumPy parity hash as the reference\". The slice plan requires 145 parity \"within a documented tolerance for non-deterministic GPU reductions\". A SHA-256 is equal or not equal, so line 472-473's \"interprets it within the documented tolerance band\" is not possible.\n\n- **Numba and cross-platform runs are affected too.** Different summation order or BLAS builds change bits without behavioural divergence, so NumPy-on-Metal versus NumPy-on-NVIDIA hashes may differ.\n- **The hash point is stated two ways.** Line 81 says \"post-warmup\"; line 460 says \"after the measure phase\".\n\nEither narrow the claim to a same-backend, same-platform determinism check and drop the 145 integration point, or leave parity to `tools/run_deterministic_trajectory.py`, which the Open Questions already call \"the parity oracle\". The architecture's fidelity goal needs array-level comparison, which a hash cannot provide.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Workload schema and CLI are inconsistent between sections",
+   "description": "- **Schema fields:** Scope (lines 70-72) lists `density`, `formation seed` and `RNG seed`. The schema has one `seed` and no density field; density is implicit in `cluster_radius`. With \"missing required fields raise\", the required set should be stated once.\n- **Profile resolution:** Line 371 resolves names against `migratory.engine.profile` presets; line 392-394 uses a registry in `bench/workload.py` mirroring `config/default.yaml`. The second duplicates profile definitions and can drift from the live config.\n- **CLI flags:** The Verification Walkthrough uses `--list-backends` and `--list-workloads`, which the CLI section (477-487) does not define.\n- **Module path:** Spatial is `migratory.spatial` at line 136 and `engine.spatial.KDTreeQuery` at line 542.\n- **N sweeps:** The Overview promises \"at which N\", but N is fixed per YAML and the three workloads vary formation only. Slice 143's 10k/50k/250k comparison needs extra workload files, which the schema allows; say so.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:347-404"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Result provenance has gaps that weaken the reproducibility claim",
+   "description": "- **Dirty tree:** \"Reproducible by repo hash + workload name\" fails when benchmarking uncommitted changes, which is the main \"did my change help\" use. Record a dirty flag alongside `git_sha`.\n- **Git failure:** Behaviour when `git rev-parse` fails is unspecified. Under the no-silent-fallback rule it should raise or write an obvious placeholder.\n- **Device target:** The platform tuple has no compute-device field. Slice 142 runs Quadrants on both Metal and CPU fallback on one machine; `{timestamp}_{workload}_{backend}` cannot tell them apart unless they register as separate backend names. State the convention.\n- **Markdown aggregation:** The table \"across all backends in `bench/results/`\" does not say which run per backend is picked, or how mixed SHAs and platforms are handled.\n\nThe other failure modes (missing field, unknown backend, setup failure with `finalize`, low TPS) are enumerated with explicit handling. The slice adds no network or message paths.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:232-240"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Minor scope that can be cut",
+   "description": "Overall size matches the plan's 3/5 effort. Cuttable items:\n\n- `--all-backends`, while only one backend exists.\n- `--workload-dir`, which nothing in the slice uses.\n- Reusing `pytest-benchmark` for stub-backend tests (lines 122-124); synthetic timings need no benchmark machinery.\n- The TPS < 1 warning, which is an unmotivated threshold.\n- Walkthrough step 10, which is informational.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-487"
+  }
+ ]
+}

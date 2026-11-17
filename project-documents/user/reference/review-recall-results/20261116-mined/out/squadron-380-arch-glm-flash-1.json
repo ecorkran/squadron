@@ -1,0 +1,188 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Range computation ownership contradicts itself between Architectural Principles and Envisioned State",
+      "description": "The first Architectural Principle says \"the adapter's job ends when it has produced a local diff range, a head ref present in the local repository, and a metadata record\" \u2014 the adapter computes the diff range. The Envisioned State review-path paragraph says the opposite: `sq review pr` itself \"computes the base-to-head range with the same merge-base semantics `--diff` uses\" after the adapter resolves the record and fetches the head. The adapter operation list in Design Goals (\"resolve a PR, fetch its head, read its threads, post a comment, create a PR, identify the operator\") contains no range computation, supporting the Envisioned reading. Taken literally, the Principles version forces a bad choice: merge-base semantics live in `review/git_utils.py` (`normalize_diff_spec`, plus the merge-base logic inside `resolve_slice_diff_range` \u2014 slice 916's work), so an adapter package \"beside the review package\" that produces the range must either import from `review/` (an adapter\u2192review dependency that muddies the stated boundary) or duplicate the merge-base logic (a DRY violation per project conventions). Pick one owner \u2014 the Envisioned State version, where the review side computes the range from the record's base+head refs \u2014 and correct the Principles sentence.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PR-keyed persistence names a target but not its contract seams",
+      "description": "Four concrete gaps under \"Persistence accepts a PR target\":\n\n1. `format_review_markdown` (`src/squadron/review/persistence.py`) writes `slice:`, `project:` frontmatter and the H1 `# Review: {type} \u2014 slice {index}` unconditionally; with no `SliceInfo` these degrade to `unknown`/`0`. The doc says a PR-keyed name \"satisfies the review frontmatter contract without a slice index\" but never says what those fields carry. More importantly, the frontmatter schema is owned and validated by Context Forge (`cf validate frontmatter`, wired into the pre-commit hook \u2014 see `src/squadron/documents/schema.py`). Dropping or replacing `slice:` on review docs is a cross-repo contract change, the same class of issue 916 flagged for verdict members; the document doesn't acknowledge cf's ownership at all.\n2. The Base-semantics invariant \"the head sha recorded in the artifact is what was reviewed\" is not free. The CLI save path hardwires `reviewed_sha=resolve_reviewed_sha(\".\")` inside `save_review_result` with no override, and `_save_and_report` exposes none. A PR review run from the operator's checkout would stamp the operator's HEAD, not the PR head. The save path needs an explicit reviewed-sha (or the PR record carried in the save target); the doc should say so.\n3. The filename grammar is deferred to the persistence slice, but consumers parse the `{index}-review.{type}.{name}.md` shape positionally or by integer index: `locate_review`/`review_type_of` (`review/resolution_evidence.py`), and metrology's `resolve_target` (`metrology/capture.py`, digit-target glob `{index}-review.*`). Slice 916 Part C4 already filed issue #90 \u2014 \"no artifact naming scheme for slice-less reviews\" \u2014 as exactly this decision; the architecture neither states the grammar nor references #90, even though consumer compatibility is what constrains it.\n4. The \"configured squadron data directory\" fallback needs a named config key; none exists in `src/squadron/config/keys.py`, and project convention centralizes keys there.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No-tools PR review leaves 904/917 location verification pointed at the wrong tree",
+      "description": "The \"Isolated checkout\" principle says \"A review without tools needs only the fetched ref\" and never defines what `cwd` such a run uses. But the path-existence check (slice 904) and 917 Part 5's `location_verified` both resolve finding citations against `inputs[\"cwd\"]` (`review_client.py` passes `cwd_for_checks` into `parse_review_output`; 917 reads line counts \"relative to the same `cwd` the existence check uses\"). With tools, the scratch worktree is the jail root and everything is consistent. Without tools, if `cwd` is the operator's checkout \u2014 on their own branch, possibly lacking the PR's files \u2014 every finding citing a file the PR adds or renames verifies against the wrong tree and earns `location_verified: False`: the exact hallucinated-citation signature 917 Part 5 exists to surface, now firing spuriously on every no-tools PR review. Either materialize the worktree whenever location verification will run (not only when tools are enabled), or scope no-tools PR reviews to the diff-membership check only. The document must choose and state it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Every existing review flag behaving as it does today\" is asserted, not defined, for the flags that conflict with a PR target",
+      "description": "Overview capability 1 and the \"Interface parity\" design goal promise full flag parity, and the third anticipated slice promises \"full parity with the existing review flags.\" But several `sq review code` flags have no defined meaning against a PR-derived target: `--diff` (the PR record owns the range \u2014 override or error? and if override, which component wins, tying back to the range-ownership contradiction above), `--files` (the PR's scope is its own diff), and `--cwd` (which repository resolves the PR and hosts the scratch worktree). Since the CLI is declared \"the contract\" that the slash-command slice transports verbatim, an undefined flag conflict propagates to both transports. Enumerate the accepted flag set for `sq review pr` and the conflict rule in this document rather than leaving it to slice design.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Doctor's \"host reachable\" check collides with the doctor module's stated purity contract",
+      "description": "`src/squadron/cli/commands/doctor_checks.py` opens with \"Pure check functions for `sq doctor`. Each returns CheckResult(s); no network, no subprocesses\", and the one subprocess-dependent value today (`git_hooks_path`) is resolved by the caller and passed into `run_all_checks`. \"gh present\" fits that pattern (`shutil.which`); \"authenticated, host reachable\" means `gh auth status` and a network probe. State which layer performs those (the doctor command caller, per the hooksPath precedent), and consider whether \"host reachable\" belongs in doctor at all \u2014 a network probe makes `sq doctor` slow and flaky where every current check is local.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq pr create` presumes a pushed branch, but push is in neither the adapter protocol nor the failure enumeration",
+      "description": "Creating a PR requires the branch to exist on the host. The adapter operation list (resolve, fetch head, read threads, post comment, create PR, identify operator) has no push, and the enumerated failure modes (host unreachable, `gh` missing/unauthenticated, PR not found, head not fetchable, base moved, post rejected) include no \"branch not on remote.\" Decide explicitly whether squadron pushes (a host write that then needs the same dry-run/refusal treatment as posting) or refuses with a named error telling the operator to push. Either is fine; the document currently implies neither.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+    },
+    {
+      "severity": "PASS",
+      "title": "Current-state claims verified against the codebase",
+      "description": "The load-bearing Current State claims were checked against source: nothing under `src/squadron` invokes `gh`; `sq doctor` has no gh check (`doctor_checks.py`); persistence is SliceInfo/int-index-keyed with minimal-SliceInfo fabrication exactly where the doc says (`_save_arch` in `cli/commands/review.py`); the CLI save-outcome path is genuinely generic over the save target (`_resolve_save_outcome[SaveTargetT]`), so the claim \"the save path already accepts a generic save target in the CLI\" holds; and `resolve_reviewed_sha(\".\")` sits where the reviewed-sha finding above bites.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#current-state"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Range computation ownership contradicts itself between Architectural Principles and Envisioned State",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "PR-keyed persistence names a target but not its contract seams",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No-tools PR review leaves 904/917 location verification pointed at the wrong tree",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Every existing review flag behaving as it does today\" is asserted, not defined, for the flags that conflict with a PR target",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Doctor's \"host reachable\" check collides with the doctor module's stated purity contract",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`sq pr create` presumes a pushed branch, but push is in neither the adapter protocol nor the failure enumeration",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Current-state claims verified against the codebase",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#current-state",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-16T20:57:14.863201",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 243518,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1036089,
+  "cached_tokens": 708480,
+  "cache_write_tokens": null,
+  "completion_tokens": 58031,
+  "reasoning_tokens": 55116,
+  "duration_seconds": 300.0536253750324,
+  "cost_usd": 0.09941124999999999,
+  "cost_basis": "alias_pricing"
+}

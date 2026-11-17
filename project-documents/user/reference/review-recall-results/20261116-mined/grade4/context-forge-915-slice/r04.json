@@ -1,0 +1,26 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Three-tier precedence extends the \"two-file-precedence merge pattern\" mentioned in the slice plan",
+   "description": "Slice plan entry 915 says \"reusing the existing user-vs-project two-file-precedence merge pattern rather than inventing a new one.\" The design introduces a three-tier precedence (`project-personal \u2192 project-shared \u2192 user \u2192 default`). This is a natural extension of the same precedence-based approach rather than a new mechanism (no switch statements, callbacks, or parallel paths), so it remains consistent with the architecture's intent \u2014 more specific scope wins. No action required; flagged only because the wording shifts from \"two-file\" to \"three-tier.\"",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Technical-Decisions"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Read-path failure modes for the new personal file rely on inherited helper behavior without restating it",
+   "description": "Failure modes are enumerated for `migrate-personal`, `ConfigManager.set` writes, and `cf init`'s gitignore append. Read-path failures for `.context-forge.local.toml` (malformed TOML, permission denied, etc.) are not explicitly enumerated; the \"same helper, same error path\" rationale that justifies `set` writes also applies to reads, but the design states this only once (for writes). A one-sentence parallel statement for reads would close the gap. Minor observation \u2014 the inheritance argument is valid.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Technical-Decisions"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Collision semantics and idempotency for `migrate-personal` are thoroughly specified",
+   "description": "The design explicitly handles three collision cases (absent-in-personal, present-with-different-value, present-with-identical-value) with per-key write-personal-then-delete-shared ordering and idempotent re-runnability. Failure between the two steps is reasoned through (recoverable via read-time fallback). The slice plan required \"a defined migration/compat story\"; the design exceeds that bar without over-engineering (e.g., no dry-run flag, no interactive confirmation beyond existing CLI conventions, as noted in `Implementation Notes > Special Considerations`).",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#Migration-Plan"
+  }
+ ]
+}

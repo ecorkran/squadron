@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Early-exit break breaks the A7 seam-isolation contract enforced by an existing test",
+   "description": "Option A places the cap test in the kernel body (`if k_found >= k_max and max_neighbors > 0: break`) *before* the seam call. Slice 145's A7 criterion requires the neighbor-selection logic to live only in `get_neighbors_first_k`, and `tests/bench/test_quadrants_fused_kernels.py::test_get_neighbors_first_k_is_only_inclusion_function` asserts that \"k_found < k_max\" appears at most once in the module (inside the seam). The proposed break is a second, kernel-level expression of the same cap decision. The slice asserts \"A1: All slice 145 parity tests pass\" while simultaneously breaking that test, and never mentions updating or re-scoping it. The design must state how the cap predicate stays single-sourced (e.g. move the whole cap decision into the seam and give the seam an explicit \"should stop scanning\" signal) and how the isolation test is reconciled \u2014 otherwise A1 is unsatisfiable as written.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-40"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Gate workload for A2/A3 is not the workload that produced the baseline or the occupancy data",
+   "description": "The design states the operating point is \"N=50k\" and names `mid-flock-50k` as the default gate config, but `bench/workloads/mid-flock-50k.yaml` declares `n: 100000` with `world_size: [1536, 1536]`. The ~38 TPS baseline and the p99\u22485137 cell occupancy that motivate this slice were both measured at a *different* setup: slice 148's measurement script used an inline N=50,000 workload with a 756\u00d7756 world and `cluster_radius=80` (`scripts/148_measure_cell_occupancy.py`, `148-notes.envelope-measurement.md` \u00a72B). The A2 gate (\"force_total \u2265 5\u00d7 faster than slice 145 CUDA baseline\") and A3 gate (\"\u2265100 TPS\") therefore compare a candidate measurement against a baseline/occupancy figure taken under a different agent count and world geometry, which makes the ratio not a like-for-like comparison and makes the expected candidate counts (~555 agents/cell at S=3) unreliable for the named gate config. The design should name the exact workload (and N) used for both the baseline capture and the gate run.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:17-19"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough uses a nonexistent script and unsupported CLI flags",
+   "description": "Every command in the walkthrough invokes `python scripts/bench.py --backend quadrants-fused --config mid-flock-50k --subdivision-factor 1 --ticks 200` (and `--N`, `--parity-check`). There is no `scripts/bench.py` (only `scripts/148_*.py`), and the actual CLI (`src/migratory/bench/cli.py`) exposes only `--workload <name>`, `--backend`, `--workload-dir`, `--results-dir` \u2014 no `--config`, `--N`, `--ticks`, `--subdivision-factor`, or `--parity-check`. The harness also drives tick counts from the workload YAML (`warmup_ticks`/`measure_ticks`), not from a CLI flag. The walkthrough therefore cannot be executed as written, and the new `subdivision_factor` input has no defined plumbing (the task file proposes it as a `Workload` YAML field, which is a different mechanism than the CLI flag the design assumes).",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:142-190"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Config plumbing names a `BenchConfig` type that does not exist, and omits the kernel call sites",
+   "description": "The Component Interactions diagram starts from a `BenchConfig` object supplying `cell_size` and `subdivision_factor S`; no such type exists in the codebase \u2014 the harness configuration is the YAML-backed `Workload` dataclass (`src/migratory/bench/workload.py`) and `GpuAgentState` derives `cell_size = max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER` at setup (`src/migratory/bench/backends/quadrants_fused_state.py:150`). The design also does not name the integration points for the new kernel parameter: `fused_force_integrate_kernel` is called from two places (`quadrants_fused_backend.py::tick_once` and `quadrants_fused_kernels.py::run_fused_tick`), and `GpuAgentState.setup`/`DEFAULT_CELL_SIZE_MULTIPLIER` must change for `cell_size` to become `query_radius / S`. Without these, the \"same setup()/tick() interface, only cell_size and S change\" claim is not verifiable.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:85-100"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Cell subdivision changes the accepted neighbor set in a way the parity criterion does not cover",
+   "description": "The design asserts \"The scan covers the same physical radius \u2014 correct neighborhood is preserved.\" That holds only for the radius bound; the *set* of visited candidates changes with `cell_size` (a (2S+1)\u00d7(2S+1) walk over smaller cells reaches a different set of agents than a 3\u00d73 walk over larger cells, including agents in corner cells that a coarse walk never visited), and combined with first-k-found the accepted set is order-dependent and therefore different. Since first-k-found already has a documented parity gap vs. the CPU's k-nearest, this compounds it. A4 (statistical parity within 20% of numpy) is asserted as the check, but the design does not state the expected effect or a per-configuration acceptance rule for S=3 versus S=1 \u2014 in particular, S=3 changes the *population* of first-k-found picks in a way that can shift mean speed/mean NN distance by more than the 20% band independent of any bug. The design should say how S=1 vs S=3 parity is compared and what happens if it falls outside the band.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:47-55"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Early exit is unconditional but the divergence cost is asserted, not bounded, at the low-density operating point",
+   "description": "The divergence analysis justifies the break only at the dense operating point (\"at the operating point where this matters (dense flock, N=50k)\") and notes that \"divergence overhead is proportional to the *spread* of exit iterations within a warp \u2014 small at high density, larger at low density.\" No fallback or guard is defined for the low-density case where agents hit the cap at very different iteration counts (the `uniform` formation measured p99=184 agents/cell in slice 148's notes, where the counter-gating cost was already low). The `max_neighbors > 0` guard covers the uncapped path but not the \"capped yet low-density\" path, where the break could plausibly be a net regression. The design should state the expected behavior/measurement for the low-density (uniform) formation and what result would trigger reverting to counter-gating.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:25-29"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Register-spill criterion (A5) is not measurable with the tooling the design names",
+   "description": "A5 requires \"local memory per thread = 0 (confirmed via `nvcc --ptxas-info` or benchmark log)\" and Step 4 says to \"Look for `lmem` in the bench log output (Quadrants/Taichi emits ptxas info when `TI_PRINT_KERNEL_STATS=1` or equivalent)\". On the actual CUDA host, slice 148 established that `ptxas`, `cuobjdump`, and `nvcc` are **not installed** (`148-notes.envelope-measurement.md` \u00a72A), and the working method was PTX inspection of the Quadrants kernel cache for `.local` declarations (`.local` = 0 in the baseline). The `TI_PRINT_KERNEL_STATS`/`lmem` route is therefore likely unavailable on the gate host, leaving A5 unverifiable as specified. The design should name the PTX-cache inspection method that slice 148 actually used.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:107"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Slice 149 correctly preserves the fused-tick architectural boundary and slice 146's integration contract",
+   "description": "The \"No changes to\" list (TickResult/world-server interface, parity infrastructure, numpy/numba backends, agent state field layout) matches architecture 140's \"same pattern, different backend \u2014 except the GPU fused tick\" principle, and the explicit statement that the `quadrants-fused` external API is unchanged keeps slice 146 unblocked as the plan requires. The Out of Scope list correctly defers distance-ranked k-nearest, GPU prefix sum, and Metal-specific tuning \u2014 all of which the plan assigns to later slices.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:101-113"
+  }
+ ]
+}

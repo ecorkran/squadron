@@ -1,0 +1,12 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`adoptionStateWrites: 'read-only'` in 2.2 is a no-op for the captured cases",
+   "description": "The golden capture passes `{ adoptionStateWrites: 'read-only' }`, but the two fixtures (greenfield and already-planned) do not trigger adoption logic, so the option has no effect on the captured output. The \"for now\" wording in the task may mislead a junior implementer into thinking the option matters for byte-identity. Functionally harmless \u2014 the golden still reflects post-cut behavior \u2014 but worth knowing in case the implementer spends time investigating.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:38"
+  }
+ ]
+}

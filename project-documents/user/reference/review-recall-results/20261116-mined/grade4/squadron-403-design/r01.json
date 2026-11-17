@@ -1,0 +1,12 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`AdapterContext.environment_root` extends 400's contract beyond what the architecture strictly enumerates",
+   "description": "The architecture's \"Measure, never gate\" and \"Metrics are a closed set\" principles say later slices inherit 400's adapter contract. The slice adds a required `environment_root: Path` field to `AdapterContext`, breaking the in-place contract signature. This is justified and constrained \u2014 the architecture itself implies commit export must run the live checkout's tools against the export directory, 400's slice doc anticipates 403 extending the snapshot path, and the design adds a conformance test that runs every adapter on an export without `.venv`/`node_modules`. Both 400 adapters and 401's coverage reader are updated inside this slice. This is acceptable scope given the architecture's stated commitment export requirement, but it is the one place where 403 reaches back into a 400-owned surface, and a reviewer of 400's later extensions should re-check that no further `AdapterContext` fields are added.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:209-219,390-396"
+  }
+ ]
+}

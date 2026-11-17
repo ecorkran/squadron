@@ -1,0 +1,33 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Commit markers use checkbox lines rather than plain lines",
+   "description": "Tasks 2C/3C/4C/5C/6C are written as `- [ ] **Task 2C: Commit**` (checkbox form) rather than plain `**Commit**:` lines. This conflicts with the \"plain lines, never checkboxes\" review guidance, but it matches the project's own `AGENTS.md` (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\") and the dominant in-repo pattern (e.g. `931-tasks...md`, `934-tasks...md`, `932-tasks...md` all use `- [x] **Task NC: Commit**`). No action needed unless the house style is being changed; I flag it only because the two conventions disagree.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Doctype failure message text lives only in the design, not in a task",
+   "description": "Task 3 defines `DesignValidationResult` with `reason: 'doctype'` and empty `missing` but no message field, so the exact human string (`frontmatter must declare 'docType: slice-design' (see file-naming-conventions.md)`) must be reproduced by Task 4 from the design's API Contracts. Task 4 says \"the frontmatter message for `reason: 'doctype'`\", which defers to the design, so the requirement is met \u2014 but a junior implementer may not notice the wording lives only in the slice design. Consider naming the constant in Task 3 or Task 4 for one-place definition, consistent with the project rule against scattering comparison values.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 5 may fix real bugs but commits under a docs: prefix",
+   "description": "Task 5's parity sweep instructs \"Any other difference is a bug: fix it and add a test in the matching test task's file\", yet its commit marker (Task 5C) is `docs: record slice 214 parity sweep results`. If the sweep uncovers a genuine mismatch, the resulting change to Tasks 2\u20134 source (not just docs) warrants a `fix:` commit per the project's semantic-commit rules. This is minor and conditional, but the commit type should match what actually changed.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:126"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "\"Unreadable file\" exit-2 path is implemented but not tested",
+   "description": "The design's Functional Requirements name \"unreadable\" as an exit-2 trigger. Task 3's preflight checks exists/regular/readable, and Task 3T covers the missing-file and directory cases, but no test exercises an existing-but-unreadable file (the \"readable\" branch specifically). The design's Technical Requirements don't demand that test, and permission-based cases are awkward to exercise portably, so this is informational \u2014 but it is the one enumerated exit-2 trigger with no coverage.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+  }
+ ]
+}

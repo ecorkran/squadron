@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Informational events are explicitly dropped in `_skip_unparseable`, contradicting Success Criterion 4 and D6",
+      "description": "Task 6 says that for a non-rejected `RateLimitEvent`, the agent should \u201clog at DEBUG and continue the loop without yielding it to the caller as a raw SDK type \u2014 let it flow to translation as normal,\u201d but those two instructions contradict each other: if the event is not yielded, it cannot flow to translation. The design's D4 explicitly says the agent path should \u201clog at DEBUG and skip,\u201d while D6 says translation's explicit branch makes informational events observable; Success Criterion 4 only requires that an informational event not trigger backoff, not restart the stream, or appear in `dispatch`'s returned text. The task wording should resolve this by defining exactly one behavior per path. If the event is intentionally skipped in `_skip_unparseable`, then Task 4's translation branch only applies to the pipeline path and the task should say so; if it is intentionally translated, Task 6 must yield it rather than \u201cnot yield\u201d it. As written, a junior implementer cannot determine the intended agent-mode behavior.",
+      "file_ref": null,
+      "category": "functional-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4 conflicts with the design's stated rationale for translation observability",
+      "description": "The design states in D6 that the translation branch exists because \u201can informational one becomes observable rather than dropped,\u201d and the data-flow diagram shows the informational path continuing to translation. Task 6 instead instructs the implementer not to yield informational events from `_skip_unparseable`, which would prevent the agent/query paths from ever exercising Task 4's new branch. Tasks 4, 5, and 6 should be reconciled with D4/D6 so the new translation behavior is actually reachable and its test reflects a reachable path.",
+      "file_ref": null,
+      "category": "scope-accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Other SDK-backed prose consumers are not covered by the exclusion-set task",
+      "description": "Task 8 only updates the exclusion tuple in `sdk_session.dispatch`, while instructing the implementer to grep for `SDK_RESULT_TYPE` in `src/`. That grep finds additional prose-accumulation filters in `src/squadron/review/review_client.py:263`, `src/squadron/pipeline/summary_oneshot.py:139`, and `src/squadron/metrology/audit.py:557`. If the translation branch emits a `rate_limit_event` system message, these consumers may append its content to review prose, summary output, or audit output. The task's success condition only protects `dispatch`'s returned text, while the slice's issue #23 rationale is broader. The task should either extend the exclusion consistently to every SDK-backed prose accumulator or explicitly establish and document why the other consumers are safe.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:263"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1's version-verification command wording is imprecise",
+      "description": "The command `python -c \"import importlib.metadata as m; print(m.version('claude-agent-sdk'))\"` prints an installed version, not a `>=` comparison, so it cannot literally \u201creport `>= 0.2.152`.\u201d The underlying check is valid, but the stated success condition should say that the printed version is at least `0.2.152`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 13's success statement does not match the commands listed",
+      "description": "Task 13 lists six commands\u2014three pytest invocations, two ruff invocations, and pyright\u2014but says \u201call four commands report clean/green.\u201d This is a minor checklist defect; the success line should refer to all listed commands or the pytest commands should be consolidated.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "All eleven success criteria have corresponding task coverage",
+      "description": "Criterion 1 maps to Task 1; criterion 2 to Task 9's grep checks; criteria 3\u20138 map to Tasks 6, 7, 10, and 11; criterion 9 to Tasks 10 and 11; criterion 10 to Tasks 10 and 11; criterion 11 to Task 13. The criterion-7 plain-`ClaudeSDKError` substring path is explicitly retained and tested in Tasks 2 and 3, and the criterion-5 budget/schedule/reset expectations are preserved through the Task 10 rewrite instructions.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing is coherent and test tasks follow their implementation work",
+      "description": "The dependency chain is sound: dependency bump \u2192 classifier and exception \u2192 unit tests \u2192 translation implementation \u2192 translation test \u2192 agent dispatch re-key \u2192 pipeline dispatch re-key \u2192 exclusion set \u2192 shim removal \u2192 test rewrites \u2192 verification. Tasks 10 and 11 follow the production changes they exercise, and no circular dependency is apparent.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers are placed at working, tested points",
+      "description": "Commit markers appear after substantive implementation and test work rather than after every checklist item, and the final closeout task has a docs commit marker. The live-verification tasks appropriately have no markers because they are observation-only and their outcomes are recorded in the closeout commit.",
+      "file_ref": null,
+      "category": "commit-discipline",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "functional-correctness",
+      "raw_category": null,
+      "summary": "Informational events are explicitly dropped in `_skip_unparseable`, contradicting Success Criterion 4 and D6",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-accuracy",
+      "raw_category": null,
+      "summary": "Task 4 conflicts with the design's stated rationale for translation observability",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Other SDK-backed prose consumers are not covered by the exclusion-set task",
+      "location": "src/squadron/review/review_client.py:263",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 1's version-verification command wording is imprecise",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 13's success statement does not match the commands listed",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "All eleven success criteria have corresponding task coverage",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing is coherent and test tasks follow their implementation work",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "commit-discipline",
+      "raw_category": null,
+      "summary": "Commit markers are placed at working, tested points",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-16T21:35:42.925619",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 104,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 106607,
+  "cached_tokens": 64128,
+  "cache_write_tokens": null,
+  "completion_tokens": 1790,
+  "reasoning_tokens": 26,
+  "duration_seconds": 32.38912312500179,
+  "cost_usd": 0.01873938,
+  "cost_basis": "alias_pricing"
+}

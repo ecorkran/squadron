@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "No task updates the server profile bridge, so the full suite cannot go green",
+   "description": "Task 2.1 makes `leadership_weight` and `momentum_weight` required fields with no defaults, and task 2.2 scopes the fallout update to \"search for `BehavioralProfile(` across `tests/`\". But production code also constructs it: `build_profiles()` at `src/migratory_server/simulation.py:18` passes exactly the six existing fields, so every construction raises `TypeError` once the new fields land. That breaks `tests/test_simulation.py::TestBuildProfiles` (3 tests), `tests/test_server.py::test_server_runs_with_profiles_config`, and `test_entities_spawned_from_config` (both call `Server.run()`, which calls `build_profiles`). `ProfileConfig` in `src/migratory_server/config.py` also has no fields to carry the new weights, so the fix is not a one-liner the implementer can infer from the plan. The task file never mentions the `src/migratory_server/` package at all. This leaves the requirement \"BehavioralProfile ... updates are backward-incompatible by design; all affected tests are updated within this slice\" unmet and makes task 6.1 (\"All tests pass (existing 80 + new herding tests)\") unachievable as written.",
+   "location": "src/migratory_server/simulation.py:18"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`leadership` array is not merged by the batch spawn path",
+   "description": "Task 1.1 extends `AgentState` and updates `create()`, `add_agent()`, and `remove_agent()`, but `EntityManager.spawn_population()` bypasses those helpers: it builds a batch state and then concatenates `positions`, `velocities`, `accelerations`, and `profile_indices` by hand (lines 136\u2013146). With the new array, `state.count` (derived from `positions.shape`) and `state.leadership.shape` desynchronize \u2014 the leadership array stays length 0 while the population is non-empty, so any later `LeadershipForce` call in the server path indexes out of bounds. No existing test inspects `leadership` after a batch spawn, so the inconsistency ships silently. No task in the breakdown covers this, and the slice design only says `add_agent()`/`remove_agent()` must handle the array.",
+   "location": "src/migratory_server/entities.py:136-146"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Vectorization criterion is never stated in any task",
+   "description": "The slice's Technical Requirements state \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" Section 101's task file carried this explicitly for each force (\"Use vectorized NumPy within each neighborhood \u2014 no `for neighbor in neighbors` inner loop\"); sections 3.1 and 4.1 of this file give the per-agent math but never mention vectorization, and the verify steps only check protocol conformance and test results. Task 4.1's `weighted_heading = sum(velocity[i] * leadership[i]) / sum(leadership)` sketch is the shape that invites a per-neighbor Python loop, so a junior implementer could satisfy every written instruction while violating a stated success criterion.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-134"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Final commit message implies documentation changes no task produces",
+   "description": "Task 6.3 commits `docs: complete slice 102 \u2014 herding and leadership` with \"Git add any remaining changes\", but no task in the file edits any document \u2014 no slice frontmatter/status update, no check-off of the `(102) Herding and Leadership` entry in `100-slices.behavior-engine.md`, no `CHANGELOG.md` entry. Compare slice 303's task file, which has explicit tasks for the slice-design update and CHANGELOG. As written the checkpoint either commits nothing or commits an unspecified change.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:180-183"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Commit checkpoints are checkboxes rather than plain marker lines",
+   "description": "The five commit checkpoints (`1.3`, `2.3`, `3.3`, `4.3`, `5.4`) are written as `- [ ] **1.3 Commit: ...**` checklist items with `- [ ] Git add and commit ...` sub-steps, rather than plain `**Commit**: ...` lines as used in `303-tasks.behavior-engine-integration.md`. Their placement is correct (five markers at working, tested points, not one per task and not only at the end), and CLAUDE.md does mandate checklist formatting for task files, so this is informational only.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48"
+  }
+ ]
+}

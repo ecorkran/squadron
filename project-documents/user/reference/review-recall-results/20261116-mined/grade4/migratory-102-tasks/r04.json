@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`build_profiles` in the server is not updated \u2014 server startup breaks at runtime",
+   "description": "`build_profiles` constructs `BehavioralProfile` with only the six existing fields:\n```python\nBehavioralProfile(\n    max_speed=pc.max_speed, query_radius=pc.query_radius,\n    cohesion_weight=pc.cohesion_weight, separation_weight=pc.separation_weight,\n    alignment_weight=pc.alignment_weight, separation_radius=pc.separation_radius,\n)\n```\nBecause slice 102 makes `leadership_weight` and `momentum_weight` **required with no defaults** (task 2.1, matching the slice design's explicit decision), this call will raise `TypeError: missing 2 required positional arguments` at runtime. `build_profiles` is called from `Server.run()` (`src/migratory_server/server.py:72`), so every server start fails. Note this is *not* caught by the test suite as written: `tests/test_simulation.py:28-45` calls `build_profiles` with `ProfileConfig` objects, so it will fail at test time too \u2014 but only because `tests/test_simulation.py` is not listed among the files to update in task 2.2.\n\nThe slice design's own \"Interfaces Required\" section does not list `build_profiles`/`ProfileConfig`, and the slice scope says the server is not part of this slice \u2014 but the slice design also states the change is \"backward-incompatible by design; all affected tests are updated within this slice.\" The task file must explicitly cover this production call site, otherwise the slice ships a broken server. Task 2.2 needs a bullet to update `src/migratory_server/simulation.py::build_profiles` to pass `leadership_weight=0.0, momentum_weight=0.0` (matching the existing pattern where `ProfileConfig` has optional defaults for the flocking weights), plus `ProfileConfig` in `src/migratory_server/config.py:52-59` and `_validate_profile` in `config.py` if the fields should be configurable. At minimum the constructor call must be updated and `tests/test_simulation.py` and `tests/test_entities.py` must be added to the update list in 2.2.",
+   "location": "src/migratory_server/simulation.py:19-31"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "`EntityManager.spawn_population` bypasses `add_agent` \u2014 leadership array silently desynchronizes",
+   "description": "`spawn_population` merges arrays manually rather than through `AgentState.add_agent`:\n```python\nself._state.positions = np.concatenate([self._state.positions, batch.positions], axis=0)\nself._state.velocities = np.concatenate([...])\nself._state.accelerations = np.concatenate([...])\nself._state.profile_indices = np.concatenate([...])\n```\nTask 1.1 updates `AgentState.create()`, `add_agent()`, and `remove_agent()` to handle the new `leadership` array, but `EntityManager.spawn_population` is never updated. After this slice, `self._state.leadership` retains its original length while `positions`/`velocities` grow \u2014 a length mismatch between the SoA arrays. `LeadershipForce` then indexes `state.leadership[neighbors]` with neighbor indices valid for `positions`, which either raises an `IndexError` or silently reads the wrong agents' leadership values.\n\nTask 1.1 needs an explicit bullet to update `EntityManager.spawn_population` to concatenate the `leadership` array too. `EntityManager.spawn_entity` (entities.py:73) goes through `add_agent` and is covered by the planned `add_agent` change. This is a genuine gap, not a nit: it produces wrong leader influence with no error.",
+   "location": "src/migratory_server/entities.py:120-141"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2.2 omits two test files that construct `BehavioralProfile`",
+   "description": "Task 2.2 lists `conftest.py`, `test_profile.py`, `test_state.py`, `test_forces.py`, `test_tick.py`, and `test_flocking.py`. It does not list:\n- `tests/test_entities.py:20-27` \u2014 `_profile()` helper with a `defaults` dict\n- `tests/test_simulation.py:60-70` \u2014 `_profile()` helper with a `defaults` dict\n\nBoth will raise `TypeError` on construction after 2.1, breaking the suite. The task does include a generic \"Update any other test files constructing `BehavioralProfile` (search for `BehavioralProfile(` across `tests/`)\" bullet, which partially mitigates this \u2014 but the generic bullet comes *after* the specific file list and is easily skipped by a junior AI executing the list top-to-bottom, and both files are in the server package where the slice design says the server is out of scope, so they are less likely to be recalled. Naming `tests/test_entities.py` and `tests/test_simulation.py` explicitly alongside the other six is the low-cost fix.\n\nNote also that `tests/test_profile.py:34-49` already has `test_missing_new_field_raises_type_error` (currently a pre-existing test asserting `TypeError` for a profile missing all fields). Task 2.2's \"add test for missing new field raises `TypeError`\" needs to be scoped to specifically omit `leadership_weight`/`momentum_weight` while supplying the other six, otherwise it duplicates the existing `test_missing_all_fields_raises_type_error`.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 2.2's `sample_profile` fixture change alters 80 passing tests' behavior",
+   "description": "Task 2.2 instructs setting `leadership_weight=0.0, momentum_weight=0.0` on the `sample_profile` fixture \"to preserve flocking-only behavior in existing tests.\" This is correct in intent but only covers `tests/conftest.py`. The per-file `_make_profile()` helpers in `tests/test_flocking.py:314-323` (`_make_profile`), `tests/test_flocking.py:312-321` (`_tight_schooling_profile`), `tests/test_entities.py:20-27`, `tests/test_simulation.py:60-70`, and `tests/test_profile.py:9-19` each define their own `defaults` dict and must each be given the two new keys. Six separate dict literals across five files \u2014 a realistic source of partial misses. The task should note that every `defaults` dict, not just the fixture, needs the two keys, or (cleaner) the new fields could be given `0.0` defaults in `BehavioralProfile`, which the slice design explicitly rules out (\"New fields are **required** with no defaults, consistent with the established pattern\"), so the per-site update is unavoidable and must be enumerated.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 5.2/5.3 convergence tests specify no metric tolerance or seeding procedurecategory: testing",
+   "description": "Task 5.2 asserts \"mean heading has positive x-component\" and task 5.3 asserts \"herding heading variance < flocking heading variance, or herding mean eastward component > flocking mean eastward component\". The slice design's success criteria require \"produce **statistically different** movement patterns\" and the walkthrough (step 4) says the herding run \"should show lower heading variance **and** eastward bias.\"\n\nTwo gaps a junior AI will hit:\n1. The slice's demo herding profile uses `max_speed=4.0, query_radius=60.0` with `cohesion_weight=0.008, separation_weight=0.08, alignment_weight=0.04, separation_radius=12.0` \u2014 the task says \"Use herding profile from slice design\" without restating the numbers, which is fine given the reference, but does not say the agents should be *within* each other's `query_radius=60.0` in a 200\u00d7200 area. With 50 agents in 200\u00d7200, mean spacing is ~28, so neighbors exist; but the initial random velocities (`uniform(-2, 2)` presumably) and leader velocities of `[4.0, 0.0]` interact with `max_speed=4.0` clamping. The task should state the exact initial velocity distribution and the exact profile values so the test is reproducible rather than approximately specified.\n2. \"or\" in 5.3's assertion makes the test satisfiable by either metric alone, which is weaker than the slice's \"statistically different\" requirement and risks a flaky pass/fail depending on the seed. The slice design names both metrics (heading variance, path straightness) \u2014 the task should pin the primary metric and a tolerance, and use a fixed seed for both runs so the comparison is deterministic rather than statistical.\n\nThis is a NOTE rather than a CONCERN because the slice design's own walkthrough is equally loose, so the breakdown faithfully reflects it \u2014 but tightening it would prevent a flaky test.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"Vectorized \u2014 no nested Python loops\" requirement has no verification step",
+   "description": "The slice's Technical Requirements state \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" Task 3.1 and 4.1 describe the computation, and 4.1's per-agent steps naturally vectorize (fancy-index + weighted sum), but no task verifies the constraint. The precedent in `tests/test_flocking.py` is a single agent-level Python loop over `eval_indices` with vectorized NumPy inside each neighborhood, which satisfies \"vectorized within each agent's neighborhood.\"\n\nThis could be a one-line addition to task 3.1/4.1's \"Verify\" bullet (\"confirm no inner `for` loop over neighbors \u2014 the implementation must use `np.sum(velocities[neighbors] * leadership[neighbors], axis=0)` style vectorized ops\"). Low priority since the algorithmic content of the criterion is effectively covered by the implementation steps, but it is a stated success criterion with no explicit check.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commit markers are appropriately placed",
+   "description": "Six commit tasks sit at tested checkpoints: after `AgentState` extension + its tests (1.3), after `BehavioralProfile` extension + call-site updates (2.3), after `MomentumForce` + tests (3.3), after `LeadershipForce` + tests (4.3), after integration/convergence/differentiation tests (5.4), and a final completion commit (6.3). This matches the slice design's \"Commit checkpoints\" note and the conventions in the slice101 task file. No adjustment needed.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 1.2's blanket \"these use `AgentState.create()` so they should work without changes\" assumption is wrong for two files",
+   "description": "Task 1.2 says: \"Update any other tests constructing `AgentState` directly (check `conftest.py`, `test_forces.py`, `test_tick.py`) \u2014 these use `AgentState.create()` so they should work without changes, but verify.\"\n\nThe \"verify\" hedge saves it, but the parenthetical enumeration is incomplete: `tests/test_entities.py` and `tests/test_simulation.py` also construct state indirectly through `EntityManager`, and `tests/test_flocking.py` uses `AgentState.create()` but then assigns to `state.positions`/`state.velocities` directly. More importantly, the `AgentState.__init__` signature gains a `leadership` parameter (task 1.1: \"Update `__init__` to accept and store `leadership` parameter\"), and `EntityManager.__init__` calls `AgentState.create(0, ...)` \u2014 fine \u2014 but any *direct* `AgentState(...)` construction would break. I confirmed via grep that no test or source file calls `AgentState(...)` directly, so this is safe; the note is just for the record.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "`AgentState.__init__` leadership parameter should have a default to avoid breaking positional callers",
+   "description": "Task 1.1 says \"Update `__init__` to accept and store `leadership` parameter\" without specifying whether it is required or defaulted. Since `__init__` is currently positional and `create()` is the only caller in the codebase (verified by grep: no `AgentState(` direct construction anywhere), this is low-risk either way. Giving it a default of `None` \u2192 `np.zeros(n)` is the more defensive choice and matches the \"no silent fallback values\" convention less well than an explicit required parameter. Worth stating explicitly in the task so the implementer picks one deliberately rather than by accident.",
+   "location": "src/migratory/engine/state.py:27-37"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Proportionality and structure are appropriate",
+   "description": "Six sections, 18 top-level tasks, ~90 checklist items for a slice adding two force classes, two dataclass fields, one state array, and five test scenarios. This is proportionate to the slice's technical scope. The test-with pattern is correctly applied (each implementation task is immediately followed by its test task), the granularity of individual checklist items is fine for a junior AI, and no task is large enough to warrant splitting. No scope creep found: every task traces to a success criterion or to the slice's \"Implementation Notes / Development Approach\" sequence.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  }
+ ]
+}

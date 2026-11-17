@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`aiModel` can name a model that did not write the review",
+   "description": "D12 states \"`aiModel` is the **last** model reported, the one that wrote the review\", and the Data Flow repeats `result.model = last answering model`. But State Management specifies `TurnCapture` accumulation as \"answering models append in order, deduplicated\", and D8 has the providers stamping `metadata[\"answering_models\"]` as a \"distinct, first-seen order\" list. Those two rules disagree about what \"last\" means. For the sequence turn 1 = `[A, B]` (possible within the agentic loop, per D8's \"Accumulate distinct values across the agentic loop\") followed by the #92 recovery turn reporting `A`, dedup yields `[A, B]`, whose last element is `B` \u2014 a model that did not produce the persisted review. The design must state the rule explicitly: either `result.model` is the last model reported *per call* (independent of the deduped list used for the digest), or the list preserves last-occurrence order. As written, the one fact this slice exists to record can be wrong in exactly the multi-turn case D12 was added to handle.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D12 \u2014 More than one model answered in one run"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The coverage cap silently discards 919's `derived` verdict provenance",
+   "description": "D5 says \"Only `impose_diff_coverage` sets it\", but `VerdictSource.DERIVED` is already set by `_verdict_from_findings` when the summary parse failed and the verdict was recovered from finding severities (verified in `parsers.py:993`). Both conditions can hold simultaneously: the cap fires on a `PASS` with a truncated diff and zero successful tool calls, and a *derived* PASS is precisely the shape where no summary verdict was parsed \u2014 919 Part B exists because that derived PASS auto-clears a gate that reads frontmatter. When the cap applies, the artifact's single `verdictSource` slot is overwritten from `derived` to `imposed`, so the #97 signal (\"the model never said this\") is destroyed at the moment it is most needed, and nothing else in the artifact records it. The design needs a stated precedence and a home for the displaced fact \u2014 either `imposed` subsumes `derived` and the digest says so, or the two are separate keys.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D5 \u2014 `VerdictSource.IMPOSED`"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The synthetic finding omits `location:`, departing from the 904 convention it bypasses",
+   "description": "D4 states \"It has no `location` because it cites no file. `location_verified` stays `None`.\" The slice plan's entry 3 (904) requires `location:` on *every* finding, PASS included, and establishes `unverified` as \"the explicit 'I don't know' token\", with `parsers.py` normalizing missing/blank/`-`/`global` to `unverified`. Because the synthetic finding is constructed in `impose_diff_coverage` rather than parsed, that normalization never runs, so the artifact carries a finding with no location \u2014 the one shape the convention forbids, and a fourth state for any consumer (904 records ensemble merged-finding dedup as keying on location). \"Cites no file\" is exactly what `unverified` means; the fix is one word, and the design should say why it did not use it.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The synthetic finding's remedy names the wrong knob for the total-limit case",
+   "description": "D3 deliberately records the `_add_injection` skip as the same fact as a `_truncate` cut (`total_chars=len(diff)`, `injected_chars=0`), and D4's rule fires on `truncated`, which D1 defines as `injected_chars < total_chars` \u2014 so the total-limit case produces the synthetic finding. But D4's template hardcodes the remedy \"Raise `review.max_file_size_bytes`\" and the sentence \"the first 256000 reached the model (review.max_file_size_bytes)\". In the D3 case nothing reached the model and `max_file_size_bytes` was not the binding constraint, so the artifact tells the operator to raise a limit that will change nothing. This is the artifact's only actionable output on that path, and the design treats the two causes as \"the same fact, not a different fact\" without noting that the *remedy* is not the same. Render the sentence from which limit bound (the counts are already carried), or word it cause-neutrally.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D3 \u2014 A diff dropped by the total-injection limit is a truncation to zero"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "A new module for one predicate, next to the module that already owns model ids",
+   "description": "`models/snapshot.py` is introduced to hold `answers_as_requested`, described as living \"next to `models/aliases.py` because it is about model ids, not reviews.\" `aliases.py` is already the module about model ids (`resolve_model_alias`, `model_allows_tools`) and has no dependency that this predicate would violate. A one-predicate, regex-only file is the lighter option's heavier sibling; fold it in unless a second consumer is already foreseen, and if it does need its own module, name it for the rule (`model_identity.py`) rather than for one of its three accepted shapes.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Component Structure"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Expanding `VerdictSource` needs the vocabulary contract updated, and the \"no external reader\" evidence is grep-only",
+   "description": "The `VerdictSource` docstring in `review/models.py` documents \"a closed two-value vocabulary (D7)\", and the design's argument (the concern was open reason strings, not member count) is fair but is not the same as the docstring saying so \u2014 the component table lists the enum change without listing the docstring/contract update. Separately, D5 rests on \"grep of context-forge on 20260926 found no reader\" and the Integration Points section calls the change \"All additive\", but 919 Part B chose the frontmatter key specifically so Context Forge could switch on it without squadron dictating policy; a third value is a value change to a key another repository may now branch on, not an addition. I could not verify CF's current state (external repo, unverified), so this is a note to re-confirm rather than an assertion that a reader exists.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D5 \u2014 `VerdictSource.IMPOSED`"
+  }
+ ]
+}

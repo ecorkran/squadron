@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator sweep sites contradict the design's own TD-3 exclusion",
+   "description": "The site table (line 36), the component table (line 75), and work step 4 (line 90) direct sweeping 3 `WorkflowNavigator.ts` sites. But all three are `SliceStatus` sites, not `NormalizedStatus` sites: `WorkflowNavigator.ts:312` and `:345` compare `slice.status` where `slice` is `status.activeSlice` of type `SliceStatus`, and `:588` assigns `status: 'complete'` to a `SliceStatus` return value. TD-3 (lines 104\u2013106) explicitly rules these out: \"`SliceStatus.status`... Its `'complete'` member is incidental overlap in spelling, not the same type... Left untouched.\" Following the table would conflate the two unions TD-3 forbids conflating \u2014 and since `slice.status === STATUS.Complete` still compiles (both are strings), the compiler will not catch it, defeating the slice's own purpose for these sites. Conversely, honoring TD-3 leaves three literals that the success criterion (line 135, \"zero matches in the six swept files\", which includes `WorkflowNavigator.ts`) then flags as failures. The same root problem hits the functional requirement directly: the FR grep excludes only `types.ts:3-6` but not `types.ts:269` (`SliceStatus`'s `'complete'` member), so as literally specified the criterion is unsatisfiable while TD-3 stands. The row, step 4, TD-3, and the FR/grep need reconciliation before implementation \u2014 the WorkflowNavigator row should most likely read 0 sites.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Every production-code site\" claim excludes a real CLI site without discussion",
+   "description": "The Overview promises \"every production-code site that assigns or compares a `NormalizedStatus` value as a bare string literal\", but the scope (line 29) restricts the sweep to `packages/core/src`. `packages/cli/src/commands/arch.ts:189` is a production bare-literal comparison (`init.slices.filter((s) => s.status === 'complete')`) against a value produced by `deriveEntryStatus` (a `NormalizedStatus`) or the `'unknown'` sentinel \u2014 the same class of site this slice exists to eliminate, in a file that already imports `STATUS` (arch.ts line 8), making the fix trivial. Either the Overview's \"every production-code site\" claim should be narrowed to core, or this site should be swept. As written, the stated goal is not met by the scoped work.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:17"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Factual claim about test files is demonstrably false",
+   "description": "The document asserts \"grep confirms zero `.test.ts` files assert against these literals directly (tests exercise behavior through parsers/fixtures, not string comparison)\". This is false: numerous `.test.ts` files assert these literals directly \u2014 e.g. `packages/core/tests/introspection/statusNormalizer.test.ts:7` (`expect(normalizeStatus(input)).toBe('complete')`), `taskFileParser.test.ts:54`, `ConsistencyChecker.test.ts:47-48`, `WorkflowNavigator.test.ts:71`, `slicePlanParser.test.ts:15`, and CLI/MCP test files. The conclusion (no test changes needed) still holds \u2014 swept values are identical strings, so string assertions remain valid \u2014 but the stated evidence base is wrong and should be corrected to that reasoning, since the current claim misrepresents the regression guard's nature.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Site-count arithmetic and walkthrough numbers do not reconcile",
+   "description": "Minor inventory inaccuracies that should be corrected when the scope contradiction above is fixed: the `types.ts` row says \"5 (of 8 total)\" sweepable, but the file has 4 `STATUS`-definition literals + 3 `inferredStatus` union literals (one line) + 1 `SliceStatus` literal = 8, of which only 3 sweep per the design's own rules. The verification walkthrough's \"Before: ~75\" (line 150) does not match a grep of `packages/core/src` (~66 occurrences by my count), and the \"After\" enumeration (4 + 3 + 4 = 11, line 151) sits awkwardly against the \"zero matches\" FR. None of these change the work, but a mechanical-sweep design lives and dies by an accurate count.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:35"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Step 1's build-coupling rationale is incorrect (harmless)",
+   "description": "Step 1 claims retyping `TaskFileResult.inferredStatus` and sweeping `taskFileParser.ts` \"must land together, or the intermediate state fails to build\". Neither intermediate state fails: a bare `'complete'` literal is assignable to `NormalizedStatus` (a widening), and `STATUS.Complete` is assignable to the narrower three-member union. Landing them together is still good practice; the stated compile-failure justification is simply wrong and should not be relied on as an ordering constraint.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:86"
+  }
+ ]
+}

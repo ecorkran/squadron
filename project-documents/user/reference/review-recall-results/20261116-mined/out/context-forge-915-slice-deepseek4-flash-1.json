@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Detection rule's file-reading mechanism is unspecified and has no supporting API",
+      "description": "The design states the new `ConsistencyChecker` rule \"scans the shared project file for any key whose `CONFIG_KEYS[key].scope === 'personal'`,\" but no mechanism is specified and none currently exists. `ConfigManager` exposes no API to enumerate the raw keys present in a *specific* file: `get()` resolves one key through the full precedence chain, and `list()` is built on `get()`, so with the new precedence a personal key present in *both* files resolves as `source: 'project-personal'` and the shared-file copy is invisible. The `readToml` helper that would be needed is module-private and not exported (`packages/core/src/config/ConfigManager.ts`), and the `Component Structure` / `API Contracts` sections add only `getProjectPersonalConfigPath` \u2014 no key-enumeration helper. Since the design's own Collision Semantics acknowledge the both-files case exists, the detection rule needs a concrete read API (e.g. an exported per-file key enumerator or a new `ConfigManager` method), and the design should name it. As written, the implementer must invent an unstated cross-layer dependency (reading TOML directly from `introspection/`) to satisfy the rule.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"existing config-hygiene-style checks\" do not exist in ConsistencyChecker",
+      "description": "The design says the rule is \"added alongside the existing config-hygiene-style checks.\" No such rule category exists \u2014 the current rules are `task-vs-plan`, `frontmatter-vs-computed`, `missing-artifact`, `plan-vs-frontmatter`, `task-file-status`, `review-gate`, `duplicate-index`, `plan-status-vs-entries`, `arch-status-vs-plans`, `initiative-*`, `stale-worktree-path`, and `frontmatter-schema`; the only existing config interaction is `resolveGateConfig()`. The reference could mislead an implementer into looking for a pattern to copy. Minor wording fix.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+    },
+    {
+      "severity": "NOTE",
+      "title": "MCP `workflow_check` tool description is not updated for the new rule",
+      "description": "The design correctly notes the rule \"surfaces automatically through ... MCP `workflow_check`,\" but the `Component Structure` MCP entry lists only `configTools.ts` as changed. `packages/mcp-server/src/tools/workflowTools.ts`'s `workflow_check` description enumerates the categories it detects, so adding a rule leaves that description stale. Either add `workflowTools.ts` to the change list or state explicitly that the description is left as-is.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#component-structure"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Detection rule's file-reading mechanism is unspecified and has no supporting API",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "\"existing config-hygiene-style checks\" do not exist in ConsistencyChecker",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "MCP `workflow_check` tool description is not updated for the new rule",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#component-structure",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-16T21:30:31.711066",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 246721,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 19,
+  "prompt_tokens": 708242,
+  "cached_tokens": 644608,
+  "cache_write_tokens": null,
+  "completion_tokens": 60102,
+  "reasoning_tokens": 56343,
+  "duration_seconds": 258.934278458124,
+  "cost_usd": 0.04293112,
+  "cost_basis": "alias_pricing"
+}

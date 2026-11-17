@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checklist items, not plain lines",
+   "description": "All five commit points (Tasks 1.5, 2.4, 3.6, 4.3, 5.5) are `- [ ] **Commit:** \\`...\\`` \u2014 a checkbox line, indistinguishable from the actionable `git add` line above it, and tickable as \"done\" independently of the commit existing. The convention is a plain `**Commit**:` line (as used in `301-tasks.tick-loop-and-timing.md` through `307-tasks.simulation-logging-and-replay.md`). The *placement* is correct \u2014 1.5, 2.4, 3.6 and 4.3 each follow a section whose tests have just been run, and 5.5 is the doc-completion commit \u2014 so only the form needs changing.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Frontmatter status contradicts the unchecked task list",
+   "description": "The frontmatter reads `status: complete` and `dateUpdated: 20260408` (identical to `dateCreated`), while every one of the ~20 `[ ]` items is unchecked \u2014 including Task 5.3, which is the step that is supposed to set that status, and Task 5.2's 8-step viewer walkthrough. A reader cannot tell which commits landed or which verification steps actually ran. Either the items should be checked off, or the status should reflect reality.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The full test suite is scheduled to run three times with no intervening code change",
+   "description": "Task 3.5 (`pytest`), Task 5.1 (`pytest`) and Task 5.2 step 2 (`pytest`) are all whole-suite runs, and between 3.5 and 5.1 the only changes are two YAML keys and the CHANGELOG. Task 5.1 adds no information; dropping it (or folding it into 5.2 step 2) would trim the file without losing a checkpoint.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 2.1 delivers a dispatch function whose branches are not implemented until 2.2",
+   "description": "Task 2.1 creates `bounds_enforcement.py` with `apply_bounds_policy` delegating to `_apply_wrap`/`_apply_reflect`, which do not exist until Task 2.2; its stated success criterion (\"Module imports cleanly\") passes only because the WRAP/REFLECT branches are never executed, and there is no commit between 2.1 and 2.2. Merging 2.1 and 2.2 into a single \"create the enforcement module\" task would remove an unverifiable intermediate state without changing the work.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 3.2's \"zero import-time overhead\" item is unverifiable and contradicts the file's own Notes",
+   "description": "Task 3.2 asks the implementer to \"Confirm the `OPEN` path has zero import-time or per-tick overhead\", yet the same task mandates a module-level `from migratory_server.bounds_enforcement import apply_bounds_policy`, and the Notes section concedes \"No import of `apply_bounds_policy` is avoided\". The testable statement is the one already given as the success criterion (the function is called exactly when policy is not `OPEN`, verified by the mock test in 3.4); the confirm item should be restated as \"the function is never invoked on the `OPEN` path\" or dropped.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Shipped-config policy (SC12) is verified only by eye",
+   "description": "Tasks 4.1 and 4.2 add `policy: wrap` to `config/default.yaml` and `config/test.yaml` and verify with a printed `python -c` invocation and \"expect output containing wrap\". Nothing asserts the shipped configs carry `wrap`, so a later edit that drops the key silently reverts first-run behavior to `OPEN` (the dataclass default) while the suite stays green. One assertion next to the existing `test_default_config_file_loads` in `tests/test_config.py` (`policy is BoundsPolicy.WRAP`) plus a companion for `config/test.yaml` would close it.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

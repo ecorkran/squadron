@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Config-injection design verified against all surface call sites; worktree scoping claim holds",
+      "description": "The design's component table names four production instantiations. Verified: `next.ts:26`, `status.ts:119`, `workflowTools.ts:154` and `:200` are exactly the navigator construction sites (no others). The \"worktree scope inherited for free\" claim is accurate: `next.ts` resolves via `resolveProjectWorktree` \u2192 `resolveProject(store, id, worktreeId)`, `status.ts:146-151` does the same, and both MCP workflow tools call `resolveProject(store, resolvedId, args.worktreeId)` \u2014 all of which route through `applyWorktreeOverlay`, which rewrites `projectPath` to the worktree path. So `ConfigManager(project.projectPath)` resolves project-scoped review config at worktree scope, matching the design's Interfaces-Required bullet and 180's resolution chain.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:97"
+    },
+    {
+      "severity": "PASS",
+      "title": "Conservative-by-default is structurally preserved and matches the arch's behavioral invariant",
+      "description": "Optional constructor parameter + \"config undefined or `review_enabled` false \u21d2 don't even look for a review artifact,\" verified by a regression test rather than inspection, matches the arch's \"Conservative by default\" and \"Extend, don't replace\" principles and its insertion-point constraint (the reserved `LIFECYCLE: review-gate` branch sits before `complete-advance` in the source, exactly where the design fills it). The arch states no latency/throughput NFRs; the one behavioral invariant it does state (no change when gating off) is restated here with a concrete test target. TD-7's additive-only recommendation vocabulary correctly preserves the `NextAction` return type the arch requires for Amoeba.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Success Criteria"
+    },
+    {
+      "severity": "PASS",
+      "title": "TD-4, the 244 retirement, and the STATUS/910 split resolve items the parent plan explicitly assigned to this slice",
+      "description": "The slice plan says \"the design (Phase 4) makes that call\" for both the inert `review_type` keys and whether per-gate `threshold` survives \u2014 TD-4 makes both calls within the sanctioned options and flags the removal alternative for the PM. The 244 retirement matches the plan's note verbatim. The `STATUS` const introduction matches maintenance slice 910's plan entry, which states \"slice 241 introduces the STATUS constant for its own new code; this slice completes the sweep\" \u2014 the dependency direction (910 depends on 241) is correct, as are 240 \u2192 241 \u2192 {242, 243}. Proportionality is sound: nothing outside the plan entry is added, nothing assigned is dropped, and excluded scope (242/243/910/score) is explicit.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:229"
+    },
+    {
+      "severity": "PASS",
+      "title": "Review-artifact I/O failure modes are explicitly enumerated with a no-silent-pass strategy",
+      "description": "The absent artifact \u2192 `pending`; present-but-unparseable \u2192 `UNKNOWN` \u2192 `review_unknown_as`, never surfaced as `pending` \u2014 is exactly the arch's \"must not silently pass\" requirement, and the design keeps the present-vs-absent distinction from collapsing. The `parseFrontmatter` never-throws contract the design leans on is verified in source (`frontmatterParser.ts:7,10,46`). The decision matrix matches the shipped config enums (`['pass','concerns']` / `['fail','concerns','pass']` in `ConfigKeys.ts`) and the arch's verdict vocabulary.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-slice-plan (arch) gate has no working routing mechanism: the reserved branch is unreachable when there is no active slice, and first-run context intercepts the boundary",
+      "description": "TD-3 says the new statuses flow through `getStatus()`/`activeSlice` and that `getNext()`'s reserved `review-gate` branch maps them to `review`/`blocked`. That mechanism cannot deliver the arch boundary: in `WorkflowNavigator.ts`, every no-active-slice path returns from *inside* the `GUARD: no-active-slice` block (`:98-190`) \u2014 including `detectFirstRunContext` (`:326-425`), whose FR-3b branch (`:384-393`) returns \"Architecture document exists. Advance to Phase 3 and create a slice plan\" for precisely the state the arch gate must intercept (arch exists \u2227 no slice plan \u2227 Phase 2). When there is no active slice, `activeSlice` is null, so no `pending-review` status can be attached or routed, and the reserved branch is never reached. The design says \"extend the no-active-slice/pre-slice-plan path\" (`:33`, `:57`) but never specifies an insertion point, the recommendation shape for that path, or precedence over first-run guidance. Unmet requirements: the arch's Overview (\"recommends `pending-review` or `review-failed` instead of recommending an advance\") and this design's own Success Criteria (\"the same clears/pending/failed behavior holds at the \u2026 arch boundaries\"). The design must specify where in the no-active-slice cascade the gate evaluates and how the review/blocked recommendation is produced there.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-slice-plan review lookup index is undefined \u2014 there is no slice index at that boundary",
+      "description": "The boundary\u2192signal table gives the *condition* (\"arch file exists, no slice plan\") but not the *index* for the review lookup. `detectDocuments` matches reviews as `{index}-review.{reviewType}.*.md` (`documentDetector.ts:87-97`), and at the arch boundary `slice.index` is null. The design's own band-mismatch precedent shows arch files carry their own numeric prefix that can differ from a slice's (`WorkflowNavigator.ts:120-127` compares `extractSliceIndex(project.fileArch)` against the slice's hundred-block as distinct bands), and the 240 fixture convention named an arch review `100-review.arch.*.md` for the 100-family. Which index derives the lookup \u2014 `extractSliceIndex(project.fileArch)`, the initiative base index, or something else \u2014 is unstated, so the Success Criterion \"the correct review type is looked for automatically\" (`arch` row) is unimplementable as specified, and slice 242 (which reuses `positionToReviewType` plus detection) inherits the hole. Name the rule and add it to the per-boundary tests.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-implementation (tasks) gate trigger is self-contradictory and as written fires throughout implementation, not before it",
+      "description": "The Overview table (`:25`) says the signal is \"task file exists, **not implemented**\"; the boundary table (`:138`) says \"task file exists, **not complete**.\" These differ materially: in `deriveSliceStatus`, `in-implementation` covers every state from 1/N to (N-1)/N checked (`WorkflowNavigator.ts:493-496`), so implementing \"not complete\" makes the tasks gate fire for the entire implementation phase \u2014 a slice at 3/5 checked with no tasks review flips to `pending-review` and `cf next` recommends a review instead of \"Continue implementation \u2014 2 tasks remaining.\" That contradicts the arch's transition name (`pre-implementation` \u2014 the tasks review gates the *start* of implementation) and TD-7's rationale examples, which assume the complete/code case. Pin the signal to \"task file exists \u2227 zero tasks completed\" (or a not-started inferred status \u2014 note `deriveSliceStatus` never produces a distinct 'not-started' slice status, so the distinction must be made on `taskProgress.completed`), and add a mid-implementation no-fire test to the per-boundary coverage.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New config-read I/O path has no failure-mode handling, violating the arch's fail-fast principle and the gating-off \"byte-for-byte identical\" claim",
+      "description": "Once a `ConfigManager` is injected, `resolveGateConfig` makes `cf next`/`cf status`/`workflow_next` read `.context-forge.toml` on every call \u2014 including when gating is off (`review_enabled` must be read to know it's off). `ConfigManager.get` \u2192 `readToml` throws on malformed TOML (`ConfigManager.ts:12-20` swallows only ENOENT). The design's failure-mode enumeration covers the review file but not the config file. Worse, the natural integration point is inside `deriveSliceStatus`'s existing `try { \u2026 } catch { return base; }` (`WorkflowNavigator.ts:461-499`), where a config-read throw silently degrades to `no-active-slice` \u2014 a silent fallback, which CLAUDE.md forbids and the arch's \"Fail-fast on configuration errors \u2026 surfaced immediately, not a silent pass or silent block\" principle explicitly prohibits. It also undermines the Overview's \"gating off \u21d2 behavior byte-for-byte identical\" guarantee (`:31`): today the navigator reads no config, so a malformed TOML is invisible to `cf next`; after 241 it is not, and the gating-off regression test (which uses a stub or no config) cannot catch it. State the handling explicitly: propagate the error to the CLI/MCP error boundary (fail-fast), or catch with an explicit warning and a documented gating-off policy \u2014 and scope the \"identical\" guarantee to valid config.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:191"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The arch's parse-failure rationale requirement is silently dropped by the never-throws parser choice",
+      "description": "The arch (240-arch \u00a7Technical Considerations, \"File-read failure modes\") requires: \"The rationale returned to the caller names the parse failure explicitly.\" The design adopts `parseFrontmatter`'s collapse of read/parse errors into `{ found: false, data: {} }` as \"exactly the behavior the gate needs\" \u2014 correct for the verdict decision (TD-2 `:216` keeps present-but-unparseable \u2260 pending), but it discards the information the arch says the rationale must carry: TD-1's `normalizeVerdict(raw: string | undefined)` and the data flow (`:161`) never plumb `FrontmatterResult.found` (or file existence) forward, so \"unreadable/malformed file\" is indistinguishable from \"file with no frontmatter block,\" and TD-7's rationale spec (`:268`) names only review type, verdict, and threshold. As written, an arch requirement is unmet without being acknowledged. Either plumb `found`/existence into the gate result so the rationale can distinguish the cases, or explicitly restate/drop the arch's rationale clause as a design decision for the PM \u2014 don't leave it silently unmet.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `workflow_status` tool description enumerates a closed status set that this slice's own edit makes stale",
+      "description": "`workflowTools.ts`'s `workflow_status` description enumerates \"(needs-design, needs-tasks, in-implementation, complete)\" \u2014 after 241 it is incomplete, and the tool is interface surface for downstream AI consumers, not just user docs. Documentation is correctly deferred to 243, but since 241 already edits `workflowTools.ts` (its component table), folding the two new values into that description string in the same change would avoid shipping a knowingly stale contract for a slice cycle. Minor; 243 coverage is an acceptable fallback.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Integration Points"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Config-injection design verified against all surface call sites; worktree scoping claim holds",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Conservative-by-default is structurally preserved and matches the arch's behavioral invariant",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Success Criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "TD-4, the 244 retirement, and the STATUS/910 split resolve items the parent plan explicitly assigned to this slice",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:229",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Review-artifact I/O failure modes are explicitly enumerated with a no-silent-pass strategy",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:216",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The pre-slice-plan (arch) gate has no working routing mechanism: the reserved branch is unreachable when there is no active slice, and first-run context intercepts the boundary",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:222",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The pre-slice-plan review lookup index is undefined \u2014 there is no slice index at that boundary",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:136",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The pre-implementation (tasks) gate trigger is self-contradictory and as written fires throughout implementation, not before it",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New config-read I/O path has no failure-mode handling, violating the arch's fail-fast principle and the gating-off \"byte-for-byte identical\" claim",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:191",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The arch's parse-failure rationale requirement is silently dropped by the never-throws parser choice",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "The `workflow_status` tool description enumerates a closed status set that this slice's own edit makes stale",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Integration Points",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "against": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-241-slice"
+  },
+  "timestamp": "2026-11-16T21:28:04.300134",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 483407,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 667026,
+  "cached_tokens": 609920,
+  "cache_write_tokens": null,
+  "completion_tokens": 112655,
+  "reasoning_tokens": 122966,
+  "duration_seconds": 1513.3144484160002,
+  "cost_usd": 0.083191,
+  "cost_basis": "alias_pricing"
+}

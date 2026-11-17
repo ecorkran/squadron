@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 3.1 describes `world_bounds` as a required argument but implementation made it optional",
+   "description": "The task says \"Add a new required keyword argument `world_bounds: WorldBoundsConfig` to `SimulationManager.__init__`\". The actual implementation (src/migratory_server/simulation.py:54-58) defaults it to `None` and falls back to `entity_manager.world_bounds`. This is a benign implementation divergence \u2014 making the argument required as the slice specifies would have forced updates to every `SimulationManager(...)` call site in the existing test suite (Task 3.4 already addresses this for `test_simulation.py`, but not other test files). The implemented approach is arguably better because it provides a graceful default. Flagging as informational only since the work is complete and the task breakdown is a historical record.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:3.1"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Slice design and task breakdown both describe the codebase as pre-implementation; current code already implements it",
+   "description": "Both the slice design and the task file are marked `status: complete` in frontmatter, consistent with the implementation now present in `src/migratory_server/config.py`, `src/migratory_server/bounds_enforcement.py`, `src/migratory_server/simulation.py`, `src/migratory_server/server.py`, `config/default.yaml`, `config/test.yaml`, `tests/test_bounds_enforcement.py`, and `tests/test_config.py`. The task breakdown correctly guided the implementation. Note: the actual codebase has gone beyond the slice's stated scope by adding a `SOFT` policy variant with `SoftBoundsConfig` and a corresponding `bounds_enforcement.py` `case BoundsPolicy.SOFT` arm, but the slice design explicitly lists `SOFT` as out-of-scope and the task breakdown correctly does not require it. This is implementation history, not a task breakdown defect.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  }
+ ]
+}

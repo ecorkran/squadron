@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "SC4 (dropped topics) is authored into the skill but never checked in the generated document",
+   "description": "SC4 is a property of the *output*: \"Dropped topics (why-now, audience evolution, methodology preference) appear nowhere in the document \u2014 neither as content nor as gap markers\" (`363-slice.concept-generation.md:346-374`). Task 4.1 authors the rule into the skill text and 4.2 diff-checks the wording, but Task 8.1 \u2014 the only task that inspects the written `000-concept.squadron.md` \u2014 enumerates Overview, User-Provided Concept, Problem & Motivation, Target Users, Development Approach, Solution Approach and provenance, and never asserts the absence of why-now / audience-evolution / methodology-preference content or gap markers. The checkable requirement is left unmet by any task; the negative assertion is cheap to add to 8.1 (a grep over the generated file for the three topics and for gap markers naming them).",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "SC10's `[INFERRED]` checkable rule has no compliance check on the generated document",
+   "description": "SC10 requires both that provenance carries the inferred-claims line *and* that \"every `[INFERRED]` sentence satisfies the checkable rule\". Tasks 7.1 (author the rule) and 7.3 (provenance block) cover the rule text and the line, and 8.1 only checks that the provenance carries an inferred-claims line. Nothing verifies the rule's three mechanical predicates on the draft: a marked sentence names a graph field it derives from, a sentence restating a field carries no marker, and no unmarked sentence lacks a source. Since the governing rule is explicitly mechanical (design lines 277\u2013279), a check in 8.1 or 8.6 is required to make SC10 verifiable rather than aspirational.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:258-289"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "SC7's absent/unreadable-guide branch and the two terminal precondition stops are never exercised",
+   "description": "SC7 covers three failure modes \u2014 guide absent, unreadable, or missing the expected section title \u2014 and Task 6.1 authors two distinct stop messages (Check 1: path/setup step; Check 2: renamed title). Task 8.3 exercises only the renamed-title branch (\"rename the section heading in the copy\"), and Task 6.3 verifies only the success path against the real guide. Likewise Task 2.1's two terminal preconditions (guide tree absent \u2192 name the setup step; no resolvable project name \u2192 stop, no fallback) have no verification task at all, even though \"no fallback\" is the behavior most likely to be silently softened by a junior author. The scratch-copy technique 8.3 already uses extends naturally to a missing guide directory and to an unregistered project name.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 1.1 introduces `comprehension` as a recognized argument while calling its behavior \"unchanged\", and that change falls in the design's excluded scope",
+   "description": "The skill today says only \"Any argument other than the comprehension default is **unrecognized**. Say so and stop\" \u2014 `comprehension` is not an accepted token. Task 1.1 makes `comprehension` route to the comprehension flow, and Task 8.5 verifies that route as \"unchanged behavior\", but it is a behavior change: today that argument is rejected. The design's Technical Scope excludes \"Any change to ... the comprehension flow\", while SC1 requires exactly this recognition \u2014 an internal design tension the task inherits without noting it. Either the task should record that the selector deliberately extends the comprehension default's argument handling (and say so in the skill text), or the tension should be raised to the PM before 1.1 is written.",
+   "location": "commands/analysis/understand.md:392-393"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox sub-items, one per task, for a single markdown file",
+   "description": "Eight commits are marked (`1.2`, `2.2`, `3.4`, `4.2`, `5.3`, `6.3`, `7.4`, `8.6`, plus `9.3`) \u2014 effectively one per task across nine tasks, all editing the same file. Each `Commit:` is written as a checklist item rather than a plain marker line. The checkbox form matches project precedent (`362-tasks.comprehension-analysis-and-graph-extraction.md` does the same) and this repo's CLAUDE.md checklist rule, so it is defensible; the density is the weaker point. Merging 1+2 and 4+5 into single commits would still leave markers at working, tested points without eight near-identical `feat:` lines for one markdown file.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Precondition 3 does not name the resolution mechanism the skill must state",
+   "description": "Task 2.1 says \"resolvable project name from the cf project registration, never from the graph\" and prohibits the graph fallback, but does not say how the skill resolves it \u2014 which command or file. The mechanism surfaces only in the verification sub-task 2.2 (\"`cf get` Name field\"). A junior author could write vague prose (\"from context-forge's project registration\") that a later run cannot execute. Task 2.1 should carry the concrete resolution step (the same `cf get` mechanism 2.2 names) so the authored text and its verification agree.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:103-118"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Two design premises could not be confirmed in this checkout; Task 0.2 correctly gates them",
+   "description": "`project-documents/ai-project-guide` is a git submodule and is empty in the current working tree, so I could not verify the design's `## User-Provided Concept`-present-exactly-once fact nor the guide path Task 2.1/6.3 depend on; the corresponding premise is unverified here rather than wrong. Task 0.2's STOP condition (\"if any check diverges from the Verified facts table ... stop and report to the Project Manager\") covers the case, provided the author initializes the submodule before running it \u2014 worth stating explicitly in 0.2 so the stop is a real premise failure rather than an uninitialized submodule.",
+   "location": ".gitmodules:1-3"
+  }
+ ]
+}

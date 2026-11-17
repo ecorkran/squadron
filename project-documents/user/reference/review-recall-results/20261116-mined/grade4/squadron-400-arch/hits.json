@@ -1,0 +1,34 @@
+{
+ "case": "squadron-400-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Goals: the headline report example \"error-handling findings: 4 from review, 2 from audit\". `AuditCategory` at `0c6c4898` (`metrology/models.py:135-144`) has `ERROR_HANDLING_OBSERVABILITY = \"error-handling-observability\"` and no `error-handling`. **VALID** (minor): contradicts code. Needs: code. Raised by the original review (F007).",
+   "hits": {
+    "r01": [],
+    "r02": [
+     0
+    ],
+    "r03": [],
+    "r04": [],
+    "r05": [],
+    "r06": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Current State: \"`category` is a free string the model chooses, and is `None` on many findings\", read by ingest from review frontmatter. `ReviewResult.structured_findings` (`review/models.py:~401`) writes `category=f.category or \"uncategorized\"`, so the frontmatter never holds `None`. **VALID**: contradicts code, and ingest would have to handle a sentinel string instead. Needs: code. Raised by the original review (F007).",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [
+     3
+    ],
+    "r05": [],
+    "r06": []
+   }
+  }
+ ],
+ "note": "F1: r04 f3 and r06 f2 flag the review prompt example error-handling as out of vocabulary but not the architecture headline example, not counted. F2: r02 f1, r05 f1, r06 f2 mention the uncategorized substitution but do not contradict the doc None claim, not counted"
+}

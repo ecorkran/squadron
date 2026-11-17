@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`recommend_thresholds` signature differs between slice design and T9",
+      "description": "The slice design (line 83) specifies `recommend_thresholds(agreement: AgreementReport, *, floor: int, current: ThresholdSnapshot) -> RecommendationReport`. T9 implements `recommend_thresholds(agreement, *, floor, graduate_rate, tighten_rate)` and reads the current thresholds per-cell via `read_current_thresholds`. The parameters diverge in both shape and where the per-template threshold read lives. Either the design's signature is wrong (and should drop `current`/`ThresholdSnapshot` in favor of the per-cell read pattern T9 uses) or T9 is wrong (and should accept a pre-built `ThresholdSnapshot`). A junior AI will pick one and either diverge from the design or fight the design \u2014 the artifact should reconcile them.",
+      "file_ref": null,
+      "category": "api-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:181"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Direction-band precedence in T7 contradicts its own success criterion and the design's table",
+      "description": "T7's listed precedence puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` as case 1 and `match_rate <= tighten_rate \u2192 TIGHTEN` as case 4. Under that literal order, a below-floor cell with a low match rate returns `INSUFFICIENT_EVIDENCE` (case 1 matches first). The T7 success criterion, T8's \"Tightening is not floor-gated\" test, and the slice design's own band-table note (\"Floor-gated? no\" for the TIGHTEN row) all require the opposite \u2014 TIGHTEN must win over the n<floor band. The task text even acknowledges this in prose (\"implement so a below-floor cell with a low match rate still surfaces as TIGHTEN, not INSUFFICIENT_EVIDENCE\") but the precedence list as written will produce the wrong result. A junior AI implementing the list verbatim will write code that fails T8's test. Recommend rewriting the precedence so TIGHTEN is checked *before* the n<floor band (or making the n<floor rule explicitly \"unless TIGHTEN triggers\"), and updating the design's table to match.",
+      "file_ref": null,
+      "category": "requirements-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:139-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13 hedges a real architectural decision (result-discovery surface)",
+      "description": "T13 instructs the implementer to \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk (ask the Project Manager if this reveals a missing 320 capability)\". The slice design's walkthrough step 7 requires discovering *new* judge review files produced after a prompt edit (`offers` must report zero offers drawn against the new config) \u2014 which can only be verified by scanning the filesystem for review files, not by reading store-recorded samples (the samples haven't been recorded yet at that point). The decision between \"read store only\" vs \"scan filesystem\" is a substantive architecture choice the task is deferring to implementation. This will either fail the walkthrough (if the scope falls back to store-only) or expand T13's scope without a plan (if a filesystem walk is invented). The design should resolve which surface 320 provides (or extend 320) before T13 starts.",
+      "file_ref": null,
+      "category": "requirements-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T15 graduation-recommendation re-derivation path is undefined",
+      "description": "T15 says `sq metrology graduate` should \"look up the pairing's current recommendation (re-derive via the same path as `recommend`, filtered to this template/model/level)\". The slice design does not specify a `recommend_for_pairing(template, model, level, ...)` entry point \u2014 `recommend_thresholds` takes an `AgreementReport`. The task is asking the implementer to factor or inline a per-pairing check that the design never defined. Either T15 should build an `AgreementReport` filtered to one cell (the natural interpretation) or a smaller pairing-level helper should be added to T7/T9 and called here. Without that, T15's task-time judgment may diverge from T9's design and from T16's tests.",
+      "file_ref": null,
+      "category": "api-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:227"
+    },
+    {
+      "severity": "PASS",
+      "title": "All success criteria are covered",
+      "description": "The Coverage Check at the bottom of the task file accurately maps each functional, technical, integration, and failure-mode requirement from the slice design to a concrete task. No criterion is left without a task.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:262-280"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern are correct",
+      "description": "T1/T2 (hash narrowing) precedes everything else as the design requires. T5 (config keys) precedes T7/T9/T13 (the consumers). Every implementation task is immediately followed by its test task (T1\u2192T2, T3\u2192T4, T5\u2192T6, T7\u2192T8, T9\u2192T10, T11\u2192T12, T13\u2192T14, T15\u2192T16). T17's full validation closes the slice. No circular dependencies.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:29-260"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers are correctly placed and formatted",
+      "description": "Every `**Commit**:` marker is a plain line (not a checkbox), sits at a working-tested point (after both implementation and test tasks for each pair), and never appears after a task that lacks coverage. Density is appropriate \u2014 17 commits for 17 tasks is correct for this slice's granularity.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load-test or NFR-driven CI task is missing",
+      "description": "The slice design restates no NFRs (no throughput, latency, scale, or concurrency requirements). The slice is local-filesystem CLI metrology with bounded data. A load test in `tests/load/` would be fiction per the design's own failure-modes note. No CI wiring task is therefore missing.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task scope is proportional to the slice",
+      "description": "17 tasks for a slice with one correctness fix, two new core modules, a new record type, a CLI surface, and a nine-step verification walkthrough is proportional. A single task file (not split into multiple) is appropriate at this size. No test task exceeds what its success criterion requires.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "api-contract",
+      "raw_category": null,
+      "summary": "`recommend_thresholds` signature differs between slice design and T9",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:181",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "requirements-clarity",
+      "raw_category": null,
+      "summary": "Direction-band precedence in T7 contradicts its own success criterion and the design's table",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:139-155",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "requirements-clarity",
+      "raw_category": null,
+      "summary": "T13 hedges a real architectural decision (result-discovery surface)",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-213",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "api-contract",
+      "raw_category": null,
+      "summary": "T15 graduation-recommendation re-derivation path is undefined",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:227",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All success criteria are covered",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:262-280",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern are correct",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:29-260",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers are correctly placed and formatted",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No load-test or NFR-driven CI task is missing",
+      "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task scope is proportional to the slice",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-16T21:40:25.636464",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 40885,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 67352,
+  "cached_tokens": 28288,
+  "cache_write_tokens": null,
+  "completion_tokens": 13155,
+  "reasoning_tokens": 10533,
+  "duration_seconds": 188.38941425015219,
+  "cost_usd": 0.02920248,
+  "cost_basis": "alias_pricing"
+}

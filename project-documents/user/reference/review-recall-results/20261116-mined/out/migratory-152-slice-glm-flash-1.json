@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Internal contradiction: `k_first` \"removed entirely\" vs. \"still parsed with deprecation warning\"",
+      "description": "Technical Scope item 7 and the Technical Decisions \u00a7\"k_first removed\" commit to removing `k_first` entirely from the kernel, `ComputeConfig`, `Workload`, and `_NEIGHBOR_MODE_MAP`, with configs using it raising `ConfigurationError`. But Mitigation Strategies states: \"Until then, ship the two new modes alongside the legacy `k_first` value (still parsed, with a deprecation warning) so the slice can land incrementally; flip the default and remove `k_first` parsing in the final commit.\" These are different shipped end-states (a mode that parses but has no kernel path is undefined behavior waiting to happen \u2014 if the config accepts `k_first` while the kernel no longer specializes for it, what does the tick do?). Pick one: either the mode is removed in the same commit as the kernel change (with `ConfigurationError`), or a documented transition state exists that specifies exactly what `k_first` does while deprecated. The current doc ships both statements.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Mitigation-Strategies"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exit criteria diverge from the parent slice plan entry without updating it",
+      "description": "The plan entry for slice 152 ([140-slices.simulation-scaling.md](project-documents/user/architecture/140-slices.simulation-scaling.md) item 13) defines the exit criteria as: \"k-nearest TPS at N=200k **within 20% of k-first** TPS at the same N; parity preserved; **no regression on k-first path**.\" The slice design replaces the comparison baseline with `radius_only` (criterion 4) and removes `k_first` entirely \u2014 which makes the plan's \"no regression on k-first path\" unsatisfiable by construction. The engineering rationale for the redesign is well-argued, but the plan entry has not been updated to match, so the slice as designed cannot be checked off against its own plan definition. Update the plan entry (or keep `k_first` through this slice and remove it in a follow-up) so the plan's exit criteria and the slice's exit criteria agree.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Success-Criteria"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependency claimed shipped while its own documents show it unmet",
+      "description": "The slice states \"Slice 150 is shipped on `main` as of 2026-05-05.\" Slice 150's design doc has `status: in_progress`, the slice plan shows item 11 unchecked (`[ ]`), and slice 150's own Implementation History records that its exit criterion 3 (TPS regression \u2264 20% vs. first-k-found at N=10k) is **not met** \u2014 \"~88% regression\" persists, with the coherent grid named as the fix. Slice 152's mechanism (reindex + mode-set change) in fact supersedes how 150's TPS criterion can be met, but the design should say so explicitly: state that slice 150 ships only in conjunction with 152, or that 152 relaxes/absorbs 150's TPS criterion. As written, the dependency claim conflicts with the recorded status of the dependency.",
+      "file_ref": null,
+      "category": "dependency-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Dependencies"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tier 3 NFR misstated: 200k vs. the architecture's 250k",
+      "description": "The slice repeatedly anchors on \"the architecture's Tier 3 target (N=200k)\" and \"our current Tier 3 milestone of 200k.\" Both the architecture document (140-arch.simulation-scaling.md, \u00a7Envisioned State: \"Tier 3 (250k...)\") and the slice plan (\u00a7Scaling Tier Milestones: \"Tier 3 (250k, ...)\") define Tier 3 as **250k** on production-class hardware. The 200k gate itself is a reasonable dev-box checkpoint and matches the plan entry for slice 152, but attributing it to \"the architecture's Tier 3 target\" misstates the parent NFR. Restate it as what it is \u2014 a slice-level checkpoint below Tier 3 \u2014 or correct the N to 250k where the architecture is being cited.",
+      "file_ref": null,
+      "category": "nfr-restatement",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Overview"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Measurement scope beyond the plan entry is cheap but could be deferred",
+      "description": "Criterion 3 requires a `radius_only` baseline at N=1M and verification step 5 requires new `mid-flock-500k`/`mid-flock-1M` workloads \u2014 none of which the plan entry assigns to this slice (its scope ends at the 200k gate + parity). These are bench-only runs, not code, so the cost is low and the FRNN follow-up trigger conditions genuinely need them; acceptable, but if the slice overruns, this is the first scope to defer to the FRNN follow-up slice's opening measurement.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Verification-Walkthrough"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new I/O and mode-transition paths are explicitly enumerated",
+      "description": "The design handles its failure paths explicitly, consistent with the project's no-silent-fallback convention: `k_first` configs fail at parse time with `ConfigurationError` and remediation guidance (no silent rename); reindex-too-expensive at N=10k is a named stop-the-line condition with a specific baseline (213.9 TPS) and a diagnosis order; register-pressure and field-allocation-order risks each have a concrete fallback. No new I/O paths or message types are introduced (the change is GPU-internal), so no hang/timeout/disconnect enumeration is required. Self-exclusion correctness \u2014 the highest-risk semantic change \u2014 is covered by three independent nets (unit permutation test, parity test, live visual check).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Risk-Assessment"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and layer boundaries are respected",
+      "description": "The change is confined to the GPU fused-tick layer (`agent_state`, `quadrants_fused_kernels`, `build_spatial_hash`, plus the config/workload default flip), matching the architecture's principle that the fused tick operates outside `SpatialQuery`/`BulkForce` by design. Dependency direction is correct (downstream of 150/143\u2013149; nothing upstream changes). The out-of-scope list correctly excludes spatial-hash kernel changes, wire protocol, multi-population support, and FRNN collect-then-sort. Memory accounting (5.6 MB scratch against the architecture's memory-budget posture) is consistent with the parent. The `_allocate_fields()`/`_bind_state_fields` integration points match slice 145/146's established patterns, including the spawn/despawn reallocation path slice 146 owns.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Technical-Scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Internal contradiction: `k_first` \"removed entirely\" vs. \"still parsed with deprecation warning\"",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Mitigation-Strategies",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Exit criteria diverge from the parent slice plan entry without updating it",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Success-Criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependency-integrity",
+      "raw_category": null,
+      "summary": "Dependency claimed shipped while its own documents show it unmet",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "nfr-restatement",
+      "raw_category": null,
+      "summary": "Tier 3 NFR misstated: 200k vs. the architecture's 250k",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Measurement scope beyond the plan entry is cheap but could be deferred",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Verification-Walkthrough",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new I/O and mode-transition paths are explicitly enumerated",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Risk-Assessment",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Scope and layer boundaries are respected",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Technical-Scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-16T21:12:26.724892",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 44651,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1078974,
+  "cached_tokens": 922240,
+  "cache_write_tokens": null,
+  "completion_tokens": 13392,
+  "reasoning_tokens": 10751,
+  "duration_seconds": 75.48941862490028,
+  "cost_usd": 0.057873299999999996,
+  "cost_basis": "alias_pricing"
+}

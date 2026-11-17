@@ -1,0 +1,117 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The retroactive marker is a self-service review exemption, despite the doc's claim it can't bypass the gate",
+   "description": "The doc says the marker is \"set only by the adoption flow\" and that \"real new work always produces those files, so the marker can't be used to bypass the gate.\" Neither is enforced. The marker is a plain token on a plan line (the tests use `1. [x] **(100) Existing System** \\`retroactive\\``). cf's adoption side is read-only, so the agent writes the marker by hand in step 5 of the flow, and nothing else does.\n\nThe only checker rule is `retroactive-entry` (`docs/REVIEW-GATING.md:122`, `:165`). It errors only if the entry has a design or task file, is unchecked, or is indexed after new work. The doc's own Current State says `missing-artifact` already tolerates plan entries without a design. So a genuinely new slice written as `[x] \u2026 \\`retroactive\\`` with no design, placed before other new work, produces no error. The review gate returns `skipped` (`REVIEW-GATING.md:161`), and cf navigation and squadron's \"done\" checks count it complete.\n\nFix: name the mechanism that makes the marker trustworthy. For example, the checker honors `retroactive` only for indexes recorded in the derived architecture's provenance frontmatter, or only for a leading block that precedes any non-retroactive entry. Add a test where a bare retroactive entry on new work must fail.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Partial adoption is terminal, and \"already planned\" disagrees with the code's adoption-complete check",
+   "description": "Outcome 2 counts \"an architecture doc or a slice plan\" as already planned and is checked before brownfield. Step 5 of the adoption flow writes the derived architecture first and the existing-state slice plan second. Once the architecture exists, the outcome flips to \"already planned\", and step 2 of `sq onboard` says adoption doesn't apply. If the agent stops between the two writes, the existing-state plan is never written. No adoption hint appears in `cf next`, and the project is navigated as planned with no slices. The amendment removed resumability (\"a re-run resumes\" is gone) and says no completion state is needed, so nothing catches this.\n\nThe code already defines \"adopted\" differently. `packages/core/src/adoption/adoptionCompletion.ts:36-43` treats adoption as complete only when a slice plan with a retroactive entry exists, and it persists `adoption.state: complete` to `.context-forge.toml`. That is a second heuristic beside the detection outcome, against \"one detection, many consumers \u2026 no surface carries its own heuristic\" and \"no completion state\".\n\nFix: define \"already planned\" with one function that requires the existing-state plan (or a non-adoption plan), and have detection and `adoptionCompletion` both call it. Decide whether an architecture alone counts, and define what a re-run does after a partial adoption.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Write ownership of the baseline artifacts is stated three different ways",
+   "description": "Row (c) says \"CF writes the architecture doc on both paths.\" Row (d) assigns the existing-state plan and marker to CF. Step 5 says \"the agent writes the derived architecture and the existing-state slice plan.\" The amendment says cf \"provides read-only primitives\" and `cf build` \"writes nothing.\"\n\nThe concept row says \"exactly one writer per run\" but lists two alternative writers (squadron 363 or the guide's prompt) with no rule for choosing. The probe that would have told `sq onboard` whether 363 already ran is gone.\n\nFix: add one table of artifact \u2192 writer (agent under which prompt, cf primitive, or squadron) \u2192 what prevents a second writer.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The squadron boundary contradicts itself: cf \"never parses squadron output,\" yet reads its frontmatter and provenance",
+   "description": "The principles say \"cf never \u2026 parses squadron output or inspects squadron's install paths,\" and that the comprehension doc is \"the one point of contact.\" Row (b) says cf finds it \"by filename and `docType` (plus squadron 361's provenance block),\" which means parsing squadron frontmatter and provenance. Detection also counts \"a CF/SQ planning artifact\" as already planned, which is a second point of contact.\n\nThe filename pattern `{n}-analysis.codebase-comprehension.md` has an index cf cannot know, so cf must glob. The doc doesn't say what happens when several files match after a re-run or graph refresh. The replacement contract has no version field and no test. The probe contract had both (`probe_version`, \"CF tests check the field names\"), and the amendment dropped them without a replacement.\n\nFix: state the actual contract, the match rule (for example newest by provenance, or error on ambiguity), and whether it is versioned and tested.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#architectural-principles"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The detection JSON is a TypeScript-to-Python contract with no version or schema",
+   "description": "The report is produced by TypeScript (`packages/core`, CLI, MCP) and consumed by squadron, which runs the Python stack (ruff, pyright). The doc exposes it as \"one CLI command and one MCP tool returning JSON (slice 271)\" but gives no schema, field list, or version. The probe had `probe_version` and a contract file. The amendment removed the probe and its version field without replacing them. Squadron can't type-check the output against anything, and the doc never says how it should treat an unknown version.\n\nFix: add `report_version`, a schema or shared fixture that both repos test against, and the consumer's behavior on an unknown version.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The brownfield decision, the core of the initiative, is deferred to \"slice design\"",
+   "description": "Outcome 3 is \"decided from the code signals\", and the signals and thresholds are \"set in slice design.\" That is the load-bearing decision: whether a ten-year codebase gets adopted. The doc says the result must \"not misfire on a repo that is only scaffolding \u2026 or a shallow clone,\" but gives no rule for how the signals combine. It doesn't say whether source volume alone suffices, whether history alone suffices, or what counts as docs. The only defined behavior is in `packages/core/src/detection/sourceVolume.ts`, which stops at a threshold and reports a floor.\n\nFix: put a provisional decision table in this doc, with the scaffolding and shallow-clone cases as named fixtures.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The \"safety valve\" runs only one way, and the opt-out's storage is undefined",
+   "description": "The doc says the costs are lopsided, with false greenfield the cheaper error, and that \"the override is the safety valve.\" The only override is opt-out, which sends a project to greenfield. Nothing forces adoption when detection says greenfield. The error the doc treats as cheap therefore has no recovery path except hand-writing planning files.\n\nThe doc also says \"the only stored value is the opt-out\" but gives no key, no scope (per checkout, per project folder in a monorepo, per worktree), and no set or clear command. The code stores adoption state in `.context-forge.toml` as `adoption.state`, which is a different thing.\n\nFix: name the storage key, its scope and its command. Add a forced-adoption override, or argue why false greenfield needs none.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "With the arch review gate applying to the derived architecture, `cf next` does not point at new work",
+   "description": "`REVIEW-GATING.md:164` and this doc both say the arch boundary \"applies unchanged\" to the derived architecture, because it is \"ordinary process work.\" With `workflow.review_enabled` on, the checker will flag that architecture for an arch review. Step 6 of the flow then fails to hold: `cf next` points at the review, not the first new slice. The doc doesn't include the review in the flow or say who performs it. It also asks a reviewer to validate a document whose purpose is to describe code the doc itself says cannot reveal intent.\n\nFix: either exempt the derived architecture from the arch gate with an explicit, non-PM marker, or add the review to the flow with an owner and a bound. Effective-date grandfathering is a project-wide cutoff, so it is too blunt to be the fix.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Failure modes and reversibility are asserted, not designed",
+   "description": "The doc has no failure section. It claims adoption is \"additive and reversible,\" but no command removes the derived architecture, retroactive entries, or managed blocks. Re-run overwrite policy covers only the concept. Unaddressed cases include:\n\n- an agent stopping mid-step 5 (see the FAIL above);\n- a graph build that fails after writing a partial comprehension doc, which cf then reads by filename;\n- a prompt fetch that fails;\n- two runs racing on one checkout.\n\nThe project's review rules require failure-mode enumeration for each new I/O path. The directory walk, git history, CI root checks, prompt fetch and comprehension read have none.\n\nFix: add a per-step failure table with the observable signal for each failure. Define the revert as removing the files a run added, identified by provenance.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "A missing comprehension doc silently degrades the prompt to repo-only",
+   "description": "The rule \"when nothing resolves, cf passes nothing (never a placeholder) and the prompt works from the repo alone\" sits in the superseded \"Original\" contract, but it is the only live statement on the subject. On the squadron path, step 3 has just built the graph and written the doc. A missing doc at step 4 means step 3 failed, and that should be an error. The doc itself says \"a missing guide prompt is an error, never a reason to fall back\". The project's core rules forbid silent fallbacks.\n\nFix: make the comprehension path required on the squadron path, failing with a named error when absent. Keep repo-only as an explicit named mode, not a silent default.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Adoption cannot run on the Codex or MCP surfaces, and the doc doesn't say so",
+   "description": "The doc keeps `/cf:onboard`, its Codex variant and `agent_onboard` as entry points, and delivers the adoption prompt through an MCP tool (slice 271). Adoption requires `sq onboard`, which requires a knowledge graph from the understand-anything plugin. The doc never says whether the Codex variant can run `sq onboard`, whether the graph build works outside Claude Code, or what an MCP caller should be told. \"Squadron decides its own surfaces \u2026 cf neither knows nor tests those\" pushes the question out of this doc without answering it.\n\nFix: list the agent surfaces that support adoption, and specify the explicit message for the rest.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#onboarding-amended-20261025"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "\"Relative order is the only thing squadron 364 relies on\" is contradicted within the doc",
+   "description": "The baseline section says relative order \"is the only thing squadron 364 relies on.\" Row (d) says 364 \"supplies the graph's `layers[]` as an optional signal for retroactive slice boundaries.\" The candidates row says 364's \"candidates adopt\" writes cf's initiative-plan format and is \"frozen until the handoff contract settles.\" The Technical Considerations say `layers[]` \"answer this when squadron runs.\" So 364 depends on at least `layers[]`, the initiative-plan format, and candidate indexing. When `layers[]` is absent or disagrees with the index scheme, the doc doesn't say which source wins.\n\nFix: correct the claim, list every 364 input, and state precedence when they conflict.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Superseded contracts remain in live sections, so an implementer cannot tell which rule holds",
+   "description": "\"Anticipated Slices\" item 2 still describes \"the persisted adoption state, and `cf build` selecting the `brownfield-adoption` profile.\" Item 3 still describes \"reading the probe.\" The \"Guide release coupling\" bullet still says cf selects the profile. The squadron-contract bullet still says CF tests probe field names as a cross-repo contract. The doc keeps these \"for history,\" but they contradict the amendment in the same file.\n\nFix: move superseded text to a revision-history section, or delete it. Keep one current specification.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The later items and a second skip mechanism make this architecture overweight",
+   "description": "Conventions reconciliation (with a persisted resolution store, sequenced with #123) and docs/ADR mapping are in scope here. The doc itself says neither is needed for \"`cf next` points at new work after adoption.\" They touch different components and should be separate architecture docs, deferred. Cut them from this one.\n\nThe retroactive skip also duplicates `workflow.review_gate_effective_date`, the existing 240 grandfathering mechanism. The doc never says why plan entries, which carry no `dateCreated`, can't use it. Either state that reason or drop the skip in favor of the cutoff.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#overview"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Detection's \"scoped to the project's folder\" claim is inconsistent with its own wording and with the history signal",
+   "description": "The doc says detection is scoped to the project's folder, with CI as the exception. Its \"already planned\" text says \"the repo holds\" a planning artifact, which is repo-wide. The doc doesn't say whether history is folder-scoped. `packages/core/src/detection/history.ts` runs `git rev-list --count HEAD -- .` against `root`, so whether it is path-limited depends on which root gets passed (I did not trace that). If history is repo-wide, a new CF project inside a ten-year monorepo is classed as brownfield by history alone. That is the costly false brownfield the doc warns about.\n\nThe doc also says detection is \"derived every time,\" which means it runs on every `cf init`, `cf next` and MCP call. The source walk is bounded by its threshold. The history count and CI root checks have no stated budget, and that cost is unmeasured.\n\nFix: state the scope for each signal, pin the history command's root, and set a performance budget for the detection call.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The review this doc cites as addressing 11 findings is not in this tree",
+   "description": "`../reviews/260-review.arch.brownfield-adoption.md` does not resolve in this worktree. A glob for `260-review*` under `project-documents/user` finds nothing, so the claim that all 11 findings are addressed could not be checked here. If the review exists on another branch, commit it with this doc as the project's planning-commit cadence requires. If it doesn't, drop the claim.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#related-work"
+  }
+ ]
+}

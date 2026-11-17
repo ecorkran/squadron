@@ -1,0 +1,12 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Settings-in-slice blind spot is acknowledged, not hidden",
+   "description": "The design explicitly calls out in its Risk Assessment that a slice which edits `.squadron.toml` settings won't show `limits_changed` or `exclusions_changed` between two exports, because both boundaries are measured under the live checkout's settings (D5). This is a known limitation of the \"read settings from live checkout\" approach, not a hidden dependency. The architecture doesn't require detecting in-slice settings changes, and the design states each record records which settings it used. This is correctly characterized as a risk with a stated mitigation (breaks fire against earlier snapshots taken under different settings), so no action is required.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#risk-assessment"
+  }
+ ]
+}

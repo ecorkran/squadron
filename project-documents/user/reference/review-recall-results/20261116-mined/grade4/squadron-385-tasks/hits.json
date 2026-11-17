@@ -1,0 +1,22 @@
+{
+ "case": "squadron-385-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 1's header says `parse_slice_branch` is \"needed by Task 9\". The only task that calls it is Task 7.1 (\"`parse_slice_branch(head)` from Task 1\"); Task 9 (`assemble_facts`) takes already-gathered inputs and never references it. **VALID** (minor): a cross-reference that contradicts the rest of the file. Needs: doc alone. Raised by the original review (F004).",
+   "hits": {
+    "r01": [],
+    "r02": [
+     1
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [],
+    "r05": [],
+    "r06": []
+   }
+  }
+ ],
+ "note": "Borderline: r02 finding 1 and r03 finding 3 both say Task 1 is first consumed by Task 7.1 rather than Task 9; counted as the same defect."
+}

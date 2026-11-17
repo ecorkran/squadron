@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Timeout remediation claim is false \u2014 Task 14's assertion cannot pass as written",
+   "description": "Task 13 states the timeout rejection should \"run through the existing `withNetworkErrorHint` path so the remediation text is appended (the `/timed out/i` pattern already matches)\", and Task 14 asserts the rejection message contains `GUIDE_OFFLINE_REMEDIATION`. The actual `NETWORK_ERROR_PATTERNS` list has `/connection timed out/i` and `/etimedout/i` \u2014 there is no bare `/timed out/i` pattern. A message phrased as Task 13 requires (\"the git command timed out after N seconds\") matches neither pattern, so `withNetworkErrorHint` returns it unchanged and `GUIDE_OFFLINE_REMEDIATION` is absent. A junior AI following Task 13 verbatim produces code that fails Task 14's success criteria. Fix by adding a `/timed out/i` pattern in Task 13's step list (a small scope addition no task currently authorizes), or by changing Task 14 to assert the timeout message only and adding a separate assertion for the hint. Note the slice design makes the same incorrect claim (\"`/timed out/i` is in `NETWORK_ERROR_PATTERNS`\"), so the design is wrong here, not just the task.",
+   "location": "packages/core/src/guides/gitExec.ts:20-31"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`detect()` throwing on `'error'` breaks existing `GuideDetector` submodule tests, and no task updates them",
+   "description": "Task 11 makes `detect()` call `checkSyncStatus()` for submodule installs and throw when it returns `'error'`. Three existing tests in `GuideDetector.test.ts` (\"detects submodule even when .git/ also exists\", \"detects submodule method when .gitmodules contains path\", \"uses operationPath for guidePath when provided\") stub `gitExec` to reject for anything other than `describe`/`ls-remote`; the new `['submodule','status', \u2026]` call therefore hits the rejecting default and `detect()` throws where those tests expect a resolved `GuideInfo`. Task 4 only updates `manual`\u2192`tarball` expectations, and Task 12 adds new checkout cases without mentioning these three. The tasks need an explicit step to give those tests a `submodule status` response.",
+   "location": "packages/core/tests/guides/GuideDetector.test.ts:84-114"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`GuideInfo.checkout` is added as a required field mid-sequence with no task owning the fallout",
+   "description": "Task 10 adds `checkout: SubmoduleCheckoutState | null` to `GuideInfo` and its own success criterion is \"typecheck passes once Task 11 populates the field\" \u2014 i.e. it knowingly leaves core non-typechecking between Task 10 and Task 11. Worse, the existing fixtures annotated as `GuideInfo` in `GuideManager.test.ts` (`notInstalledInfo`, `installedInfo`) will fail `pnpm --filter @context-forge/core typecheck` until a `checkout` value is added, and no task lists that edit \u2014 Task 18 touches that file but only to add `ensureCheckout()` cases. Either make the field optional in Task 10 or add the fixture update to Task 10/11 explicitly. (`packages/cli/tests/commands/guides.test.ts` and `packages/mcp-server/tests/guideTools.test.ts` use untyped fixtures, so they are unaffected.)",
+   "location": "packages/core/tests/guides/GuideManager.test.ts:75-96"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Real-git fixture tests are placed in files that mock the modules under test",
+   "description": "Task 18 puts the `cloned()`/`initialized()`/`out_of_sync()` assertions (real directory populated, 7+ char commit, `git submodule status` unchanged) in `GuideManager.test.ts`, which mocks `fs`, `../../src/guides/gitExec.js`, `GuideDetector`, and all three strategy modules \u2014 including `SubmoduleStrategy`. As written the test cannot exercise the real `init()`/`detect()` path. Task 21 has the same shape at the CLI layer: `build.test.ts` mocks the entire `@context-forge/core/node` barrel (`FileProjectStore`, `createContextPipeline`, `ConfigManager`), so the `GuideManager` that Task 19's `ensureGuideReady()` builds would be the mock, not the real class. Both tasks need a stated approach (partial `importActual` mock, or a new test file that does not stub core), otherwise the fixture work of Task 9 yields tests that assert nothing about the auto-init behavior.",
+   "location": "packages/core/tests/guides/GuideManager.test.ts:22-49"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "MCP wiring point leaks auto-init into `template_preview`, which declares itself side-effect free",
+   "description": "Task 22 says to call `ensureCheckout()` \"before `createContextPipeline` (~line 57)\". Line 57 is inside the shared `generateContext()` helper, which is used by `context_build`, `template_preview` (line ~220) and `prompt_*`. `template_preview` is registered with `readOnlyHint: true` and a description promising it runs \"without triggering any side effects\"; auto-initializing a submodule there contradicts both, and the design's D3 list covers only `context_build`/`prompt_list`/`prompt_get`. The task must say where the call goes so `template_preview` is excluded (or the design's exclusion list is deliberately amended).",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:26-62"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Rename-verification greps miss the user-facing `manual` strings they are meant to retire",
+   "description": "Task 3's success criterion is `grep -rn \"'manual'\" packages/core/src` returning only the alias entry and the `ConfigKeys` enum line. The remaining non-alias occurrences \u2014 `CloneStrategy.ts:34` and `SubmoduleStrategy.ts:39,45` (\"use the `\"manual\"` strategy instead\", \"--strategy clone or --strategy manual instead\") plus the comment at `GuideManager.ts:135` \u2014 are double-quoted or unquoted, so the single-quote grep passes while user-facing advice still names a deprecated alias. The design's \"Rename sweep (exact locations)\" does list those line numbers and Task 3 names those files, so the work is in scope; only the verification is too weak. Use a quote-agnostic grep for the success criterion.",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:39-45"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Several effort-1 fragments could merge without losing anything",
+   "description": "Task count (32) is defensible for a five-part slice touching ~10 source files plus docs, and no step dictates implementation detail the design does not require. But Tasks 13+14 (gitExec timeout + its single test), Task 24 (one `Checkout:` line + its test), and Task 25 (descriptor + help text, whose consumer Task 26 adds immediately after) are fragments that each trigger a full build/test cycle for a few lines. Merging 13+14 and 24 into the neighbouring task would cut three commit/verification cycles. Not blocking \u2014 the file is not overweight overall, and the test-with pattern is respected everywhere.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 27's first-named test file cannot cover the help output it asserts",
+   "description": "Task 27 says \"`help.test.ts` (or `guides.test.ts`): both `--help` outputs contain `submodule`, `clone`, and `tarball`\". `help.test.ts` builds a synthetic `Command` program with hand-registered `build`/`list`/`slice`/`concept` commands and never calls `registerInitCommand`/`registerGuidesCommand`, so it cannot observe either help string. The parenthetical hedge saves the task, but naming an unusable file first invites a wasted attempt \u2014 point at `guides.test.ts` (or a new test registering both commands).",
+   "location": "packages/cli/tests/commands/help.test.ts:1-30"
+  }
+ ]
+}

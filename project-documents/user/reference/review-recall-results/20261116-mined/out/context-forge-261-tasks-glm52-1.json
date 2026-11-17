@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers formatted as checkboxes, not plain lines",
+      "description": "The review instruction specifies that `**Commit**:` markers should be \"plain lines, never checkboxes.\" All eight commit markers in this file are formatted as checklist items with unchecked boxes: `- [ ] **Task 2C: Commit** \u2014 feat(core): ...` (and similarly for Tasks 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). This conflicts with AGENTS.md's general convention that \"each item and subitem should have a `[ ]` checkbox,\" creating genuine tension. However, commit markers function as commit-point markers rather than tasks to check off \u2014 the commit either happens or doesn't. The placement and frequency are correct (at working, tested points, not after every task, not only at the end), so this is a format issue only. Converting them to plain lines (e.g., `**Commit:** feat(core): add adoption.state config key and state helpers`) would resolve the conflict.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "All success criteria fully covered with no gaps or scope creep",
+      "description": "Every Functional Requirement, Technical Requirement, Integration Requirement, and Verification Walkthrough step from the slice design maps to at least one task. The 13 integration fixtures in Task 12 directly mirror the Functional Requirements case-by-case. Unit test requirements are covered by the test tasks (1T, 2T, 3T, 4T, 5T, 6T, 7T, 8T, 9T, 10T). No task introduces work outside the design's Included scope or its D1\u2013D9 decisions. Task 6's extraction of `INITIATIVE_PLAN_FILE_PATTERN` from `ArtifactIntrospector.ts` is a justified refactoring to satisfy D6's \"other read errors throw\" requirement (the existing `resolveInitiativePlanPath` swallows all `readdir` errors), documented in the Context Summary \u2014 not scope creep.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task sizing, sequencing, and test-with pattern are correct",
+      "description": "Tasks are sequenced to respect dependencies: state/contracts (1\u20132) \u2192 detection facts (3\u20136) \u2192 outcome/renderer (7\u20138) \u2192 resolver (9) \u2192 integrator/callers (10\u201311) \u2192 integration tests (12\u201313) \u2192 docs (14) \u2192 verification (15). No circular dependencies exist in the import graph (verified: `contracts.ts` imports nothing; `adoptionOutcome.ts` uses `import type` for `SourceVolume` to avoid a runtime cycle; `ContextIntegrator.ts` imports from `contracts.ts` only). Every implementation task is immediately followed by its test task (1\u21921T, 2\u21922T, 3\u21923T, 4\u21924T, 5\u21925T, 6\u21926T, 7\u21927T, 8\u21928T, 9\u21929T, 10\u219210T). The highest-effort tasks (3, 9, 12 at effort 3) are complex but cohesive, with explicit instructions to split functions under ~50 lines and clear per-case success criteria. No task needs splitting or merging.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers formatted as checkboxes, not plain lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All success criteria fully covered with no gaps or scope creep",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task sizing, sequencing, and test-with pattern are correct",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T20:54:49.020594",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 162820,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 251041,
+  "cached_tokens": 204736,
+  "cache_write_tokens": null,
+  "completion_tokens": 42398,
+  "reasoning_tokens": 40610,
+  "duration_seconds": 437.84102320787497,
+  "cost_usd": 0.18025084,
+  "cost_basis": "alias_pricing"
+}

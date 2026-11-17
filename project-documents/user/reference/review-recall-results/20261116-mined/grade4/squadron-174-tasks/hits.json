@@ -1,0 +1,22 @@
+{
+ "case": "squadron-174-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 22a asserts wall-clock `MAX_LISTING_S = 1.0` for `list_run_summaries`, while the parent design says \"The I/O-bounds test enforces the counts, and walkthrough step 8 measures wall-clock time. There is still no assertion on time in tests\" (design Special Considerations at `44765b28`). The correction deletes Task 22a and routes the timing to the hand-run walkthrough (Task 42). **VALID**: the task file contradicts its parent design. Needs: document alone (design plus tasks). Not found by the original review (it passed the file and praised criterion traceability).",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [
+     0
+    ],
+    "r06": []
+   }
+  }
+ ],
+ "note": "r06 finding 2 flags the 1.0 s wall-clock assertion as flaky but never notes the contradiction with the design (\"no assertion on time in tests\"); not counted."
+}

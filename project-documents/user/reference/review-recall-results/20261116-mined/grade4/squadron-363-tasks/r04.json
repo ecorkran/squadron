@@ -1,0 +1,12 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "PM interaction framing is captured before the live walkthrough",
+   "description": "The PM interaction notice at the top of the file plus the inline reminder before Task 8.1 ensure the agent does not fire the two engagement questions without framing. This matches the project's \"never fire questions without framing\" rule. Informational, not a finding.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:40-46"
+  }
+ ]
+}

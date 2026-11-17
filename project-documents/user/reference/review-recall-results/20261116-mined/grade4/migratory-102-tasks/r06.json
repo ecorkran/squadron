@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Server profile construction breaks once the new fields are required",
+   "description": "`build_profiles()` builds `BehavioralProfile` from the six existing keyword arguments. Task 2.1 makes `leadership_weight` and `momentum_weight` required, so every call to `build_profiles()` raises `TypeError`. Task 2.2 updates test call sites only, and the slice limits its scope to \"affected tests\" (slice lines 397-398). No task extends `ProfileConfig` (`src/migratory_server/config.py`) or passes the new values through. Defaulting them to 0.0 here would be the silent fallback the project rules forbid. Add a task that extends the server profile config with the two fields, passes them through `build_profiles`, and tests the path. Alternatively, the PM can decide the server defers this, but then the slice has to say so.",
+   "location": "src/migratory_server/simulation.py:18"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Batch agent merge does not carry the new leadership array",
+   "description": "The batch-add path concatenates `positions`, `velocities`, `accelerations`, and `profile_indices` by hand, but not `leadership`. After a batch add, `leadership` keeps length N_old while `positions` has N_new. `LeadershipForce` indexes `state.leadership[neighbors]`, so it raises `IndexError` once a new agent is a neighbor. Task 1.1 covers only `state.py`, and no task touches `entities.py`. Add a task to concatenate `leadership` in this path, plus a test that adds agents and then evaluates the leadership force.",
+   "location": "src/migratory_server/entities.py:136-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The momentum force as specified cannot change heading",
+   "description": "Task 3.1 (task file line 88) implements `force = heading * speed * momentum_weight`, which equals `velocity * momentum_weight`. That force is parallel to velocity, so it never changes heading. It changes speed only. `integrate()` (src/migratory/engine/integration.py:42) adds `forces * dt` to velocity, so the term multiplies speed by `(1 + momentum_weight * dt)` each tick. That is anti-drag, not the \"resists turning\" behavior described at slice lines 136-139 and 153-154. At the slice's herding weight (0.03, dt 0.05), an agent below the cap gains about 1.57\u00d7 speed over the 300-tick run before `max_speed` clamps it. Task 3.2 only checks that the force points along velocity, which passes regardless of intent. The convergence and differentiation results in 5.2 and 5.3 could then reflect speed saturation at `max_speed` rather than alignment. Settle the intended formula before task 3.1 starts.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:158"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The convergence assertion does not test convergence",
+   "description": "Task 5.2 asserts only that the final mean heading has a positive x-component. The slice's criterion is that mean heading converges toward the leaders' initial heading (slice lines 389-391). With 45 random-velocity followers, the initial mean x-component is near zero, so a sign check can pass on noise. \"Mean heading\" is also undefined: it could mean the mean of unit vectors or the direction of the mean velocity. State the metric. Assert that the final value exceeds the initial value by a stated margin.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:153"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The differentiation assertion is an OR with no statistical threshold",
+   "description": "The slice requires \"statistically different\" movement (slice lines 403-405). Task 5.3 passes if either heading variance is lower or eastward component is higher, on a single seed, with no threshold or significance test. Either condition can pass by chance, and the OR lets one noisy metric carry the test. Pick one metric, state the expected direction and a threshold, and either run several seeds or name the test.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:161"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The vectorization requirement is not carried into any task step",
+   "description": "Slice lines 395-396 require both forces to be \"vectorized within each agent's neighborhood \u2014 no nested Python loops.\" Tasks 3.1 and 4.1 say \"for each active agent\" and list per-agent arithmetic, with no vectorization instruction. A junior agent can meet every listed step with a loop over agents and a nested loop over neighbors. Add the constraint to 4.1 and 3.1.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The epsilon is written as a literal in two places",
+   "description": "Task 3.1 (line 86) and task 4.1 (line 117) each give `1e-10` inline. The project rule is that a comparison value used in conditionals is defined once and referenced everywhere. Direct the implementer to define one named constant and use it in both forces.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkboxes, so they cannot be checked before the commit they describe",
+   "description": "The commit items at lines 48-49, 73-74, 103-104, 134-135, 164-165, and 180-182 are checkboxes. The project order is implement, task-check, then commit. A commit checkbox therefore cannot be truthfully checked before the commit exists, and checking it afterward leaves the tree dirty. Replace them with plain `**Commit**: feat: ...` lines (not checkboxes) at the same points, which are working and tested. Section 6.3 is a catch-all \"git add any remaining changes\" commit with no defined content. Remove it or define what it contains.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`add_agent` defaults leadership to 0.0 silently",
+   "description": "Task 1.1 sets `leadership: float = 0.0` on `add_agent()`. A caller who forgets the argument silently gets a non-leader. The project rule is \"never use silent fallback values.\" The same slice makes the profile fields required \"consistent with the established pattern\" (slice line 244), so the two decisions contradict each other. Make `leadership` required in `add_agent`, or record in the slice why this is an exception, and update the test in 1.2.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:36"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Two verify steps have no checkable pass/fail rule",
+   "description": "Task 4.2 asks that the uniform-leadership result be \"similar to plain velocity averaging\" with no tolerance. Task 5.1 asks to \"confirm forces interact correctly\" and gives \"runs without error\" as the only check. For 4.2, assert equality with the mean of neighbor velocities minus the agent's velocity, scaled by `leadership_weight`, within a stated tolerance. For 5.1, either add a concrete assertion or merge it into 5.2, which already covers integration with `tick()`.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:127"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "No lint or type-check gate appears in any verify or commit step",
+   "description": "The migratory Python rules require `ruff` and a zero-error strict type check (`pyright` or `mypy`). Every verify step runs only `pytest`, so a commit can pass tests and still fail the project gate. Add `ruff check`, `ruff format --check`, and `pyright` with zero errors to 6.1, and run them at the first commit point, where the Protocol and dataclass changes are made.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:172"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The isinstance check is repeated across five steps",
+   "description": "`isinstance(..., BulkForce)` appears in 3.1 (line 91), 3.2 (line 95), 4.1 (line 122), 4.2 (line 125), and 6.2 (lines 177-178). Keep it once in `tests/test_herding.py` and drop the verify lines in 3.1, 4.1, and 6.2.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:91"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "`tests/test_herding.py` covers five test groups in one file",
+   "description": "The file would hold unit tests for two forces, an integration test, a convergence run, and a differentiation run. If the ~300-line guideline applies to test files, split the 5.2 and 5.3 runs into `tests/test_herding_convergence.py`.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:94"
+  }
+ ]
+}

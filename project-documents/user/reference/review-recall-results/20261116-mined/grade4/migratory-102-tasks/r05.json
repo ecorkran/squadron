@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers formatted as checkboxes instead of plain lines",
+   "description": "The six commit markers (tasks 1.3, 2.3, 3.3, 4.3, 5.4, 6.3) are formatted as checkbox items (`- [ ] **X.X Commit: ...**`). Per convention, `**Commit**:` markers should be plain lines, never checkboxes. The placement itself is correct \u2014 each commit sits at a working, tested point after its implementation and test tasks, with intermediate commits rather than only at the end \u2014 but the format should be a plain bold line rather than a checklist checkbox.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Vectorization requirement not explicitly restated in implementation tasks",
+   "description": "The success criterion \"both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\" (from the slice design's Technical Requirements) is not explicitly called out in the implementation tasks 3.1 and 4.1. The steps use \"For each active agent\" language describing the algorithm with numpy array notation (`state.leadership[neighbors]`, `sum(velocity[i] * leadership[i])`), which implies vectorized inner operations. A junior AI could implement nested Python loops without explicit guidance, though the numpy-based descriptions make vectorization the natural approach. Consider adding an explicit \"use numpy vectorized operations, no nested Python loops\" step.\n\n---\n\n**Cross-reference summary of success criteria vs. tasks:**\n\n| Success Criterion | Task(s) |\n|---|---|\n| LeadershipForce/MomentumForce conform to BulkForce | 3.1, 4.1 (Verify lines), 6.2 |\n| Correct output for hand-constructed inputs | 3.2, 4.2 (known-case tests) |\n| Zero force: no neighbors (LeadershipForce) | 4.2 |\n| Zero force: stationary agent (MomentumForce) | 3.2 |\n| Zero force: all-zero neighbor leadership | 4.2 |\n| Respect active_indices | 3.2, 4.2 |\n| tick() with 5 forces \u2192 directional bias | 5.1, 5.2 |\n| Vectorized, no nested loops | (implicit in impl steps \u2014 see NOTE) |\n| Backward-incompatible profile/state updates, tests updated | 1.2, 2.2 |\n| Unit tests: direction, edge cases, self-exclusion, isolation | 3.2, 4.2 |\n| Integration test | 5.1 |\n| Profile differentiation test | 5.3 |\n\nNo gaps (all criteria covered), no scope creep (all tasks trace to criteria), correct dependency sequencing (state \u2192 profile \u2192 forces \u2192 integration \u2192 verification), test-with pattern followed throughout, and task count is proportional to the slice scope. No NFR or load test required by this slice.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The review-provenance verdict has no producer",
+   "description": "Task 8.1 specifies reading only `reviewedSha` from each artifact's frontmatter (\"Read each file's frontmatter for `reviewedSha` via the existing `read_frontmatter`\"), and Task 8.2 tests no verdict. But Task 9.1 requires `PrFacts` to carry \"the review artifact path, its verdict, and its reviewed sha\", and Task 11.1 requires the review-provenance section to render \"the artifact path, verdict, and reviewed sha\". The design's data flow lists `verdict` in `PrFacts` too. The `verdict:` key does exist in artifacts (`_review_frontmatter_lines` in `src/squadron/review/persistence.py` writes it unconditionally), so the field is available \u2014 but no task reads it, no input record is specified to carry it, and no test asserts it. As written, the provenance section's verdict either goes unimplemented or gets invented at render time, which is exactly what the traceability rule (\"assert nothing an input does not support\") forbids. Task 8.1 should read the artifact's `verdict` alongside `reviewedSha`, and Task 8.2/9.2 should assert it is copied.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:178"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2.2's real-file fixture assertion cannot pass against either named file",
+   "description": "Task 2.2 asks for a test \"reading an actual task file from `project-documents/user/tasks/` \u2014 this file once it exists, or `384-tasks.post-findings-to-the-pr.md` until then \u2014 and asserting both groups are non-empty\". Neither candidate can satisfy \"both groups non-empty\" at the moment Task 2 runs: `384-tasks.post-findings-to-the-pr.md` contains no `[ ]` items at all (every checkbox in it is `[x]`), so the unchecked group is empty; and this file's 33 checkboxes are all unchecked when Task 2 executes, so the checked group is empty. The fallback the task offers does not cover the case it is offered for. Fix by asserting each group's count against the file's own counts (or by building a small mixed-state fixture task file) rather than asserting both groups are non-empty, and by naming one file rather than a \"until then\" alternative.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 1 and Task 2 headers name the wrong dependents",
+   "description": "Task 1's header says the parser is \"needed by Task 9\" and Task 2's says \"Needed by Tasks 9 and 10\". Both are actually consumed first by Task 7.1 (`parse_slice_branch(head)` and `parse_task_items` on the first task file), with Tasks 9\u201311 downstream. The execution order is correct \u2014 Tasks 1\u20132 do land first \u2014 but a junior implementer reading the headers may defer wiring into `inputs.py` or misjudge which task proves the parser works end to end. Cheap to correct.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 12.2 asserts a host call cannot be made where there is no host",
+   "description": "Task 12.2 asks `tests/pr/test_body.py` to \"Assert the failure path creates nothing \u2014 no host call is made\". `pr/body.py` has no code-host dependency at all (the host call is `open_pull_request` in the command, Task 13), so the assertion is vacuous in that file and cannot fail. The load-bearing version already exists in Task 13.2 (\"a failed presence check exits 1 with no write\"), which is where the fake runner can record zero writes; the body-layer test should assert only that the check raises, leaving the no-write assertion to Task 13.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

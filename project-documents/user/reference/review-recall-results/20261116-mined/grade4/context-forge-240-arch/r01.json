@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Config has no path to WorkflowNavigator or ConsistencyChecker",
+   "description": "The entire design premise is \"config-driven gating\": `workflow.review_enabled`, `workflow.review_threshold`, `workflow.review_unknown_as`, and per-transition overrides. But `WorkflowNavigator` is constructed as `new WorkflowNavigator()` with no arguments (`packages/cli/src/commands/next.ts:26`, `packages/mcp-server/src/tools/workflowTools.ts:154`), `getNext(project)`/`deriveSliceStatus(project, projectPath)` receive only `ProjectData` + a path, and `ProjectData` (`packages/core/src/types/project.ts`) carries no config fields. `ConfigManager` is a separate class currently wired only into `GuideManager`. The document never describes how `ConfigManager` (or resolved config values) reach the navigator or checker \u2014 the \"Config keys\" section only says to *add* keys to `ConfigKeys.ts`. The \"Inherited by both surfaces\" goal (\"the gate lives in the shared `WorkflowNavigator` and `ConsistencyChecker`... both inherit it without per-surface work\") is asserted without any wiring design. This is the load-bearing mechanism of the initiative and it is left implicit.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The \"existing naming convention\" for reviews is not grounded in this project",
+   "description": "The section states the detection rule scans `project-documents/user/reviews/` and cites \"the existing naming convention (e.g., `210-review.code.github-copilot-vs-code-ide-support.md`) \u2014 no new convention is introduced.\" There is no `reviews/` directory under `project-documents/user/` in this repo (confirmed by listing), and no review files exist here. The example filename is not present anywhere in the project (grep for `review.code.`/`review.arch.` returns only this document and a test fixture). The introspection *infrastructure* does expect reviews (`ProjectModelBuilder.ts` `SCAN_DIRS` includes `'reviews'`; `ConsistencyChecker.DOC_SCAN_DIRS` includes `'reviews'`; `INDEXED_RE` matches `review`), so `safeReaddir` won't crash \u2014 but the claim that this is an existing convention with existing instances is not grounded; the example appears fabricated. The convention is effectively new to this project and should be stated as such, with the reviewType vocabulary sourced somewhere.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`review_unknown_as` semantics is internally inconsistent",
+   "description": "The config example declares `workflow.review_unknown_as = \"fail\"` (a pass/block policy value), and the Verdict handling section says \"treated according to `workflow.review_unknown_as` (default: `fail`, therefore blocks).\" But Technical Considerations says \"When `review_unknown_as = \"concern\"`, `UNKNOWN` is treated as `CONCERNS` and then compared against `review_threshold`\" \u2014 i.e., a verdict-value-to-map-unknown-as (`\"concern\"`), not a pass/block policy. These are two different semantics. Additionally the singular `\"concern\"` there clashes with the verdict vocabulary `CONCERNS` (plural) and the `review_threshold` value `\"concerns\"` (plural). It is unclear whether `review_unknown_as` is `{\"pass\",\"fail\"}` or a verdict value `{\"pass\",\"concerns\",\"fail\"}`. The threshold-comparison path is not well-defined until this is resolved.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`NextAction.recommendation` is free-form prose, not a \"stable vocabulary\"",
+   "description": "The Related Work / Amoeba entry states the gate \"must not change the `NextAction` return type, only add new `recommendation` string values,\" and that Amoeba \"depends on CF returning structured `recommendation` values with a stable vocabulary.\" But `NextAction.recommendation` is `string` (`packages/core/src/introspection/types.ts`), and the existing cascade returns prose sentences (`\"Continue implementation \u2014 N tasks remaining\"`, `\"Advance to slice NNN: name\"`, `\"Slice plan complete. Review architecture for next initiative\"`). There is no enum or stable vocabulary today; consumers match substrings. Introducing exact-string values `\"review\"`/`\"blocked\"` alongside prose is an inconsistency, and the \"stable vocabulary\" the design relies on for the downstream contract does not exist in the current type. Either the return type must be widened to a discriminated shape, or the existing recommendations must be normalized \u2014 neither is in scope per the document.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#related-work"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Existing `ruleTaskVsPlan` auto-checks the plan entry before the review gate clears it",
+   "description": "The new consistency rule fires \"when a slice is marked complete in the slice plan but its required review artifact is absent\" (warning) / \"verdict does not clear\" (error). But `ConsistencyChecker.ruleTaskVsPlan` (`packages/core/src/introspection/ConsistencyChecker.ts`) already auto-checks the plan entry when `taskResult.inferredStatus === 'complete'` (with `workflow.auto_fix`), and `deriveSliceStatus()` returns `'complete'` on the same condition. So the existing layer marks the slice complete-in-plan *regardless of review state* \u2014 the very state the new rule keys on \u2014 before the review has cleared. With `auto_fix` on, the plan checkbox is checked and the slice is reported `complete \u2192 advance` (Priority 6) without the gate firing, because the gate is described as gating the *recommendation* in `getNext`, not the plan-checkbox write in `ConsistencyChecker`. The interaction between the existing auto-check rule and the new gate is not addressed and undermines the gate.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#consistencychecker-rule"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`buildSummary()` and `WorkflowStatus` consumers are not updated for the new statuses",
+   "description": "The section adds `pending-review` and `review-failed` to the `SliceStatus.status` union (currently `'needs-design' | 'needs-tasks' | 'in-implementation' | 'complete' | 'no-active-slice'`, `types.ts`) and claims \"first-class status representation... the visualizer and runners can act on them without parsing recommendation strings.\" But `WorkflowNavigator.buildSummary()` switches on `status` with explicit branches (`'no-active-slice'` vs else) and would produce a summary like `\"slice NNN pending-review\"` with no review-aware handling, and `getStatus()`/`WorkflowStatus.activeSlice` carry the `SliceStatus` to every consumer. The \"Anticipated Slices\" plan mentions extending `deriveSliceStatus()` and `getNext()` but not `buildSummary()`, the summary shape, or the MCP/CLI serialization of the new statuses. The \"first-class\" goal is only half-specified.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#slice-status-extension"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Gate logic is described as duplicated across WorkflowNavigator and ConsistencyChecker (DRY)",
+   "description": "The goal \"Inherited by both surfaces \u2014 the gate lives in the shared `WorkflowNavigator` and `ConsistencyChecker`\" implies both components implement the verdict-threshold comparison + `review_unknown_as` handling. No shared `reviewGate` helper is specified; the \"Anticipated Slices\" describe the logic inside each component separately. The project's own CLAUDE.md states \"Do not duplicate logic. Respect DRY.\" The threshold-decision matrix (PASS/CONCERNS/FAIL/UNKNOWN \u00d7 threshold \u00d7 unknown-policy) is exactly the kind of logic that must be one function both consume; the document should name a shared module rather than describing the comparison in two places.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#design-goals"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`reviewType` vocabulary is load-bearing but undefined and unvalidated",
+   "description": "Per-transition overrides use `reviewType = \"arch\" | \"slice\" | \"tasks\" | \"code\"` and discovery matches `NNN-review.{reviewType}.*.md`, but the valid set is never defined or constrained (no `enum`, no source). A typo like `\"archt\"` would silently match no file and surface as `pending-review` \u2014 a silent-fallback the project rules forbid (\"Never use silent fallback values\"). The reviewType vocabulary is load-bearing for the discovery rule and should be defined once and validated by `ConfigKeyDefinition.validate`.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "v1 scope claim counts transitions inconsistently",
+   "description": "The Overview says \"v1 implements slice-level transitions only,\" the per-gate example lists four entries including `pre-slice-plan` (initiative-level), the \"Initiative-level gating\" section says `pre-slice-plan` is \"a later slice within 240\" with \"V1 implements only the four slice-level transitions,\" and \"Anticipated Slices\" lists the initiative gate as a separate slice. The example thus shows four entries but one (`pre-slice-plan`) is explicitly not in v1 \u2014 so v1 is three slice-level transitions, yet the text repeatedly says \"four slice-level transitions.\" The count and the scope boundary are muddled.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#initiative-level-gating-v1-deferred"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Score-gating extension point does not compose with the verdict-string `threshold` field",
+   "description": "Score-based gating is \"designed for, not built\": `score` is read/stored but unenforced until Squadron 301. The per-transition override field is `threshold = \"concerns\"` (a verdict string). A future numeric score threshold would either need a separate field (`score_threshold`) or overload `threshold`'s type from verdict-string to number \u2014 the document doesn't say which, so it's unclear the stated extension point will compose without a config-shape change later.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling"
+  }
+ ]
+}

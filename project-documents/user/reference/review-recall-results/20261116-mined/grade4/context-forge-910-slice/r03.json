@@ -1,0 +1,19 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "NOTE",
+   "title": "Parent field points to the architecture document, not the slice plan",
+   "description": "The slice design's `parent:` frontmatter points to `project-documents/user/architecture/900-arch.maintenance-and-refactoring.md` (the architecture doc), while slice 911 (a sibling in the same slice plan) uses `project-documents/user/architecture/900-slices.maintenance-and-refactoring.md` (the slice plan). The review instructions explicitly tell me not to flag this, so this is informational only \u2014 flagging in case the convention is worth aligning across siblings later.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:5"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Site-count accounting in the survey table is inconsistent with actual source",
+   "description": "Two rows in the \"Confirmed sites\" table disagree with what `grep -oE \"'(complete|in-progress|not-started|deprecated)'\"` actually returns from those files: (a) `statusNormalizer.ts` row claims \"13 (of 16 total; 3 are alias keys, see Excluded)\" but the map has 14 keys and 14 value-side literals (lines 5\u201318), not 16 \u2014 and there are no \"alias keys\" as a distinct category; every key is an alias. (b) `types.ts` row claims \"5 (of 8 total; 4 are the STATUS definition itself)\" but 8 \u2212 4 = 4 sweep sites, not 5. Because the verification grep in Success Criteria is keyed to \"zero matches in the six swept files,\" the counts themselves don't gate correctness \u2014 but the table is the developer's working map for verifying the sweep, and the post-sweep grep expects the developer to recognize \"4 (STATUS const) + 3 (intentionally-excluded frontmatterSchema) + 4 (intentionally-excluded SliceStatus)\" rather than the \"5/8\" figure cited in the survey. Recount both rows against the actual files and update the table; the rest of the design is sound.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope"
+  }
+ ]
+}

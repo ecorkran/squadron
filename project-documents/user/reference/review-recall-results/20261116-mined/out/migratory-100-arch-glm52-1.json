@@ -1,0 +1,206 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Core force protocol is incompatible with the stated GPU/vectorization goals",
+      "description": "Description with specific references to document sections.\nThe architecture's \"GPU compute path\" technical consideration (line ~99) states the `BulkForce` pattern must remain compatible with eventual GPU offload: \"bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop.\" But the actual `BulkForce` protocol defined in the slice 100 design \u2014 which is the realized interface contract of this architecture \u2014 takes `neighbor_lists: list[NDArray[np.intp]]`, a ragged Python list of variable-length index arrays, one per active agent. That representation is the opposite of a GPU-dispatchable bulk array: it requires Python-level per-agent iteration to consume (the slice 101 design explicitly acknowledges this, choosing \"a Python-level loop over active agents with vectorized NumPy operations within each agent's neighborhood\"). So the interface the architecture establishes already precludes the GPU path the architecture claims it enables. The ragged-neighbor-list interface is the load-bearing decision, and it directly contradicts the \"no Python-level per-agent branching\" requirement. Either the GPU compatibility claim should be dropped from this architecture as future hand-waving, or the `BulkForce` interface should be specified as accepting a packed/padded neighbor representation (CSR-style offsets + flat index array) rather than a Python `list` of arrays. As written, the architecture's own interface choice and its stated extension goal are inconsistent.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Float64 internal precision undermines determinism-on-distribution claim without a narrowing story",
+      "description": "Description with specific references to document sections.\nThe architecture makes \"tick determinism\" a first-class design goal and explicitly ties it to \"eventual distribution (where regions must agree on simulation results from shared boundary state).\" The implementation (slice 100) runs force accumulation and integration in float64 NumPy. NumPy's reduction operations (mean, sum) are not guaranteed bit-identical across builds, array sizes, threading, or platforms \u2014 and `np.mean`/`np.sum` over variable-length neighborhood slices can reorder reductions, producing per-agent force differences that integrate into divergent trajectories over long runs. The architecture never addresses that determinism at the *numerical* level is a much stronger requirement than algorithmic determinism, and that float64 reductions across different neighbor counts on different machines (the distribution case it cites) are a well-known source of replay divergence. There is no stated policy: are reductions required to be sequential, is a fixed summation order mandated, is float32 tolerated at boundaries? The determinism goal is load-bearing for replay and distribution, but the hard part \u2014 making vectorized NumPy reductions reproducible across hosts \u2014 is left entirely implicit. This is a feasibility cliff hidden under a clean \"same state, same output\" sentence.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subset-evaluable tick semantics are under-specified for the neighbor-write-back case",
+      "description": "Description with specific references to document sections.\nThe \"Subset-evaluable tick\" principle and the Envisioned State both specify that inactive agents remain visible as neighbors but are not integrated. What is not specified anywhere is the contract when an *inactive* agent was active in a previous tick and has a stale velocity: neighbor-based forces of active agents (cohesion/alignment) read inactive agents' velocities and positions. The architecture says inactive positions are \"untouched,\" meaning they hold the position/velocity from the last tick they were evaluated. But alignment force uses neighbor *velocity* \u2014 a stale velocity from up to 16 ticks ago feeds into active agents' force computation, and the world server's \"interpolated positions between evaluations\" (from 300-arch) is not represented in the engine's `AgentState` at all. The engine's interface has no slot for interpolated/predicted inactive-agent positions, yet the multi-resolution design depends on active agents reacting to where inactive agents *appear to be now*. This is a gap between the behavior-engine interface (raw arrays, no interpolation) and the world server's stated variable-rate strategy (interpolated positions). Who computes and injects interpolated positions into `AgentState`? The architecture defers this to \"the world server would present through the same neighbor query interface,\" but that punts the actual interface impact \u2014 the `SpatialQuery.build(positions)` receives a single positions array, leaving no defined place for predicted positions of non-evaluated agents. This load-bearing interaction is left as \"step 3: handled elsewhere.\"",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Inter-archetype (profile-to-profile) force interactions have no representation in the force interface",
+      "description": "Description with specific references to document sections.\nThe \"Inter-archetype interactions\" technical consideration correctly identifies that heterogeneous neighborhoods require per-profile-pair rules (an elk's separation from a wolf differs from separation from another elk) and notes this \"adds a combinatorial dimension to the parameter space.\" But the force interface as realized \u2014 a `BulkForce` that receives `state`, `neighbor_lists`, `profiles`, `active_indices` \u2014 has no structure for profile-to-profile interaction weights. A profile is a flat set of weights for *its own* behavior; there is no defined place for an N\u00d7N matrix of cross-profile coefficients, nor is there a contract for how a force learns the profile index of each neighbor (it must index into `state.profile_indices` and branch on pairs, reintroducing exactly the Python-level per-agent, per-neighbor branching the GPU consideration forbids). Predator-prey (slice 103) is listed as future work and *depends* on this capability, but the current `BehavioralProfile`/`BulkForce` abstraction has no extension point for it. By the architecture's own \"Profile as data\" principle, cross-profile weights should live in data, but the data model provides only per-profile fields. This is an abstraction boundary that will force a rearchitecting of the profile structure (and likely the force protocol) when slice 103 arrives, rather than a clean extension.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture references a world-server document under a non-existent path",
+      "description": "Description with specific references to document sections.\nThe \"Related Work\" section links to `200-arch.world-server-foundation.md` and describes it as the source of \"detailed entity scaling tiers and multi-resolution simulation strategy that informs the engine's interface requirements.\" The actual file in the repository is `300-arch.worldserver-foundation.md` (note both the index `300` vs `200` and the spelling `worldserver` vs `world-server`). The referenced path does not resolve. More importantly, the behavior-engine architecture repeatedly cites scaling tiers and multi-resolution requirements as coming from that companion document, so a broken link to the document that supposedly constrains this architecture's interface design is not cosmetic \u2014 it undermines the traceability of the subset-evaluable tick and aggregation-interface decisions. The companion does exist (as `300-arch.worldserver-foundation.md`) and does contain the cited tiers, so this is a reference drift, but it should be corrected so the claimed dependency is actually followable.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `Force` (per-agent) protocol is retained but never used by the tick loop",
+      "description": "Description with specific references to document sections.\nThe architecture's realized design (slice 100) defines two protocols: `Force` (per-agent, scalar force vector) and `BulkForce` (vectorized, full-population array). The tick function is specified to accept only `list[BulkForce]` and \"prefers the bulk variant when available.\" The per-agent `Force` protocol is described as \"used for testing, reference implementations,\" but the architecture document itself never mentions a per-agent protocol at all \u2014 the `BulkForce` pattern is the only force interface described in the architecture. The per-agent protocol is an artifact of the slice that the architecture does not require, and it duplicates the abstraction surface. This is minor (a NOTE) because it doesn't break anything, but it is a small case of the slice introducing an abstraction the architecture doesn't call for and nothing on the hot path consumes \u2014 a candidate for trimming per the project's \"resist adding complexity\" principle.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Engine has no defined error/failure handling strategy for degenerate simulation states",
+      "description": "Description with specific references to document sections.\nThe architecture defines what the engine does on the happy path but is silent on what happens when the simulation enters degenerate states that boid systems are known to produce: agents overlapping (separation force \u2192 infinity at distance\u21920 due to inverse-square), NaN propagation from a zero-neighbor division by zero, agents exiting world bounds, or velocity clamp failing to bound energy under accumulated high-magnitude forces. The slice 101 design reveals at least one concrete instance \u2014 `SeparationForce` uses `repulsion /= distance\u00b2`, which is undefined at distance 0 and will produce `inf`/`NaN` if agents ever overlap, which separation is precisely trying to prevent (a bootstrapping instability). The architecture's \"Tick determinism\" and \"integration stability\" considerations name the *risk* of energy drift but prescribe no handling (clamping, NaN checks, hard position bounds, force magnitude caps). The project conventions explicitly require failing explicitly rather than silent fallbacks, yet the architecture doesn't specify whether the engine raises, clamps, or lets NaN propagate when forces blow up. Given that a single NaN agent will, via neighbor queries, propagate NaN to every agent it touches within a few ticks, this is a real failure mode that the architecture leaves entirely to implementation luck.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "World-bounds and boundary handling are unspecified despite being load-bearing for aggregation",
+      "description": "Description with specific references to document sections.\nThe architecture describes the environment as a read-only query surface and defers spatial bounds to the world server (\"world bounds and entity capacity... configured at startup,\" per 300-arch). But the behavior engine's tick integrates positions, and nothing specifies what the engine does when integration pushes an agent outside world bounds: wrap, clamp, reflect, or let it leave and let the world server handle lifecycle? The companion architecture names \"boundary-driven (entities leaving world bounds)\" as a future event source, but the *engine's* behavior at the boundary during integration is not part of its stated interface contract. This matters now, not just in the future: the brute-force spatial query has no notion of bounds, and an agent that drifts far outside the expected region will still be returned as a neighbor (or not, depending on radius) with no bounds-aware logic. Since the engine \"owns what happens within a tick,\" the absence of a boundary contract is a gap in the engine's own interface, not just the world server's concern. It's left implicit which component clamps or wraps, and the two architectures together never close the loop.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Core force protocol is incompatible with the stated GPU/vectorization goals",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Float64 internal precision undermines determinism-on-distribution claim without a narrowing story",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Subset-evaluable tick semantics are under-specified for the neighbor-write-back case",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Inter-archetype (profile-to-profile) force interactions have no representation in the force interface",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Architecture references a world-server document under a non-existent path",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The `Force` (per-agent) protocol is retained but never used by the tick loop",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Engine has no defined error/failure handling strategy for degenerate simulation states",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "World-bounds and boundary handling are unspecified despite being load-bearing for aggregation",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-16T20:48:37.778284",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 36969,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 111686,
+  "cached_tokens": 37952,
+  "cache_write_tokens": null,
+  "completion_tokens": 10327,
+  "reasoning_tokens": 7573,
+  "duration_seconds": 47.63890408282168,
+  "cost_usd": 0.07376152999999999,
+  "cost_basis": "alias_pricing"
+}

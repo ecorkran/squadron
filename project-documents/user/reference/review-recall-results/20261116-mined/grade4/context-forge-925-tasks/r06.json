@@ -1,0 +1,89 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 13/14 premise is false: `/timed out/i` is not in NETWORK_ERROR_PATTERNS, so the specified test will fail",
+   "description": "The design's D10 and Task 13 both assert that `withNetworkErrorHint` \"already recognizes\" a timeout via `/timed out/i`. The actual pattern list contains `/connection timed out/i` and `/etimedout/i` \u2014 there is no standalone `/timed out/i`. A message of the form \"git submodule update failed: timed out after 60 seconds\" matches neither pattern, so `withNetworkErrorHint` will **not** append `GUIDE_OFFLINE_REMEDIATION`. Task 14's stated success criterion (\"rejects with a message containing 'timed out' and `GUIDE_OFFLINE_REMEDIATION`\") is therefore unsatisfiable as written, and Task 17's \"rethrow with `GUIDE_OFFLINE_REMEDIATION` appended\" for the `init()` failure path would also silently not produce remediation text. Task 13 must add `/timed out/i` to `NETWORK_ERROR_PATTERNS` (or construct the message so it matches), and Task 14 must assert against that.",
+   "location": "packages/core/src/guides/gitExec.ts:21-31"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 7's success criterion is unsatisfiable at Task 7 \u2014 Task 25 owns the same file",
+   "description": "Task 7's success criterion is \"`grep -rn \"manual\" packages/cli/src packages/mcp-server/src` returns only the MCP enum entry and deprecation-message text.\" At the time Task 7 runs, `packages/cli/src/commands/guides.ts:119` still contains the literal `'Installation strategy: submodule, clone, or manual'`, and Task 25 (Part 4, later) is what replaces it. The criterion therefore fails at Task 7 even with correct work. Either move Task 25's `guides.ts` literal replacement into Task 7, or scope Task 7's grep to exclude the help-string literal.",
+   "location": "packages/cli/src/commands/guides.ts:119"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Task 3's rename sweep misses user-facing error strings, and its grep criterion cannot detect them",
+   "description": "Task 3 enumerates the rename locations and asserts \"`grep -rn \"'manual'\" packages/core/src` returns only the `normalizeGuideMethod()` alias entry and the `ConfigKeys` enum line.\" But `CloneStrategy.ts:34` (`'git is not available. Install git or use the \"manual\" strategy instead.'`), `SubmoduleStrategy.ts:39` (same message), and `SubmoduleStrategy.ts:45` (`'The submodule strategy requires a git repo. Use --strategy clone or --strategy manual instead.'`) contain `manual` inside **double quotes** within single-quoted strings. The grep criterion cannot see them, so they will survive the sweep, leaving error text that recommends a deprecated strategy name to users. The design's rename sweep lists only `CloneStrategy.ts:34` and `SubmoduleStrategy.ts:39` and omits `SubmoduleStrategy.ts:45` entirely \u2014 the task inherited that omission. Task 3 must explicitly cover the double-quoted occurrences (and the design's location list should be corrected).",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:39"
+  },
+  {
+   "i": 3,
+   "severity": "FAIL",
+   "title": "No task updates `packages/mcp-server/tests/configTools.test.ts`, which hard-codes the old config enum",
+   "description": "Task 3 changes `ConfigKeys['guide.git_strategy'].enum` to `['submodule', 'clone', 'tarball', 'manual']`, but `packages/mcp-server/tests/configTools.test.ts:199` asserts the exact error message `Config key \"guide.git_strategy\" must be one of [\"submodule\", \"clone\", \"manual\"]`. Task 4 lists only `GuideDetector.test.ts`, `TarballStrategy.test.ts`, and `GuideManager.test.ts` as tests to update, and no other task mentions this file. The MCP suite will fail after Task 3. Task 4 must add `packages/mcp-server/tests/configTools.test.ts` to its list (this also violates the design's \"All existing tests pass\" criterion).",
+   "location": "packages/mcp-server/tests/configTools.test.ts:199"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 15 contradicts itself on `init()`'s signature, risking a D10 violation",
+   "description": "Task 15 specifies `init(operationPath: string): Promise<{ commit: string }>` \u2014 a signature with no timeout parameter, and then says the call runs \"with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`\" baked in. The next bullet then requires that `sync()` call `init()` \"**without** the timeout: pass the timeout as an `init()` option\". Those two bullets cannot both hold. If the timeout is baked in, `sync()` (which `GuideManager.update()` calls for worktrees at `GuideManager.ts:81`) becomes time-bounded, violating D10 (\"install() and update() keep today's unbounded behavior\"). The signature must be `init(operationPath: string, opts?: { timeoutMs?: number })` with `GUIDE_INIT_TIMEOUT_MS` passed explicitly by the `ensureCheckout()` caller, and Task 15 must state that `sync()` calls `init()` with no timeout.",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:127"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 5 removes `resolveSource()`'s catch without specifying how the empty-value default survives",
+   "description": "Task 5 instructs removing the catch blocks \"at ~lines 177 and 192\". `resolveSource()` currently catches and falls through to `DEFAULT_SOURCE_GIT` when the config value is empty **or** throws. `ConfigKeys['guide.source'].default` is `''` (not `DEFAULT_SOURCE_GIT`), so a naive catch-removal makes `resolveSource()` return `''` for the common unset case, breaking every install. Task 5 spells out the default-sourcing rule only for `resolveStrategy()` (\"an unset key already yields the `ConfigKeys` default\") and says nothing about `resolveSource()`. Task 5 must specify that `resolveSource()` returns `DEFAULT_SOURCE_GIT` when the config value is empty while still propagating a genuine read/parse error.",
+   "location": "packages/core/src/guides/GuideManager.ts:172-180"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 19's helper contract does not match the values available at its call sites",
+   "description": "Task 19 defines `ensureGuideReady(projectPath, operationPath)` and says it \"builds `GuideManager` the same way `getGuideContext()` does\" \u2014 but `getGuideContext()` is a non-exported function in `guides.ts`, so it cannot be reused without exporting it (duplicating ~25 lines of `FileProjectStore` + `resolveProjectWorktree` worktree resolution would violate the project's DRY rule). Worse, the call sites do not have those values: `build.ts:78` uses `workingCopy.projectPath` (no worktree resolution), `prompt.ts:60,116` uses `resolveOperationPath(...)`, and `setup-ide.ts` uses a bare `projectPath` with no worktree handling. Task 19/20 must state how `projectPath` and `operationPath` are obtained at each of the three call sites (and whether `getGuideContext()` is exported and reused).",
+   "location": "packages/cli/src/commands/guides.ts:23"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 20 does not require the MCP-side grep that D3 mandates",
+   "description": "D3 requires the implementation to \"grep for `createContextPipeline`, `resolvePromptFilePath`, and `GUIDE_RELATIVE_PATH` in `packages/cli/src` **and** `packages/mcp-server/src` and cover every hit.\" Task 20 performs the grep only over `packages/cli/src`; Task 22's only grep requirement is `grep -rn \"notices\" packages/mcp-server/src`, which cannot reveal an uncovered guide-reading call site. Task 22 should require the same three-pattern grep over `packages/mcp-server/src` and an enumeration of every hit covered, mirroring Task 20's.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 11 omits the not-installed early-return path of `detect()`, which will fail to typecheck",
+   "description": "Task 10 adds `checkout: SubmoduleCheckoutState | null` to `GuideInfo` as a required (non-optional) field, but `detect()` has two return paths: the early return of `baseInfo` when the guide path does not exist, and the full return. Task 11 only says \"when the detected method is `submodule`, call `checkSyncStatus(...)`... Otherwise set `null`\", which does not cover the not-installed early return. `baseInfo` will lack the required `checkout` property and fail the typecheck. Task 11 must state that `baseInfo.checkout` is `null` for the not-installed path.",
+   "location": "packages/core/src/guides/GuideDetector.ts:80-91"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 17 points a core-layer method at a CLI-layer helper for path resolution",
+   "description": "`GuideManager` already receives `operationPath` in its constructor and stores it as `this.operationPath`. Task 17 instead instructs the implementer to make `operationPath` resolution \"match `getGuideContext()` in `guides.ts`\", which pulls a CLI-layer concern into core. The natural implementation is `this.operationPath ?? this.projectPath`, which `ensureCheckout()` can use directly. Worth stating explicitly so the implementer does not duplicate worktree logic inside core.",
+   "location": "packages/core/src/guides/GuideManager.ts:17-21"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Task 9's `outOfSync()` fixture description is ambiguous given the one-commit guide repo",
+   "description": "The fixture creates \"a bare 'guide' repo with one commit and one tag\", then `outOfSync()` is described as \"initialized then a second guide commit checked out inside the submodule.\" A submodule checked out at a *newer* commit than the gitlink still shows `+` in `git submodule status`, so the description is workable, but the design's walkthrough step 2 uses the opposite direction (`git checkout HEAD~1`, which requires the submodule to contain the gitlink commit plus a prior commit). Task 9's smoke-test assertion (prefix `+`) will settle it, but spelling out which direction is used would avoid a wasted iteration.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:70-73"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Task 5's `resolveStrategy()` return-shape change cannot report the config alias on the CLI-override path",
+   "description": "`install()` computes `const method = strategyOverride || (await this.resolveStrategy())`, so when a CLI `--strategy` override is supplied, `resolveStrategy()` is never called and the config-path alias is never observed. Task 5's instruction to \"choose one return shape ... and use it for both the CLI flag and the config path\" therefore cannot be satisfied by a single `resolveStrategy()` return value \u2014 the CLI flag path needs its own alias check against `GUIDE_METHOD_DEPRECATED_ALIASES`. Task 7 covers the CLI-flag case separately, so the fix is to state in Task 5 that the override path's alias detection happens at the boundary, not in `resolveStrategy()`.",
+   "location": "packages/core/src/guides/GuideManager.ts:34"
+  }
+ ]
+}

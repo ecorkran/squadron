@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"No git\" in report modules contradicts the first-parent ordering of `report history`",
+   "description": "The component table states the report assembly modules do \"No git and no store writes beyond what `ensure_snapshot` and `record_slice_ranges` do\". But `report history` must order snapshots \"by the target's first-parent history\" and separate \"snapshots of commits off that line\" with a closing count, and `report slice` must `git cat-file -e` each stored landing's commits. Neither capability is assigned to a module in the table: `boundaries.py` owns `ensure_snapshot` only, and no module owns ancestry/containment queries. Either a git-capable helper module is named (and the \"no git\" claim narrowed to `slice_report.py`/`project_report.py`/`history_report.py`), or the ordering is dropped. As written, the first-parent ordering is an unowned hidden dependency on `git_utils` from inside `metrology/quality_report/`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#Component Structure"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Audit-run lookup by commit is not specified",
+   "description": "The slice report and history report both need \"the latest run at `before_sha`\" and \"the latest run at `after_sha` under the same `audit_prompt_hash`\", and `report history` needs \"audit totals per commit\". The Interfaces Required section names only `baseline_report`, `compute_delta` and `is_within_floor` from 323 \u2014 none of which selects a run by commit or by prompt hash. No store or API method for locating audit runs by commit appears in the component table or in the store methods (\"`write_slice_ranges` / `get_slice_ranges`\" are the only additions). The requirement this leaves unmet is criterion 8: \"The audit section uses `compute_delta` when runs exist at both boundaries under one prompt hash\" cannot be implemented without naming how a run is found for a commit. Name the lookup (e.g. an existing 323 accessor or a new store query) and its failure behaviour when the audit directory is absent.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#Interfaces Required"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Concurrent `slice_ranges` writes lose a landing with no signal",
+   "description": "The failure-mode row for \"Two commands write `slice_ranges` at once\" accepts last-write-wins and gives the signal as \"None\". For a merge-commit landing that is recoverable, but a fast-forward landing that is lost this way is only recoverable \"while its reflog lasts\" \u2014 the design's own D4 exists because the reflog expires. A silent permanent loss of exactly the data criterion 2 is about is not consistent with the project's \"fail explicitly\" principle. A read-modify-write version check on the record (compare the `record_id`'s stored landings against what was read, and either merge or emit a WARNING) would close it cheaply. At minimum the row should carry a WARNING signal rather than \"None\".",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#Failure modes"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Whether `report project` and `report history` take snapshots on demand is not stated",
+   "description": "The Overview says \"Missing boundary snapshots are taken on demand\", but the Slice report data flow shows `ensure_snapshot` only for `report slice`, and the failure-mode table only covers \"A boundary snapshot fails during `report slice`\". For `report project` and `report history` the design does not say whether a missing snapshot is measured (which would run pyright per row, unbounded across history) or the row is shown as absent. The requirement this leaves unmet is criterion 11: \"Every failure mode in the Failure modes table behaves as stated\" \u2014 the on-demand path's cost and its failure behaviour for the two project-wide reports are not enumerated. State the rule (e.g. `report project`/`report history` read stored snapshots only and mark missing ones absent with a reason) and add its failure row.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#API Contracts"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "D3 changes the parent's range definition without updating the parent",
+   "description": "The architecture states the range as \"fork commit against merge commit\". D3 replaces this with `M^1` \u2192 `M` for merge landings and states \"This refines the architecture's ...\". The refinement is well argued (the fork-to-merge diff includes other work merged in the meantime), and `fork_sha`/`tip_sha` are retained so `fork..tip` is still available to 420. But the deviation is recorded only in the slice doc; nothing notes that the parent architecture's statement needs amending, so a future reader of the architecture gets the superseded definition. Add the parent amendment to the slice's obligations (or to the Risk Assessment) so the two documents do not disagree after this slice lands.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#D3 \u2014 Before and after are the target just before and just after the landing"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"Value\" restates the slice plan's Value and the Overview restates its criteria",
+   "description": "The \"Value\" section restates the slice plan's entry verbatim in substance (\"Developer value. 'Did this slice make the code better?' gets a measured answer\"), and the Overview restates the plan's three scope bullets. This is cuttable without losing design content \u2014 the plan is the parent and is already linked in frontmatter. The heavier sections that carry real decisions (D1\u2013D10, the failure-mode table, the verification walkthrough) are proportionate to a 4/5 slice; the restatements are the only obvious trim.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#Value"
+  }
+ ]
+}

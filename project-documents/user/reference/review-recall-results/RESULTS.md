@@ -403,3 +403,26 @@ Notes:
 - Section 5's opus-high comb on code reviews kept 91% of real findings; on design reviews it keeps 78%.
 - Decision (PM, 2026-11-17): no comb on design reviews; the fable-medium and pooled combs were skipped as the haiku result gave no reason to expect a different answer. A cheaper comb model was not tried.
 - Recommended design-review recipe from sections 16-18: haiku-xhigh as the cheap default, fable-medium as a heavier second pass, no comb.
+
+## 19. Cheap OpenRouter models as design reviewers (2026-11-17)
+
+**Method:** the 43 mined cases of section 16, `sq review` with read tools, run 1, for glm52, glm-flash, deepseek4-flash and minimax (172 reviews). haiku-xhigh and fable-medium run 1 were graded in the same batches as anchors. Blind grading as in section 16: 15 Sonnet agents, 3 cases each, names stripped, order shuffled (seed 20261119); brief `20261116-mined/grade4/BRIEF.md`, inputs, `hits.json`, `map.json` in `grade4/`, table `score_cheap.py`, runs `jobs4.txt`, `batch4.log`. Agent grades, not hand-checked. Costs are alias pricing for the OpenRouter models and provider-reported for the Claude anchors.
+
+| Config | Flaws of 82 | Arch (of 19) | Slice (of 32) | Tasks (of 31) | Findings per review | Cost per review | Median time |
+|---|---|---|---|---|---|---|---|
+| fable-medium (anchor) | 47 | 14 | 12 | 21 | 7.5 | $2.27 | 80 s |
+| haiku-xhigh (anchor) | 43 | 12 | 15 | 16 | 13.9 | $0.24 | 267 s |
+| glm-flash | 37 | 8 | 19 | 10 | 5.3 | $0.06 | 323 s |
+| deepseek4-flash | 33 | 7 | 13 | 13 | 7.3 | $0.06 | 340 s |
+| glm52 | 19 | 7 | 10 | 2 | 3.0 | $0.08 | 57 s |
+| minimax | 13 | 2 | 5 | 6 | 4.8 | $0.05 | 107 s |
+
+Notes:
+- The anchors reproduce section 16 (fable-medium 47 against 46.3 per run, haiku-xhigh 43 against 43.7), so the grading is steady.
+- glm-flash finds 37 for a quarter of haiku-xhigh's cost. It is the best of all six on slice designs (19), and weak on tasks (10 against 16 and 21) and arch (8 against 12 and 14).
+- Pairs, run 1 each: glm-flash plus fable-medium 61, glm-flash plus haiku-xhigh 55, fable-medium plus haiku-xhigh 55, fable-medium plus deepseek4-flash 56. glm-flash as a second reviewer matches fable-medium's contribution to haiku-xhigh for $0.06 against $2.27. All six configs together 68, the same union as section 16's six Claude configs.
+- minimax (13) and glm52 (19) are not worth a reviewer slot; four of 43 reviews from each returned no findings.
+- Precision is not measured; glm-flash raises fewer findings per review than haiku-xhigh (5.3 against 13.9).
+- One run per config; the run-to-run spread for one config is 3-6 flaws. glm-flash against deepseek4-flash (37 against 33) is inside it; both against minimax and glm52 are not.
+- Two cases (squadron-197-tasks, squadron-917-tasks) return a rule-based FAIL in 1-2 s for every model without calling it, and no model found their flaws.
+- Haiku-xhigh's cost here ($0.24) is below section 16's $0.34; the anchor batch ran on different days.

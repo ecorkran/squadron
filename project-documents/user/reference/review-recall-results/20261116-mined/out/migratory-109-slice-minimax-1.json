@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Vectorization aligns with architecture's core design goal",
+      "description": "The slice directly addresses the architecture's stated principle that \"The hot loop must be structured for vectorized computation over arrays of agent state, not object-by-object iteration\" (100-arch.behavior-engine.md, Design Goals). The padded `NeighborData` representation is also consistent with the architecture's GPU-compute guidance (\"bulk array-in/array-out operations with no Python-level per-agent branching\"). This is the architecture mandate, properly scoped to the right slice.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#overview"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR (tick budget) is restated with specific target",
+      "description": "The slice explicitly restates the 50ms tick-budget NFR (from the slice plan) with the specific measured target (\"overruns its 50ms budget by ~10-15ms once agents cluster\", \"ticks should stay within the 50ms budget\"), and the Verification Walkthrough (step 2) gives a concrete check. This satisfies the criterion that NFRs from the parent architecture/slice plan be restated with specific targets when the slice touches that path.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#value"
+    },
+    {
+      "severity": "PASS",
+      "title": "Boundary discipline preserved",
+      "description": "The slice cleanly excludes batch spatial query vectorization (correctly assigned to slice 105), avoids changing spatial-query interfaces, leaves the `Force` (single-agent) protocol alone, and confines its breaking protocol change to within this slice. Dependency directions are correct: it depends on 101+102 (both marked complete) and exposes `NeighborData` to 103 and 105.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#excluded"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile-weight list comprehension violates the slice's \"no per-agent Python loops\" constraint",
+      "description": "The slice's defining technical constraint is \"No Python-level per-agent loops in any `BulkForce.__call__` implementation\" (Success Criteria, Technical Requirements), yet the documented vectorized pattern uses a Python list comprehension: `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`. The doc acknowledges this (\"This is a Python list comprehension over `n` agents\") but dismisses it as negligible at n=100. Two problems: (1) the verification grep in step 4 (`for.*agent_idx\\|for.*eval_indices\\|for.*list_idx`) won't catch this comprehension because it iterates over `state.profile_indices`, not `agent_idx`/`eval_indices` directly, so the \"no per-agent Python loops remain\" verification will pass even if the comprehension ships. (2) This is exactly the kind of Python-level per-agent dispatch that the architecture flags as a GPU-compat concern (100-arch.behavior-engine.md, \"GPU compute path for force accumulation\"). Either precompute a `(n_profiles, n_weight_fields)` weight table once at engine init and index into it with NumPy, or rename the constraint to acknowledge the per-tick profile-dispatch cost and document the GPU migration path. The constraint as written cannot be met by the documented pattern.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#per-agent-profile-weight-vectorization"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No failure-mode enumeration for `build_neighbor_data()` I/O path",
+      "description": "The slice introduces a new per-tick I/O path (`build_neighbor_data()` consuming per-agent spatial query results) but does not enumerate its failure modes. Specifically: (a) what happens when `max_neighbors == 0` (all active agents have zero neighbors) \u2014 `NeighborData.indices` would have shape `(n_active, 0)`; (b) what happens when `active_indices` is empty (`n_active == 0`) \u2014 the cohesion example does `state.positions[neighbor_data.indices]` and `np.sum(neighbor_pos, axis=1)` which work on zero-sized arrays but produce empty outputs that must propagate correctly through downstream force accumulation and integration; (c) what happens if the spatial query returns more neighbors than expected (memory bound on `max_neighbors`) \u2014 should there be a truncation policy, an error, or unbounded growth. The \"Handling Zero-Neighbor Agents\" subsection covers per-row zero counts but not the case where the entire array's second dimension is 0. The doc should add an explicit failure-mode table for this new path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#neighbor-data-representation"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`WorldBoundsRepulsor` lives in a server-side slice, not the engine slice doc it cites",
+      "description": "The slice doc repeatedly cites `WorldBoundsRepulsor` as a \"non-neighbor force\" that already exists in the engine. In fact, slice 314 (`314-slice.repulsor-framework.md`) introduces `WorldBoundsRepulsor` as a new file in `migratory/engine/repulsor.py` and that slice is currently `not_started`. The 109 doc treats it as a pre-existing BulkForce that only needs its signature updated; in reality, depending on order, 109 may need to wait for 314 or update an interface that does not yet exist. Worth flagging for the implementation plan but not blocking the design.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#included"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Vectorization aligns with architecture's core design goal",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "NFR (tick budget) is restated with specific target",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#value",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Boundary discipline preserved",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#excluded",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Profile-weight list comprehension violates the slice's \"no per-agent Python loops\" constraint",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#per-agent-profile-weight-vectorization",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No failure-mode enumeration for `build_neighbor_data()` I/O path",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#neighbor-data-representation",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`WorldBoundsRepulsor` lives in a server-side slice, not the engine slice doc it cites",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#included",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-16T21:42:13.443701",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 390,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 144765,
+  "cached_tokens": 94080,
+  "cache_write_tokens": null,
+  "completion_tokens": 3493,
+  "reasoning_tokens": 99,
+  "duration_seconds": 77.29758004192263,
+  "cost_usd": 0.0250419,
+  "cost_basis": "alias_pricing"
+}

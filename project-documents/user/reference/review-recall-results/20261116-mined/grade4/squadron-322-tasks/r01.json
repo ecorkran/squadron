@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`recommend_thresholds` signature differs between slice design and T9",
+   "description": "The slice design (line 83) specifies `recommend_thresholds(agreement: AgreementReport, *, floor: int, current: ThresholdSnapshot) -> RecommendationReport`. T9 implements `recommend_thresholds(agreement, *, floor, graduate_rate, tighten_rate)` and reads the current thresholds per-cell via `read_current_thresholds`. The parameters diverge in both shape and where the per-template threshold read lives. Either the design's signature is wrong (and should drop `current`/`ThresholdSnapshot` in favor of the per-cell read pattern T9 uses) or T9 is wrong (and should accept a pre-built `ThresholdSnapshot`). A junior AI will pick one and either diverge from the design or fight the design \u2014 the artifact should reconcile them.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:181"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Direction-band precedence in T7 contradicts its own success criterion and the design's table",
+   "description": "T7's listed precedence puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` as case 1 and `match_rate <= tighten_rate \u2192 TIGHTEN` as case 4. Under that literal order, a below-floor cell with a low match rate returns `INSUFFICIENT_EVIDENCE` (case 1 matches first). The T7 success criterion, T8's \"Tightening is not floor-gated\" test, and the slice design's own band-table note (\"Floor-gated? no\" for the TIGHTEN row) all require the opposite \u2014 TIGHTEN must win over the n<floor band. The task text even acknowledges this in prose (\"implement so a below-floor cell with a low match rate still surfaces as TIGHTEN, not INSUFFICIENT_EVIDENCE\") but the precedence list as written will produce the wrong result. A junior AI implementing the list verbatim will write code that fails T8's test. Recommend rewriting the precedence so TIGHTEN is checked *before* the n<floor band (or making the n<floor rule explicitly \"unless TIGHTEN triggers\"), and updating the design's table to match.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:139-155"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T13 hedges a real architectural decision (result-discovery surface)",
+   "description": "T13 instructs the implementer to \"reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk (ask the Project Manager if this reveals a missing 320 capability)\". The slice design's walkthrough step 7 requires discovering *new* judge review files produced after a prompt edit (`offers` must report zero offers drawn against the new config) \u2014 which can only be verified by scanning the filesystem for review files, not by reading store-recorded samples (the samples haven't been recorded yet at that point). The decision between \"read store only\" vs \"scan filesystem\" is a substantive architecture choice the task is deferring to implementation. This will either fail the walkthrough (if the scope falls back to store-only) or expand T13's scope without a plan (if a filesystem walk is invented). The design should resolve which surface 320 provides (or extend 320) before T13 starts.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-213"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T15 graduation-recommendation re-derivation path is undefined",
+   "description": "T15 says `sq metrology graduate` should \"look up the pairing's current recommendation (re-derive via the same path as `recommend`, filtered to this template/model/level)\". The slice design does not specify a `recommend_for_pairing(template, model, level, ...)` entry point \u2014 `recommend_thresholds` takes an `AgreementReport`. The task is asking the implementer to factor or inline a per-pairing check that the design never defined. Either T15 should build an `AgreementReport` filtered to one cell (the natural interpretation) or a smaller pairing-level helper should be added to T7/T9 and called here. Without that, T15's task-time judgment may diverge from T9's design and from T16's tests.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:227"
+  }
+ ]
+}

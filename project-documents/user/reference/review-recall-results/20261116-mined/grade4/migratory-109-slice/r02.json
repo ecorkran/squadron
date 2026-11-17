@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Profile-weight list comprehension violates the slice's \"no per-agent Python loops\" constraint",
+   "description": "The slice's defining technical constraint is \"No Python-level per-agent loops in any `BulkForce.__call__` implementation\" (Success Criteria, Technical Requirements), yet the documented vectorized pattern uses a Python list comprehension: `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`. The doc acknowledges this (\"This is a Python list comprehension over `n` agents\") but dismisses it as negligible at n=100. Two problems: (1) the verification grep in step 4 (`for.*agent_idx\\|for.*eval_indices\\|for.*list_idx`) won't catch this comprehension because it iterates over `state.profile_indices`, not `agent_idx`/`eval_indices` directly, so the \"no per-agent Python loops remain\" verification will pass even if the comprehension ships. (2) This is exactly the kind of Python-level per-agent dispatch that the architecture flags as a GPU-compat concern (100-arch.behavior-engine.md, \"GPU compute path for force accumulation\"). Either precompute a `(n_profiles, n_weight_fields)` weight table once at engine init and index into it with NumPy, or rename the constraint to acknowledge the per-tick profile-dispatch cost and document the GPU migration path. The constraint as written cannot be met by the documented pattern.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#per-agent-profile-weight-vectorization"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No failure-mode enumeration for `build_neighbor_data()` I/O path",
+   "description": "The slice introduces a new per-tick I/O path (`build_neighbor_data()` consuming per-agent spatial query results) but does not enumerate its failure modes. Specifically: (a) what happens when `max_neighbors == 0` (all active agents have zero neighbors) \u2014 `NeighborData.indices` would have shape `(n_active, 0)`; (b) what happens when `active_indices` is empty (`n_active == 0`) \u2014 the cohesion example does `state.positions[neighbor_data.indices]` and `np.sum(neighbor_pos, axis=1)` which work on zero-sized arrays but produce empty outputs that must propagate correctly through downstream force accumulation and integration; (c) what happens if the spatial query returns more neighbors than expected (memory bound on `max_neighbors`) \u2014 should there be a truncation policy, an error, or unbounded growth. The \"Handling Zero-Neighbor Agents\" subsection covers per-row zero counts but not the case where the entire array's second dimension is 0. The doc should add an explicit failure-mode table for this new path.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#neighbor-data-representation"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`WorldBoundsRepulsor` lives in a server-side slice, not the engine slice doc it cites",
+   "description": "The slice doc repeatedly cites `WorldBoundsRepulsor` as a \"non-neighbor force\" that already exists in the engine. In fact, slice 314 (`314-slice.repulsor-framework.md`) introduces `WorldBoundsRepulsor` as a new file in `migratory/engine/repulsor.py` and that slice is currently `not_started`. The 109 doc treats it as a pre-existing BulkForce that only needs its signature updated; in reality, depending on order, 109 may need to wait for 314 or update an interface that does not yet exist. Worth flagging for the implementation plan but not blocking the design.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#included"
+  }
+ ]
+}

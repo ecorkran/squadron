@@ -1,0 +1,170 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Anticipated Slices section contradicts the amendment and the rework",
+      "description": "The \"Anticipated Slices\" section was never rewritten to reflect the 20261025 amendment. It still lists the pre-amendment plan as the deliverable: \"Detection and adoption state: \u2026 `cf build` selecting the `brownfield-adoption` profile (fail-fast when the guide lacks it),\" \"Squadron path: reading the probe, resolving `fileComprehension`,\" and \"Brownfield-aware `cf next`: adoption steps while in progress.\" Every one of these is contradicted by the amendment block at the top (\"`cf build` is pure again: no detection, no state writes, no prompt swap,\" \"`cf next` carries no adoption guidance,\" \"cf no longer talks to squadron about graphs: the probe integration is removed\") and by the rework slices 268\u2013272 in the slice plan. A reader who stops at the arch body \u2014 which is the norm \u2014 receives the exact plan the amendment repudiates. The only signal that the list is stale is a single sentence (\"The list below is the original plan, all shipped (260\u2013267)\") appended after the rework paragraph; the list items themselves are unannotated and read as current design.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The initiative delivers no working brownfield adoption after the amendment",
+      "description": "The stated core goal \u2014 \"`cf next` points at the first piece of new work\" after adoption, repeated in the Overview, Design Goals, and the slice plan's slice 264 value line \u2014 is not achievable by any slice remaining in this initiative. Slices 268\u2013272 dismantle the shipped adoption logic and expose read-only primitives; the actual adoption run (273) and the comprehension carry-through into later phases (274) are explicitly \"Parked until `sq onboard` exists,\" and `sq onboard` is not built (\"Until `sq onboard` exists, adoption is parked\"). The initiative's own slice plan confirms 273 is the first slice that exercises adoption end-to-end, and it depends on the external unbuilt component. The net effect of the rework is that a previously-working (if flawed) CF-only adoption path is removed and replaced with primitives for a consumer that does not exist. The architecture should state plainly that the initiative, post-amendment, delivers no usable brownfield adoption on its own and that the goal is deferred to a cross-repo dependency outside this initiative's control.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale Technical Considerations describe removed behavior as current",
+      "description": "Two bullets retain superseded design as if live. (1) \"Guide release coupling\" still says \"If cf selects the brownfield profile and the installed guide lacks it, `cf build` fails with a named error. It never falls back to the greenfield prompt.\" The amendment removes `cf build` profile selection entirely, so this fail-fast rule has no trigger; the parenthetical (\"20261025: the fail-fast rule below applied to `cf build` selecting the profile, which no longer happens; it moves to the prompt-delivery primitive\") is buried mid-paragraph and the operative sentence below it is unchanged. (2) \"Squadron contract stability (superseded 20261025)\" is labelled superseded yet retains the full original probe contract \u2014 `probe_version` 1, `surfaces` object shape, `graph{present,path,commit,commits_behind}`, `baseline{available}` \u2014 in detail. This is dead specification that the amendment says is removed (\"cf no longer talks to squadron about graphs\"). Keeping it risks a future implementer coding against the probe contract that 271 is tasked with deleting.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 271's primitive contract is designed against an unbuilt, unsettled consumer",
+      "description": "The two read-only primitives (project-state report and prompt delivery) are the contract `sq onboard` will build against, but `sq onboard` does not exist and the architecture itself flags that the contract is unsettled: the slice plan's slice 271 risk note says \"confirm it with the sq session before design is final,\" and the responsibility-split table marks the Initiative candidates row \"frozen until the handoff contract settles.\" The detection report's JSON shape, the prompt-delivery mechanism for the `brownfield-adoption` context profile (now that `cf build` no longer selects it), and how the comprehension path is filled in are all load-bearing decisions deferred to a slice design that must be validated against a consumer whose needs are not yet specified. If the contract is wrong, 271 and the parked 273\u2013274 rework again. The architecture should not present the primitive surface as settled when its sole consumer is unbuilt.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shipped guide content will contradict the reworked cf after slice 268",
+      "description": "The ai-project-guide shipped v0.22.0\u2013v0.22.2 with the `brownfield-adoption` profile and prompt written for the original `cf build` flow \u2014 the changelog confirms the prompt tells agents to run `cf build` for adoption. Slice 268 removes the adoption resolver from `cf build`, and slice 272's value line is \"no doc or guide prompt tells anyone to run `cf build` for adoption,\" acknowledging the guide will be stale until 272 ships. But 272 is sequenced after 268\u2013271, so between 268 and 272 a user with the currently-installed guide (v0.22.2, the stated minimum) who triggers the brownfield prompt will be instructed to run `cf build` for adoption, which 268 has just made a no-op that selects the concept prompt. The architecture names this only as a 272 risk note (\"the guide's current brownfield prompt tells agents to run `cf build`; 272 aligns it\") without specifying the ordering constraint or a guard. Given the project's own principle that \"a missing guide prompt is an error, never a reason to fall back,\" the window where the shipped guide points at removed behavior should be called out as a sequencing hazard, not buried in a slice risk note.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#dependencies"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The amendment scraps the bulk of shipped 260\u2013267 without accounting for net value",
+      "description": "Eight slices (260\u2013267) shipped the in-`cf build` adoption state machine, the squadron probe integration, the per-step adoption navigation, and the Adoption Facts section. The amendment reverses that direction and slices 268\u2013272 exist primarily to delete those features (`adoptionResolver.ts`, `adoptionNavigation.ts` \u2014 described in the slice plan as \"~240 lines \u2026 that the 265 runs never exercised live,\" the probe code, the state writes). The architecture does not reconcile the cost: it presents the rework as a clean redirection but does not name what usable value remains from 260\u2013267 after 268\u2013272 land, beyond the retroactive marker (263), conventions reconciliation (266), and the docs map (267) \u2014 which the slice plan itself isolates as \"deliberately not in this rework.\" The proportionality question is real: the initiative's shipped investment is largely negated, and the architecture should explicitly scope what is retained vs. scrapped rather than leaving a reader to cross-reference two documents to determine the net deliverable.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#envisioned-state"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Anticipated Slices section contradicts the amendment and the rework",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The initiative delivers no working brownfield adoption after the amendment",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Stale Technical Considerations describe removed behavior as current",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Slice 271's primitive contract is designed against an unbuilt, unsettled consumer",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Shipped guide content will contradict the reworked cf after slice 268",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The amendment scraps the bulk of shipped 260\u2013267 without accounting for net value",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#envisioned-state",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-16T20:47:40.123673",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 21003,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 187058,
+  "cached_tokens": 145024,
+  "cache_write_tokens": null,
+  "completion_tokens": 6833,
+  "reasoning_tokens": 4741,
+  "duration_seconds": 29.761387791950256,
+  "cost_usd": 0.05921871,
+  "cost_basis": "alias_pricing"
+}

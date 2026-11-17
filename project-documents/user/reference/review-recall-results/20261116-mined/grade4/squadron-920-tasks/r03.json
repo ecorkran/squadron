@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Test rewrites deferred \u2014 implementation tasks commit with a red suite",
+   "description": "The test-with pattern breaks for the four core implementation tasks. Task 6 (re-key `agent.py`) commits `refactor: re-key agent.py throttle detection` but the corresponding test rewrite is Task 10 \u2014 four tasks later. Between Task 6 and Task 10, `test_a_rejected_rate_limit_event_reaches_the_backoff` constructs a `MessageParseError` with a `rate_limit_event` payload; after Task 6 removes the `is_rate_limit_event(exc.data)` special case from `_skip_unparseable` (confirmed at `src/squadron/providers/sdk/agent.py:128`), that `MessageParseError` falls through to the generic WARNING-and-skip branch instead of re-raising, so the test expecting `ProviderRateLimitError` fails. Similarly, Task 9's commit `refactor: delete rate-limit parser shim` lands while `test_the_shim_absorbs_informational_events` and three sibling tests still call `install_rate_limit_parser_shim()` (confirmed at `tests/providers/sdk/test_agent.py` \u2014 these tests import and call the deleted function). Tasks 7 and 8 have the same gap (tests deferred to Task 11). Each of these four tasks includes a `Commit:` marker, but the suite is not green at those points. The fix is to move the test rewrites adjacent to their implementation tasks \u2014 e.g., merge Task 10's `test_agent.py` rewrites into Task 6's commit, and Task 11's `test_sdk_session.py` rewrites into Task 7's commit \u2014 or reorder so each implementation task is immediately followed by its test task. The deferred ordering is not forced by dependencies: after Task 1 raises the floor, `RateLimitEvent` is available for tests to construct, and the shim is a no-op on natively-parsed types, so tests could be rewritten before the shim is removed.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Commit markers use checkbox format instead of plain lines",
+   "description": "Every task's `Commit:` line is formatted as `- [ ] Commit: \\`...\\`` \u2014 a checkbox subitem. The review criteria specify commit markers as \"plain lines, never checkboxes.\" This conflicts with the project convention (\"Use checklist format for all task files. Each item and subitem should have a `[ ]` checkbox\"), so the format is consistent with the project's own rules, but it does not match the `**Commit**:` plain-line convention expected by this review. Minor; no action required if the project convention takes precedence.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 10 is large but cohesive",
+   "description": "Task 10 spans seven sub-steps: rewriting four existing tests onto real `RateLimitEvent`, deleting four shim-specific tests, adding a new informational-event test (criterion 10), and verifying `TestUnparseableMessages` still passes. It is the single largest task. The steps are detailed enough for a junior AI to follow, and all changes are confined to one file (`tests/providers/sdk/test_agent.py`), so the task is cohesive. If the sequencing concern above is addressed (moving test rewrites adjacent to implementation), this task's scope naturally shrinks. No split needed as-is, but worth noting it is the heaviest single task in the breakdown.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  }
+ ]
+}

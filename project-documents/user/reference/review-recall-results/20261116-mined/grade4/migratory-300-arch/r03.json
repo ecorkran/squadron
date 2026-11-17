@@ -1,0 +1,103 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tick sequence omits the agent\u2192environment write-back the design requires",
+   "description": "The Envisioned State defines a six-step tick (environment update \u2192 behavior evaluation \u2192 commit \u2192 distribution) and describes the environment as a \"read-only query interface\" providing \"terrain elevation, biome data, resource locations, and seasonal state.\" Step 2 (\"Environment update\") is scoped to \"seasonal progression, resource regeneration, any time-dependent environmental changes\" \u2014 i.e. nothing agent-driven. But the concept document's swarm-intelligence archetype depends on stigmergy (\"network-like paths reinforced through use\"), and the engine arch states \"Swarm agents respond to environmental stigmergy (reinforced paths).\" The derived slice plan (300-slices, slice 304) explicitly adds \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" \u2014 a phase that exists nowhere in this document's tick sequence. As written, the architecture cannot support one of the five archetypes it is scoped to host, and the ordering/atomicity of that write relative to \"State commit\" and replay logging is unspecified.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Anticipated Slice list claims scope owned by other initiatives",
+   "description": "The list includes \"Environment layer foundation \u2014 Terrain generation, resource placement, and the read-only query interface\" and \"Seasonal and temporal systems \u2014 seasonal cycles, resource availability shifts, day/night.\" The initiative plan assigns terrain, biomes, resources, threat zones and seasonal state to initiative 500 (Environment Layer), and the slice plan derived from *this* document reflects that: slice 304 is environment *integration* only (\"The environment layer itself \u2014 terrain, biomes, resources, seasonal logic \u2014 is owned by initiative 500\") and slice 308 says \"What seasons *mean* for terrain, resources, and biomes is owned by initiative 500's seasonal cycle slice.\" The document's own Overview even says the server \"does not own ... rendering\" and repeats \"Subsystem orchestration, not subsystem reimplementation,\" so terrain generation appearing as a world-server slice is self-contradictory as well as contradictory with the initiative plan. The same list is missing two slices that the plan actually contains and the document argues are required \u2014 (306) State Serialization and Protocol and (309) Client Spatial Culling \u2014 so the list is stale in both directions.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Third-party WebSocket library is never chosen, and the stack has none",
+   "description": "The document asserts \"The WebSocket and async I/O story is well-served by asyncio\" and makes client streaming, slow-client handling, and per-client spatial culling load-bearing. `pyproject.toml` declares only `numpy` and `pyyaml` (plus `pytest`/`pytest-asyncio`), so \"asyncio handles it\" is not true as stated: Python's stdlib has no WebSocket server, and the choice between `websockets`, `aiohttp`, or a hand-rolled protocol over `asyncio` streams changes the answer to the very question the document flags (\"slow or stalled clients without blocking the tick loop\"). `websockets` manages per-connection send queues and raises/queues on backpressure; a raw `asyncio` protocol requires implementing buffering, frame masking, and ping/pong keepalive by hand. This is a load-bearing dependency decision left unnamed in the section that discusses backpressure.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The \"offload the tick to a thread\" upgrade path is both ineffective against the current engine and in tension with tick-as-transaction",
+   "description": "The section says \"If tick computation grows to consume the full budget, offloading the tick to a thread or process (NumPy releases the GIL) becomes the upgrade path.\" Two problems. First, the tick as actually structured (`src/migratory/engine/tick.py`) is `for idx in eval_indices: ... spatial.query_radius(...)` \u2014 a Python-level per-agent loop calling back into Python \u2014 so the dominant cost holds the GIL and `run_in_executor` on a thread would not parallelize it; NumPy's GIL release applies to the C-level array ops inside each iteration, not to the loop. Second, running the tick on a thread *concurrently* with the event loop that distributes state breaks the stated principle that \"Between ticks, the world is consistent and queryable\" \u2014 clients could read the in-place-mutated `AgentState` arrays mid-tick. The process variant is worse: shipping full state each tick at the tier sizes the document itself cites (500K \u00d7 ~48 B \u00d7 20 tps \u2248 480 MB/s of IPC) is a cost the document never mentions and directly contradicts \"Distribution-compatible without distribution machinery.\"",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Entity-state memory claim ignores the per-entity Python metadata",
+   "description": "\"Memory is never the constraint (500K entities \u2248 24MB of state; even 12M \u2248 576MB)\" is arithmetic on contiguous arrays only. Entity management as built (`src/migratory_server/entities.py`) maintains `_id_to_index` and `_index_to_id` as `dict[int, int]` plus a Python ID list \u2014 roughly two dict entries per entity, on the order of 100 B/entity. At 500K entities that is ~50 MB of ID bookkeeping, more than the \"24MB of state\" figure it is being compared against; at 12M it is ~1.2 GB, which makes \"576MB\" wrong by ~2x and invalidates the conclusion that raw computation is the only real constraint. Any later distribution/aggregation design inherits this metadata cost, so the claim should be corrected or the ID scheme redesigned (e.g. dense int32 ID arrays).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Position-size figures are mutually inconsistent and assume a dimensionality the codebase does not use",
+   "description": "Network egress is computed with \"500K entity positions (12 bytes each)\" \u2014 12 bytes is 3 \u00d7 float32, i.e. 3D. The 24MB/576MB state figure is 48 B/entity, which is exactly 3 arrays \u00d7 2 dims \u00d7 8 bytes (float64), i.e. 2D *and* float64 *and* excluding the `profile_indices` array the state container actually holds. Meanwhile `src/migratory/__init__.py` fixes `DIMS = 2`. So within one section, positions are assumed to be both 3D-float32 and 2D-float64. It also leaves open the precision decision the behavior engine doc explicitly delegates to this boundary (\"the engine should define its internal precision and provide an efficient conversion path at the serialization boundary\") \u2014 neither document states whether the wire format is float32 or float64, yet \"Raw float buffers\" and the 120 MB/s conclusion depend on it.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "No mechanism is defined for getting configured behavioral parameters into the engine's force functions",
+   "description": "The Configuration surface bullet promises \"enabled behavioral profiles,\" and the Design Goals promise the server \"calls into [subsystems]; it does not duplicate their logic.\" But the seam between server config and engine behavior is never specified: who selects which `BulkForce` implementations are active, where their per-profile weights (cohesion/separation/alignment from the engine arch) are authored and validated, and how a profile name in a population definition maps to a parameter set. In the current code the gap is concrete \u2014 `src/migratory_server/config.py`'s `ProfileConfig` carries only `name`, `max_speed`, `query_radius`, and `src/migratory_server/server.py` constructs `SimulationManager(..., forces=[])`, so the tick accumulates zero forces and entities never move. The architecture treats \"behavior engine integration\" as a wiring exercise without ever stating the wiring for profile\u2192force parameterization.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Entity ID \u2194 array-index stability across the server/engine boundary is unaddressed",
+   "description": "\"The server assigns entity IDs, allocates space in the state arrays, and removes entities when appropriate\" is the only statement on entity identity. The engine's spatial interface returns positional indices (`SpatialQuery.query_radius` \u2192 `NDArray[np.intp]`), and the current removal path (`np.delete` plus a full rebuild of both index maps) shifts every subsequent index. The document never states the contract: are client-facing references IDs or indices? What happens to in-flight neighbor lists or client delta state when an entity is removed mid-tick (step 4 commits removals before step 5 distributes)? This is the ownership question the architecture is supposed to answer and it is left implicit.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Tick step 4 commits \"lifecycle events queued during the tick,\" but v1 defines no producer for that queue",
+   "description": "State commit is specified as \"Handle entity lifecycle events (spawning, removal, profile changes) queued during the tick.\" Elsewhere the document states \"Nothing flows back from clients into simulation state in v1\" and that the engine \"does not manage the entity lifecycle itself,\" and aggregation/disaggregation (the only plausible spawn source) is explicitly deferred. So in v1 there is no producer for this queue except startup population creation, which happens before the loop \u2014 making the queue, its flush ordering relative to state distribution, and its interaction with replay logging unspecified machinery. Slice 302 in the plan likewise only spawns/removes independent of the tick.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "\"Persist state on shutdown\" is stated as a lifecycle requirement with no slice and no owner",
+   "description": "The Explicit lifecycle principle states \"The server knows how to initialize subsystems in order, drain client connections gracefully, and persist state on shutdown. No silent failures, no undefined states.\" None of the seven Anticipated Slices persists state; in the derived slice plan \"State Persistence and World Save/Load\" is Future Work item 3 with dependencies on (306) and (304). Worse, the persistence content (entities + environment + temporal state) spans three owners \u2014 this initiative, 500 (environment), and the deferred slice \u2014 so the principle asserts a behavior nobody has been assigned. Either the principle should be scoped to \"drain and exit cleanly\" or the persistence slice belongs in this document's slice list.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Replay determinism is claimed from \"the same configuration,\" but population placement is unseeded",
+   "description": "\"Logging format and replay fidelity\" says the log \"must capture enough to reconstruct the simulation\" and the Envisioned State says \"given a log and the same configuration, the simulation can be reconstructed tick-by-tick.\" The Configuration surface lists \"environment seed\" but no entity-placement seed, while entity spawning is random \u2014 `EntityManager.spawn_population` calls `np.random.default_rng()` with no seed and `server.py` passes none. Under the document's own \"log only initial state plus non-deterministic inputs\" branch this is recoverable, but the \"same configuration suffices\" framing is wrong as written, and the config surface it enumerates is incomplete for the claim it supports. (The same list \u2014 terrain seed, biome layout, seasonal cycle length, logging granularity of \"every N ticks\" \u2014 is also absent from the implemented `ServerConfig`, which carries only level and format under `logging`.)",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Aggregate \"flock entities\" have no representation in the entity state or spatial interface the document specifies",
+   "description": "The document states as \"the key architectural decision now\" that \"the behavior engine's interface and the entity management layer support aggregation and variable-rate ticking from the start.\" Variable-rate ticking is at least anticipated by the engine's `active_indices` parameter. Aggregation is not: an aggregate flock entity is defined as \"center of mass, average heading, dispersion radius, population count,\" which does not fit the SoA `AgentState` (positions/velocities/accelerations/profile_indices) and is not representable through `SpatialQuery.query_radius`, which returns indices of agents. The document says aggregates are \"managed by the world server\" but never says where they live, how the engine sees them as neighbors, or how disaggregation (\"spawning individuals from statistical models\") interacts with the configured `entity_capacity` (an aggregate of 50K individuals cannot be materialized if capacity is 10K) or with the ID/index stability of clients mid-stream. The claim that the design \"must not preclude\" aggregation is asserted rather than demonstrated.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Multi-GPU / predictive-partition content restates deferred initiative 620 scope without linking it",
+   "description": "The \"Entity scaling and multi-resolution simulation\" subsection runs from 10K through 4M+ entities, covering CuPy/CUDA kernels, multi-GPU dynamic spatial partitioning, \"predictive partition rebalancing,\" and astrophysics/wargaming precedents. The initiative plan places GPU force accumulation and multi-resolution strategies in initiative 620 (Distribution & Scaling), \"acknowledged but deliberately deferred,\" and this document's own slice plan defers multi-resolution entirely. None of 620, 500, or 320 appears in Related Work. The result is a foundation document carrying several pages of speculative scaling design and metrics (\"GPU particle simulations routinely handle 4M+ at 60fps \u2014 the physics is similar\") with no delivery commitment, while the concrete foundation decisions it *does* owe \u2014 force registration, the tick's environment write-back, backpressure, entity identity \u2014 are left thin. This is exactly the heaviest mechanism in the document defending an out-of-scope ambition.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Dependency declarations are stale or dangling relative to the artifacts they point at",
+   "description": "Frontmatter declares `dependsOn: [001-concept.migratory, 100-arch.behavior-engine]` and Related Work links `../project-guides/001-concept.migratory.md`. No `001-concept.migratory.md` exists \u2014 the concept document is `000-concept.migratory.md` (and `001` is the initiative plan). Separately, this document is numbered 300, but its own dependency `100-arch.behavior-engine.md` refers to it twice as `200-arch.world-server-foundation.md` (frontmatter-adjacent Related Work and the \"Multi-resolution simulation and aggregation\" section), as does `100-slices.behavior-engine.md`, so the cross-initiative link graph is dangling in both directions. Related Work also omits the environment layer (500) and logging/replay (320) initiatives that this document's log-to-file and environment-hosting responsibilities overlap with \u2014 a scope overlap (this document's \"Simulation Logging and Replay\" slice 307 vs initiative 320, and its Overview's \"logging infrastructure\" claim) that should be resolved explicitly rather than left to collide at implementation time.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#related-work"
+  }
+ ]
+}

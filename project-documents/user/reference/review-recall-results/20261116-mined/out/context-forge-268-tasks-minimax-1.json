@@ -1,0 +1,189 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every functional and technical success criterion has a covering task",
+      "description": "Cross-reference against `268-slice.pure-cf-build.md` Success Criteria:\n\n- FR1 (no reads/writes of `adoption.state`, no detection, no `sq` spawn on the three surfaces) \u2192 task 5.1 purity test (snapshot, `Adoption Facts` absence, `sq` marker absence across CLI/`context_build`/`template_preview`).\n- FR2 (Phase 0 brownfield returns concept prompt and writes nothing for any stored state) \u2192 task 5.1 (CLI path runs once with no `.context-forge.toml`, once with `in_progress`).\n- FR3 (greenfield / already-planned / later-phase byte-identical) \u2192 task 2.1 + 2.2 golden capture and comparison, gated again at 3.7 and 6.1.\n- FR4 (CLI/MCP `context_build` parity) \u2192 task 5.1 parity check.\n- FR5 (`MIN_GUIDE_VERSION` warning preserved on stderr / separate MCP item) \u2192 tasks 3.5, 3.6, 6.1 guide-warning success clause.\n- TR1 (`services/` imports nothing from `adoption/` or `detection/`) \u2192 grep checks at 3.3 and 6.2.\n- TR2 (no orphan exports; `history` / `comprehensionAnalysis` / `adoptionOutcome` retained for 269/271) \u2192 6.2 export audit, with the exception listed.\n- TR3 (format/lint/typecheck/tests pass) \u2192 6.1 full pass; format is ESLint per the context summary.\n- IR (269 starts with no build-path code to change) \u2192 implicitly covered by 4.x keeping `adoptionOutcome` and the read path of `adoptionState`, plus the 6.2 export audit.\n\nThe Migration Plan table from the design maps one-to-one onto the deletes in sections 3 and 4.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing is correct and dependencies are respected",
+      "description": "Order: branch (1) \u2192 golden capture on unmodified source (2) \u2192 render removal that keeps the signature (3.1\u20133.2) \u2192 seam removal that changes signatures (3.3\u20133.6) \u2192 code deletion (4) \u2192 purity test (5) \u2192 full validation (6). The seam removal is split into two commits (3.2a and 3.7) at exactly the points where the workspace is green, and the `core` rebuild dependency between 3.4 and 3.5 is called out. No circular dependencies.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern is respected",
+      "description": "Every implementation edit that requires test updates names the corresponding test file in the same task (3.1, 3.2, 3.3, 3.5, 3.6, 4.1, 4.3, 4.4). The new behavior test (golden) is created alongside its fixtures (2.1 + 2.2). The replacement integration test (5.1) is its own task and follows the `adoptionParity.test.ts` deletion in 3.6, with a `git show {target}:\u2026` recipe to recover the pattern.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers sit at working, tested points",
+      "description": "Commits at 2.3 (golden captured before edits), 3.2a (render removal compiles + tests), 3.7 (seam removal compiles + tests), 4.1\u20134.4 (one deletion each, with typecheck/test gates), 5.1 (purity test passes), and a conditional commit at 6.3 if 6.2 / 6.3 surfaces residual items. No commit-after-every-task bloat; no \"everything at the end\" anti-pattern.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality fits the slice",
+      "description": "Six tasks for a multi-package cut that touches `core`, `cli`, `mcp-server` plus tests. Each task's step count is justified (e.g. 5.1 is effort 3 because the purity test is the load-bearing behavior proof; 3.x splits a 2-commit seam removal into clearly marked sub-units because the workspace would not compile midway otherwise). No excess test scaffolding beyond what the success criteria require: the golden test, the purity test, and the test edits needed to keep the suite green.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Retention list is honored",
+      "description": "`AdoptionError`, `readAdoptionState`, `decideOutcome`, `BROWNFIELD_MIN_SOURCE_LINES`, every `detection/` module except `squadronProbe.ts`, `COMPREHENSION_PROFILE_VARIABLE` / `findComprehensionAnalysis`, `core/tests/helpers/adoptionFixtures.ts`, and `core/tests/fixtures/brownfield-guide` are all either explicitly preserved (4.2, 4.3, 4.4) or named as the fixture used by 2.1 / 5.1. `COMPREHENSION_PROFILE_VARIABLE` is the explicit exception in the 6.2 grep, matching the design's D4 note.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`adoptionStateWrites: 'read-only'` in 2.2 is a no-op for the captured cases",
+      "description": "The golden capture passes `{ adoptionStateWrites: 'read-only' }`, but the two fixtures (greenfield and already-planned) do not trigger adoption logic, so the option has no effect on the captured output. The \"for now\" wording in the task may mislead a junior implementer into thinking the option matters for byte-identity. Functionally harmless \u2014 the golden still reflects post-cut behavior \u2014 but worth knowing in case the implementer spends time investigating.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:38"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Every functional and technical success criterion has a covering task",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing is correct and dependencies are respected",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Test-with pattern is respected",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers sit at working, tested points",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality fits the slice",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Retention list is honored",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`adoptionStateWrites: 'read-only'` in 2.2 is a no-op for the captured cases",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:38",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T21:40:17.881497",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 35255,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 22287,
+  "cached_tokens": 5760,
+  "cache_write_tokens": null,
+  "completion_tokens": 10557,
+  "reasoning_tokens": 9050,
+  "duration_seconds": 69.62514579109848,
+  "cost_usd": 0.017972099999999998,
+  "cost_basis": "alias_pricing"
+}

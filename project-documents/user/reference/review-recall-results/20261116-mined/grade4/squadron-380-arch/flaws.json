@@ -1,0 +1,10 @@
+{
+ "case": "squadron-380-arch",
+ "kind": "arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"Rules outside a planned project\": \"In an unplanned repository the review runs with the template's rules and language auto-detection only, and says so\" (line 175). `review/rules.py:resolve_rules_dir` at `76bd0251^` resolves CLI flag, config, `{cwd}/rules/`, `{cwd}/.claude/rules/`, then `~/.config/squadron/rules/`, so a review in an unplanned repository can load rules from the repo or the user directory, silently. **VALID** (minor): contradicts code. Needs: code. Raised by the original review (F012). The response changed the doc to \"reported, not suppressed\"."
+  }
+ ]
+}

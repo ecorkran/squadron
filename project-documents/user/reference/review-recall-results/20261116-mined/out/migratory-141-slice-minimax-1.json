@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Numba backend misattributed to slice 144",
+      "description": "The slice doc states \"Slice 144 registers `numba` by adding `bench/backends/numba_backend.py`\" and \"Numba backend runner (slice 144 / 118 territory; one-row registry add)\". Per the parent slice plan `140-slices.simulation-scaling.md:30` (line 28\u201329 in the `Anticipated Cross-Initiative Work` section) and `100-slices.behavior-engine.md`, the Numba Force JIT slice is **118**, not 144. Slice 144 is Quadrants Force Kernels. The two slice numbers are conflated in three places: the in-scope bullet about the Numba runner, the architecture section's \"Slice 144 registers numba\" line, and the integration-requirements success criteria (\"Slice 144 can register a `numba` backend...\"). Correct this \u2014 Numba belongs to slice 118 in plan 100; the integration requirement should say \"slice 118 can register a numba backend\" and the architecture section should attribute the Numba runner to slice 118.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Quadrants registration slice attribution is muddled",
+      "description": "The slice doc says \"Slice 142/145 registers `quadrants` similarly\" and \"Slice 142/145 registers `quadrants`\" and the integration-requirement reads \"Slice 142 can register a `quadrants` backend by adding one file under `src/migratory/bench/backends/`\". Per the parent plan, slice 142 is the Quadrants Substrate Evaluation (registers a CohesionForce-only Quadrants runner, per-force timings introduced here), slice 143 is the Quadrants Spatial Kernel (a SpatialQuery backend, not a bench backend), slice 144 is Quadrants Force Kernels (registers a full Quadrants force runner), and slice 145 is Quadrants Integration and Tick Pipeline (registers the full-tick Quadrants runner). The `/` grouping obscures which slice adds what. Recommend naming each registration point explicitly so slice 142 / 144 / 145 designers know which harness call site they own.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Workload schema omits PropulsionForce",
+      "description": "The workload YAML example and the \"engaged forces\" list name `cohesion / separation / alignment / momentum / leadership` (five forces). The parent plan's slice 144 description (`140-slices.simulation-scaling.md:34`) explicitly enumerates \"CohesionForce, SeparationForce, AlignmentForce, MomentumForce, LeadershipForce, **PropulsionForce**\" as the six forces that slice 144 ports and benchmarks. PropulsionForce exists today per `100-arch.behavior-engine.md` and `100-slices.behavior-engine.md:51` (slice 114 Self-Propulsion Force). Slice 142 only needs cohesion for its substrate evaluation, but slice 144 will require PropulsionForce benchmarking and the workloads shipped in slice 141 do not engage it. Either add `propulsion` to the default `forces:` list in the example workload (with `propulsion_weight > 0` on at least one profile preset), or explicitly mark PropulsionForce as \"future workload addition, slice 144\" so the slice-144 designer knows to extend the workloads rather than expecting slice 141 to have shipped it.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:226"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Architecture's TPS NFR is implicit in the slice, not restated",
+      "description": "The architecture (`140-arch.simulation-scaling.md:34`) names 57 TPS at N=3500 as today's baseline and 60 TPS as the tier target. Slice 141's success criteria include a JSON schema with `tps_observed` and the verification walkthrough step 9 references the per-phase profile shape at N=2492, but the slice does not restate the 57 TPS / 60 TPS NFR as an explicit benchmark target the harness is meant to validate. This is a minor gap: the slice's purpose is to *produce the numbers* rather than *gate against them*, but a one-line callout under Technical Decisions or Success Criteria noting that the harness is the empirical gate for the 60 TPS NFR would tighten alignment.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:309"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Per-phase budget restatement is informal",
+      "description": "The architecture (`140-arch.simulation-scaling.md:48\u201358`) explicitly states the per-tick budget: spatial_build 0.35 ms, spatial_query 5.67 ms, csr_assembly 0.21 ms, force_total 3.14 ms, integrate 0.06 ms (at N=2492, Entry 8). The slice restates these in the JSON example and verification step 9, but they appear as illustrative numbers rather than as an explicit \"this harness validates against the architecture's N=2492 per-tick budget\" restatement. Given the architecture's \"Profile before you optimize, profile after\" principle, formal restating the NFR targets as benchmark expectations would strengthen the slice's role as the architecture's empirical gate.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:182"
+    },
+    {
+      "severity": "PASS",
+      "title": "TickResult contract consumption is correct",
+      "description": "The harness correctly consumes `TickResult` from slice 140 \u2014 reads `result.positions` and `result.velocities` for the parity hash, holds the result across the measure phase rather than reaching into `AgentState` directly. The \"does not depend on `SimulationManager`\" boundary matches the architecture's \"engine/server boundary\" goal. Slice 140's \"Do not retain references across tick boundaries\" lifetime rule is implicitly honored (harness finishes its run within a single measure phase before any new tick). No integration drift.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:99"
+    },
+    {
+      "severity": "PASS",
+      "title": "Backend registry pattern matches architecture's \"same pattern, different backend\" principle",
+      "description": "The `BackendRunner` Protocol + `@register_backend` decorator design correctly instantiates the architecture's principle that the Quadrants migration preserves the structure but rewrites the code. A future Quadrants backend implementing `tick_once() \u2192 (TickResult, PhaseTimings)` plugs in without harness-internal refactor; this is the \"single-row registration plus a config flag\" extensibility the architecture's tier milestones depend on.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:213"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes are enumerated for every I/O path",
+      "description": "Each failure path (missing YAML field, unregistered backend, setup exception, low TPS) has an explicit handling strategy. No \"TBD\" or implicit handling. The `try/finally` for backend `finalize` on `setup` failure is correctly structured per the project's \"Exception Handling\" convention.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:295"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope is proportional to what the slice must deliver",
+      "description": "Three workloads (one per architecture-named formation regime), one registered backend (NumPy today), JSON + Markdown reports, parity hash, deterministic-seed reproducibility \u2014 all directly required by the slice plan entry and the architecture's \"Profile before you optimize\" principle. No speculative abstractions (no charts module, no CI gating, no GPU memory measurement, no subprocess isolation \u2014 each explicitly deferred with rationale). 3/5 effort matches the parent plan's estimate.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:38"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Numba backend misattributed to slice 144",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:54",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Quadrants registration slice attribution is muddled",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:54",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Workload schema omits PropulsionForce",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:226",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Architecture's TPS NFR is implicit in the slice, not restated",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:309",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-phase budget restatement is informal",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:182",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "TickResult contract consumption is correct",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Backend registry pattern matches architecture's \"same pattern, different backend\" principle",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes are enumerated for every I/O path",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:295",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope is proportional to what the slice must deliver",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:38",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-16T21:42:59.355847",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 174,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 119596,
+  "cached_tokens": 88576,
+  "cache_write_tokens": null,
+  "completion_tokens": 4112,
+  "reasoning_tokens": 44,
+  "duration_seconds": 110.79571425006725,
+  "cost_usd": 0.019554960000000003,
+  "cost_basis": "alias_pricing"
+}

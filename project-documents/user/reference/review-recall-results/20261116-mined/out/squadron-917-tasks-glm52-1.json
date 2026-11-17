@@ -1,0 +1,70 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Merge step at line 251: - [ ] Merge `917-slice.review-artifact-integrity` into `main`; set this file and",
+      "description": "Line 251 schedules a merge: `- [ ] Merge `917-slice.review-artifact-integrity` into `main`; set this file and`. Merging happens in Phase 7 after code review passes; a task file must not contain it. Matched rule: git_object_window.",
+      "file_ref": "project-documents/user/tasks/917-tasks.review-artifact-integrity-2.md",
+      "category": "merge-step",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/917-tasks.review-artifact-integrity-2.md:251"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "merge-step",
+      "raw_category": null,
+      "summary": "Merge step at line 251: - [ ] Merge `917-slice.review-artifact-integrity` into `main`; set this file and",
+      "location": "project-documents/user/tasks/917-tasks.review-artifact-integrity-2.md:251",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/917-tasks.review-artifact-integrity-2.md",
+    "against": "project-documents/user/slices/917-slice.review-artifact-integrity.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-917-tasks"
+  },
+  "timestamp": "2026-11-16T20:47:06.689136",
+  "model": "squadron-task-gate",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "categories_normalized": false,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": null,
+  "setting_sources": null,
+  "fallback_used": false,
+  "verdictSource": "imposed",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": null,
+  "answering_models": null,
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": null,
+  "effort": null,
+  "profile": null,
+  "turns": null,
+  "prompt_tokens": null,
+  "cached_tokens": null,
+  "cache_write_tokens": null,
+  "completion_tokens": null,
+  "reasoning_tokens": null,
+  "duration_seconds": null,
+  "cost_usd": null,
+  "cost_basis": null
+}

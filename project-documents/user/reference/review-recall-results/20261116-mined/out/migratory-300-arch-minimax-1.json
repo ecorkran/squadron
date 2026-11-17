@@ -1,0 +1,296 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "\"Current State\" contradicts the implemented slice plan and working code",
+      "description": "The architecture's \"Current State\" section states \"No world server exists. The behavior engine architecture (100-arch) defines the computational core but has no host process.\" Meanwhile, `300-slices.worldserver-foundation.md` marks slices 300-303 complete, the `src/migratory_server/` package contains working server.py, tick.py, simulation.py, entities.py, config.py, and the test suite in `tests/test_server.py` and `tests/test_server_tick.py` exercises it end-to-end. The architecture's `status: in_progress` frontmatter is misleading given that the foundational slices are already delivered. This contradiction will confuse future readers trying to understand what is built vs. designed.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#current-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Anticipated slice list is stale relative to the slice plan",
+      "description": "The architecture enumerates 7 anticipated slices (Bootstrap, Entity Management, Behavior Engine Integration, Environment Layer Foundation, WebSocket Client Layer, Logging and Replay, Seasonal and Temporal Systems). The companion slice plan (`300-slices.worldserver-foundation.md`) defines 10 slices \u2014 adding (308) Temporal Orchestration as its own slice rather than merging it into the environment work, and (309) Client Spatial Culling as an integration slice. The architecture's section also omits (306) State Serialization and Protocol, which the slice plan separates from (305) WebSocket Client Layer for a specific reason (serialization serves both clients and logging). Anyone planning work from the architecture will miss these two slices entirely.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Tick as transaction\" architectural principle contradicted by implementation",
+      "description": "The architecture states: \"Each simulation tick is a discrete, atomic operation: read current state, compute next state, commit. Between ticks, the world is consistent and queryable.\" However, `SimulationManager.step()` in `src/migratory_server/simulation.py` passes `entity_manager.state` directly to `engine.tick()`, which mutates the canonical state arrays in place during force accumulation and integration. There is no separate \"commit\" step, and the world is never in a \"read current state\" form within the tick \u2014 the engine reads and writes the same arrays. This is fine for v1 (the engine is the only writer), but the architectural principle is wrong as written and will mislead the design of slice 307 (Logging/Replay), which needs clear snapshot boundaries, and any future work that wants to observe state between read and commit.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment integration sequencing contradicts \"Envisioned State\"",
+      "description": "The architecture's Envisioned State says the server \"initializes the environment layer (terrain, resources, seasonal state)\" at startup and treats environment as part of v1's per-tick flow (step 2 \"Environment update\"). The slice plan defers environment integration entirely to slice 304, which depends on an external initiative (500). The architecture gives no signal that the environment subsystem is actually contingent on unbuilt work from another initiative, and slice 300-303 have no environment dependency whatsoever. The reader of the architecture will assume environment is on the critical path when it is actually a parallel track behind a different initiative. This sequencing mismatch should be explicit in the architecture, not discoverable only by reading the slice plan.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Behavioral profile schema completeness is a hidden complexity cliff",
+      "description": "The architecture's Envisioned State says \"Entities are created from behavioral profiles defined in configuration\" and lists \"entity population definitions (which profiles, how many, where)\" as part of the configuration surface. But the actual `BehavioralProfile` in `src/migratory/engine/profile.py` requires six fields (`max_speed`, `query_radius`, `cohesion_weight`, `separation_weight`, `alignment_weight`, `separation_radius`). The current `ProfileConfig` schema only exposes two (`max_speed`, `query_radius`). When slice 101 (Flocking Behavior) lands, the schema must extend to cover all force weights, validation rules tighten, and existing config files become invalid. The architecture treats profile parameter set as a downstream detail when it's a load-bearing decision that ripples through validation, config examples, and existing user data.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Disproportionate scaling content in a foundation document",
+      "description": "This section devotes ~70 lines to five detailed scaling tiers (10K-50K through 4M+), specific bandwidth calculations (120 MB/s), GPU acceleration strategies (CuPy, CUDA), multi-GPU dynamic partitioning with reference to \"astrophysics N-body simulations, military wargaming,\" and three-tier multi-resolution simulation with aggregate entities and disaggregation semantics. The current v1 scope is a single Python process running ~100 entities at 20 Hz. The document itself states the initial operating range is \"10K-50K entities: comfortable on a single CPU\" \u2014 five orders of magnitude away from the regimes this section designs for. The Multi-Resolution Entity Simulation is correctly listed as Future Work in the slice plan, but the architecture treats it as core content. This is over-engineering for hypothetical future requirements that dilutes the foundation's clarity. A foundation document should describe the v1 target scale in one paragraph and defer scaling tiers to a separate \"scaling roadmap\" document.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#entity-scaling-and-multi-resolution-simulation"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Runtime error handling strategy is unspecified",
+      "description": "The architecture explicitly addresses config-time failures (\"Failures should be explicit and immediate\") and signal-driven shutdown, but says nothing about what happens when the tick body itself raises. Concrete failure modes left unaddressed: NumPy floating-point warnings or exceptions during force accumulation, an engine invariant violation (e.g., negative force magnitude causing NaN propagation), an `asyncio.CancelledError` during shutdown, or an OOM condition during population spawning. The TickLoop in `src/migratory_server/tick.py` has no exception containment \u2014 a single engine tick raising will propagate up through `tick_body` and crash the server with no cleanup of subscribers, no final state persistence attempt, no diagnostic context. The architecture's \"Explicit lifecycle\" principle is undermined by leaving runtime failure recovery undefined.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "dt precision over long runs not addressed for replay fidelity",
+      "description": "The architecture specifies fixed-timestep ticks (a requirement for determinism and replay) but does not address how `dt = 1.0 / tick_rate` behaves at non-power-of-two-divisor rates over millions of ticks. At tick_rate=30, `1.0/30 = 0.0333...` is not exactly representable in float64; accumulated error compounds over millions of ticks and breaks bit-exact replay across machines. The behavior engine architecture (100-arch) explicitly cites float64 simulation precision and replay as design goals. The world server architecture inherits both requirements but says nothing about tick-rate constraints, dt representation, or replay-precision expectations. This will become visible when slice 307 (Logging and Replay) is implemented.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Network binding configuration is consumed by no current code",
+      "description": "The configuration surface explicitly lists \"network binding\" as a concern handled at startup, and `ServerConfig.server` contains `host` and `port` fields. The current `Server` class (`src/migratory_server/server.py`) never binds to or reads these fields \u2014 `__main__.py` logs them, but nothing else. They are vestigial until slice 305 (WebSocket Client Layer), which is unchecked on the slice plan. The architecture describes network binding as part of the current configuration surface, which is technically true (the fields exist) but functionally misleading (no code path uses them). Either the fields should be marked optional in config until slice 305 lands, or the architecture should defer them to that slice.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#configuration-surface"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cumulative tick drift under repeated minor overruns not addressed",
+      "description": "The TickLoop sleeps for the remainder of the tick budget when under budget, and warns but does not compensate when over budget (`src/migratory_server/tick.py` lines 75-89). If ticks consistently run at 51ms against a 50ms budget, the loop never sleeps but logs an overrun every tick \u2014 wall-clock time drifts from simulation tick count at 2% per tick. The architecture says \"Fixed-timestep integration is essential for determinism and replay\" but the tick scheduler allows unbounded wall-clock drift. The architecture's tick loop description (\"sleep for the remainder of the tick budget, or log an overrun warning if the tick took longer than the budget allows\") is precisely the behavior that produces drift. A foundation document should at minimum acknowledge this and state whether drift is acceptable or compensated.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 300 description and architecture description diverge on what v1 includes",
+      "description": "The architecture's Envisioned State describes the server as a unified, running system that loads config, initializes environment, manages entities, accepts clients, and runs the full tick loop. Slice 300 (\"Server Bootstrap and Configuration\") describes itself as \"establishes the skeleton that everything else plugs into. No tick loop yet.\" These two views are not reconciled \u2014 the architecture does not clearly say \"this is what the server looks like when all v1 slices are complete\" vs. \"this is what each slice incrementally delivers.\" A new contributor reading only the architecture will not understand that web clients, environment, logging, and serialization are all post-foundation work.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice 303 design document accesses private attribute; implementation corrects it",
+      "description": "The slice design for 303 explicitly says \"accessing `_profile_list` is acceptable here since `EntityManager` and `SimulationManager` are both server internals\" and suggests exposing a public property as \"a minor API decision for implementation time.\" The implementation in `src/migratory_server/server.py:84` cleanly uses the public `entity_manager.profile_list` property already exposed by `EntityManager`. The slice document should be updated to reflect this \u2014 perpetuating the private-attribute pattern in design docs normalizes a coupling that the implementation already avoided.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/slices/303-slice.behavior-engine-integration.md#server-integration"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test tolerance guidance in slice 301 absent from architecture",
+      "description": "The slice document for tick-loop-and-timing explicitly addresses test tolerance (\"\u00b130% tolerance for OS scheduling jitter, not exact equality\") as a known operational concern. The architecture's tick loop technical consideration mentions \"Sleep for the remainder of the tick budget\" but does not surface timing jitter or test-determinism concerns. A reviewer implementing slice 301 from the architecture alone would not know this guidance exists.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/slices/301-slice.tick-loop-and-timing.md:223"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Current State\" contradicts the implemented slice plan and working code",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#current-state",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Anticipated slice list is stale relative to the slice plan",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Tick as transaction\" architectural principle contradicted by implementation",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Environment integration sequencing contradicts \"Envisioned State\"",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Behavioral profile schema completeness is a hidden complexity cliff",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Disproportionate scaling content in a foundation document",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#entity-scaling-and-multi-resolution-simulation",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Runtime error handling strategy is unspecified",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "dt precision over long runs not addressed for replay fidelity",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Network binding configuration is consumed by no current code",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#configuration-surface",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Cumulative tick drift under repeated minor overruns not addressed",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Slice 300 description and architecture description diverge on what v1 includes",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Slice 303 design document accesses private attribute; implementation corrects it",
+      "location": "project-documents/user/slices/303-slice.behavior-engine-integration.md#server-integration",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Test tolerance guidance in slice 301 absent from architecture",
+      "location": "project-documents/user/slices/301-slice.tick-loop-and-timing.md:223",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-300-arch"
+  },
+  "timestamp": "2026-11-16T21:43:22.410261",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 12567,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 442680,
+  "cached_tokens": 329942,
+  "cache_write_tokens": null,
+  "completion_tokens": 6540,
+  "reasoning_tokens": 3170,
+  "duration_seconds": 162.77291620895267,
+  "cost_usd": 0.06146592,
+  "cost_basis": "alias_pricing"
+}

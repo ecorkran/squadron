@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Environment context is never passed to the behavior engine",
+      "description": "The design claims that the environment is made available for environment-aware forces, but the engine tick still receives only `state`, `profiles`, `spatial`, `dt`, and `forces`; no environment/query reference is passed to `engine.tick()`. This leaves the architecture\u2019s \u201cenvironment context to the behavior engine\u201d requirement unmet and makes the stated behavior-engine integration boundary incomplete. The design should either extend the engine tick interface with an environment/query argument as required by the parent architecture, or explicitly define a supported alternative (for example, passing the environment through the force registry) and show the actual call path and ownership of that responsibility.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Post-tick environment writes are not handled",
+      "description": "The parent slice plan explicitly requires handling post-tick environment writes, including stigmergic trail deposits and threat mutations. The proposed `post_tick()` call supplies no deposits or mutations, and no mechanism is designed for the behavior engine to return or emit them. The environment architecture also requires the server to forward these writes after behavior evaluation. The design therefore omits a required integration path; it should define the source and forwarding mechanism for both write types, or explicitly scope and hand off that responsibility to a named later slice.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Implementation Details"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The configuration scope conflicts with the environment architecture and parent slice plan",
+      "description": "The parent architecture states that the server-side configuration should cover environment parameters such as terrain seed, biome layout, and seasonal cycle length, and the parent slice plan explicitly lists \u201cseed, grid resolution, layer selection\u201d for this slice. The design instead defers the environment specification and layer configuration to slice 507 while adding an unused `seed` field that is not consumed by the empty environment. This is a scope mismatch rather than a clear deferral: the slice either needs to implement the configuration surface assigned to it, or the design should explicitly state why the assignment is being changed and identify where the deferred fields will be handled.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment state is omitted from client snapshots and broadcasts",
+      "description": "The parent slice plan and slice 305 state that terrain/environment information in snapshots is deferred to slice 304. This design explicitly excludes environment data from client snapshots/broadcasts, but the existing client protocol and broadcast path are not extended, so the deferred integration is not delivered by this slice. If environment distribution is intentionally deferred, the design should name the replacement slice or change the parent plan assignment rather than leave the stated responsibility unresolved.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`SimulationManager.step()` lifecycle has contradictory implementations",
+      "description": "One illustrative implementation returns early when `entity_manager.count == 0`, which skips `post_tick()`. The later implementation notes explicitly require `post_tick()` to run even with zero entities, and the success criteria require the lifecycle to be preserved. The design must specify one implementation; otherwise the zero-agent path can silently skip trail decay and other time-varying environment updates.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Seasonal-parameter failure behavior is not specified",
+      "description": "The environment foundation contract rejects seasonal values outside `[0, 1]`, but this slice uses a fixed default of `0.0` and does not state whether `step()` validates the parameter before calling `pre_tick()` or what happens when the environment raises `ValueError`. Because the tick path is synchronous and the failure occurs inside the environment boundary, the handling strategy should be explicit rather than implicit.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The environment API shape differs from the parent slice-plan wording",
+      "description": "The design correctly follows the completed environment foundation\u2019s `pre_tick`/`post_tick` contract rather than the older `environment.update()` wording in the parent slice plan. This is a justified reconciliation, but the slice document should note that the parent-plan terminology is superseded by the slice 500 interface so that consumers do not implement against the obsolete method.",
+      "file_ref": null,
+      "category": "interface-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Dependencies"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Environment context is never passed to the behavior engine",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Post-tick environment writes are not handled",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Implementation Details",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "The configuration scope conflicts with the environment architecture and parent slice plan",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Environment state is omitted from client snapshots and broadcasts",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`SimulationManager.step()` lifecycle has contradictory implementations",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Seasonal-parameter failure behavior is not specified",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "interface-alignment",
+      "raw_category": null,
+      "summary": "The environment API shape differs from the parent slice-plan wording",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#Dependencies",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+    "against": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-304-slice"
+  },
+  "timestamp": "2026-11-16T21:43:52.973596",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 507,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 707750,
+  "cached_tokens": 572928,
+  "cache_write_tokens": null,
+  "completion_tokens": 2232,
+  "reasoning_tokens": 128,
+  "duration_seconds": 98.26090516615659,
+  "cost_usd": 0.07750067999999999,
+  "cost_basis": "alias_pricing"
+}

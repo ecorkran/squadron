@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All slice success criteria are covered by tasks, with no scope creep",
+      "description": "Cross-reference: SC1\u21921.1; SC2\u21921.2; SC3/SC4\u21921.3+1.4; SC5\u21921.4 (round-trip test, plus the pre-existing `world_bounds` equality assertion in `TestConfigToYaml`); SC6\u21922.3 and 3.4; SC7\u21922.2+2.3+3.4; SC8\u21922.3 (`test_wrap_velocities_unchanged`); SC9\u21922.2+2.3; SC10\u21923.2+3.4 (`unittest.mock.patch` on `migratory_server.simulation.apply_bounds_policy`); SC11\u21923.4 (50-step runs per policy); SC12\u21924.1+4.2; SC13\u21923.5+5.1; SC14\u21925.2 (all 8 walkthrough steps enumerated). Every task traces back to a criterion or to the slice's Verification Walkthrough (3.3's startup log line is required by walkthrough step 4); nothing in the out-of-scope list (SOFT/arena, per-axis or per-profile policies, engine changes) appears as a task.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/313-slice.world-bounds-policy.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checklist items, not plain lines",
+      "description": "All five commit points (Tasks 1.5, 2.4, 3.6, 4.3, 5.5) are `- [ ] **Commit:** \\`...\\`` \u2014 a checkbox line, indistinguishable from the actionable `git add` line above it, and tickable as \"done\" independently of the commit existing. The convention is a plain `**Commit**:` line (as used in `301-tasks.tick-loop-and-timing.md` through `307-tasks.simulation-logging-and-replay.md`). The *placement* is correct \u2014 1.5, 2.4, 3.6 and 4.3 each follow a section whose tests have just been run, and 5.5 is the doc-completion commit \u2014 so only the form needs changing.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter status contradicts the unchecked task list",
+      "description": "The frontmatter reads `status: complete` and `dateUpdated: 20260408` (identical to `dateCreated`), while every one of the ~20 `[ ]` items is unchecked \u2014 including Task 5.3, which is the step that is supposed to set that status, and Task 5.2's 8-step viewer walkthrough. A reader cannot tell which commits landed or which verification steps actually ran. Either the items should be checked off, or the status should reflect reality.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The full test suite is scheduled to run three times with no intervening code change",
+      "description": "Task 3.5 (`pytest`), Task 5.1 (`pytest`) and Task 5.2 step 2 (`pytest`) are all whole-suite runs, and between 3.5 and 5.1 the only changes are two YAML keys and the CHANGELOG. Task 5.1 adds no information; dropping it (or folding it into 5.2 step 2) would trim the file without losing a checkpoint.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 2.1 delivers a dispatch function whose branches are not implemented until 2.2",
+      "description": "Task 2.1 creates `bounds_enforcement.py` with `apply_bounds_policy` delegating to `_apply_wrap`/`_apply_reflect`, which do not exist until Task 2.2; its stated success criterion (\"Module imports cleanly\") passes only because the WRAP/REFLECT branches are never executed, and there is no commit between 2.1 and 2.2. Merging 2.1 and 2.2 into a single \"create the enforcement module\" task would remove an unverifiable intermediate state without changing the work.",
+      "file_ref": null,
+      "category": "task-granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3.2's \"zero import-time overhead\" item is unverifiable and contradicts the file's own Notes",
+      "description": "Task 3.2 asks the implementer to \"Confirm the `OPEN` path has zero import-time or per-tick overhead\", yet the same task mandates a module-level `from migratory_server.bounds_enforcement import apply_bounds_policy`, and the Notes section concedes \"No import of `apply_bounds_policy` is avoided\". The testable statement is the one already given as the success criterion (the function is called exactly when policy is not `OPEN`, verified by the mock test in 3.4); the confirm item should be restated as \"the function is never invoked on the `OPEN` path\" or dropped.",
+      "file_ref": null,
+      "category": "acceptance-criteria",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Shipped-config policy (SC12) is verified only by eye",
+      "description": "Tasks 4.1 and 4.2 add `policy: wrap` to `config/default.yaml` and `config/test.yaml` and verify with a printed `python -c` invocation and \"expect output containing wrap\". Nothing asserts the shipped configs carry `wrap`, so a later edit that drops the key silently reverts first-run behavior to `OPEN` (the dataclass default) while the suite stays green. One assertion next to the existing `test_default_config_file_loads` in `tests/test_config.py` (`policy is BoundsPolicy.WRAP`) plus a companion for `config/test.yaml` would close it.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All slice success criteria are covered by tasks, with no scope creep",
+      "location": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are written as checklist items, not plain lines",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Frontmatter status contradicts the unchecked task list",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "The full test suite is scheduled to run three times with no intervening code change",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "task-granularity",
+      "raw_category": null,
+      "summary": "Task 2.1 delivers a dispatch function whose branches are not implemented until 2.2",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "acceptance-criteria",
+      "raw_category": null,
+      "summary": "Task 3.2's \"zero import-time overhead\" item is unverifiable and contradicts the file's own Notes",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Shipped-config policy (SC12) is verified only by eye",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-16T21:35:39.059715",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 173937,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 308269,
+  "cached_tokens": 233216,
+  "cache_write_tokens": null,
+  "completion_tokens": 46629,
+  "reasoning_tokens": 43966,
+  "duration_seconds": 211.45117966691032,
+  "cost_usd": 0.03372044,
+  "cost_basis": "alias_pricing"
+}

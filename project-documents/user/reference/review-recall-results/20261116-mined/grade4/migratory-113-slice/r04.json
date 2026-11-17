@@ -1,0 +1,110 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Parity acceptance criteria cannot pass and misattribute failures",
+   "description": "Step 5 requires \"bit-exact position equality against brute-force-only over N ticks.\" The doc's own parity criterion (line 329) and its Testing Strategy (line 431) require set equality, because grid rows come back in a different order. Forces sum neighbors with `reduceat` over CSR edges (slice 111), so a different order changes floating-point rounding. A correct grid tick breaks bit-exactness. Brute also uses the identity distance form by default (journal Entry 1), and slice 105 does not specify the grid's formula. Boundary pairs can therefore classify differently between backends, so divergence can come from backend numerics and not only from the dispatcher.\n\nLine 352 says \"any divergence indicates a dispatcher correctness bug,\" and line 408 says the dispatcher \"cannot introduce a correctness bug.\" Together they send real failures to the wrong place. Line 352 also calls the suite \"brute-initial\"; with the default threshold, any scenario whose mean neighbor count falls below 8 leaves brute after tick 1. Line 359 cites \"documented determinism caveats in the hash grid\" that this doc never states. The plan's 105 entry requires identical behavioral output across a spatial swap, so 113 must say how it meets that for a per-tick swap.\n\nFix before implementation: choose one contract. Recommended: per-tick neighbor-set equality, plus run-to-run determinism for a fixed dispatch sequence. Drop the cross-backend bit-exact assertion. Define trajectory drift from order-dependent rounding as bounded and expected, and neighbor-set differences as the failure signal. Rewrite lines 352 and 408 to match.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Default threshold contradicts the journal and the doc's own arithmetic",
+   "description": "Lines 210 and 211 disagree. At 300\u00d7300 with r=35 and N=3100, uniform spread gives about 132 mean neighbors, which selects brute. Line 211 then says uniform spread in the expansion phase drops the mean below 10, which selects grid. One uniform spread cannot produce both.\n\nThe journal points the other way. Entry 4 measured uniform spread at N=2000 in a 1000\u00d71000 world with r=50, where the mean is about 15.7 before edge truncation and the grid is 3.3\u00d7 faster. With t=10 and h=2, the switch to grid fires only below 8 (line 133), so the default stays on brute there. At either world size the journal uses, uniform spread at these N stays above 8. The default therefore never selects grid in the expansion phase the Value section (line 23) claims to capture.\n\nFix: restate the default against the journal's measured points (grid wins at mean \u224816 uniform and loses in the r=150 clustered benchmark), or mark the default unvalidated until the step-4 sweep runs.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Config permits a silent disable of grid selection",
+   "description": "The brute\u2192grid rule (line 133) fires when `m < t \u2212 h`. The mean `m` is never negative, so when h \u2265 t the condition can never hold, and adaptive stays on brute with no error. Validation (lines 200\u2013202) checks t > 0 and h \u2265 0 but not h < t. This is the silent-failure pattern the project rules prohibit.\n\nFix: add `0 \u2264 hysteresis_band < grid_threshold_mean_neighbors` to `_validate_spatial` as a `ConfigError`, and test the boundary.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:198-202"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Density signal is undefined when no agents are evaluated",
+   "description": "The signal is `counts.sum() / n_active` (line 116). The plan's slice 100 entry requires subset-evaluable ticks, so an empty subset is reachable. Division by zero raises or yields NaN depending on how it is computed. NaN makes both comparisons false, which silently freezes the backend. Line 431 lists \"empty\" as a parity input but never says what `record_density` does.\n\nFix: specify the behavior (for example, skip the update, keep the current backend, and log at WARNING), and test it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:114-116"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "initial_backend is unplanned, unused, and missing from the config it claims to expose",
+   "description": "Line 301 says operators can choose grid-first, and the Risk section (line 400) assumes they set `initial_backend: grid`. But `SpatialConfig` (lines 168\u2013176) and the YAML (lines 189\u2013196) have no such field. `_build_spatial` hard-codes `\"brute\"` (line 238). The plan's 113 entry does not assign this parameter.\n\nFix: remove the constructor parameter and state that brute is the starting state. If grid-first is wanted, add the field to `SpatialConfig` with validation and a test.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:294-301"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Plan's \"live\" tuning is delivered as restart-time config",
+   "description": "The plan's 113 entry says the knobs let the operator \"tweak the crossover live while experimenting.\" `SpatialConfig` is `frozen=True` and read from YAML, so any change requires a restart. Line 51 excludes runtime tuning, and line 314 still calls the surface \"live.\"\n\nThis needs a Project Manager decision. Either \"live\" means restart-time config, in which case reword line 314 and the plan entry, or runtime reload is in scope, in which case add it along with its failure handling.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:168-176"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Undeclared dependency on deferred slice 105",
+   "description": "The body depends on 105's `HashGridQuery` and its 35 tests (lines 71\u201373, 319). The frontmatter (line 6) and the plan entry omit 105. Slice 105 is `deferred`, and its outcome records that server wiring was reverted to `BruteForceQuery()`.\n\nTwo consequences. First, declare the dependency in the frontmatter and the plan. Second, lines 217\u2013219 say the cell-size derivation \"moves from server.py,\" but current wiring (line 226) has nothing to move. The derivation must be rewritten as new code, and the doc should say so.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:6"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Tick hook uses a duck-typed guard; the wrapper can record the signal itself",
+   "description": "Line 162's `hasattr(spatial, \"record_density\")` makes tick.py branch on a capability by name. That conflicts with the project's \"program to interfaces\" rule, and the doc tests the guard (line 344). The \"pre-cap\" claim (lines 116 and 409) also depends on which binding of `filtered_counts` is passed at step 8 (line 159). Slice 112's cap sits between those steps and may rebind that name, and the pseudo-code does not say.\n\nThe wrapper already receives the counts. `query_radius_batch` returns `(flat_neighbors, counts)` and keeps self-matches (slice 110). The wrapper can record density from its own output at call time, subtracting the self count. That removes the tick.py edit, the guard, and the guard test, and it matches slice 105's \"no tick.py change\" pattern. The cost is documenting the self-count offset.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Backend identity uses concrete types, raw strings, and duplicate defaults",
+   "description": "Three problems:\n- The constructor takes `grid: HashGridQuery` and `brute: BruteForceQuery` (lines 85\u201386). The doc says a future KD-tree \"can slot in behind the dispatcher\" (lines 49, 313). That requires `SpatialQuery`-typed parameters. The dispatcher only calls `build` and `query_radius_batch`.\n- Names drift. The constructor uses `threshold_mean_neighbors` and `hysteresis_band`, the wiring sketch (line 238) uses `threshold=` and `hysteresis=`, and config uses `grid_threshold_mean_neighbors`. Pick one name.\n- The strings \"adaptive\", \"grid\", and \"brute\" appear raw on lines 89, 173, 200, 204, and 236\u2013238. Define a backend enum once. `hysteresis_band` defaults to 0.0 in the class (line 88) and 2.0 in config (line 175). Only config should carry defaults, per project rules.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:82-90"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Empty-profile case uses a silent fallback",
+   "description": "\"If the profile list is empty ... fall back to `max(world.width, world.height)`\" is the silent fallback the project rules prohibit. Slice 105's caveats record the same fallback. Either reject an empty profile list in config validation, in which case the existing zero-profile test that 105 mentions changes, or keep the fallback as an explicit, logged decision with a test. The doc should state which.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:217"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Walkthrough cannot show the expansion-phase gain and relies on undefined surface",
+   "description": "- Journal Entry 5 measured brute at 19\u201320 TPS in the scattered phase, against a 20 Hz target. TPS is capped there, so \"TPS \u2265 brute-only\" (line 377) cannot show a grid gain. Compare per-tick compute time in milliseconds at fixed N for the expansion phase, and keep TPS for steady state.\n- Step 2 (lines 356\u2013357) pins backends with `MIGRATORY_SPATIAL_BACKEND`, a surface the doc never defines (line 359 calls it \"an implementation detail\"). The Testing Strategy (line 432) already prescribes a pytest fixture. Use the fixture, or define the variable.\n- The sweep harness (lines 368\u2013369) is `/tmp/bench_adaptive.py`, \"constructed during implementation\" and unversioned, yet the perf journal entry depends on it. Commit it or specify its inputs.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-380"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Proportionality: cut or defer these",
+   "description": "Cut candidates, by impact:\n1. `initial_backend` (see above): unused configuration.\n2. The `hasattr` guard and tick.py edit: removable if the wrapper records density itself.\n3. `MIGRATORY_SPATIAL_BACKEND` pinning: duplicates the fixture the doc already prescribes.\n4. Numeric restatements of journal entries in the Value section (lines 21\u201329) and Default Threshold Choice (lines 206\u2013213). Link to the journal and record the sweep result instead; restated numbers drift.\n5. Speculative \"Provides\" items (lines 313, 315): no current consumer.\n\nKeep the wrapper, the three config fields with validation, the three backend options, and the unit and parity tests.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Switch-cost premise is wrong",
+   "description": "The doc says the grid \"has never been built\" after a brute\u2192grid switch and proposes warm-up builds. The grid is rebuilt on every tick it is selected (tick step 1, line 151), so its first grid tick costs the same as any other grid tick. No switch-specific spike exists to warm. Remove the premise and the \"build both backends\" option, or measure first.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:439"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Cost claim for record_density is inaccurate",
+   "description": "`counts.sum()` is O(n_active) and is not a BLAS call. The O(1) claim holds only if the total is read from the CSR structure, as line 116 implies with `len(flat_neighbors)`. State the implementation that way.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:340"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Default-behavior sentence contradicts itself",
+   "description": "\"Omitting the section preserves current behavior *after* this slice, not before\" both preserves and changes behavior in one sentence. Omitting the section changes behavior: the default becomes adaptive. Say that directly, and call it out in the CHANGELOG entry (line 43).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:187"
+  }
+ ]
+}

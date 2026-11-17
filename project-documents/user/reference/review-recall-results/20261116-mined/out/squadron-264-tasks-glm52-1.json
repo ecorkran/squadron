@@ -1,0 +1,135 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Missing test for McpError / closed-stream mid-call failure mode",
+      "description": "The design's failure-mode table lists four rows and states \"Each row above has a test asserting the observable signal.\" Task 5 covers spawn failure (5.3), timeout (5.2), server `isError` (5.1 `test_server_is_error_maps_to_error_result`), and unknown tool name (5.1), but no test explicitly covers the \"Protocol/transport error mid-call (`McpError`, closed stream)\" row. The `test_unknown_tool_name` case is a server-level error for an unknown tool, not a transport-level stream break. The `call_mcp_tool` implementation handles `McpError` in Task 4.3, but that branch has no corresponding test asserting its observable WARNING signal. A test that forces the fake server to close the stream mid-call (or patches the transport to raise `McpError`) would close this gap.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md (Task 5)"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage is complete",
+      "description": "- SC1 (registration + pipeline validation) \u2192 Tasks 6.4, 7.1, 7.4\n- SC2 (exact mapped call/args + result mapping) \u2192 Tasks 6.1, 6.2, 7.2, 7.3\n- SC3 (real stdio round-trip + isError/timeout) \u2192 Tasks 3, 5.1, 5.2, 5.4\n- SC4 (spawn failure \u2192 is_error, no exception) \u2192 Task 5.3\n- SC5 (live contract test with CF) \u2192 Task 8\n- SC6 (live demo: cf_workflow_status + cf_build_context) \u2192 Task 8.2 (automated) and Task 9.1 walkthrough step 4 (manual terminal demo, explicitly acknowledged as open)\n- SC7 (full suite green, pyright, ruff) \u2192 Task 9.2",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing respects one-way layering and test-with pattern",
+      "description": "Config keys (1) \u2192 config tests (2); fake server (3) before bridge (4); bridge (4) \u2192 bridge tests (5); bridge before cf_tools (6); cf_tools (6) \u2192 descriptor tests (7); descriptors before live contract (8); all before close-out (9). No circular dependencies. Every implementation task is immediately followed by its test task.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task sizing and scope proportionate",
+      "description": "`mcp_bridge.py` ~80 lines (Task 4, 3/5 effort), `cf_tools.py` ~150 lines (Task 6, 3/5 effort) \u2014 within the ~300 line/file and ~50 line/function limits. matching the design's 2/5 overall effort. Five test files are each narrowly scoped to one layer (fixture, bridge, descriptors, live contract, close-out). No task requires splitting or merging.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Missing test for McpError / closed-stream mid-call failure mode",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md (Task 5)",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criteria coverage is complete",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing respects one-way layering and test-with pattern",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task sizing and scope proportionate",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-16T20:47:04.816462",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 11183,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 17050,
+  "cached_tokens": 0,
+  "cache_write_tokens": null,
+  "completion_tokens": 3603,
+  "reasoning_tokens": 2864,
+  "duration_seconds": 31.04102766700089,
+  "cost_usd": 0.01987445,
+  "cost_basis": "alias_pricing"
+}

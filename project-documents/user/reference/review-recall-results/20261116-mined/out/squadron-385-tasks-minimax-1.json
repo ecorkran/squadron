@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion traces to a task",
+      "description": "Cross-reference against the slice design's 11 Functional SCs and 7 Technical SCs:\n\n- Functional F1 (slice-branch body cites design, tasks, review) \u2192 Tasks 7, 8, 9, 11, 13\n- F2 (unplanned repo: five sections, three no-input lines, creation succeeds) \u2192 Tasks 5, 11, 13\n- F3 (merged-ancestor review excluded) \u2192 Task 8.2's load-bearing test\n- F4 (refusal when configured branch absent from host) \u2192 Task 5.1's third row + Task 5.2's refusal-case test\n- F5 (present integration branch used, source printed) \u2192 Task 5.1, Task 13.1\n- F6 (missing push and behind-push failures) \u2192 Task 6\n- F7 (presence-check failure creates nothing) \u2192 Tasks 12, 13\n- F8 (title: human name when slice, fallback to first commit subject) \u2192 Task 10a\n- F9 (dry-run equals real) \u2192 Task 13.1's \"bound once\" rule, Task 13.2's equality test\n- F10 (operator-unidentified refuses, no write) \u2192 Tasks 13.1 ordering, 14 parametrized over identify_operator\n- F11 (one recorded live creation) \u2192 Task 16.2 step 5\n- Technical T1 (timeouts per call site) \u2192 Task 14.1\n- T2 (provider failure logged, no write) \u2192 Task 10.1 boundary handler, Task 10.2 test\n- T3 (default path makes exactly one write after reads) \u2192 Task 13.1 ordering, Task 13.2\n- T4 (review/ does not import pr/) \u2192 Task 15.1\n- T5 (checkbox parser real-file fixture) \u2192 Task 2.2\n- T6 (pyright/ruff clean) \u2192 Task 16.1\n- T7 (summary_oneshot docstring + test) \u2192 Task 15.2\n\nVerification Walkthrough steps 1\u20136 \u2192 Task 16.2; walkthrough rewrite with observed output \u2192 Task 16.3.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing follows the design's implementation order with no cycles",
+      "description": "The task order matches the LLD's \"Implementation Notes \u2192 Order\": parsers (1, 2) \u2192 git helpers (3) \u2192 `resolve_locator` extraction (4) \u2192 refusal paths (5, 6) \u2192 inputs (7, 8) \u2192 assembly (9) \u2192 body layers (10, 10a, 11, 12) \u2192 command wiring (13) \u2192 failure matrix (14) \u2192 corrections (15) \u2192 verification (16). Dependencies between tasks are forward-only and explicit where they exist (e.g., Task 1 needed by Task 7, Task 4 needed by Task 13, Task 2 needed by Task 7, Task 3 needed by Task 7). The failure-matrix task (14) sits after the command (13) it tests. No cycles.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern is respected; no test calls a real model",
+      "description": "Each implementation task (1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1, 10.1, 10a.1, 11.1, 12.1, 13.1) has an immediately-following test task with concrete cases tied back to the design's decision. Task 10.2 explicitly states \"No test here calls a real model\" and the context summary confirms the model is exercised live exactly once, in Task 16.2.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality holds; no overweight sub-tasks",
+      "description": "The slice is substantial (8 design decisions, 18 SCs, 6 verification steps, a new 7-file package plus three file modifications). 16 tasks is proportionate. Sub-tasks are small (most Effort 1 or 2; the largest are 8.1, 8.2, 11.1, 13.1, 13.2, 14.1 at Effort 3, each with a tight focus). The single task file is appropriate \u2014 splitting would not improve clarity.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR-restated load test owed; no implicit CI gating",
+      "description": "The slice design does not restate a quantifiable throughput, latency, or capacity NFR. The \"live creation\" requirement is a one-shot verification, exercised once in Task 16.2 step 5 \u2014 not a load-test scenario. No `tests/load/` task is needed and no CI wiring is left implicit.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No `**Commit**:` markers in the file",
+      "description": "The file contains no commit markers. Per the review criteria, \"A file with no markers is acceptable; do not require them.\" Recording this as an observation, not a finding \u2014 the breakdown is otherwise complete.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Every success criterion traces to a task",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing follows the design's implementation order with no cycles",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Test-with pattern is respected; no test calls a real model",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality holds; no overweight sub-tasks",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No NFR-restated load test owed; no implicit CI gating",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No `**Commit**:` markers in the file",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T21:39:07.176211",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 20296,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 25792,
+  "cached_tokens": 6016,
+  "cache_write_tokens": null,
+  "completion_tokens": 6449,
+  "reasoning_tokens": 5213,
+  "duration_seconds": 96.62950691697188,
+  "cost_usd": 0.01403256,
+  "cost_basis": "alias_pricing"
+}

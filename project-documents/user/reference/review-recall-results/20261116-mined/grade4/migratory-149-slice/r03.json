@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Gate configuration resolves to a workload whose N is 100,000, not 50k",
+   "description": "`Default bench config for gate runs: mid-flock-50k workload, S=3, max_neighbors=32` is the config that A2 (\u22655\u00d7 `force_total`) and A3 (\u2265100 TPS at N=50k) are measured on \u2014 and A3 is the stated NFR gate. But `bench/workloads/mid-flock-50k.yaml` declares `n: 100000` with `world_size: [1536.0, 1536.0]`, while its own description claims the N=50k operating point and slice 145's recorded 38 TPS at N=50k corresponds to a 756\u00d7756 world. As written, the design's gate would be evaluated at N=100k against a denominator recorded at N=50k, so the pass/fail meaning of A2/A3 is undefined. The slice must state the exact workload file (or N and world size) used for both the denominator and the gate, and either fix or disambiguate `mid-flock-50k.yaml`.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough cites a non-existent harness and unreproducible ablations",
+   "description": "Every command in Steps 2, 3 and 5 invokes `python scripts/bench.py --backend quadrants-fused --config <name> --N <n> --ticks <n> --subdivision-factor <S> --parity-check numpy`. There is no `scripts/bench.py` (the scripts directory contains only `148_measure_cell_occupancy.py` and `148_smem_vs_dram_microbench.py`), and the real harness is `python -m migratory.bench.cli`, whose flags are `--workload`, `--backend`, `--workload-dir`, `--results-dir`, `--list-*` \u2014 none of `--config`, `-N`, `--ticks`, `--subdivision-factor`, or `--parity-check` exist. Worse, the four Step-3 configurations meant to isolate each intervention are not distinguishable: the \"Baseline (S=1, counter-gating)\" and \"Early exit only (S=1, break enabled)\" command lines are byte-identical, as are \"Cell subdivision only (S=3, counter-gating)\" and \"Both interventions (S=3, break enabled)\". Since the break is compiled into the kernel (not behind a flag), the counter-gating rows cannot be produced on this branch at all \u2014 which is also why the task list instructs taking the baseline from `main` instead. The design needs to name the real harness/flag it will add for `subdivision_factor`, and to state explicitly which gate comparisons are against a recorded slice-145 baseline rather than a same-branch ablation. The gap left unmet is a reproducible measurement path for A2/A3.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:150-190"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Component-interaction diagram misplaces the state it modifies and names a type that does not exist",
+   "description": "The design says `build_spatial_hash` (lines 411\u2013462) \"computes `grid_w` and `grid_h`\" and that `QuadrantsFusedBackend.setup()` \"stores grid_w, grid_h, cell_size, S\". In the code, `build_spatial_hash` only orchestrates the four kernels plus the CPU `np.cumsum` and holds no such state; `grid_w`, `grid_h`, `n_cells` and `cell_size` are computed and stored in `GpuAgentState.setup()`, and the backend merely forwards `state.cell_size` / `state.grid_w` / `state.grid_h` into the kernel launch. The diagram's `BenchConfig` node likewise names no existing type \u2014 the actual config surface is `Workload` (YAML schema in `bench/workloads/*.yaml`) plus the module constant `DEFAULT_CELL_SIZE_MULTIPLIER`, which the design's line-80 claim (\"only the cell_size value changes\") does not reconcile with the task-level instruction to remove that constant. For an implementer wiring S through, the ownership of the new field is the core question and the document points at the wrong modules; the design should name `Workload`, `GpuAgentState`, and both kernel call sites (`QuadrantsFusedTickRunner.tick_once` and the `run_fused_tick` wrapper).",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-105"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"A7 seam preserved\" overstates what the count-based break leaves intact",
+   "description": "The plan entry says both interventions use the `getNeighbors` seam, and the design concludes \"A7 seam preserved: the `get_neighbors_first_k` swap point \u2026 remains intact.\" Two things undercut that claim. (1) The break is placed in the caller, before the seam, on a pure count condition (`k_found >= max_neighbors`), so the seam can no longer be swapped in isolation to obtain distance-ranked selection: a distance-ranked policy must keep scanning to prove no closer candidate remains, which requires changing the caller's break condition, not just the seam body \u2014 i.e. the seam is no longer the whole swap point. (2) The text says \"The seam becomes unreachable when the break fires,\" which is not what the sketch does: the break fires only once the cap is reached, so on every pre-cap iteration the seam is still executed and now always returns accept \u2014 leaving its counter-gating branch as dead, misleading logic that the design never says to remove or mark. Either state the seam's narrowed contract explicitly (count-only break, distance-ranked requires a caller-side change) or move the gating decision so A7 stays a single-function swap.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Benchmark target named by the slice plan (max_neighbors=7) is dropped",
+   "description": "The slice plan entry for (149) states: \"real starling murmurations interact with ~7 nearest neighbors; `max_neighbors=32` is an intentional physics stress; the 7-neighbor operating point is a benchmark target,\" and the design's own source analysis notes that early-exit gain scales inversely with `max_neighbors` (\"The 7-neighbor target is a meaningful operating point to benchmark at\"). The design fixes every gate, criterion and walkthrough run at `max_neighbors=32` and never measures the lower-k operating point, so the regime with the largest predicted payoff relative to the 45,000-candidate scan is left unquantified and the plan's stated benchmark target has no corresponding deliverable. Deferring it is a scope reduction that should be stated and justified rather than silently omitted.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"CPU fallback\" does not exist for this backend and conflicts with the architecture's substrate posture",
+   "description": "\"A1 and A4 can be verified on Mac (Metal or CPU fallback)\" implies a CPU path for `quadrants-fused`. There is none: the backend selects CUDA on Linux and Metal on Darwin and raises on anything else, with no silent CPU degradation. The parent architecture further demotes Metal to best-effort / not gated. Rewording as \"Mac/Metal for A1 and A4, CUDA-only for A2/A3/A5\" would keep the verification matrix accurate and avoid implying a platform that the design does not support.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:126"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Intervention-composition arithmetic contradicts the cited source measurements",
+   "description": "The composition paragraph says \"With S=3 alone: candidates loaded drops to ~5000\" and \"With both: candidates loaded ~555,\" but per-cell occupancy (~555) is not the candidate count: at S=3 the scan is 7\u00d77 cells \u00d7 ~555 agents \u2248 27,000 candidates (the figure the cited slice-148 re-diagnosis itself gives). The ~5000/~555 figures conflate per-cell occupancy with candidates scanned, weakening the quantitative justification for calling the two interventions multiplicative. Aligning these numbers with the source measurements would make the expected-gain argument checkable.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "No failure-mode statement for the spatial-build cost growth at S>1",
+   "description": "The design states no structural change is needed for `grid_w`/`grid_h`/`n_cells`, and lists the per-tick CPU prefix-sum round trip (D\u2192H `cell_count`, `np.cumsum`, H\u2192D `cell_start`/`write_cursor`) as out of scope because it is \"currently ~1.4% of tick time.\" That fraction was measured against a ~26 ms tick; at the A3 gate (\u2265100 TPS, ~10 ms) it rises to several percent, and S=3 multiplies `n_cells` by ~9 (S=8 by ~64) on top of that. A one-line statement of what happens to that per-tick host round trip as S grows \u2014 and why it stays acceptable at the gate \u2014 would close the only I/O path this slice enlarges.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:48-80"
+  }
+ ]
+}

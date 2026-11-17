@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Dispersion has no data path: the fan-out reduce and persistence chain drops per-branch scores",
+   "description": "The Dispersion bullet asserts \"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`\". Neither half holds as stated. 300's multi-sample judging is deferred, unimplemented Future Work (`300-slices...md` Future Work item 1, unchecked), and no median reducer exists \u2014 `src/squadron/pipeline/intelligence/fan_in/reducers.py` registers only `collect` and `first_pass`; `merge_findings`/`unanimous`/median are \"planned in 189\" per `project-documents/user/notes/000-process-journal.md`. More concretely, the surviving reduce path cannot carry scores at all: `CollectReducer.reduce` builds each branch entry as `{step_name, status, action_results[{action_type, success, outputs, verdict}]}` \u2014 `score` and `criteria` are omitted. `_execute_fan_out_step` returns a single reduced `ActionResult` whose `score` is `None`, and `StateManager._append_step` hoists \"the last non-None action score\" from `step_result.action_results` \u2014 which is that one reducer result. So per-branch judge scores never reach persisted state. The doc's requirement that \"the metrology must accept dispersion data opportunistically (when multi-sample ran anyway)\" therefore has no source, and the referenced 300 \"multi-sample option\" is not a thing that exists. Additionally, `_execute_fan_out_step` fails the entire step if any branch returns `FAILED`, so a single missing-input review branch destroys the whole dispersion sample set.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Where metrology data lives\" mis-states the current state \u2014 there is no project identifier anywhere in the persisted record",
+   "description": "The doc claims \"300's persistence is per-run/per-project\". It is not. `RunState` (`src/squadron/pipeline/state.py`) has no project or cwd field \u2014 its schema is run_id, pipeline, params, execution_mode, timestamps, status, current_step, completed_steps, checkpoint, compact_summaries, pool_selections. Run files live in `~/.config/squadron/runs/`, i.e. user-global. And `state.params` is populated from `_assemble_params` (`src/squadron/cli/commands/run.py`), which never records the project; `_project` is injected into `merged_params` inside `execute_pipeline` *after* `init_run`, so it never lands in `state.params`. The per-project review markdown does carry `project:` in frontmatter, but that is per-project only by directory location and is not queryable cross-project without knowing every project root. Consequence: the \"leading slice-design decision\" the doc frames as \"whether this extends existing storage or adds a metrology store\" is not a free choice \u2014 extending existing storage is not possible without adding a project identifier to the persisted run/result record, which is a write-path change and directly contradicts the stated stance \"Read-side over 300's write path ... it does not modify ... the result models' write semantics.\"",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Judge-configuration identity is not recoverable: no template version exists and effective thresholds are never persisted",
+   "description": "\"Metrology records must therefore identify the judge configuration (template identity/version, model) ... reports must not blend measurements across incompatible configurations\" is fixed here, but neither ingredient is recordable today. (a) Version: `ReviewTemplate` (`src/squadron/review/templates/__init__.py`) has no version field, and `load_all_templates` lets a user template in `~/.config/squadron/templates/` override a built-in by `name` \u2014 so a prompt edit or a user override silently changes the identity of accumulated calibration data with no signal. Adding a version means a template-schema change in 100/300, not something 320 can assume. (b) Thresholds: `resolve_thresholds(template.judge, step_override)` (`src/squadron/pipeline/actions/judge.py`) computes effective `pass_floor`/`concerns_floor` at runtime, but `ActionResult.metadata` from the review action records only `model`/`profile`/`template`, and the step-level `judge:` override lives in pipeline YAML that is not persisted in `RunState`. A score of 78 returning PASS is indistinguishable from one that was configured at floor 75 versus 82. So \"reports must not blend measurements across incompatible configurations\" cannot be implemented as written; it requires recording effective configuration (and probably a template content hash), which the doc does not scope.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The tech-debt-audit \"harness\" is an under-specified hard part, not a normalization detail",
+   "description": "The doc treats \"run the audit across squadron-managed projects, normalize and persist findings\" as slice work and relegates the hard part to the \"Normalizing an LLM-authored audit\" bullet. But `commands/analysis/tech-debt-audit.md` is a Claude Code slash-command skill with `disable-model-invocation: true` that depends on `TodoWrite`, subagent (Task tool) dispatch, `git log` churn analysis, and stack tooling (`pip-audit`, `ruff`, `vulture`, `mypy --strict`), and whose deliverable is a prose document written to `analysis/nnn-analysis.{project}.md` in each audited repo. Nothing in the document says how a disabled-model-invocation interactive skill is invoked headlessly across N repos, what \"squadron-managed projects\" enumerates as a set (`ContextForgeClient` is single-project-per-cwd; there is no project registry), or how the \"Findings table\" columns (`ID | Category | File:Line | Severity | Effort | Description | Recommendation`) are extracted from a markdown table that the skill instructs the model to \"aim for 30\u201380\" rows of, alongside a required \"Things that look bad but are actually fine\" prose section. Three separate unresolved mechanisms are compressed into one bullet while the slice is scheduled.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The pre-emption prompt has no injection point in the dispatch path",
+   "description": "The design repeatedly calls it \"the dispatch-side prompt-chaining pre-emption prompt\", but nothing states where in the dispatch path such a prompt attaches. `DispatchAction._resolve_prompt` (`src/squadron/pipeline/actions/dispatch.py`) resolves prompt text from exactly three sources: an explicit `params[\"prompt\"]`, the most recent `cf-op(build_context)` stdout, or the most recent prior `review` action's findings. There is no cross-pipeline hook, no shared system-prompt injection point, and phase-step dispatch takes its prompt from CF's `build_context`. Making one prompt front-load issue-class avoidance across all dispatch steps therefore means either editing every pipeline/step's dispatch config or the CF context templates, or adding a new injection point to 140's dispatch machinery \u2014 a write-path change to the execution path that the document's \"no change to the judging path / read-side over the write path\" framing does not cover and never acknowledges. This is presented as a scheduled deliverable (\"Pre-emption prompt & delta measurement\") rather than a design decision.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Anticipated Slices"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Two oracles, one metrology shape\" conflates two unrelated data models and bundles a separable experiment",
+   "description": "\"The two oracles share one metrology shape ... so the reporting layer is built once\" is asserted, not shown. The judge oracle reads scalar `score`/`verdict`/`provenance` from run-state JSON keyed by (run, step, iteration, action), computing agreement and dispersion per artifact level and judge config. The audit oracle reads `(category, location, severity)` out of LLM-authored markdown tables in per-repo files, aggregated as a cross-project findings count. They share no schema, no source, no grain, and no aggregation shape; the \"one reporting layer\" is likely two. Separately, the pre-emption prompt and its before/after measurement is a dispatch-prompt experiment that needs no metrology to ship \u2014 its dependency on the baseline is only for measuring the effect. What to cut: the entire code-quality half (audit harness, normalization, baseline, pre-emption prompt and delta) can be deferred to its own initiative without touching the keystone; bundling it here makes the design-quality metrology wait on an unrelated headless-skill-harness problem, and inflates a five-slice architecture whose two halves have disjoint preconditions.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Envisioned State"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Small-n honesty is in tension with three-way stratification, and the report surface is never named",
+   "description": "\"Honest statistics at small n\" commits to sample sizes on every number and a minimum-evidence floor below which the system \"refuses to recommend loosening a threshold\". Meanwhile the Design Goals require agreement computed per artifact level, and Technical Considerations fix that measurements are \"keyed by judge configuration (template identity/version, model)\", and the reporting goal includes trend over time. With \"a handful of human spot-checks per artifact level\", the cells are (level \u00d7 judge-config \u00d7 time bucket); the evidence floor will either be unreachable for most configurations or the report contradicts its own principle. The document names no dominant stratification, no minimum n, and no time bucketing. Relatedly, the entire output of this component is reports, yet the document never names their surface, format, or cadence \u2014 while it does constrain the capture surface (\"CLI at minimum, honoring interface parity\"). For a component whose deliverable is a report, that asymmetry is a load-bearing omission.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Architectural Principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Judge verdicts come from unattended pipelines, so \"cheap sampling\" requires a discovery surface the design omits",
+   "description": "The first Technical Consideration frames capture as \"the make-or-break design problem\" and constrains it to an existing workflow surface that \"takes seconds\". But 300's whole premise is that judges gate *unattended* pipelines, so the operator is ordinarily absent at judgment time and a \"spot-check\" is inherently retrospective: something must list or offer past judge results for sampling. No such surface exists \u2014 `sq run --status` shows one run's summary, `sq history` is daemon conversation history, and there is no judge-result query. The keystone slice is therefore described too narrowly: \"the durable home for human sample verdicts ... plus the low-friction capture surface\" omits the discovery/offer half, and the escalation-triggered and disagreement-triggered offer options both need cross-run data (checkpoint records in `RunState`, multi-sample results) that nothing exposes. The Non-Goal \"No general observability platform. Dashboards, generic metrics pipelines, or telemetry beyond that purpose are not this initiative\" is in direct tension with the discovery surface the sampling design requires.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Technical Considerations"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Declared dependency set omits 340 and overstates coupling to 300 for the code-quality half",
+   "description": "Frontmatter declares `dependencies: [100, 140, 300]`, matching the initiative plan, but the code-quality oracle's only hard upstream artifact is the 340 analysis pack (`commands/analysis/tech-debt-audit.md`, `[packs.analysis]` in `src/squadron/data/skills.toml`), which the body cites in Related Work but the dependency list omits. Conversely the audit-baseline half needs nothing from 300. The stated set both understates a real upstream artifact and overstates coupling across the two halves, which matters because it shapes slice ordering.",
+   "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#Related Work"
+  }
+ ]
+}

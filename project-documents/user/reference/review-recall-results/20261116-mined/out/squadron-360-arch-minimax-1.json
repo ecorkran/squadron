@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The 940\u2013949 allocation collides with the project\u2019s documented index ranges",
+      "description": "The architecture says the naming convention \u201creserves **940-949** for \u2018codebase analysis, research, investigation\u2019\u201d and then sanctions overflow into 950+. The actual project documents do not establish that reservation. `commands/analysis/tech-debt-audit.md` and `.claude/skills/analyze/SKILL.md` only say that the analysis number \u201cstarts at 940\u201d; they define neither an upper bound nor a 940\u2013949 range. Meanwhile, `project-documents/user/project-guides/001-initiative-plan.squadron.md` defines 900+ as a broad cross-cutting maintenance/refactoring range. The proposed overflow therefore overlaps a documented namespace without defining ownership or collision behavior. The architecture should specify an allocation rule for all 900+ indices, including what happens when 950+ is already occupied.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The architecture treats an empty workspace as a valid and common source without defining a safe fallback",
+      "description": "Capability 2 permits an absent concept and says it will source purpose from the initiative plan \u201cplus interview,\u201d but the interview is not part of the described flow or its failure semantics. It is also unclear how an empty workspace is represented when deriving a proposal: the architecture does not distinguish an empty proposal from a proposal with no opportunities, nor specify whether the command should report the distinction. This is especially important because the project convention says never to use silent fallback values. The document needs an explicit empty-workspace result, with a visible difference between \u201cno opportunities found\u201d and \u201cworkspace contains no files.\u201d",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graph parsing is specified as context guidance rather than a reliable data contract",
+      "description": "The graph shape is described as coming from a plugin reference, but the implementation is limited to \u201cGrep for the needed section before reading; never load the whole file into context.\u201d That is not a safe way to parse a single large JSON object: grep cannot reliably isolate `layers[]`, `tour[]`, or file-level nodes because JSON arrays contain nested braces and repeated structural keys. It also cannot establish that every file belongs to exactly one layer or that node IDs referenced by tours and layers exist. The upstream schema is explicitly external and actively developed, so the consumer needs a bounded structural parser or a mechanically derived projection rather than prose search. Otherwise a format change can produce a silently incomplete planning document.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Staleness detection is incomplete and can report the wrong state",
+      "description": "The proposed staleness check compares `meta.json`\u2019s `gitCommitHash` with `HEAD`. That detects whether the graph predates the current tip, but not whether it was generated from the current commit when the graph itself has changed, whether the commit hash belongs to another repository, or whether an uncommitted worktree changed the analyzed files. More importantly, the architecture asks for \u201ccommit distance,\u201d but does not define whether it means `git rev-list --count <hash>..HEAD` and how the command behaves when the hash is absent, shallow-cloned, or not an ancestor. The promised warning can therefore be unavailable exactly when it is most needed. The staleness contract should enumerate missing, invalid, non-ancestor, and dirty-worktree states.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `.gitignore` side effect is outside the skill-pack ownership boundary and has no update contract",
+      "description": "Capability 1 is delivered as a pack skill, while the flow also mutates the target repository\u2019s `.gitignore`. The architecture defines no owner for that mutation, does not account for nested `.gitignore` files or repositories whose root ignore file has unusual encoding, and gives no conflict rule if the file already contains an equivalent but differently spelled pattern. It also says \u201cSquadron manages `.gitignore`,\u201d although the design otherwise says squadron only writes Markdown and the external plugin owns scratch lifecycle. This is a concrete dependency on repository-wide write behavior that is absent from the stated \u201cskill-level document transforms\u201d scope. Either isolate it behind a named repository-hygiene component with explicit merge semantics or remove it from this initiative.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \u201cproposed initiatives\u201d output has no defined artifact, lifecycle, or review protocol",
+      "description": "Capability 1 is described as producing a concept, a codebase-comprehension analysis, and \u201cinitiative-plan candidates,\u201d but only the first two have paths and schemas. The candidates are \u201coffered for PM review\u201d and \u201cwritten only on explicit confirmation,\u201d which leaves the interaction unclear: a conversational proposal, an analysis document, or a set of initiative-plan drafts. There is no rule for how candidates are numbered, how dependencies are represented, or what happens to proposals that are declined. This leaves a load-bearing part of the capability\u2019s output undefined and conflicts with the claim that it consumes and produces squadron-native planning artifacts.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The client document has no deterministic source-selection and freshness policy",
+      "description": "The schema names \u201cConcept Overview,\u201d \u201cConcept Problem & Motivation,\u201d \u201cInitiative plan,\u201d \u201cdependencies,\u201d and \u201cstatuses\u201d as sources, but does not define how those fields are located when an initiative plan contains multiple projects, subprojects, or differently named sections. It also does not define whether an initiative plan\u2019s prose is authoritative over its checklist/status metadata, nor how stale source artifacts are represented. Since the output is explicitly derived and must not invent claims, source selection and precedence need to be part of the contract rather than delegated to an unspecified interview or model judgment.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#document-field-schema"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capability 2 adds an unspecified generation parameter despite declaring one neutral document",
+      "description": "The document says \u201cAudience variants share one document\u201d and the resolved decision says there is \u201cone neutral document,\u201d with emphasis added \u201conly if real use demonstrates the need.\u201d At the same time, the translation rules introduce an \u201cemphasis parameter.\u201d The architecture never says whether this parameter exists in the first release, what values it accepts, or whether the document is neutral when it is absent. This is a small but load-bearing contradiction: either remove the parameter from the current contract or specify it and its default behavior.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The proposed command surfaces lack concrete invocation and failure contracts",
+      "description": "The architecture says Capability 1 is `/sq:analysis understand` and Capability 2 is `/sq:overview`, but it does not define their arguments, project-root resolution, target-repository behavior, or required tooling. For Capability 1, it is unclear whether the command operates on the current repository, a path argument, or the project root discovered by Context Forge. For Capability 2, there is no topic/project selection contract even though topic suffixes are supported in filenames. It also does not specify what happens when the output index is occupied, when the required initiative plan is malformed, or when a stale source artifact is encountered. These are essential interfaces for two public command surfaces and should not be deferred wholly to slice design.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The architecture overreaches by promising a concept format without owning or validating the concept guide contract",
+      "description": "The table claims to derive directly from \u201cthe concept guide\u2019s own section list,\u201d including Problem & Motivation, Target Users, Solution Approach, Initial Technical Direction, and Development Approach. The referenced guide files are not present in the checked-out `project-documents/ai-project-guide/` tree, and the existing initiative plan points to `user/project-guides/001-concept.squadron.md`, which also does not exist. The design therefore depends on an unavailable or externally owned template whose exact headings, frontmatter requirements, and \u201cRefined Concept\u201d structure cannot be confirmed. Because the output claims conformance to that template, the architecture needs an explicit versioned template contract or a pinned source for the guide.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#interview-scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The plan retains an obsolete alternative instead of defining which path users should choose",
+      "description": "The architecture says `user/reference/analyze-codebase-prompt.md` is retained \u201cnot superseded\u201d and remains a \u201clow-cost alternative path,\u201d while also presenting the graph-backed path as the initiative\u2019s primary capability. The retained path has materially different inputs, structure, tooling, and output semantics, including a different extraction backend and a large proposed pipeline configuration. Nothing tells users when to choose it, how its outputs compare, or whether it is maintained. Keeping both under the same capability without an explicit routing rule creates two divergent codebase-analysis contracts and unnecessary maintenance. The initiative should either scope this alternative out, rename it as historical reference material, or define a concrete selection boundary and ownership status.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#prior-art-retained-not-superseded"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The 940\u2013949 allocation collides with the project\u2019s documented index ranges",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The architecture treats an empty workspace as a valid and common source without defining a safe fallback",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Graph parsing is specified as context guidance rather than a reliable data contract",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Staleness detection is incomplete and can report the wrong state",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The `.gitignore` side effect is outside the skill-pack ownership boundary and has no update contract",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The \u201cproposed initiatives\u201d output has no defined artifact, lifecycle, or review protocol",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The client document has no deterministic source-selection and freshness policy",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#document-field-schema",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Capability 2 adds an unspecified generation parameter despite declaring one neutral document",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The proposed command surfaces lack concrete invocation and failure contracts",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The architecture overreaches by promising a concept format without owning or validating the concept guide contract",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#interview-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The plan retains an obsolete alternative instead of defining which path users should choose",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#prior-art-retained-not-superseded",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-16T21:37:29.349961",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 507803,
+  "cached_tokens": 424717,
+  "cache_write_tokens": null,
+  "completion_tokens": 4000,
+  "reasoning_tokens": 0,
+  "duration_seconds": 91.26080520800315,
+  "cost_usd": 0.05520881999999999,
+  "cost_basis": "alias_pricing"
+}

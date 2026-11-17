@@ -1,0 +1,117 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Reviewed head sha is stamped from the operator's HEAD on non-tool PR reviews",
+   "description": "Base semantics says \"the head sha recorded in the artifact is what was reviewed.\" Fetching without checkout says a review without tools \"needs only the fetched ref,\" so the operator's checkout stays put. The existing persistence path stamps `reviewedSha` with `run_git([\"rev-parse\", \"HEAD\"], cwd=cwd)` (`src/squadron/review/persistence.py:116`). Only the tool-enabled path, where cwd is the scratch worktree, gets the PR head. On the non-tool path the stamp is the operator's branch tip, which may be unrelated to the PR. That stamp anchors `sq review resolve`'s \"what changed since the review\" diff (`persistence.py:104-105`), so resolution would diff against the wrong commit. The document must state that the PR path passes the head sha explicitly from the PR record and does not call `resolve_reviewed_sha(cwd)`.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The reviewed range is not pinned to the host's base",
+   "description": "The adapter \"fetches the head ref,\" and the range is \"merge-base to head ... so the review matches what the host displays.\" The document never says the base is fetched. The PR identity record in Architectural Principles carries a base ref but no base sha. Consequences:\n- Merge-base is computed against a local base ref that may be stale or absent. The document does not rule out shallow or partial clones, and in those `merge-base` can fail or return an ancestor that differs from what GitHub displays. Fork PRs have the same problem on the base side.\n- The artifact stamps only the head sha, while the base \"routinely moves.\" The reviewed range cannot be reconstructed from the artifact.\n- The base source is unspecified. `resolve_diff_base` (`src/squadron/review/git_utils.py:293-336`) reads `git.integration_branch` from cf and, when cf is absent or the read fails, returns `main` and logs at DEBUG (`git_utils.py:325-330`). A PR review that reuses it silently reviews against `main` for a PR whose base is another branch, which breaks the no-silent-fallback rule.\n\nRequired: name the base fetch (remote, depth), record base sha and head sha in the artifact, and state that the PR path takes its base only from the PR record.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Rules and config resolve from the review cwd, so the PR can supply its own reviewer conventions",
+   "description": "\"Rules outside a planned project\" promises template rules and language detection only, \"and says so.\" The code does not behave that way. `resolve_rules_dir` (`src/squadron/review/rules.py:18-51`) checks `{cwd}/rules`, then `{cwd}/.claude/rules`, then `~/.config/squadron/rules`. It never checks for `project-documents/`. So:\n- In an unplanned repo that has a `.claude/rules/` directory, that repo's rules load silently and the \"says so\" never fires.\n- The operator's personal rules load through the home-directory fallback.\n- For tool-enabled PR reviews, cwd is the scratch worktree, so `{cwd}/.claude/rules` is read from the PR head. The PR can change the rules that judge it.\n- Config is per checkout (git rules: the integration-branch value is stored per checkout directory). The scratch worktree has none of the operator's values: `rules_dir`, `review.max_total_injection_bytes` (read via `get_config(..., cwd=cwd)`, `resolution_evidence.py:219-227`), or the integration branch. `resolve_rules_dir` also calls `get_config(\"rules_dir\")` with no cwd (`rules.py:33`), so it reads the process cwd's config.\n\nThe document must name the rules source for each mode (operator checkout or PR base, never PR head) and say that config comes from the operator's checkout and is passed in explicitly.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Persistence and resolution are index-keyed, so \"apply unchanged\" is not true",
+   "description": "\"Archiving, digest, and integrity checks from the 900-band review work apply unchanged.\" The resolution path is keyed on the index:\n- `locate_review(index: int, review_type, cwd)` globs `{index}-review.{type}.*.md` (`src/squadron/review/resolution_evidence.py:93-118`).\n- `review_type_of` reads the type from field 1 of a dot-split filename (`resolution_evidence.py:78-90`).\n- `save_review_result` takes `slice_info: SliceInfo` (`src/squadron/review/persistence.py:454-457`).\n\nThe document never gives the PR-keyed filename. Whatever it is must pass `review_type_of` and must not be picked up by a `{index}-review.*` glob by accident. Otherwise PR reviews are invisible to `sq review resolve` and to `sq pr create`'s \"latest saved review.\" The document should define the name and list which of these signatures change.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "PR metadata has no seam in the template-input registry",
+   "description": "Envisioned State makes PR title, body, linked issues and unresolved threads \"available to the prompt as additional inputs,\" sized \"with the same truncation discipline as file injection.\" The input registry is typed on the slice record: `TemplateInputSpec.source: Callable[[SliceInfo, str], str | None]` (`src/squadron/review/template_inputs.py:25-29`). `_diff_range` resolves through `resolve_slice_diff_range(info[\"index\"], cwd)` (`template_inputs.py:46-47`). A PR target cannot satisfy that signature without changing the registry, which the document says is unchanged. The alternative is a parallel injection path that duplicates the truncation logic. Pick one: generalize the registry to a review-subject protocol that both `SliceInfo` and the PR record implement, or make PR inputs an explicit separate step that reuses the same truncation function.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The adapter protocol mixes reads and writes",
+   "description": "\"One adapter protocol\" covers resolve, fetch, read threads, post comment, create PR, and identify operator. `sq review pr` needs only the reads (resolve, fetch, threads). Under the ISP rule in `review-code.md`, the review path would depend on post and create methods it never calls, and every test double would have to implement them. The document's own principle (\"Reads before writes, and writes are explicit\") points to two protocols, a reader and a writer, with identity on the writer and one GitHub implementation of both. The keystone slice fixes the protocol shape, so this has to be settled before it starts.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The PR identity record is GitHub-shaped, so \"a second host is not an edit\" does not hold",
+   "description": "The record is `(host, owner, repository, number, base ref, head ref, head sha, URL)`, and every downstream consumer keys on it. GitLab project paths can be nested groups, not `owner/repository`, and GitLab merge requests are numbered per project. Bitbucket uses a workspace and a repo slug. Supporting those hosts changes the record, which contradicts Design Goals' \"a new implementation, not an edit.\" Either make repository identity an opaque host-defined value with a display form, or limit the claim to GitHub and GitHub Enterprise.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The `gh` transport has no timeout, no non-interactive mode, and an unspecified sync/async boundary",
+   "description": "\"`gh` as the transport\" accepts a process boundary and JSON parsing per call, and says nothing else:\n- **Timeout.** The existing `run_git` path has `GIT_COMMAND_TIMEOUT_SECONDS = 30` (`src/squadron/review/git_utils.py:24`). The \"host unreachable\" failure mode needs a named timeout, or \"unreachable\" cannot be told apart from \"slow.\"\n- **Non-interactive.** A `gh` subprocess can block on an auth or SSO prompt. The subprocess environment must disable prompts and close stdin, or the review hangs.\n- **Where calls run.** `run_review_with_profile` is async. The Python rules require that sync work inside `async def` either finish in under 1 ms or run through an executor or async subprocess. Network calls to `gh` take far longer, so the document must say which executor the adapter uses.\n- **Repo resolution.** Target grammar says resolution fails loudly on more than one host remote. `gh` has its own default-repo resolution (`gh repo set-default`, remote ordering). If squadron parses remotes itself and `gh` picks a different one, the same input resolves to two repositories. Pick one source of truth and pass `-R` explicitly.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`sq pr create` should be cut from this initiative",
+   "description": "The Overview says the three capabilities \"share one new boundary and nothing else.\" Only the adapter is shared. `sq pr create` shares nothing with review except reading artifacts. The review capability answers a concrete failure (the manual base-finding and copy-paste flow in Motivation). `sq pr create` adds an LLM composition path, a five-section body contract, provenance rules, integration-branch targeting, and a dry-run. The section contract has no consumer in this initiative: `sq review pr` reads PR bodies as untrusted text, not as a parsed structure. The document should move `sq pr create` to a follow-on initiative. At minimum, drop the \"stable section structure\" requirement, since it is extension built for a consumer that does not exist.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "`sq pr create` leaves its inputs undefined where it matters",
+   "description": "- **\"Latest saved review\" has no selection rule.** Reviews are keyed by slice index or by PR, and a PR-keyed review cannot exist before the PR is created. For a new PR, the only candidates are slice reviews. The document should say so.\n- **Commits-only branches** are said to get \"a commits-only description.\" It does not say whether they may use a review or which one.\n- **Fixed sections** (\"how it was verified,\" \"known gaps,\" \"why\") have no defined input. Design Goals says nothing is asserted without an input and the body \"says which inputs it was built from,\" but no input-to-section mapping exists. \"How it was verified\" has no source in squadron's artifacts beyond what commit messages say.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The trust boundary covers the PR title and body but not the diff",
+   "description": "\"Prompt inputs from the PR\" treats title, body, linked issues and threads as untrusted third-party text. The diff and the files the reviewer opens are at least as third-party: for an external contributor's PR, the code can contain text aimed at the reviewer. The output drives a verdict, and with `--post` that verdict goes out under the operator's identity. Mitigating factor: review templates allow only `read_file, list_files, grep` (`src/squadron/data/templates/code.yaml:53`), so the reviewer has no shell. That blocks execution but not verdict manipulation. The document should state the trust model for diff content and say what the posted comment tells readers about the verdict's provenance.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Scratch-worktree lifecycle and ref namespace are deferred, but slice 1 needs them",
+   "description": "\"Concurrency with the operator's own worktrees, disk use, and cleanup on failure are the slice-level questions.\" But slice 1, the read-only keystone, must fetch \"into a namespaced local ref,\" and the document does not name the namespace, its retention, or whether repeated reviews of one PR accumulate refs. Worktree handling is not deferrable either. `git worktree add` writes to the operator's `.git/worktrees`, which is shared repo metadata, so \"never mutates the operator's working tree\" is true only for the working tree itself. The document should name the ref namespace (for example `refs/squadron/pr/<n>/head`), say whether the worktree is created detached and where it lives, and define the failure-path cleanup.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "\"Base moved since resolution\" is listed as an error, but the design treats it as normal",
+   "description": "The enumerated failure modes include \"base moved since resolution\" as a named error with a non-zero exit. Technical Considerations says the base \"routinely moves after the PR is opened\" and that merge-base semantics exist to absorb it. Under the named-error rule, reviewing any active PR would fail. Drop it from the failure list, and treat the recomputed merge-base differing from the recorded one as a warning recorded on the artifact.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Posting idempotency and the head-moved case are undecided",
+   "description": "- **Idempotency.** \"Marked so squadron can find and update its own prior comment\" requires listing all PR comments, paginated, and filtering by the operator's login and the marker. The document does not say where a comment id is stored, so every later invocation must search. State the mechanism, including pagination.\n- **Head moved.** Envisioned State says a post against a moved head \"must say so.\" It does not say whether posting is refused or proceeds with a marker. These are different behaviors, and an operator who asked for `--post` needs to know which one happens.\n- **Dry-run.** The update-or-create decision depends on the remote listing, so a dry-run that \"prints what would be sent\" must also query the host. Say so.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "`cli/commands/review.py` is already 1215 lines, and the document does not say where `sq review pr` goes",
+   "description": "The project guideline is about 300 lines per source file. Current sizes: `src/squadron/cli/commands/review.py` 1215, `review/review_client.py` 564, `review/git_utils.py` 562, `review/persistence.py` 525. Slice 2 (\"`sq review pr`\") would naturally go into `review.py`, which is already far over the limit, and the document gives no module boundary for the new command group or the PR target. Name the new modules for the adapter, the PR target, and the CLI group, and state that existing review modules gain no new responsibility.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "The sequencing claim refers to slices the repo already shows as complete",
+   "description": "\"Sequenced after 916 and 917 land on `main`.\" Both `project-documents/user/slices/916-slice.review-scope-correctness.md` and `917-slice.review-artifact-integrity.md` have `status: complete`. Either \"land on main\" is already satisfied, or it is a separate condition the document should state. This document's own frontmatter still says `status: not_started` with `dateUpdated: 20260912`, so confirm which integration target these slices landed on before treating the sequencing as a constraint.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+  }
+ ]
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Rationale for unparseable review files does not carry forward the arch's \"names the parse failure explicitly\" requirement",
+      "description": "The architecture states, under \"File-read failure modes\": *\"A review file that exists but cannot be parsed\u2026 must not silently pass. It is treated as UNKNOWN and `review_unknown_as` applies. The rationale returned to the caller names the parse failure explicitly.\"* The slice design handles the *status* side of this correctly (TD-2, Special Considerations: present-but-unparseable \u21d2 UNKNOWN \u21d2 `review_unknown_as`, surfaced as `review-failed`, never `pending`). However, TD-7 \u2014 which is the slice's normative spec for what the rationale must contain \u2014 enumerates only \"the review type; for `review-failed`, also the verdict and threshold that produced the block.\" For an unparseable file the normalized verdict is `UNKNOWN`, so under this spec the rationale would say \"verdict UNKNOWN does not clear threshold \u2026\" rather than naming the parse/read failure. The arch's requirement that the rationale *name the parse failure explicitly* is therefore left unmet by the slice's rationale contract. Success Criteria likewise only asserts the file is \"treated as UNKNOWN (never silently cleared)\" and does not require parse-failure-naming in the rationale. TD-7 should be extended to require, for the present-but-unreadable case, a rationale that names the parse/read failure (e.g. \"review artifact could not be parsed\"), distinct from a clean `UNKNOWN`-verdict rationale.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Inert `review_type` per-gate keys in tension with arch's fail-fast principle, sanctioned by slice plan",
+      "description": "The architecture lists \"Fail-fast on configuration errors\" as a principle: *\"an unrecognized per-gate config is a config error surfaced immediately, not a silent pass or silent block.\"* TD-4 leaves the 240-shipped `workflow.review_gates.{gate}.review_type` keys *defined but unread*, delegating deprecation docs to 243 \u2014 so a user who sets a malformed `review_type` value gets no immediate error. This is a mild tension with the arch's fail-fast principle, but it is explicitly sanctioned by the slice plan (\"241 leaves them defined-but-unread\u2026 OR 241 removes them; the design makes that call\"), and the backward-compatibility rationale is sound. No action required; flagged only so the trade-off is visible. If the team prefers the clean removal path TD-4 also offers, that would also satisfy fail-fast.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-4"
+    },
+    {
+      "severity": "PASS",
+      "title": "Position-derived review-type model and 244 fold-in align with slice plan and arch boundaries",
+      "description": "The slice implements exactly the model the slice plan's Notes mandate: review type derived from lifecycle position (arch/slice/tasks/code at the four boundaries), never configured, with the retired slice 244 folded in as the `arch`/pre-slice-plan case. The `BOUNDARY_REVIEW_TYPE` const is the single source of truth, satisfying the project's \"define once\" convention. This supersedes the arch's per-gate `reviewType` config as the slice plan explicitly authorizes. Boundary\u2192signal mapping (file presence for three boundaries, `STATUS.Complete` checkbox completion for the code boundary) keeps CF artifact-shaped and respects the arch's layer boundary (CF does not inspect git/commits/PRs), matching TD-5 and the slice plan's note on the code trigger.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#The position-derived reviewType (core mechanism)"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and integration points match consuming/providing slice expectations",
+      "description": "`reviewGate.ts` is standalone (pure functions + one config reader), imported by the navigator and reused by 242 without importing the navigator \u2014 correct DRY direction. `ConfigManager` is constructor-injected as an optional dependency, preserving all existing call paths and keeping worktree scope inherited from the surfaces' already-resolved paths (consistent with 180's resolution chain the arch references). Provides (`reviewGate` evaluator, `pending-review`/`review-failed` statuses, `review`/`blocked` vocabulary, `STATUS` const, injected-navigator pattern) and consumes (240's detection slot, config keys, reserved branch, `parseFrontmatter`) match what 242/243/910 and 240 expect. The `NextAction` return type is preserved (additive recommendation strings only), satisfying the arch's stability constraint for Amoeba. The `parseFrontmatter` never-throws contract relied on by TD-2 is verified against the actual parser.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Integration Points"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope is proportional; deferred scope is correctly bounded",
+      "description": "The slice is the behavioral core (effort 4/5 per plan) and its mechanism count is justified: one evaluator module, two new statuses, one const introduction, four surface wirings, boundary wiring. Exclusions are explicit and match the slice plan \u2014 ConsistencyChecker wiring \u2192 242, docs \u2192 243, the ~50-site `NormalizedStatus` literal sweep \u2192 910, score enforcement \u2192 301. No scope assigned to this slice is dropped (all four boundaries are covered, including the folded-in 244), and no out-of-scope mechanism (e.g. the consistency rule, score enforcement) is pulled in. The `STATUS` const is introduced and used only in new code, with the mechanical sweep deliberately deferred so a large no-behavior diff doesn't bury the gate-logic review \u2014 the same proportionality rationale 240 used.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Technical Scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Rationale for unparseable review files does not carry forward the arch's \"names the parse failure explicitly\" requirement",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Inert `review_type` per-gate keys in tension with arch's fail-fast principle, sanctioned by slice plan",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-4",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Position-derived review-type model and 244 fold-in align with slice plan and arch boundaries",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#The position-derived reviewType (core mechanism)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Dependency direction and integration points match consuming/providing slice expectations",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Integration Points",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Scope is proportional; deferred scope is correctly bounded",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#Technical Scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "against": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-241-slice"
+  },
+  "timestamp": "2026-11-16T20:47:53.715244",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 13908,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 81202,
+  "cached_tokens": 35584,
+  "cache_write_tokens": null,
+  "completion_tokens": 4767,
+  "reasoning_tokens": 3123,
+  "duration_seconds": 34.10860245791264,
+  "cost_usd": 0.04191721,
+  "cost_basis": "alias_pricing"
+}

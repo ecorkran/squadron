@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D8 requires doctor to inspect pack sources inside a check layer that is contractually offline and subprocess-free",
+   "description": "D8 specifies that an agents row for a pack with no Codex content reports `WARN \u2014 pack ships no Codex content` rather than \"not installed\". Deciding that requires reading the pack's *source* root for an `agents/` directory. For `source = \"github:...\"` packs there is no filesystem path to read: `resolve_source` deliberately raises (`resolver.py:26-27`, \"Use clone_github() to resolve github: sources\"), and `clone_github` performs a network `git clone` via `subprocess.run`. `doctor_checks.py` states its own contract in its module docstring (\"no network, no subprocesses\") and the codebase defends that contract elsewhere (`_squadron_skill_names`'s narrow `except (OSError, typer.Exit)`). The design neither says how doctor learns a pack's Codex content nor what the agents row reports when the source cannot be read offline \u2014 so criterion 5 is not implementable as written for any pack that is not a local or bundled source, and the verification walkthrough only exercises a local source (`/tmp/p928`). Either pin the offline determination (and the fallback row for an unresolvable source), or cut D8 (see the proportionality finding).",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The target-scoped receipt filename has no assigned owner on the write path",
+   "description": "D5 requires the receipt file name to be `base + suffix + scope suffix`, and the slice's value depends on it (`analysis-agents.toml`, criterion 1). But `write_receipt` derives the filename from the payload, not from a key: `target = receipts_dir / f\"{receipt.pack_name}.toml\"` (`src/squadron/skills/receipts.py:34`). The component change table assigns exactly one change to `skills/receipts.py` \u2014 \"Gains `remove_receipt_files(receipt) -> int`\" \u2014 and `State Management` asserts \"Schema unchanged; only the file name varies by target and scope (D5)\". Nothing in the design says how the writer learns the key: a new parameter on `write_receipt`, a `receipt_key` field on `InstallReceipt`, or `install_pack` passing the suffixed string as `pack_name` (which would also change the stored `pack_name` field). The read side is fine (`read_receipt`'s first argument is already used as the key by `install.py`), so this is the one place D5 does not reach. Name the mechanism and the owning component.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Part B's deliverable is deferred to an implementation-time probe, with an open-ended README branch",
+   "description": "Success criterion 8 requires the shipped rule to carry \"the D10 subcommand list\", but D10 does not produce that list \u2014 it produces a table in which four rows say \"confirm by probe\", two say \"probe\", and `sq auth login` is \"unprobed\", and the design states the rule's contents are \"exactly the 'yes' rows\" recorded in the implementation DEVLOG. That makes Part B a research task whose output is unknowable at design time, and it leaves one open-ended branch: \"If the daemon-client commands need the rule, README's '`$sq-spawn` \u2026 fine to invoke directly' sentence is corrected in the same edit\" \u2014 a docs change to the #126 guidance that is neither scoped nor bounded by a criterion. The probe method itself is a good call (it avoids guessing at Codex's classification), but the design should pin the deliverable: which rows are in the rule under each probe outcome, and whether the README correction is in scope or a follow-up. As written, no reviewer can check the doc half of this slice against the design.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Per-target skill-pack doctor rows are new scope beyond the plan entry and are the heaviest machinery in the slice",
+   "description": "Plan entry 26 assigns Part A as threading `CommandTarget` through `skills install`/`skills uninstall` and Part B as documenting the approval rule; its only doctor question is whether to detect a missing rule, which the design answers \"no\" (D11). D8 instead adds per-target skill-pack rows, which drags in `installed_path`, the name-format choice, `_command_targets_to_check` reuse, and the unresolved source-resolution problem above \u2014 and it is the reason the effort rose from the plan's 2/5 to 3/5. The cuttable scope, in order of value: (1) defer D8's agents rows (and with them the source-resolution gap) to a follow-up, keeping the Claude row byte-identical as the design already promises; (2) drop `--local` from the three `skills` commands \u2014 parity with `install-commands` is a nicety, not part of #125, and it costs a root-resolution path plus an ignored-flag warning branch in three commands. `skills list --ide` is defensible (it is one of #125's stated symptoms), and the D4 asset move plus D7 removal extraction are load-bearing for correctness, so those should stay.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The collision exclusion understates a new failure mode: a pack can overwrite and then delete squadron's own installed skills",
+   "description": "The Excluded list calls pack-name collisions \"pre-existing on the Claude path and unchanged here\". On the Claude path a pack lands in its own `commands_dir/<prefix>/`, so collisions require a shared prefix. On the agents path every pack lands flat in one shared root \u2014 the same root 925 writes squadron's bundled skills into \u2014 and D3's naming rule permits a pack whose prefix is `analysis` or `sq` to ship `agents/analysis-understand/`. `write_skill_dirs` would copy over squadron's installed `SKILL.md`, the receipt would record that path as the pack's, and `skills uninstall <pack> --ide codex` would then delete a file squadron's own `codex skills` row still counts as installed (the count is name-based, per `_count_installed`). That is issue #65's ownership confusion \u2014 the failure the receipt mechanism and `write_skill_dirs`' docstring exist to prevent \u2014 arriving through the new target. The design's own D3 rationale leans on \"collision reasoning\" to justify the name rule, then waves collisions away in Excluded. Either add a collision check against `bundled_skill_names` (and other installed packs) or state explicitly that a name collision silently transfers ownership, so the implementer does not have to rediscover it.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Two exhaustive target-keyed tables now describe the same target's layout, with different semantics",
+   "description": "D6 says \"`PACK_LAYOUTS` is the one place that knows where a pack lands\", but `DELIVERIES[target]` keeps a `layout` callable, `machine_root`/`local_root`, and `check_subdir`, and `install.py` continues to call `delivery.layout(...)` directly. The two tables disagree for CLAUDE in a way nothing asserts: `write_flat_markdown` writes to `destination / source.name`, while `PACK_LAYOUTS[CLAUDE]` (and `installed_path`) key on `entry.prefix`. That divergence is pre-existing and harmless today only because the bundled subdirectory names coincide with the pack prefixes. Consider extending `TargetDelivery` with the pack-layout fields, or at minimum documenting the split and asserting the two tables agree on the target set and root, so a future target cannot be added to one and forgotten in the other.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:136"
+  }
+ ]
+}

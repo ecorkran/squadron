@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion traces to at least one task; no gaps, no orphan tasks",
+      "description": "Cross-referencing the design's Functional, Technical and Integration Requirements against tasks: liveness/ownership (D2/D3/D13) \u2192 Tasks 8\u201314; foreground stall (D7, #165) \u2192 Tasks 15\u201318; wait ORPHANED/exit 8 and STALE policy (D8) \u2192 Tasks 19\u201320; listing liveness and unavailable summary (D10) \u2192 Tasks 21\u201322; column renderer and both listings (D11, UI specs) \u2192 Tasks 23\u201328; `pipelines show` (API contracts) \u2192 Tasks 29\u201331; prune selection/protection/deletion (D9) \u2192 Tasks 32\u201339; docs and the architecture note (D12 record, Dev Approach step 8) \u2192 Task 40; the excluded-resume issue \u2192 Task 41; the Verification Walkthrough \u2192 Task 42. Each named technical requirement has a home: D3-row liveness tests (Task 10, including the real exited-subprocess PID), the `init_run(owner=)` no-ownerless-window test (Task 12), the RunHeartbeat test matrix (Task 14, all five bullets from the design), sdk_session fake-client tests (Task 17), the dispatch WARNING/no-traceback test (Task 18), `plan_prune`/`apply_prune` tests (Tasks 35, 37), `fit_widths` tests (Task 24), wait tests plus the exit-8 CLI mapping (Task 20), the 199 I/O-bounds extension with the 20-running-run/`process_alive`-count assertion (Task 22), and observer call-order tests for plain and `each` steps (Task 7). Integration requirements (\"existing tests unchanged\") are asserted in Tasks 14, 17, 20 and 26. I found no success criterion without a task and no task without a design anchor.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Load-test NFR covered in `tests/load/`, and CI gating is explicit and verified",
+      "description": "The design restates the listing-time NFR (`sq runs list --all` under 1 s with a few hundred files). Task 22a adds `tests/load/test_run_listing_scale.py` modelled on the existing `tests/load/test_usage_reader_loop.py`, seeding through `StateManager` and asserting `MAX_LISTING_S = 1.0` with the real `process_alive` \u2014 a faithful load-tier test per `.claude/rules/python.md:56`. Its success criterion addresses CI gating head-on rather than leaving it implicit, and the claim checks out: `pyproject.toml:82` sets `testpaths = [\"tests\"]` and `.github/workflows/ci.yml:38` runs `uv run pytest`, so `tests/load/` is collected and gated with no new wiring.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with placement, and commit markers are all correct",
+      "description": "Dependencies are respected and acyclic: `assess_liveness` (Task 9) precedes `claim`'s LIVE check (Task 11); the observer refactor (4\u20137) precedes the recorder's progress writes (11); schema v5 (8) precedes everything in Part B; `resolve_pipeline` (29) precedes `show` (30); `scan_runs` (32) precedes `plan_prune` (33); the CLI (38) precedes its tests (39); the load test (22a) sits right after the `RunListing` change it measures (21). Every implementation task is immediately followed by its test task or carries tests inline (Tasks 8, 18, 32). The 17 commit markers sit at working, tested points \u2014 after each part's test task (7, 10, 12, 14, 18, 20, 22, 24, 26, 28, 31, 35, 37, 39, 40, 42) \u2014 not after every task and not only at the end; commit-free tasks (1\u20133, 4\u20136, 8\u20139, 11, 13, 15\u201316, 19, 21, 23, 25, 27, 29\u201330, 32\u201334, 36, 38, 41) are covered by the next milestone commit, matching the house style of sibling task files. No task writes a merge, consistent with the branch rules.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Code anchors cited by the tasks are accurate against current source",
+      "description": "Spot-checked the task file's concrete anchors: `executor.py:390`/`:427` (the `on_step_complete` parameter and docstring entry) and `:576-577` (the call site) all match; `state.py:267` is `make_step_callback` and `state.py:43-44` has `_SCHEMA_VERSION = 4` / `_SUPPORTED_SCHEMA_VERSIONS = {3, 4}`, so Task 8's v5/{3,4,5} change is described from the real baseline; `cli/commands/run.py:251` is exactly the `on_step_complete=state_mgr.make_step_callback(run_id),` argument; `sdk_session.py:218` is the foreground read with `idle_s=None` (comment even cites #165), `_BackgroundIdleTimeout` exists at `:102`, `_read_turn` raises `ProviderAPIError` on `is_error` results (which Task 16 explicitly neutralizes for the drain), and `dispatch.py:330` is the generic `except Exception` that Task 18's catch must precede; `run_wait.py:34` `WAIT_EXIT_CODES` uses 0\u20137, so exit 8 is next free as the design states; `run_views.py` builds its runs and pipelines listings on `rich.table.Table`, which Tasks 25/27 replace; `loader.py` has `_search_dirs`, `_find_by_identity`, `discover_pipelines` and a four-field `PipelineInfo` as Tasks 27/29 assume; `batch_report.py:60` has `report_json_paths` beside which Task 32 defines the `.report.md` glob; `docs/COMMANDS.md`, `docs/PIPELINES.md`, `CHANGELOG.md` and `project-documents/user/architecture/140-arch.pipeline-foundation.md` all exist for Task 40. The tasks are executable as written.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A few adjacent task pairs are split finer than strictly necessary",
+      "description": "Three observations, none blocking: (1) Tasks 15 and 16 both edit `sdk_session.py` (timer + error class vs. interrupt + drain) and could be one task, though the split lets Task 16 absorb the Task 2 spike findings cleanly; (2) Tasks 33 and 34 both build `plan_prune` (selection vs. protection rules) and could merge, though the split mirrors D9's own two rule groups and Task 35 tests both together; (3) Task 5's success criterion (\"grep \u2026 is empty after Task 6\") is only satisfiable once Task 6 has run, so the tree is intentionally red between them \u2014 the commit at Task 7 keeps history green, and the task is honest about the deferral. Each split traces to a distinct design subsection, so this is granularity taste, not a defect.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 13's wiring pointer names `_run_pipeline_sdk`, but `init_run` and the executor call live in `_run_pipeline`",
+      "description": "In `src/squadron/cli/commands/run.py`, fresh SDK runs call `init_run` inside `_run_pipeline` (which `_run_pipeline_sdk` invokes), the `execute_pipeline` call is `_run_pipeline`'s, and the prompt-only init site is `_handle_prompt_only_init`. Implementing Task 13 as described (owner built before `init_run(owner=...)`, executor call inside `RunHeartbeat`, prompt-only paths untouched) will necessarily thread the owner through `_run_pipeline` and touch the prompt-only init site too. The file-level reference is correct and the slice design uses the same phrasing (D13/Data Flow), so a junior AI resolves this by reading the file; noting it so the implementer is not surprised that the change spans two functions in `run.py`.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:189-203"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Every success criterion traces to at least one task; no gaps, no orphan tasks",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Load-test NFR covered in `tests/load/`, and CI gating is explicit and verified",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "Sequencing, test-with placement, and commit markers are all correct",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "Code anchors cited by the tasks are accurate against current source",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "A few adjacent task pairs are split finer than strictly necessary",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "Task 13's wiring pointer names `_run_pipeline_sdk`, but `init_run` and the executor call live in `_run_pipeline`",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:189-203",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T21:09:47.937336",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 48,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 552291,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1037494,
+  "cached_tokens": 875520,
+  "cache_write_tokens": null,
+  "completion_tokens": 144948,
+  "reasoning_tokens": 141165,
+  "duration_seconds": 1159.2456412501633,
+  "cost_usd": 0.1230357,
+  "cost_basis": "alias_pricing"
+}

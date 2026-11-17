@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Backward-incompatible profile/state changes break `migratory_server` source call sites, but no task covers them",
+      "description": "Task 2.1 adds `leadership_weight` and `momentum_weight` as required, no-default fields, and task 1.1 adds the `leadership` array. Task 2.2 then updates test call sites (with a catch-all \"search for `BehavioralProfile(` across `tests/`\" that correctly sweeps `test_entities.py:27` and `test_simulation.py:65`), but no task updates the two **source** call sites the change breaks:\n\n1. `build_profiles()` at `src/migratory_server/simulation.py:18-27` constructs `BehavioralProfile` with only the six existing fields. Once 2.1 lands, every call raises `TypeError`. This is exercised by existing tests (`tests/test_simulation.py:28-45` calls `build_profiles` directly; `tests/test_server.py:265-275` builds a `SimulationManager` through server startup), so task 2.2's verify step (\"all existing tests still pass\") and task 6.1's full-suite gate cannot both be satisfied. The requirement left unmet is the slice's Technical Requirement that \"all affected tests are updated within this slice\" plus Verification Walkthrough step 1 (\"all tests green\"). Fixing it also forces a design decision the plan should surface explicitly: `ProfileConfig` (`src/migratory_server/config.py:51-59`) has no herding fields, so `build_profiles` cannot pass them without extending `ProfileConfig` (and its validation) or defaulting them \u2014 and CLAUDE.md forbids silent fallback values, so the choice should be a named subitem, not an improvisation.\n2. `EntityManager.spawn_population()` at `src/migratory_server/entities.py:135-149` merges state arrays by manually concatenating `positions`, `velocities`, `accelerations`, and `profile_indices`. After task 1.1, `AgentState.create(n, ...)` allocates `leadership` of shape `(n,)` for the batch, but the merge never concatenates it \u2014 leaving `state.leadership` at length 0 while `count` grows. No current test catches this (placeholder/flocking forces never read `leadership`), so the suite stays green while the slice's own invariant (\"1D array of shape (N,)\") is silently violated; `LeadershipForce` indexing `state.leadership[neighbors]` on a server-spawned population would then fail or misindex. Task 1.2's subitem claiming tests \"should work without changes\" is accurate for `AgentState.create()` call sites (verified: `tests/conftest.py:31`, `tests/test_forces.py:23`, `tests/test_flocking.py:33`), but it does not cover this src-side merge.\n\nFix: add a subitem to 1.1/1.2 for the `spawn_population` merge, and a subitem (or a small task in Section 2) for `ProfileConfig` + `build_profiles` plus the `test_simulation.py`/`test_server.py` fallout, before the 2.3 commit point.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "src/migratory_server/simulation.py:18-27"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional and technical success criteria are fully traced, with correct test-after-implementation sequencing",
+      "description": "Every functional requirement maps to a task: protocol conformance (3.1/3.2, 4.1/4.2, re-verified in 6.2), hand-constructed known cases matching the slice's walkthrough scripts (3.2 expects `[3.0, 0.0]` for velocity `[3,0]` \u00d7 weight 1.0; 4.2 reproduces the slice's 3-agent 0.1/0.9 leadership geometry), zero-neighbor and zero-leadership edge cases (4.2), zero-velocity edge case (3.2), `active_indices` isolation (3.2, 4.2), and self-exclusion (4.2). The five-force `tick()` directional-bias criterion is covered by 5.1/5.2 (50 agents, seed 42, 5 leaders at 0.9 eastward, 300 ticks at dt=0.05 \u2014 same parameters as the slice's convergence check), and profile differentiation by 5.3 using the slice's flocking-control profile. Sequencing is correct and acyclic: state (1) \u2192 profile (2) \u2192 forces (3, 4) \u2192 integration (5) \u2192 verification (6); `MomentumForce` correctly precedes `LeadershipForce` (simpler, no state dependency), and both follow the profile extension they read from. Each commit checkpoint (1.3, 2.3, 3.3, 4.3, 5.4, 6.3) sits after a green-suite verify step, so every commit point is working and tested \u2014 not after every task, not only at the end.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-168"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Vectorization requirement from the slice is not restated in the force implementation tasks",
+      "description": "The slice's Technical Requirements state \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\" (`102-slice.herding-and-leadership.md:395`), but tasks 3.1 and 4.1 never mention it; their per-agent bullets (\"Compute speed\u2026\", \"Get neighbor leadership values\u2026\") are consistent with the vectorized-within-neighborhood pattern used by `src/migratory/engine/flocking.py:31-46`, so risk is low, but a junior could satisfy every listed verify step with an inner per-neighbor Python loop and still check the task off. Adding one subitem per force (\"vectorize over neighbors within each agent; no inner Python loop\") makes the requirement traceable.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-133"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit checkpoints are checkbox tasks rather than plain `**Commit**:` markers \u2014 acceptable under project convention",
+      "description": "There are no plain-line `**Commit**:` markers (which the file-format check treats as optional), and no marker is missing where it matters: all six commit tasks carry semantic messages (`feat:`/`test:`/`docs:` per CLAUDE.md's commit types) and are placed only after the section's tests pass. The checkbox formatting diverges from the plain-line marker form but follows the project-wide mandate that every task item be a `[ ]` checkbox, so no change is needed.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-53"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Backward-incompatible profile/state changes break `migratory_server` source call sites, but no task covers them",
+      "location": "src/migratory_server/simulation.py:18-27",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional and technical success criteria are fully traced, with correct test-after-implementation sequencing",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-168",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Vectorization requirement from the slice is not restated in the force implementation tasks",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-133",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit checkpoints are checkbox tasks rather than plain `**Commit**:` markers \u2014 acceptable under project convention",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-53",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-16T21:12:18.888969",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 211369,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 254930,
+  "cached_tokens": 193216,
+  "cache_write_tokens": null,
+  "completion_tokens": 51126,
+  "reasoning_tokens": 48733,
+  "duration_seconds": 265.41858199983835,
+  "cost_usd": 0.04061658,
+  "cost_basis": "alias_pricing"
+}

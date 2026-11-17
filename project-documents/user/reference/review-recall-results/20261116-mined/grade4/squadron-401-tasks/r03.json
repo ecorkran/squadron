@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2/8/12 claim the 400 suite passes unchanged, but a 400 test asserts the full metric set",
+   "description": "Description: Task 2 replaces `PythonAdapter.metrics` (today `frozenset(SnapshotMetric)`, verified at `src/squadron/metrology/snapshot/python_adapter.py:96`) with an explicit four-metric set so `take_snapshot`'s contract check doesn't reject the four new enum members. But `tests/metrology/snapshot/test_python_length.py:57-60` asserts `adapter.metrics == set(SnapshotMetric)`, so that test fails the moment the new members exist. Task 2's success line (\"the full `tests/metrology/` suite passes unchanged\"), and Task 8's and Task 12's (\"400's length tests pass, edited only for the rename\"), are therefore unachievable as written \u2014 the full-metric equality is only restored once coverage is declared in Task 25. A junior AI hitting the red test has no instruction telling it this assertion is expected to be temporarily narrowed, and may weaken or delete it. Fix: state in Task 2 that `test_adapter_declares_its_metrics_and_pb2_conventions` must be edited to the four declared metrics, note it stays narrowed through Tasks 8 and 12, and have Task 25 restore the `set(SnapshotMetric)` equality (which its \"`PythonAdapter.metrics` now equals the full `SnapshotMetric` set\" bullet implies but does not test).",
+   "location": "tests/metrology/snapshot/test_python_length.py:57-60"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`read_coverage` never states that the coverage key is resolved from the measured repo root",
+   "description": "Description: D6 requires the reader to resolve `metrology.coverage_report` with `get_config(key, cwd=repo_root)`, and 400 had to add an explicit test that config comes from the measured repo rather than the process cwd (`tests/metrology/snapshot/test_preflight.py:130-140`). Task 16 states the call for `preflight.py` only; Task 21's `read_coverage` ordering starts at \"key unset \u2192 `coverage_not_configured`\" with no statement of how the key is read, and Task 22's test list never checks cwd independence. The requirement the gap leaves unmet is D6's measured-repo resolution: a reader that takes `get_config`'s default cwd would read squadron's own `.squadron.toml` (which 400's Task 32 populated and which exists locally) instead of the measured project's, and the Task 22 bullets as written would not reliably catch it. Fix: add \"resolve the key with `get_config(KEY, cwd=str(repo_root))`\" to Task 21 and one cwd-independence bullet (set the key only in the measured repo, run from elsewhere) to Task 22.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Commit markers are checkbox lines rather than plain lines",
+   "description": "Description: Every commit marker in this file is written as `- [ ] Commit: \\`\u2026\\`` rather than as a plain line. The reviewer's marker rule prefers plain lines, but AGENTS.md mandates \"Each item and subitem should have a `[ ]` checkbox\" for all task files, and the accepted sibling file `project-documents/user/tasks/400-tasks.snapshot-record-and-first-adapters-keystone.md` uses the identical form. The substance of the rule is satisfied: each marker sits at a working, tested point (the feature and its test commit together, e.g. Tasks 3\u20134, 10\u201311, 16\u201317), not after every step and not only at the end. Flagged only so the convention conflict is visible; no action needed unless the project decides to standardize on plain marker lines.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+  }
+ ]
+}

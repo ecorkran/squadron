@@ -1,0 +1,44 @@
+{
+ "case": "context-forge-260-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Dependencies: \"cf releases that select the brownfield profile require at least v0.22.2\", while the Amendment states \"`cf build` is pure again: no detection, no state writes, no prompt swap\" and Technical Considerations says `cf build` \"no longer selects the `brownfield-adoption` profile\". The same stale material sits in the Responsibility table row (b) (\"plus squadron 361's provenance block\"), Current State (\"The capability probe does not exist yet\") and Technical Considerations (probe contract kept \"for history\"). **VALID**: self-contradiction (the Dependencies line is the cleanest instance; the others are labeled history). Needs: doc alone. **Raised by the original review (F001)**; control for claude-sonnet-5-5.",
+   "hits": {
+    "r01": [
+     6
+    ],
+    "r02": [],
+    "r03": [
+     2
+    ],
+    "r04": [
+     9
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     12
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Responsibility table row (c): \"CF writes the architecture doc on both paths\", while the amendment and Design Goals make squadron the only adoption path with no CF-only fallback. The amendment says rows (a), (b) and (g) changed; (c) was not updated. **VALID** (minor): self-contradiction. Needs: doc alone.",
+   "hits": {
+    "r01": [],
+    "r02": [],
+    "r03": [],
+    "r04": [],
+    "r05": [
+     3
+    ],
+    "r06": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "Borderline, not counted for F1: r02#5 and r04#3 flag the Dependencies v0.22.2 floor as stale against code (MIN_GUIDE_VERSION) but not as contradicting the amendment; r03#0 flags stale Anticipated Slices (a section F1 does not list). Borderline, counted for F1: r04#9 (names Dependencies staleness and the lines 136-137 contradiction under a general superseded-text finding) and r06#12 (probe contract kept for history plus release coupling)."
+}

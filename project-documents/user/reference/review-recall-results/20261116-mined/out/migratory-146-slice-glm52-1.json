@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A7 success criterion contradicts the GPU-fallback mechanism in `_select_arch()` and Open Notes",
+      "description": "The slice's A7 criterion states: \"A host with no Metal and no CUDA starts successfully with `backend: quadrants` \u2014 `_select_arch()` falls back to `qd.cpu` and logs a `WARNING` \u2026 The server does not crash; performance is CPU-bound.\" But the `_select_arch()` implementation maps by OS (`platform.system()`) rather than by GPU-hardware detection: Darwin \u2192 `qd.metal`, Linux \u2192 `qd.cuda`, else \u2192 `qd.cpu` with warning. On a Linux host without an NVIDIA GPU, `_select_arch()` returns `qd.cuda`, and per the Open Notes (\"If `qd.init()` raises (e.g. CUDA driver absent \u2026) \u2026 the server exits at startup with a clear error\"), the server crashes rather than falling back. The architecture and slice plan both state the intent as \"if neither is detected it warns and falls back to `qd.cpu`\" \u2014 detection-based, not OS-mapping. The graceful CPU fallback only fires for platforms that are neither Darwin nor Linux (e.g. Windows), leaving the Linux-without-CUDA case unsatisfied by A7 as written. Resolution: either have `_select_arch()` (or `setup()`) detect actual GPU availability \u2014 e.g. catch the `qd.init()` failure and retry with `qd.cpu` \u2014 or re-scope A7 to match the design's actual behavior (crash on CUDA-absent Linux, graceful fallback only for unsupported OS). The current text overpromises relative to what the mechanism delivers.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#success-criteria"
+    },
+    {
+      "severity": "PASS",
+      "title": "Config surface, ownership boundaries, and TickResult contract all align with the architecture",
+      "description": "The `ComputeConfig` (`backend: quadrants | cpu`, `subdivision_factor`, default `quadrants`) matches the slice plan entry exactly. The `GpuSimulationDriver` owning `qd.init` / `GpuAgentState` lifecycle keeps GPU concerns out of `SimulationManager`, preserving the clean ownership boundary the architecture requires. The TickResult contract follows option (a): `export_positions()` / `export_velocities()` present NumPy arrays to consumers via `TickResult.from_quadrants_fields(...)`, consistent with slice 145 and the architecture's \"contract surface still presents NumPy arrays to consumers.\" The world-server call site (`server.py`) is unchanged, matching \"the world server consumes the contract and must not depend on which backend produced the data.\"",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#architecture"
+    },
+    {
+      "severity": "PASS",
+      "title": "File move eliminates the production\u2192bench import dependency in the correct direction",
+      "description": "Moving `GpuAgentState` from `src/migratory/bench/backends/quadrants_fused_state.py` to `src/migratory/gpu/agent_state.py` corrects the dependency direction: production code (`migratory_server`) imports from `migratory.gpu`, not from the bench harness. The bench backend updates its import to the new location with no logic changes. This is the right boundary hygiene and is called out explicitly in the Open Notes as \"the first step of this slice (T2a).\"",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#files-changed"
+    },
+    {
+      "severity": "PASS",
+      "title": "Bounds sync-back and spawn/despawn mechanisms match the slice plan's stated scope",
+      "description": "The slice plan says this slice \"Handles the secondary-mutation paths the bench harness ignores: bounds policy (sync-back via `field.from_numpy()` after download for wrap/reflect/soft), and spawn/despawn (re-upload changed agent state).\" The design delivers exactly this: `notify_positions_modified()` + `_positions_dirty` flag + `upload_positions()` for bounds sync-back; `count_changed_since_last_tick()` + `sync_from_entity_manager()` for spawn/despawn. The `step()` does not apply bounds enforcement (that stays in `SimulationManager`), consistent with the CPU path. The f32-internal / f64-export contract is explicitly specified and consistent with slice 145's f32-throughout GPU design and the architecture's \"f32 on GPU\" commitment.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#bounds-enforcement-on-the-gpu-path"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR (Tier 2 TPS target) is restated with the specific target",
+      "description": "The architecture defines Tier 2 as \"50k, GPU, NVIDIA CUDA Linux\" at 60 TPS. The slice restates this as A6 (\"Tier 2 TPS gate (CUDA only): `tests/load/test_gpu_server_tps.py` passes at N=50k (\u226560 TPS)\") and the integration test asserts \"wall-clock TPS \u2265 60\" at N=50k with `quadrants`, CUDA-only (skip on Mac). The specific latency/throughput target is present.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#success-criteria"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new GPU lifecycle path are enumerated with explicit handling",
+      "description": "The Open Notes enumerate: `qd.init()` raising (CUDA driver absent) \u2192 propagate, server exits at startup; GPU OOM during field allocation \u2192 same; mid-session GPU failure \u2192 fatal, restart with `backend: cpu`; `qd.init()` is process-global and a second call in the same process is undefined behavior \u2192 tests must use `finalize()` + process isolation or subprocess. These are explicit handling strategies, not \"TBD\" or implicit.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "A7 success criterion contradicts the GPU-fallback mechanism in `_select_arch()` and Open Notes",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Config surface, ownership boundaries, and TickResult contract all align with the architecture",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "File move eliminates the production\u2192bench import dependency in the correct direction",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#files-changed",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Bounds sync-back and spawn/despawn mechanisms match the slice plan's stated scope",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#bounds-enforcement-on-the-gpu-path",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "NFR (Tier 2 TPS target) is restated with the specific target",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes for the new GPU lifecycle path are enumerated with explicit handling",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#open-notes",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-16T20:51:09.849908",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 117411,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 83617,
+  "cached_tokens": 56419,
+  "cache_write_tokens": null,
+  "completion_tokens": 29054,
+  "reasoning_tokens": 27361,
+  "duration_seconds": 129.8849598749075,
+  "cost_usd": 0.111607285,
+  "cost_basis": "alias_pricing"
+}

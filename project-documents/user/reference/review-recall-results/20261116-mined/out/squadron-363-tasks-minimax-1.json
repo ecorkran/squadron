@@ -1,0 +1,207 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All 12 success criteria from the slice design are covered",
+      "description": "Every Success Criterion (1-12) has corresponding task coverage. SC1 \u2192 Tasks 1.1, 1.2, 8.5; SC2 \u2192 Tasks 5.1, 5.3, 8.1; SC3 \u2192 Tasks 3.2, 3.3, 4.1; SC4 \u2192 Task 4.1 (dropped-topics rule); SC5 \u2192 Tasks 5.1, 8.2; SC6 \u2192 Task 6.1, 8.4; SC7 \u2192 Tasks 6.1, 8.3; SC8 \u2192 Tasks 6.2, 8.4; SC9 \u2192 Tasks 7.2, 8.1; SC10 \u2192 Tasks 7.1, 7.3; SC11 \u2192 Tasks 3.1, 8.6; SC12 \u2192 Task 8.1.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task sequencing respects dependencies with no circular references",
+      "description": "Sequence is 0 (branch/premise) \u2192 1 (selector) \u2192 2 (preconditions) \u2192 3 (sources) \u2192 4 (mapping) \u2192 5 (interview) \u2192 6 (write contract) \u2192 7 (governance/output) \u2192 8 (walkthrough) \u2192 9 (close). Each step depends on prior tasks and the linear flow is correct.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern is followed consistently",
+      "description": "Every implementation task (1.1, 2.1, 3.1-3.3, 4.1, 5.1-5.2, 6.1-6.2, 7.1-7.3) is followed by an explicit verification subtask (1.2, 2.2, 3.4, 4.2, 5.3, 6.3, 7.4) that diffs or executes against the design. Task 8 is the end-to-end walkthrough that exercises the whole flow.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers are placed at working, tested points; none are checkboxes",
+      "description": "Plain-line `**Commit**:` markers appear at the end of verification subtasks (1.2, 2.2, 3.4, 4.2, 5.3, 6.3, 7.4, 8.6, 9.3) \u2014 none use checkbox syntax and none follow every single task. No markers on intermediate authoring steps within a task.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality fits the slice scope",
+      "description": "9 tasks for a slice whose only non-document change is `commands/analysis/understand.md` plus one generated concept is proportionate. Tasks are not oversized (highest effort 3/5) and verification subtasks are appropriately scoped (1/5 each). No test tasks beyond what the success criteria require.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Walkthrough exercises the three PM-facing outcomes",
+      "description": "Task 8.1 (happy path with PM correction) exercises the extracted-and-corrected outcome; Task 8.2 (decline path on scratch copy) exercises declined; Task 8.3 (contract failure on scratch guide) exercises loud stop; Task 8.4 covers re-run/augment. This covers every SC outcome the design lists without redundantly testing covered paths.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:200-280"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep detected",
+      "description": "No tasks address excluded territory (no Python, no changes to `src/squadron/`, no Preflight Graph Contract edits, no frontmatter gate changes, no `guide.ai-project.000-concept.md` changes, no docs/ mining). Task 7.4 is the only edit to a previously written file (comprehension flow text), explicitly authorized by the design's Implementation Notes.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "PM interaction framing is captured before the live walkthrough",
+      "description": "The PM interaction notice at the top of the file plus the inline reminder before Task 8.1 ensure the agent does not fire the two engagement questions without framing. This matches the project's \"never fire questions without framing\" rule. Informational, not a finding.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:40-46"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All 12 success criteria from the slice design are covered",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task sequencing respects dependencies with no circular references",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Test-with pattern is followed consistently",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers are placed at working, tested points; none are checkboxes",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality fits the slice scope",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Walkthrough exercises the three PM-facing outcomes",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:200-280",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "No scope creep detected",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "PM interaction framing is captured before the live walkthrough",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:40-46",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T21:38:46.323725",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 13378,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 185862,
+  "cached_tokens": 151168,
+  "cache_write_tokens": null,
+  "completion_tokens": 5909,
+  "reasoning_tokens": 3400,
+  "duration_seconds": 86.65060941688716,
+  "cost_usd": 0.026569080000000002,
+  "cost_basis": "alias_pricing"
+}

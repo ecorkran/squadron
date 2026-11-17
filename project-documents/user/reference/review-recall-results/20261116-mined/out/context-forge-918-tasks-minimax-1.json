@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All seven success criteria are covered by tasks",
+      "description": "Cross-referenced each criterion from the slice design against the task breakdown:\n- SC1/2 (indexed/unindexed `[~]` parse with `status: 'deprecated'`, `isChecked: false`, description captured): Tasks 2, 3, 5\n- SC3 (`totalSlices`/`completedSlices` arithmetic): Tasks 4, 5\n- SC4 (`cf list slices` renders `\u2298 deprecated`, never `\u2190 next`): Tasks 9, 10\n- SC5 (`cf next`/`findFirstNotCompleteEntry` skip `[~]` with no design/task docs): Tasks 8, 11\n- SC6 (`ConsistencyChecker` rules don't false-positive): Task 12\n- SC7 (existing `[ ]`/`[x]`/`[X]` parsing byte-identical): Task 1 (fixture retains existing lines), Task 5 (explicit regression test), and the rule in Task 5 that existing tests continue to pass unchanged.\nNo gaps; no scope creep.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing respects dependencies and follows test-with pattern",
+      "description": "Order is correct: fixture-first (Task 1, per CLAUDE.md lenient-parsing rule), then parser changes (Tasks 2\u20134), then parser test (Task 5), then statusDerivation impl (Task 6) followed immediately by its test (Task 7), then consumer wiring (Tasks 8, 9) followed by tests (Tasks 10, 11), then ConsistencyChecker test (Task 12), then full verification (Task 13). No circular dependencies. Test-with pattern respected for every implementation task.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers placed at tested working points",
+      "description": "Five `Commit:` lines (Tasks 5, 7, 10, 11, 12) plus a conditional one on Task 13. Each is a plain line, not a checkbox, and each sits at the natural close of a tested unit of work \u2014 not after every task and not only at the end.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tasks are appropriately scoped",
+      "description": "Tasks 2, 3, 4 are each genuinely small (one-character regex widening, status assignment, completedSlices filter) and could be merged, but keeping them separate aids review and matches the slice design's decision-by-decision structure. Task 9's added `derivedStatus` initializer fix is a defensive improvement not explicitly mentioned in the slice design, but is justified by the project guideline against silent fallbacks (CLAUDE.md) and aligns with the slice's goal of making `[~]` resolve to `Deprecated` everywhere. No tasks are too large for a junior AI; each has concrete success criteria and approximate line numbers that match the slice design's references.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 12 covers only `plan-status-vs-entries`, not the sibling `arch-status-vs-plans` rule",
+      "description": "Success criterion #6 explicitly names both `plan-status-vs-entries` and `arch-status-vs-plans` rules. Task 12 tests only the first. Both rules consume the same `completedSlices`/`totalSlices` from `parseSlicePlan()` (per the slice design's Current Behavior section), so testing one is representative of the arithmetic fix in Task 4 \u2014 this is not a blocker. A symmetric `arch-status-vs-plans` case would close the coverage loop directly; worth considering if test time permits, but not required.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:task 12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 7 assumes `statusDerivation.test.ts` exists",
+      "description": "Task 7 instructs adding cases \"in `packages/core/tests/introspection/statusDerivation.test.ts`\" and references \"lines 6-22\" of an existing frontmatter-deprecated test. The slice design explicitly hedges this with \"statusDerivation.test.ts if it exists (or add coverage \u2014 planLineStatus precedence)\". If the file does not exist, the task instructions don't tell the implementer to create it. Minor; the file almost certainly exists given the slice design's confidence, but the task could either be agnostic (\"add coverage in or for `statusDerivation.test.ts`\") or the file's existence could be verified before the task is executed.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:task 7"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "All seven success criteria are covered by tasks",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing respects dependencies and follows test-with pattern",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Commit markers placed at tested working points",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Tasks are appropriately scoped",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 12 covers only `plan-status-vs-entries`, not the sibling `arch-status-vs-plans` rule",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:task 12",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 7 assumes `statusDerivation.test.ts` exists",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:task 7",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-16T21:40:55.016936",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 18571,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 15856,
+  "cached_tokens": 3840,
+  "cache_write_tokens": null,
+  "completion_tokens": 5656,
+  "reasoning_tokens": 4791,
+  "duration_seconds": 56.90288120810874,
+  "cost_usd": 0.010622399999999999,
+  "cost_basis": "alias_pricing"
+}

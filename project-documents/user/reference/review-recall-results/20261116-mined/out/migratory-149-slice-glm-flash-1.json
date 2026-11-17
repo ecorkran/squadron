@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Tier 2 NFR is restated with specific targets and the gate exceeds it",
+      "description": "The design restates the architecture's Tier 2 target (60 TPS at N=50k on CUDA) and sets A3 at \u2265 100 TPS (1.67\u00d7 headroom) plus A2 at \u2265 5\u00d7 on `force_total`, matching the slice-plan entry for (149) exactly (\u22655\u00d7 force_total, \u2265100 TPS, 20% statistical parity). No ambiguity about which host measures what (A1/A4 Mac, A2/A3/A5 CUDA).",
+      "file_ref": null,
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria"
+    },
+    {
+      "severity": "PASS",
+      "title": "Correct architectural boundaries; seam and downstream interface preserved",
+      "description": "The fused tick legitimately operates outside `SpatialQuery`/`BulkForce` per the architecture's explicit exception principle. The design keeps `get_neighbors_first_k` as the documented A7 swap point (Option A), changes no `TickResult`/world-server surface, and correctly identifies that slice 146 stays unblocked. The `break`-in-caller placement is technically correct for Quadrants: a `@qd.func` cannot break the enclosing kernel loop, so the guard-then-break structure is the right mechanism (consistent with the slice 145 Phase 2 POC finding that `break` compiles in an inner range loop).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#cross-slice-dependencies-and-interfaces"
+    },
+    {
+      "severity": "PASS",
+      "title": "Config validation fails explicitly; subdivision coverage math is sound",
+      "description": "`S` is validated at config-load time with hard `ValueError`s (non-integer, < 1, > 8) \u2014 no silent clamp, per project policy. The (2S+1)\u00d7(2S+1) scan with `cell_size = query_radius / S` provably covers the same physical radius (worst-case agent-at-cell-edge leaves \u2265 S\u00b7cell_size margin on each axis), and `S=1` reproduces slice 145's loop bounds exactly.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-2--configurable-cell-subdivision"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config mechanism for S/cell_size doesn't match the actual bench harness",
+      "description": "The design names three inconsistent mechanisms, none of which matches the code: (1) \"BenchConfig\" \u2014 no such component exists; the harness config surface is the `Workload` YAML loader (`src/migratory/bench/workload.py`), which has a strict required-field schema and no `subdivision_factor` field today (unknown keys are silently ignored, so adding one to YAML without loader changes would do nothing). (2) The walkthrough commands (`scripts/bench.py --config mid-flock-50k --subdivision-factor 3 --ticks 200 --parity-check numpy`) reference a CLI that doesn't exist \u2014 the real entry point is `python -m migratory.bench` with `--workload`/`--backend` only (`src/migratory/bench/cli.py:23-34`); there is no `--ticks` or `--parity-check` flag, and tick counts come from the workload YAML. (3) The claim \"the bench harness passes cell_size at setup; it reads from config\" is inaccurate: `GpuAgentState.setup()` computes `cell_size = max_query_radius * DEFAULT_CELL_SIZE_MULTIPLIER` internally (`src/migratory/bench/backends/quadrants_fused_state.py:150`) \u2014 it is not passed in. The design should name the real seam (e.g., a `subdivision_factor` field on `Workload` threaded through `GpuAgentState.setup()` as `max_query_radius / S`, replacing the hardcoded multiplier) and state whether `--subdivision-factor` is a new CLI override or a workload-YAML field. \"Refined after implementation\" does not cover this: the loader/backends touched (runner vs state) determine where the validation code lives.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#component-interactions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Gate workload `mid-flock-50k` resolves to N=100,000, contradicting the design's N=50k premise",
+      "description": "The design's gate configuration is \"mid-flock-50k workload, S=3, max_neighbors=32\" with A2/A3 measured at N=50k. The checked-in `bench/workloads/mid-flock-50k.yaml` has `n: 100000` while its own description says \"N=50k operating point\" (and its `cluster_centers` at [120,120]/[280,280] with radius 45 look scaled for a 400\u00d7400 world, not 1536\u00d71536). Since `GpuAgentState.setup()` reads `workload.n` directly, A2/A3 as written would be measured at N=100k against a slice-145 baseline recorded at N=50k \u2014 invalidating the \u22655\u00d7 and \u2265100 TPS comparisons. The slice design should either call out the workload correction as in-scope or pin the exact workload definition (N, world size, cluster geometry) the gates run against; the p99-occupancy premise (~5000/cell) the entire speedup model rests on was measured under a specific formation config.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough Step 3 cannot reproduce the baseline with the shown commands",
+      "description": "The \"Baseline (S=1, counter-gating)\" and \"Early exit only (S=1, break enabled)\" commands are byte-identical; once the break is merged there is no flag that disables it, so the baseline must come from the recorded slice-145 numbers (force_total \u2248 25.18 ms at N=50k) or from a temporary disable mechanism. A2 permits using recorded numbers, but the walkthrough should say so explicitly rather than implying a fresh same-command baseline run.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#verification-walkthrough"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "nfr-alignment",
+      "raw_category": null,
+      "summary": "Tier 2 NFR is restated with specific targets and the gate exceeds it",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Correct architectural boundaries; seam and downstream interface preserved",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#cross-slice-dependencies-and-interfaces",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Config validation fails explicitly; subdivision coverage math is sound",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-2--configurable-cell-subdivision",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Config mechanism for S/cell_size doesn't match the actual bench harness",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#component-interactions",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Gate workload `mid-flock-50k` resolves to N=100,000, contradicting the design's N=50k premise",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough Step 3 cannot reproduce the baseline with the shown commands",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#verification-walkthrough",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-16T21:11:20.560654",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 49891,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 15,
+  "prompt_tokens": 467548,
+  "cached_tokens": 399104,
+  "cache_write_tokens": null,
+  "completion_tokens": 15104,
+  "reasoning_tokens": 12912,
+  "duration_seconds": 65.89594924985431,
+  "cost_usd": 0.02979172,
+  "cost_basis": "alias_pricing"
+}

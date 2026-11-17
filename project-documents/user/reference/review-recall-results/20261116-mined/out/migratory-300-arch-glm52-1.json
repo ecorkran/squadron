@@ -1,0 +1,188 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Concept document dependency reference is wrong",
+      "description": "The frontmatter `dependsOn` field lists `001-concept.migratory`, but the actual concept document is `000-concept.migratory.md` (located at `project-documents/user/project-guides/000-concept.migratory.md`). The sibling behavior engine architecture correctly references `000-concept.migratory`. The \"Related Work\" section at the bottom of the document also links to `../project-guides/001-concept.migratory.md` \u2014 a path that does not resolve. This is a load-bearing reference: the concept document establishes the technology choices (Python 3.12, asyncio, NumPy) and the world-server-as-source-of-truth principle that this architecture builds on, so the broken link makes the dependency untraceable.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scaling section is disproportionate to foundation scope",
+      "description": "The \"Entity scaling and multi-resolution simulation\" subsection is the longest section in the document, spanning scaling tiers from 10K through 4M+ entities, multi-GPU spatial decomposition, multi-machine distribution, predictive partition rebalancing, and group-encounter merge strategies at million-entity scale. This is a *foundation* architecture whose stated initial operating range is 10K\u201350K entities, and whose own slice plan explicitly defers all multi-resolution work to \"Future Work\" with `Risk: High, Effort: 4/5`. The document's own conclusion \u2014 \"The key architectural decision now is ensuring the behavior engine's interface and the entity management layer support aggregation and variable-rate ticking from the start\" \u2014 is the only actionable requirement, and it's buried under several pages of speculative multi-machine engineering. The detailed tier analysis and merge-strategy discussion can be cut; what remains is the single interface-design constraint, which belongs as a concise requirement on the entity management and tick interfaces, not a scaling treatise.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick loop / asyncio coexistence mechanism is underspecified",
+      "description": "The document states \"run the tick synchronously, then yield to the async event loop for I/O between ticks\" and identifies thread offload as an \"upgrade path.\" But the behavior engine tick is CPU-bound NumPy work. At 20 tps the budget is 50ms; the document's own scaling analysis implies tick computation could consume a large fraction of that. A synchronous tick called from within the asyncio event loop blocks all I/O for the full tick duration \u2014 WebSocket sends, connection accepts, and disconnect handlers all stall. The document doesn't specify the yield mechanism (`await asyncio.sleep(0)`? `loop.run_in_executor`?), doesn't bound how long the synchronous tick may run before I/O starves, and doesn't reconcile \"yield between ticks\" with the fact that state distribution (step 5) is itself async I/O that must happen *within* the tick cycle. The slice plan's (301) tick loop is already marked complete, so this decision has likely already been made in code without architectural guidance.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Serialization slice (306) is ordered after the client layer (305) that needs it",
+      "description": "The architecture's \"Anticipated Slices\" lists \"WebSocket client layer\" (push state snapshots) without a serialization slice. The actual slice plan places (306) State Serialization and Protocol *after* (305) WebSocket Client Layer, and (305)'s description requires sending \"a full state snapshot (world bounds, entity positions/velocities, terrain summary)\" to clients on connection. There is no serialization format defined when (305) is built \u2014 (306), which defines the wire protocol, comes later. Either (305) builds an ad-hoc serialization that (306) later replaces (wasted work, contradicting \"designed once and used consistently\"), or the dependency is mis-ordered and (306) should precede or be merged into (305). The slice plan's own note acknowledges serialization \"serves both the client layer and the logging system\" but doesn't resolve that (305) cannot function without it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Entity lifecycle event queuing is specified without a source",
+      "description": "The tick cycle step 4 says \"Handle entity lifecycle events (spawning, removal, profile changes) queued during the tick.\" But in v1, the server is server-push only \u2014 no client-to-server commands exist, and the architecture explicitly states \"Nothing flows back from clients into simulation state in v1.\" With no client input and no described internal triggers (what spawns entities? what removes them? what changes profiles?), the queuing mechanism has no identified producer. Additionally, the behavior engine (per 100-arch) is stateless and receives the agent state array at tick start \u2014 if spawns/removals are applied at commit (step 4) after behavior evaluation (step 3), the engine never sees mid-tick lifecycle changes, which is probably correct but is not stated. The document should either specify what produces these events in v1 (e.g., configured initial population only, with no runtime lifecycle changes) or clarify that the queue is an extension point that is empty in v1.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment layer is a load-bearing dependency on a nonexistent architecture",
+      "description": "The architecture treats the environment layer as a hosted subsystem providing \"terrain elevation, biome data, resource locations, and seasonal state\" through a \"read-only query interface.\" The slice plan (304) depends on \"500 Environment Layer foundation slice.\" But no 500-arch environment layer document exists in the project \u2014 `list_files` of the architecture directory shows only the 100-series and 300-series documents, and no 500-series file was found anywhere in the project tree. The `dependsOn` frontmatter field lists only the concept and behavior engine, not the environment layer. The architecture makes concrete commitments about this interface (the environment is queried by the behavior engine, updated each tick, and owns seasonal progression) without a defined contract. The slice plan's note that \"(304) can be deferred while other world server slices proceed independently\" mitigates the scheduling risk, but the architecture's \"Envisioned State\" describes a complete server that cannot be built as written without the environment layer existing.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Seasonal/temporal ownership boundary is blurred between server and environment",
+      "description": "The \"Envisioned State\" section says \"Seasonal state advances with each tick based on a configurable time scale\" and places \"Advance environmental state (seasonal progression, resource regeneration)\" as step 2 of the tick cycle, described as if the server owns seasonal logic. The slice plan (308) clarifies the intended boundary: the server owns *when* time advances (the world clock, time scale) while initiative 500 owns *what seasons mean* for terrain, resources, and biomes. The architecture document does not make this split \u2014 it conflates the server's temporal orchestration role with the environment layer's seasonal-effects role under a single \"Environment update\" step. This matters because the slice plan assigns these to different initiatives with different dependencies, and a reader of the architecture alone would reasonably conclude the server implements seasonal effects, which the slice plan says it does not.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Concept document dependency reference is wrong",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scaling section is disproportionate to foundation scope",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Tick loop / asyncio coexistence mechanism is underspecified",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Serialization slice (306) is ordered after the client layer (305) that needs it",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Entity lifecycle event queuing is specified without a source",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Environment layer is a load-bearing dependency on a nonexistent architecture",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Seasonal/temporal ownership boundary is blurred between server and environment",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-300-arch"
+  },
+  "timestamp": "2026-11-16T20:49:45.983323",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 28498,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 70724,
+  "cached_tokens": 57088,
+  "cache_write_tokens": null,
+  "completion_tokens": 7867,
+  "reasoning_tokens": 5934,
+  "duration_seconds": 101.71080412482843,
+  "cost_usd": 0.038164170000000004,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Workload YAML uses 3D coordinates but the engine is 2D",
+   "description": "The `mid-flock.yaml` example specifies `world_size: [200.0, 200.0, 200.0]` and `cluster_centers: [[60.0, 60.0, 60.0], [140.0, 140.0, 140.0]]` \u2014 three-dimensional values. The engine's `DIMS` constant is `2` (`src/migratory/__init__.py:4`), `AgentState.positions` is shaped `(n, 2)`, and `KDTreeQuery.build` expects `(n, 2)`. A workload constructed as written would fail at `AgentState.create` or at the first spatial build. The formation initialization must use 2D coordinates. This is a concrete design error in the canonical workload example that the implementation would follow.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#workload-schema"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Profile name resolution references presets that do not exist",
+   "description": "The slice states: \"Profile names resolve against a small registry in `bench/workload.py` that maps `flocker` / `leader` / etc. to the existing `BehavioralProfile` constructors used in `config/default.yaml`.\" The workload YAML uses `flocker` and `leader`. Neither name exists in `config/default.yaml`, which defines profiles named `default`, `cruiser`, `wolf`, `elk`. The `BehavioralProfile` dataclass (`src/migratory/engine/profile.py`) is a plain dataclass with no preset registry; profiles are constructed inline in `src/migratory_server/simulation.py` from `ProfileConfig`. The slice says \"The harness does not invent new profiles,\" but `flocker` and `leader` would be new inventions. Either the workload must use names that resolve to real existing profile configurations, or the slice must acknowledge that it is defining new named presets (which contradicts its stated constraint).",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#workload-schema"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Force name resolution mechanism does not exist in the codebase",
+   "description": "The slice states: \"Force names resolve to module-level singleton instances in the relevant engine modules (e.g. `flocking.cohesion_force`).\" No such singletons exist. `src/migratory/engine/flocking.py` defines `CohesionForce`, `SeparationForce`, `AlignmentForce` as classes (not instances). `src/migratory/engine/herding.py` defines `MomentumForce`, `PropulsionForce`, `LeadershipForce` similarly. The existing force construction path (`src/migratory_server/force_builder.py`) instantiates these classes conditionally based on profile weights. The workload loader's described force-resolution mechanism cannot work as specified \u2014 there is no `flocking.cohesion_force` to resolve to. The harness must either instantiate classes by name or define its own force registry.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#workload-schema"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Workload omits PropulsionForce and miscounts existing forces",
+   "description": "The slice says \"The five existing `BulkForce` implementations (cohesion / separation / alignment / momentum / leadership)\" and the `mid-flock` workload lists exactly those five forces. The codebase has six `BulkForce` implementations: the five listed plus `PropulsionForce` (`src/migratory/engine/herding.py:102`). The default config (`config/default.yaml:176`) has `propulsion_weight: 0.1` \u2014 propulsion is an active force at the default operating point. The slice labels `mid-flock` as \"current default operating point,\" but a workload that omits propulsion does not reproduce the default configuration's force pipeline. The architecture's slice plan says the harness should run \"the same workload across NumPy, Numba, and Quadrants backends,\" and workload fidelity to the real operating point matters for the comparative benchmarking the architecture relies on.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#scope"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Per-force timing deferred despite slice plan assigning it to this slice",
+   "description": "The slice plan entry for 141 specifies \"comparable per-tick timings broken down by phase (spatial build, spatial query, CSR assembly, force totals per force, integration).\" The parenthetical includes \"force totals per force\" \u2014 a per-force breakdown. The slice defers this: \"`force_total` is one number, not per-force, in this slice. Slice 142 introduces per-force timings.\" Deferring scope the slice plan assigns to this slice is a CONCERN. The slice's rationale (142 needs finer resolution for the cohesion port) is reasonable, but the slice plan text explicitly lists per-force breakdown as a 141 deliverable. The architecture's own per-tick budget table shows only a single `force_total` figure, so the practical impact is low, but the deferral should be acknowledged as a scope reduction from the plan, not presented as a design decision within the slice's authority.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#per-phase-timings-shape"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Phase name `csr_assembly` differs from architecture's budget table name `self_excl_cap`",
+   "description": "The architecture's per-tick budget table (`140-arch.simulation-scaling.md`, Current State) labels the CSR-assembly phase as `self_excl_cap`. The slice uses `csr_assembly`. The slice plan also uses \"CSR assembly,\" so the slice is consistent with the slice plan's naming. No action required; noted for traceability.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#technical-decisions"
+  }
+ ]
+}

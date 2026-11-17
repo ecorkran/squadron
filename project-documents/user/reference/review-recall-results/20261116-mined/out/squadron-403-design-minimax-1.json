@@ -1,0 +1,189 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Slice scope aligns with the architecture's anticipated-slices description",
+      "description": "The architecture (`400-arch.code-quality-measurement.md`, lines 102\u2013110) describes slice 403 as \"Slice ranges, rollup and trend reports. Durable slice-range records, commit export for non-HEAD commits, per-slice, per-project and over-time breakdowns across all three sources, on-demand boundary snapshots, and noise-floor display for LLM sources.\" The slice design delivers every element: durable slice ranges (D1), commit export (D5), three reports (slice/project/history), on-demand boundary snapshots (`ensure_snapshot` in D7 / Data Flow), and noise-floor display (D8 audit/review figures). The slice plan's five success criteria map to the design's D-decisions and acceptance criteria without gaps.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural principles preserved",
+      "description": "- **Coarse records:** One `slice_ranges` record per project keyed on `ProjectId` (D1, State Management) \u2014 same coarse-records principle as 400 D1.\n- **Breakdown, not a score:** D8's test asserts no serialized report key contains `score`; explicit check follows `audit_report`'s precedent.\n- **No pipeline hook:** Explicitly excluded in Technical Scope; `report slice` is the only `report` command that writes records, and that is called out in Implementation Notes.\n- **Extend the 320 store, don't fork it:** `MetrologyRecord.slice_ranges: SliceRanges | None = None`, `RECORD_TYPE_SLICE_RANGES = \"slice_ranges\"`, `schema_version` stays 1 \u2014 same pattern as 322/323/177/400/402.\n- **Deterministic numbers next to the LLM ones:** D8 separates static figures (no floor), audit figures (323's noise floor), and review figures (`no floor measured`). The architecture's \"absent is not zero\" rule is inherited from 400.\n- **Limits come from the project:** `read_snapshot_config` reads limits, exclusions and timeout from the live checkout for an export too (D5).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure-mode handling is explicit for each new I/O path",
+      "description": "Every new I/O path has a row: `git archive`/`rev-parse` non-zero, `git archive` hang (named timeout constant `GIT_COMMAND_TIMEOUT_SECONDS`), extraction `OSError` or `node_modules` symlink failure, unknown revision, archive member refused by `tarfile` `data` filter, tool hang inside the export (delegated to 400's `metrology.snapshot_tool_timeout_s`), reflog/merge-search returning `None`, stored landing whose commit was rewritten, concurrent writers (same caveat as 400), and store write failure. Each row names the exception, the cleanup action and the observable signal (ERROR/INFO/WARNING + exit code). Acceptance criteria 11 ties them to tests.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:152-167"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency directions and integration points match what consuming slices expect",
+      "description": "403 depends on 400 (snapshots), 402 (code reviews, `ReviewCategory`, `list_code_reviews`), 323 (`baseline_report`, `compute_delta`, `is_within_floor`) and `review/git_utils`. Provides to 420 exactly the API the architecture's \"Related Work\" entry for 420 implies: `take_snapshot_at(commit)` and `get_slice_ranges`. Provides nothing to 404, and the design states 404 is unaffected. The 401 cross-ordering risk (401 before vs after 403) is handled in Prerequisites: either 401 inherits the `environment_root` rule, or 403 updates 401's reader to read `repo_root` \u2014 both paths preserve 401's contract.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:71-78,317-327"
+    },
+    {
+      "severity": "PASS",
+      "title": "Comparability rule implements the architecture's closed-metric-identity principle",
+      "description": "D7 compares on the full identity (metric, language, tool name, tool version, counting, rule set, environment) and emits a typed `ComparabilityBreak` otherwise (`tool_changed`, `rule_set_changed`, `environment_changed`, `absent_before`, `absent_after`, plus `exclusions_changed`/`limits_changed` at snapshot level). This is the slice-level realization of the architecture's \"Metrics are a closed set\" and \"Comparable over time and across projects\" principles; cross-language rows are explicitly never compared.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:226-234"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`AdapterContext.environment_root` extends 400's contract beyond what the architecture strictly enumerates",
+      "description": "The architecture's \"Measure, never gate\" and \"Metrics are a closed set\" principles say later slices inherit 400's adapter contract. The slice adds a required `environment_root: Path` field to `AdapterContext`, breaking the in-place contract signature. This is justified and constrained \u2014 the architecture itself implies commit export must run the live checkout's tools against the export directory, 400's slice doc anticipates 403 extending the snapshot path, and the design adds a conformance test that runs every adapter on an export without `.venv`/`node_modules`. Both 400 adapters and 401's coverage reader are updated inside this slice. This is acceptable scope given the architecture's stated commitment export requirement, but it is the one place where 403 reaches back into a 400-owned surface, and a reviewer of 400's later extensions should re-check that no further `AdapterContext` fields are added.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:209-219,390-396"
+    },
+    {
+      "severity": "PASS",
+      "title": "Boundary-snapshot timing model is consistent with the architecture",
+      "description": "Range resolution persists fast-forward slices before reflog expiry (D4), and exports are bounded by `metrology.snapshot_tool_timeout_s` per call (D5 + Implementation Notes Cost). D6's lockfile gate implements the architecture's \"For an exported commit, the current environment is used only when that commit's lockfile matches it; otherwise both metrics are absent with that reason\" verbatim. Extraction is bounded only by archive size, like 400's parse \u2014 explicitly noted as linear.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:128-149,253-258"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Slice scope aligns with the architecture's anticipated-slices description",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Architectural principles preserved",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure-mode handling is explicit for each new I/O path",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:152-167",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Dependency directions and integration points match what consuming slices expect",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:71-78,317-327",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Comparability rule implements the architecture's closed-metric-identity principle",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:226-234",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`AdapterContext.environment_root` extends 400's contract beyond what the architecture strictly enumerates",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:209-219,390-396",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Boundary-snapshot timing model is consistent with the architecture",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:128-149,253-258",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-16T21:36:38.013046",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 29420,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 16,
+  "prompt_tokens": 773801,
+  "cached_tokens": 629888,
+  "cache_write_tokens": null,
+  "completion_tokens": 9051,
+  "reasoning_tokens": 7497,
+  "duration_seconds": 112.52204670803621,
+  "cost_usd": 0.09182838,
+  "cost_basis": "alias_pricing"
+}

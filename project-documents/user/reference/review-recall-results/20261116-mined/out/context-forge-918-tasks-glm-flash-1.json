@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion has a corresponding task",
+      "description": "Cross-reference of the slice design's Success Criteria:\n- Indexed `[~]` line parses into a `Deprecated` entry (status, isChecked false, rationale as description) \u2192 Tasks 1, 2, 3, 5.\n- Unindexed `[~]` parses equivalently with index fallback \u2192 Tasks 1, 2, 3, 5 (asserts `indexSource: 'fallback'`).\n- `totalSlices` includes deprecated; `completedSlices` counts it resolved \u2192 Task 4, verified in Task 5 (`totalSlices: 7`, `completedSlices: 5`).\n- `cf list slices` renders deprecated and never `\u2190 next` \u2192 Tasks 9, 10 (JSON `status: 'deprecated'` + `isNext: false` for all entries).\n- `cf next`/`findFirstNotCompleteEntry` skip a `[~]` entry with no docs \u2192 Task 11.\n- `ConsistencyChecker` `plan-status-vs-entries` doesn't false-positive with `status: complete` \u2192 Task 12 (both firing and non-firing directions).\n- `[ ]`/`[x]`/`[X]` byte-identical regression \u2192 Task 5's explicit regression test plus the fixture-first approach in Task 1.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and commit placement are correct",
+      "description": "The fixture (Task 1) precedes the parser change (Tasks 2\u20134), which precedes its tests (Task 5) \u2014 consistent with the CLAUDE.md lenient-parsing rule that the regression fixture must exist before the parser change. Implementation tasks 6, 8, 9 are immediately followed by their test tasks 7, 10. Commit markers sit at working, tested points (after Tasks 5, 7, 10, 11, 12, 13); Tasks 8\u20139 intentionally share Task 10's commit, which is a valid working point since Task 10 is the test that proves them. No circular dependencies; Task 11 correctly frames itself as a verification of Task 8's wiring with an explicit stop-and-report instruction if it fails.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality is appropriate",
+      "description": "13 tasks in one task file for a slice touching two parsers, one derivation function, two call sites, and four test files. Each task is small, concrete, and independently completable by a junior AI with explicit success criteria. No load-test/NFR restatement in the slice design, so no load-test or CI-gating task is required. Test tasks all trace to named success criteria (Task 12's ConsistencyChecker tests are required by criterion 6, not scope creep despite the design's \"out of scope\" note, which excludes code changes to the checker, not verification of it).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cf list slices` table rendering is verified indirectly",
+      "description": "The success criterion says `cf list slices` \"renders the entry with the existing `\u2298 deprecated` display\", but Task 10 asserts only JSON output (`status: 'deprecated'`, `isNext: false`). The table rendering flows through the pre-existing `renderEntryStatus()` case, which the design confirms needs no change, so this is covered indirectly rather than a gap. If desired, an assertion on the rendered table string would close the last sliver of this criterion.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md#task-10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 9's initializer-fallback change goes slightly beyond the design's stated one-line addition",
+      "description": "Slice design Decision 4 says `slice.ts` gets \"the same one-line addition to its inline `deriveEntryStatus()` call\". Task 9 additionally updates the `derivedStatus` initializer for the `detectDocuments`-throws path. The task justifies this well (a filesystem error would otherwise report a `[~]` entry as `not-started`), and it traces to the \"renders deprecated\" criterion, so it is justified, small scope \u2014 but it is a design-level delta the PM should be aware of.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md#task-9"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Every success criterion has a corresponding task",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing and commit placement are correct",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality is appropriate",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`cf list slices` table rendering is verified indirectly",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md#task-10",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Task 9's initializer-fallback change goes slightly beyond the design's stated one-line addition",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md#task-9",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-16T21:05:20.777782",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 8392,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 2,
+  "prompt_tokens": 15604,
+  "cached_tokens": 3926,
+  "cache_write_tokens": null,
+  "completion_tokens": 3199,
+  "reasoning_tokens": 2155,
+  "duration_seconds": 26.432319875108078,
+  "cost_usd": 0.00346898,
+  "cost_basis": "alias_pricing"
+}

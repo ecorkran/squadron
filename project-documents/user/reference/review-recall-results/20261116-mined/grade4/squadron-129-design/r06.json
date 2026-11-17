@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Design leaves the `openai-codex` upper bound undecided \u2014 the packaging half of Part A cannot be implemented as written",
+   "description": "The slice plan (line 79 of `100-slices.orchestration-v2.md`) explicitly requires `codex = [\"openai-codex>=\u2026\"]` under `[project.optional-dependencies]`, and D1 in the design proposes `codex = [\"openai-codex>=0.159.3,<1\"]` \u2014 but \"Special Considerations\" then states the upper bound \"is not decided here: \u2026 PM to say whether to cap.\" A `[project.optional-dependencies]` entry with an unresolved upper bound is not implementable as a single decision; the design also names the floor as \"the version this design was inspected against,\" which means the exact constraint string is unspecified. Resolve the bound (or explicitly declare the entry as `openai-codex>=0.159.3` with no cap) inside this design, since the extra declaration is this slice's own deliverable and cannot be deferred to implementation.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Part C adds a shared auth-layer capability that the parent architecture does not describe, and the design asserts the architecture \"stays accurate\" without a stated owner for the follow-up edit",
+   "description": "The design introduces `InteractiveLogin` in `providers/auth.py` and `ExtraRequirement` in `providers/base.py` \u2014 both in shared layers \u2014 while `100-arch.orchestration-v2.md` (Authentication Patterns, line 231ff) states only \"Squadron does not attempt to unify authentication. Each provider's credential resolution is self-contained.\" The design's own argument (an optional capability implemented by exactly one provider, with no credential storage) is sound, but the conclusion \"the architecture text stays accurate\" is asserted rather than demonstrated, and the deferred edit (\"if a second provider adopts `InteractiveLogin`, the architecture's \u2026 section should gain a sentence then\") leaves the architecture knowingly incomplete with no owner. Either state the single sentence the architecture needs now and name who applies it, or record explicitly in the design that the architecture amendment is out of scope for this slice and that the shared-layer Protocols are provider-local extensions of the provider layer, not of the core auth model.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The `OPENAI_API_KEY` fallback decision is scheduled as \"step 0\" of implementation, but the slice's own success criteria and Part A already depend on the answer",
+   "description": "`OAuthFileStrategy.is_valid()` currently reports a key-only environment as valid (`src/squadron/providers/codex/auth.py`), and the \"Special Considerations\" bullet says the outcome is \"resolved in this slice, not deferred,\" with the check as implementation task 0. But the Design's Data Flow and Failure Modes already specify behavior in both directions (\"Not logged in / token rejected \u2192 \u2026 includes `sq auth login openai-oauth`\"; `sq auth status` shows source), and Success Criteria state \"`sq auth status` shows email and plan for a logged-in `openai-oauth`\" without covering the key-only case. The consequence of \"fails\" \u2014 removing the key fallback from `is_valid`, `active_source`, `get_credentials`, `setup_hint` \u2014 changes `sq auth login`/`status` output for a profile that other slices and users rely on today, which is a behavior change beyond this slice's stated scope. The design should either resolve the question before Part A/C begin (it is the very first task) and state the resulting `sq auth status`/`login` output for a key-only environment in the Success Criteria, or explicitly scope the removal as an observable behavior change with its own acceptance criteria \u2014 currently the outcome is undecided inside a slice whose other decisions are pinned.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#special-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`sq model list` marker mechanism contradicts the slice plan's stated goal and adds cost to a hot path",
+   "description": "D9 requires `sq model list` to resolve every alias's profile via `ensure_provider_loaded` + `get_provider` and then `isinstance(provider, ExtraRequirement)` per alias, and the doctor's row to reach the same abstractions. This turns a purely local alias-table render (`src/squadron/cli/commands/models.py` currently reads `get_all_aliases()` and never touches the provider registry) into a registry-resolving call for each alias, and it adds a second shared Protocol (`ExtraRequirement`) for a single consumer. The slice plan asks only for \"`sq model list` marks `openai-oauth` aliases that need the extra.\" A narrower mechanism achieves the same user-visible outcome: resolve the profile's provider once per distinct profile (not per alias), and mark only when that provider reports the extra missing. Consider deferring `ExtraRequirement` to `providers/base.py` as a shared abstraction until a second provider needs it, and scoping the doctor's row to consume the provider's report without a second new Protocol method.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#d9--extra-missing-signal-is-a-provider-side-protocol"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`sq doctor` Codex row duplicates an existing `codex CLI` row and its \"no subprocess\" constraint conflicts with the shared resolver",
+   "description": "The design adds a `codex provider` row while keeping the existing `codex CLI` row (`src/squadron/cli/commands/doctor_checks.py:316`, which probes `shutil.which(\"codex\")` and fixes the hint at `npm i -g @openai/codex`). The new row's detail is said to come from `resolve_codex_runtime()` \u2014 which per D2 checks the bundled binary then `shutil.which(\"codex\")` \u2014 while the existing row independently does `shutil.which(\"codex\")`. The two rows can therefore disagree on a machine where the npm CLI is on PATH but the SDK's bundled binary is preferred. The design should state which row is authoritative for \"which binary will actually be used\" and whether the old row's `npm i -g @openai/codex` hint is now stale (the SDK's bundled binary makes the npm install unnecessary).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#sub-part-b-surfaces"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`Effort` \u2192 `ReasoningEffort` mapping rests on an unverified external enum claim",
+   "description": "D5 asserts \"Every squadron `Effort` value (`none, low, medium, high, xhigh`) exists in `ReasoningEffort`, so no mapping table,\" and `src/squadron/core/models.py` confirms squadron's `Effort` has exactly those five members. The claim about the external SDK's `ReasoningEffort` members could not be verified from the repository (the `openai-codex` package is not vendored and is not installed here), and the design's own Technical Requirements ask for \"at least one test imports against the real `openai_codex` types (skipped when the extra is absent)\" \u2014 which would catch a mismatch only after the extra is installed. Given `ReasoningEffort` is the newer API's enum and `none` is the one non-obvious member, pin the verified member list in the design (or specify the fallback when a member is absent) so the \"no mapping table\" claim is not an assumption.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#d5--effort"
+  }
+ ]
+}

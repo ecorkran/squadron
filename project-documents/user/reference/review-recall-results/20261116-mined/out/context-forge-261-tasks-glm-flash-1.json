@@ -1,0 +1,153 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Complete criterion-to-task coverage with correct sequencing",
+      "description": "Every functional requirement maps to Task 12 fixtures 1\u201313 (empty, scaffold, brownfield, shallow clone, monorepo scoping, concept-only, planned, resume, overrides, `--phase 2`, explicit instruction, missing-profile guide, `template_preview` read-only); every technical requirement maps to Tasks 1T\u20139T unit tests; parity has Task 13; the walkthrough has Task 15. Dependencies run strictly forward (contracts/state \u2192 facts \u2192 outcome \u2192 renderer \u2192 resolver \u2192 integrator \u2192 pipeline callers \u2192 integration tests), with no circular imports \u2014 the known `ConfigManager`/`ConfigKeys` cycle is pre-empted by defining `ADOPTION_STATES` in `ConfigKeys.ts` and re-exporting it.",
+      "file_ref": null,
+      "category": "task-breakdown",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45-269"
+    },
+    {
+      "severity": "PASS",
+      "title": "D9 and D4 edge cases are explicitly tested, not just implemented",
+      "description": "Task 9T covers guide-check-before-write ordering (state stays `''`), the write-failure `AdoptionError` with its remedy text, the explicit-instruction path (no decide step, no write, \"not evaluated\" outcome), the `read-only` mode, and the walk-never-runs spy for planned projects. Task 8T pins the squadron bullet to `renderSquadronFact()` and the exhaustive `never` check, satisfying the 262/263 integration requirements.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:182-200"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Performance NFR intentionally covered by cap tests, not a load test",
+      "description": "D2's sub-second detection target is bounded by the cap assertions in Task 3T (early exit at the line threshold, `AdoptionError` at `MAX_WALK_ENTRIES`) rather than timing tests, and the design explicitly decided \"tests assert the caps, not timings.\" The task file also records that `tests/load/` is a Python-repo rule inapplicable to this TypeScript repo. No load-test or CI-gating task is therefore required; the rationale is documented in the breakdown itself.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 12 is at the upper bound of single-task size but stays coherent",
+      "description": "Thirteen fixtures in one task (effort 3) is large, but all cases share one helper, one guide fixture, and one pipeline invocation pattern, and each expectation is enumerated precisely enough for a junior implementer. Splitting it (e.g. greenfield/planned vs. brownfield/override/edge groups) would be defensible but is not required \u2014 the slice's own Success Criteria list is what dictates the count.",
+      "file_ref": null,
+      "category": "task-breakdown",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-247"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 7's missing-input error is a small principled addition beyond the design text",
+      "description": "The design does not state that `decideOutcome` throws on a missing input the outcome order needs, but the task adds it as a programming error rather than a silent default. This is consistent with the project's \"never use silent fallback values\" principle and costs one test case; not scope creep.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:152-157"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "task-breakdown",
+      "raw_category": null,
+      "summary": "Complete criterion-to-task coverage with correct sequencing",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45-269",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "D9 and D4 edge cases are explicitly tested, not just implemented",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:182-200",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Performance NFR intentionally covered by cap tests, not a load test",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "task-breakdown",
+      "raw_category": null,
+      "summary": "Task 12 is at the upper bound of single-task size but stays coherent",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-247",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 7's missing-input error is a small principled addition beyond the design text",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:152-157",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T21:04:07.298934",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 31041,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 155624,
+  "cached_tokens": 93599,
+  "cache_write_tokens": null,
+  "completion_tokens": 9475,
+  "reasoning_tokens": 8042,
+  "duration_seconds": 65.76152458414435,
+  "cost_usd": 0.016849219999999998,
+  "cost_basis": "alias_pricing"
+}

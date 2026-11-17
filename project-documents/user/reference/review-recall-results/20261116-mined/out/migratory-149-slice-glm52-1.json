@@ -1,0 +1,189 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Nfr and gate targets correctly restated from the architecture",
+      "description": "A2 (\u22655\u00d7 force_total speedup), A3 (\u2265100 TPS at N=50k, confirming headroom above the Tier 2 NFR of 60 TPS), and A4 (statistical parity within 20%) match the parent plan's exit criteria for slice 149 exactly. The architecture's Tier 2 target (60 TPS at N=50k on CUDA) is correctly referenced as the floor the A3 gate sits above.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and interface boundaries are correct",
+      "description": "Depends on 145 (`fused_force_integrate_kernel`, `build_spatial_hash`, `GpuAgentState`, `get_neighbors_first_k` seam); interfaces 146 (unchanged external API). This matches the parent plan's dependency graph: 149 \u2192 145, and 146 \u2192 149 is unblocked. No reverse or hidden dependencies.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#cross-slice-dependencies-and-interfaces"
+    },
+    {
+      "severity": "PASS",
+      "title": "Break placement respects the \"Important Quadrants constraint\"",
+      "description": "The `break` is placed on the innermost `for kk in range(start, end)` loop (the per-agent cell-slot scan), not the outer `for i in range(n)` parallel kernel loop. The `max_neighbors > 0` guard preserves the uncapped path. Warp-divergence overhead is analyzed and dismissed as small relative to the wasted-work saving at the operating density. Correct and well-reasoned.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-1-early-exit-at-neighbor-cap"
+    },
+    {
+      "severity": "PASS",
+      "title": "A7 seam preserved with Option A",
+      "description": "`get_neighbors_first_k` is kept as a guard; the `break` is added before the seam call. making the seam unreachable when the break fires but preserving it as the documented swap point for distance-ranked k-nearest (future slice). This is the correct tradeoff between the A7 seam contract and the early-exit optimization.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-1-early-exit-at-neighbor-cap"
+    },
+    {
+      "severity": "PASS",
+      "title": "S validation is config-time with hard errors, not silent clamping",
+      "description": "`S` is validated at config-load time (Python) with explicit `ValueError` for non-integer, `<1`, and `>8`. The kernel receives a validated `S >= 1` with no runtime guard. which is correct per the architecture's \"never use silent fallback values\" principle. The upper bound of 8 is justified (17\u00d717 = 289 cells, practical GPU memory limit).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-2-configurable-cell-subdivision"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality \u2014 two focused interventions, no scope creep",
+      "description": "The design delivers exactly two interventions (early exit, cell subdivision) with small code surface. Out-of-scope is explicit: distance-ranked k-nearest, full GPU prefix sum, TickResult interface changes, world-server wiring, Metal tuning. No overweight mechanisms; the heaviest option (cell subdivision) is a config parameter and loop-bound generalization, which is appropriately light.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#out-of-scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Combined effect with slice 148 (shared-memory tiling) is not measured by this slice's success criteria",
+      "description": "Slice 149 measures against the slice 145 baseline, not against slice 148's tiled kernel. Since 148 (shared-memory tiling) is marked complete in the parent plan and 149 depends only on 145, the two optimizations are designed to compose independently. The slice correctly claims the two interventions compose multiplicatively with each other but does not claim or measure composition with 148's tiling. This is consistent with the parent plan's independent-shipping model; it is noted here only as an observation, not a gap \u2014 the parent plan allows slices to ship and be measured independently.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-2-configurable-cell-subdivision"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Nfr and gate targets correctly restated from the architecture",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Dependency direction and interface boundaries are correct",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#cross-slice-dependencies-and-interfaces",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Break placement respects the \"Important Quadrants constraint\"",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-1-early-exit-at-neighbor-cap",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "A7 seam preserved with Option A",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-1-early-exit-at-neighbor-cap",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "S validation is config-time with hard errors, not silent clamping",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-2-configurable-cell-subdivision",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality \u2014 two focused interventions, no scope creep",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#out-of-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Combined effect with slice 148 (shared-memory tiling) is not measured by this slice's success criteria",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#intervention-2-configurable-cell-subdivision",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-16T20:50:12.579163",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 10798,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 102885,
+  "cached_tokens": 51968,
+  "cache_write_tokens": null,
+  "completion_tokens": 3802,
+  "reasoning_tokens": 2740,
+  "duration_seconds": 44.00839312491007,
+  "cost_usd": 0.04341112,
+  "cost_basis": "alias_pricing"
+}

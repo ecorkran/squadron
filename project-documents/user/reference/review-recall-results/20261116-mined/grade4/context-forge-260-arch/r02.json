@@ -1,0 +1,68 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The amendment leaves two conflicting user-facing onboarding entry points",
+   "description": "The amendment says \u201c`/cf:onboard` stays the entry point for now, with no brownfield path,\u201d while the Overview, Design Goals, and Adoption flow all name `sq onboard` as the brownfield entry point. The project\u2019s own process journal (`project-documents/user/notes/000-process-journal.md`, 20261022 entry) records the opposite ruling: \u201c`cf onboard` and `sq onboard` side by side is not acceptable: two command surfaces are already confusing for new users. The work may be split internally between the tools, but the user sees one entry point, either `cf onboard` or `sq onboard`.\u201d This architecture therefore violates a standing process decision without recording a superseding ruling. The document must either name one user-facing entry point or explicitly record why the journal\u2019s ruling no longer applies.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:25"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The read-only detection report is specified without a concrete public interface",
+   "description": "The detection report is the central cross-repo contract: `sq onboard`, `cf init`, and `cf next` consume it, and slice 271 exposes it as CLI + MCP. Yet the architecture does not define the JSON shape, the outcome enum, the fact names, or whether the opt-out is reflected in the report. Slice 271 defers \u201ccommand names\u201d and \u201chow the profile is delivered\u201d to slice design, but this is a cross-repo contract with an external consumer, not an internal naming choice. The same omission applies to the prompt-delivery primitive: \u201cfetch the adoption prompt from cf \u2026 with the comprehension doc\u2019s path filled in\u201d has no defined request/response contract. Define both primitives\u2019 wire formats (including versioning) in the architecture before squadron builds against them.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:71"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The architecture describes a three-way detection outcome but the implementation has a four-value state machine",
+   "description": "The amended design says detection derives \u201cgreenfield, brownfield or already planned\u201d with only an opt-out stored. The shipped implementation still models `\"\" | in_progress | complete | declined` (`packages/core/src/config/ConfigKeys.ts:28`) and the resolver\u2019s decision order is persisted state \u2192 already planned \u2192 source volume (`packages/core/src/adoption/adoptionResolver.ts:50-64`, `packages/core/src/adoption/adoptionOutcome.ts:30-49`). The architecture relies on slices 269\u2013271 to collapse this, but the \u201cCurrent State\u201d, \u201cAnticipated Slices\u201d (original plan), and Technical Considerations sections still describe the old four-value model, the persisted \u201cadoption state\u201d, and build-time detection. A reader cannot tell which of the two designs is authoritative. Remove or clearly quarantine the superseded state-machine description.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The retroactive-marker rules and the existing-state slice plan are excluded from the rework that consumes them",
+   "description": "The rework list (268\u2013272) removes the persisted adoption state and the `cf build` path, but slice 271\u2019s success criteria require \u201cthe prompt fills the comprehension path\u201d and slice 273 depends on 271\u2013272 to produce an existing-state slice plan. The slice plan\u2019s \u201cDeliberately not in this rework\u201d section excludes \u201cretroactive slice entries (cf check, the review gate and the plan parser)\u201d \u2014 yet those shipped components (`packages/core/src/introspection/retroactiveRules.ts`, `packages/core/src/introspection/parsers/slicePlanParser.ts:23`) remain the only mechanism implementing the architecture\u2019s retroactive contract. The exclusion is acceptable only if the shipped parser stays stable; the architecture does not say so, and the removal of `adoption.state` touches the same navigation/parser path. State explicitly that 269\u2013270 must not alter the marker parser, gate skip, or checker rules, or fold their preservation into the rework.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:143"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The guide prompt\u2019s mandatory \u201cAdoption Facts\u201d contract is not covered by the rework",
+   "description": "The guide prompt shipped in ai-project-guide still says: \u201cIf the section is missing, stop and say: \u2018The Adoption Facts section is missing; cf build should always supply it\u2026\u2019 Do not continue on any path\u201d (`project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:452`), and it still branches on raw probe JSON and a CF-only path (`:453-464`). The architecture\u2019s Technical Considerations says these branchings \u201cgo away\u201d and slice 272 aligns the guide, but the architecture does not specify the new prompt\u2019s input contract (what replaces Adoption Facts, and whether the prompt still hard-requires it). The rework ships cf primitives before the guide release carrying the reworked prompt exists; until that guide lands, the delivered prompt contract is broken. Define the new prompt-delivery payload and the minimum guide version explicitly, not just \u201cslice 272 aligns it\u201d.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:135"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The document\u2019s guide-version facts contradict the implemented minimum",
+   "description": "The Dependencies section says cf releases \u201crequire at least v0.22.2\u201d, but the implemented constant is `MIN_GUIDE_VERSION = '0.22.6'` (`packages/core/src/guides/guideMinimum.ts:5`). The architecture is the contract used by slice design and release gating; shipping it with a stale minimum risks a release that believes it is compatible with a guide that is not. Bring the version floor in the architecture to the value actually enforced, or state that the floor is raised by slice 272 and is not yet fixed.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:159"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\u201cAlready planned\u201d detection is narrower than the architecture claims",
+   "description": "The amended rule says \u201cAlready planned\u201d covers \u201can initiative plan, an architecture doc or a slice plan.\u201d The implementation matches the initiative plan only by the exact filename `001-initiative-plan.*.md` (`packages/core/src/introspection/ArtifactIntrospector.ts:34`) and architectures only by `NNN-arch.*.md` / `NNN-hld.*.md` under `project-documents/user/architecture` or `project-documents/user/project-guides` (`packages/core/src/detection/planningArtifacts.ts:15-17,57-65`). A project using a different initiative-plan index, an architecture in another directory, or an HLD with another prefix is detected as brownfield and will have adoption write artifacts over existing work. The document treats \u201cthe files say whether a project is planned\u201d as a reliable invariant; the current matcher does not make it reliable. Either broaden the detection rule to the set of artifact kinds CF actually understands, or state the exact filename conventions as part of the contract.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:76"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The scope includes conventions reconciliation and docs/ADR mapping although the initiative\u2019s core goal does not depend on either",
+   "description": "The Scope paragraph includes \u201cand, last, conventions reconciliation and docs/ADR mapping,\u201d while the stated core goal is only that \u201c`cf next` points at the first piece of new work\u201d after adoption. Conventions reconciliation is explicitly the highest-risk item in the slice plan (266: Risk High, Effort 4/5), depends on the unresolved #123 audience split, and introduces a new persisted resolution format plus agent-driven semantic comparison. Docs mapping (267) is a separate discoverability feature. Both are already shipped as slices 260\u2013267 and are declared outside the rework, so keeping them in the initiative\u2019s Scope enlarges the architecture without contributing to the stated outcome. Cut both from this architecture\u2019s Scope and track them under their own architecture, or state explicitly why they are load-bearing for adoption.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:22"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Detection\u2019s history and CI facts are produced but never used to decide an outcome",
+   "description": "The report includes \u201chistory\u201d and \u201cCI\u201d, but the outcome is decided from the planning-artifact check plus source volume; the shipped implementation likewise computes history via a 5-second git timeout (`packages/core/src/detection/history.ts`) and CI recognition without letting either affect the outcome. This is consistent with the \u201cfacts in core, judgement in the prompt\u201d principle, but it means the report carries relatively expensive facts that mostly duplicate what the prompt can observe. If they are genuinely intended for the agent, say so; otherwise they are removable cost on a primitive that `sq onboard` will call on every run.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73"
+  }
+ ]
+}

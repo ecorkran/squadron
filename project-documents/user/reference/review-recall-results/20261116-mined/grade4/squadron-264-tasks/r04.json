@@ -1,0 +1,19 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "\"Prefer\" wording understates the DRY rule for the executor builder",
+   "description": "Task 6.2 says \"Prefer one shared executor-builder parameterized by the mapping-table entry over five hand-written near-identical closures (DRY)\". CLAUDE.md states \"Do not duplicate logic. Respect DRY\" as a core principle, not a preference. A junior implementer reading \"prefer\" may reasonably produce five near-identical closures that satisfy the letter of the task. Tightening to \"Build one shared executor-builder... do not write five near-identical closures\" would make the expectation unambiguous. This is a wording nit, not a blocking issue \u2014 the surrounding bullets and the mapping-table requirement already push toward the right design.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md#6.2"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Live contract test partially duplicates walkthrough step 2",
+   "description": "Task 8.2's live `cf_workflow_status` round-trip and Task 9.1's walkthrough step 2 both materialize `cf_workflow_status` and invoke it from the repo root. They serve different purposes (Task 8 = pytest assertion as part of the contract test; Task 9 = recorded manual walkthrough outcome), so the duplication is intentional, but a junior AI may wonder whether to fold them. No action required; flagging for awareness.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md#8.2"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Synthetic finding is specified only for the file-size case; the D3 skip case would name the wrong limit",
+   "description": "D3 treats a diff dropped by `review.max_total_injection_bytes` as truncation to zero, and D4's cap fires on it. The only finding text given names `review.max_file_size_bytes` as the cause and tells the reader to raise that key. In the D3 case that advice is wrong: raising the per-file limit does not bring the diff back.\n\n`DiffInjection(total_chars, injected_chars)` does not record which limit applied, so the finding builder cannot tell the two cases apart. The plan requires Part B's outcome to be \"observable in the artifact\", and a finding that misattributes the cause fails that for the path the Overview calls the worse one.\n\nFix, either of:\n- Carry the limiting config key on `DiffInjection` (the injection step already knows which branch it took).\n- Specify a second finding wording for `injected_chars == 0`.\n\nEither way, add the D3 wording to SC2/SC4 so a test pins it.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:123-152"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "D9 leaves the routed-provider half of \"what counts as differs\" to Phase 6",
+   "description": "The plan says design \"must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id (OpenRouter)\". D9 decides the dated half. The routed half is deferred to implementation-time capture, and the Risk section concedes the rule may flag every run on a router profile.\n\nTwo consequences are not handled:\n- **Unverified profiles:** walkthrough step 6 captures ids only for profiles \"with credentials\". A profile without credentials at implementation time ships unverified.\n- **Cost of a false positive:** D10 makes the presence of `requestedModel` the gate-facing signal for \"not the model you asked for\". A false positive therefore puts a wrong fact in the frontmatter contract on every run; it is more than one extra key and a WARNING.\n\nFix: state in the design what happens for a profile whose ids were not captured. Either name it as a known limitation in the artifact contract, or make the walkthrough's capture of each shipped profile a stated completion criterion, not best-effort.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:176-187"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Effect on stored metrology identity is stated for new artifacts only",
+   "description": "D10 says OpenAI-direct judges change identity once, from the alias to the dated snapshot. It does not say what happens to calibration or graduation records already keyed on the undated id, or that each later snapshot rollover will re-key the judge again. A sentence on whether existing records are orphaned would let the metrology owner plan for it.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Other consumers of the result's model are not listed",
+   "description": "The component table covers `sq review` and the pipeline action. PR review and its posted comment also consume the same result and will pick up the answering model. The parity argument covers them, but the table and SC12 do not mention them, so nothing asserts the substitution suffix (or its absence) there.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:65-76"
+  }
+ ]
+}

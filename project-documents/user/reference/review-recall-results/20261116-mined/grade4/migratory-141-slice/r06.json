@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force timing is deferred, against plan 141 and slice 118's needs",
+   "description": "The slice keeps `force_total` as one number and pushes the per-force breakdown to slice 142. Plan 141 explicitly scopes \"force totals per force\" into this slice (`project-documents/user/architecture/140-slices.simulation-scaling.md:26`). Slice 118 needs per-force numbers now: plan 100 requires \"Benchmark each force individually against the NumPy baseline\" (`project-documents/user/architecture/100-slices.behavior-engine.md:77`), and its Entry 9 data came from a scratch script in `/tmp` (`project-documents/user/slices/118-slice.numba-force-jit.md:655-659`). That is the reproducibility gap this harness exists to close. Add the per-force breakdown to this slice now. It is one more timing bracket per force.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Timed path copies the tick body, contradicts the 140 contract, and contradicts itself",
+   "description": "Per-phase timings come from `tick_instrumented()`, a parallel copy of the tick body (lines 496\u2013506). Three problems:\n- **Contradicts the 140 premise.** Slice 140 says the harness \"reads `result.positions` and is done\" and needs no knowledge of the backend (`project-documents/user/slices/140-slice.tick-return-type-contract.md:289-293`). Here every backend must expose its own timed tick (lines 262\u2013265). That per-backend cost is hidden by the \"single-file registration\" claim (lines 341\u2013345).\n- **Contradicts itself on what is timed.** Lines 131\u2013132 say the NumPy runner \"calls `tick()` directly\", and line 541 says `tick()` is \"called by the NumPy backend\". Lines 255\u2013258 and 496\u2013501 make `tick_instrumented` the timed path. The document never states how the timed path relates to the production tick.\n- **Conflicts with the DRY rule and hides a dependency.** The copy re-implements engine internals (spatial build, CSR assembly, force, integrate). None of them appear under \"Interfaces Required\" (lines 127\u2013149). The justification (\"the engine module is a clean room\") is a slice choice, not an architecture requirement.\n\nTake the timing-path choice to the Project Manager before implementing it. The options are a timing hook argument on `tick()` or phase functions in the engine that both paths call. Either changes the engine, which this slice currently forbids.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:244-272"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Runner integration is assigned to slices whose plans don't include it",
+   "description": "The slice says \"Slice 142 can register a `quadrants` backend\" and \"Slice 144 can register a `numba` backend\" by adding one file each (lines 586\u2013591). Both conflict with the plans and with the other slice docs:\n- Slice 140 says slice 142's cohesion-force prototype \"produces a tiny `TickResult`\" (`project-documents/user/slices/140-slice.tick-return-type-contract.md:294-297`). The harness's `BackendRunner` must return `(TickResult, PhaseTimings)` for a full tick over spatial, CSR, forces and integration (lines 326\u2013336). One cohesion force cannot satisfy that without a hybrid backend, which the slice does not describe.\n- Plan 144 is \"Port all `BulkForce` implementations \u2026 to `@ti.kernel`\" (`project-documents/user/architecture/140-slices.simulation-scaling.md:34`). It contains no numba runner work. Slice 118 does not mention registering with the harness. Lines 92\u201393 call the Numba runner \"slice 144 / 118 territory\", so no slice owns it.\n\nName an owner for each runner. State how a single-force backend reports phases, or describe the hybrid.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:586-591"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Parity hash is outside plan scope, duplicates slice 140, and ignores `count`",
+   "description": "- The plan assigns tick-level parity to slice 145, not to this slice (`140-slices.simulation-scaling.md:36`).\n- Slice 140 already built `tools/run_deterministic_trajectory.py` as the parity check (`140-slice.tick-return-type-contract.md:449-464`).\n- The Open Questions say the trajectory tool \"is the parity oracle; the bench is the timing oracle\" (lines 753\u2013755). Integration Points say slice 145 uses \"the harness's NumPy parity hash as the reference\" (lines 533\u2013534). Both cannot hold.\n- The hash covers the full arrays (line 460). Slice 140 says consumers read `[:count]` because a GPU backend may return max-N buffers (`140-slice\u2026:147-149, 197`). Hashing the padding would make the reference hash depend on buffer size.\n\nDecide one oracle. If the hash stays, hash `positions[:count]` and `velocities[:count]`. Otherwise cut it.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "CUDA is deferred with no owner or trigger",
+   "description": "Plan 141 scopes \"NVIDIA (CUDA)\" into this slice (`140-slices.simulation-scaling.md:26`). Plan Tier 3 depends on it: \"Tier 2 validated on CUDA via (141)\" (line 61). This slice defers CUDA to \"someone runs the same workload on an NVIDIA box later\" (lines 96\u201399). The deferral fits the architecture's goal that NVIDIA \"must not be required for development or demonstration below 250k\" (`140-arch.simulation-scaling.md:28`). The gap is ownership: nothing names who runs the CUDA pass or when it is required. Name the slice or Tier 3 gate that owns it.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:96-99"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Overweight CLI options that nothing needs yet",
+   "description": "Cut these:\n- `--all-backends` (line 481): with one backend registered, it equals `--backend numpy`. The slice's own Open Question already defers subprocess isolation for it as over-engineering (lines 762\u2013766).\n- `--workload-dir` (line 482): no caller and no requirement.\n- The parity hash (see the parity finding above), if the trajectory tool stays the oracle.\n\nThe Protocol and registry stay, because the plan says backends \"slot in\".",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:477-487"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Failure modes are incomplete for new I/O and config paths",
+   "description": "The section covers missing YAML fields, unregistered backends, `setup` exceptions and TPS below 1. It leaves these unhandled:\n- Profile fractions are not required to sum to 1, and the rounding of `fraction \u00d7 n` is not stated. Either case silently changes the agent count.\n- Exceptions raised in `tick_once` during warmup or measure are not covered. Only `setup` is wrapped in `try/finally`, so `finalize` may not run.\n- JSON and Markdown write failures (missing or unwritable `bench/results/`) have no handling.\n- Malformed YAML and wrong types (for example a string `n`, or a negative `n`) are not covered.\n- `git rev-parse HEAD` failing (no git, not a checkout) has no handling. The Value section names the reproducibility goal this affects.\n- The TPS threshold of 1 is a bare literal. Define it once.\n\nEach path needs an explicit error or a logged WARNING.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Provenance records the commit but not uncommitted changes",
+   "description": "Result files record `git rev-parse HEAD` but not whether the working tree had uncommitted changes. A dirty run is then labeled with a commit it did not measure. This undermines the Value section's \"apples-to-apples comparison\" (lines 44\u201348). Add a `dirty` field, or refuse to write results on a dirty tree unless a flag overrides that.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:232-236"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "JSON timing fields are undefined, and the sample does not reconcile",
+   "description": "The schema is \"stable from this slice\" (line 530), but `tps_observed` and `wall_seconds` are not defined. The sample is internally inconsistent: 600 measured ticks at the sample's mean total of 9.55 ms is 5.73 s, not the 9.21 s wall time. `tps_observed: 65.1` equals 600 \u00f7 9.21. The slice does not say whether wall time includes warmup, setup, or the hash. Define both fields exactly, then regenerate the sample from that definition.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:426-427"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Workload schema is incomplete and inconsistent with its scope",
+   "description": "- Scope lists \"density, formation seed, \u2026 RNG seed\" as workload fields (lines 70\u201372). The schema has only `seed` and no density field.\n- Two of the three named regimes have no parameters. The architecture names \"dispersed (low density)\" and \"packed-herd (high density)\" without N or formation values (`140-slices.simulation-scaling.md:26`). Only `mid-flock` is specified.\n- Plan 143 requires timings at N = 10k, 50k and 250k (`140-slices.simulation-scaling.md:32`), and plan 145 validates 50k and 250k (line 36). The slice's workloads top out at 3,500 and defer large-N to \"slice 143 may want\" (lines 526\u2013529).\n- The `mid-flock` profile mix is mapped from `config/default.yaml` by a hand-written registry (lines 392\u2013396). The plan says workloads come \"from config\". If the default config changes, `mid-flock` silently stops measuring the \"current default operating point\" (lines 352\u2013355). Derive it from the config, or fail on mismatch.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:347-390"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Architecture NFRs are not restated",
+   "description": "The architecture states the scaling targets this harness exists to check: 3,500 agents at 57 TPS as the live baseline (`140-arch.simulation-scaling.md:50, 60`), and 60 TPS for the scaled tiers (line 18; Tier 2 \"sim 60\", line 70). This slice restates none of them. The success criteria state no TPS target, and step 9 says explicit thresholds are \"not asserted\" (lines 661\u2013668). Plans 143 and 145 say their milestones are \"validated by the harness\". Restate the targets here, and state whether the harness reports pass/fail or only records TPS.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#success-criteria"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Illustrative sample conflicts with the architecture's baseline",
+   "description": "The sample labels `n: 3500`, but its phase numbers are the N\u22482492 profile-shape reference from Entry 8 (`140-arch.simulation-scaling.md:50`). Its `tps_observed: 65.1` sits above the 57 TPS live baseline at 3,500 (line 60). The architecture warns against this conflation (line 60). Use a consistent N, or label the sample as a shape reference.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:413-434"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Phase key `csr_assembly` differs from the architecture's name",
+   "description": "The architecture's budget table calls this phase `self_excl_cap` (`140-arch.simulation-scaling.md:54`). The JSON key `csr_assembly_ns` will not match Entry 8 without a mapping. Choose the canonical key, or record the mapping in the schema, before `schema_version: 1` freezes.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:65-66"
+  }
+ ]
+}

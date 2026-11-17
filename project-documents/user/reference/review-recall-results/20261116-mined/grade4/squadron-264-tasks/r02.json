@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Registering the five CF tools breaks an existing test the plan never updates",
+   "description": "`tests/tools/test_package.py:11` asserts `set(tools.list_tools()) == {\"read_file\", \"write_file\", \"bash\"}`\nand line 22 asserts `len(executors) == 3` after materializing every registered tool. Task 6.4 adds the\nside-effect import that registers five more tools at package import, so the full suite goes red at Task 6's\ncommit \u2014 yet no task in the file mentions `tests/tools/test_package.py` (grep for the filename across the\ntask file returns nothing). This contradicts two of the file's own invariants: \"Each task leaves the suite\ngreen\" (Sequencing note) and Task 1's \"Existing config tests still green\" framing for the whole run. Task 6's\nsuccess criteria even restate the expected set as \"the five `cf_*` names plus the three builtins\" without\nnoting the file that encodes the old expectation. Add an explicit step to Task 6 (or 7.1) to widen\n`test_exactly_the_three_builtin_tools_are_registered` / `test_materialize_binds_every_registered_tool` to\nthe eight-name registry \u2014 ideally deriving the expected builtin set from the registry as the file's own\n\"never hard-coded\" principle asks, rather than writing a new magic literal.",
+   "location": "tests/tools/test_package.py:11-22"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two tasks both claim ownership of the spawned process environment",
+   "description": "Task 4.1 states the bridge should \"use the SDK's `get_default_environment()` as the spawned process env\"\nwhile also saying \"callers construct `StdioServerParameters`; the bridge does not read config\"; Task 6.3\nthen has the executor build `StdioServerParameters(command, args, cwd=..., env=get_default_environment())`.\nBoth layers cannot own `env`: if the bridge sets it, it silently overrides whatever a caller put in the\n`server: StdioServerParameters` it was handed \u2014 which matters because `mcp_bridge.py` is explicitly the\nreusable seam for future MCP servers (design D1/Value), where a caller may legitimately need a custom env.\nIf instead the bridge passes `server` through untouched, Task 4.1's instruction is dead text. Pick one\nowner (the caller, consistent with the design's data-flow diagram and Task 6.3) and delete the other\nsentence, or state explicitly that the bridge only supplies the default when `server.env is None`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Result-mapping branches are implemented with no test that asserts them",
+   "description": "Task 4.2 requires two behaviors beyond the happy path: joining **all** text blocks with `\\n`, and noting\nnon-text blocks by type rather than dropping them. Task 5's fake server only exposes `echo` (single\n`TextContent`), `fail`, `sleep`, and `empty`; no tool emits multiple text blocks or a non-text block, and\nTask 7 mocks `call_mcp_tool`, so it never exercises `CallToolResult` mapping. Result: a regression that\nsilently drops image/resource blocks \u2014 the exact silent-no-op class the design calls out as the slice-909\nlesson \u2014 passes the whole suite. Slice success criterion 2 says results are \"mapped per the Result mapping\nrules\", so name the requirement in a test: either add one fixture tool returning two text blocks plus one\nnon-text block, or unit-test the mapping helper directly against hand-built `CallToolResult` values.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:137"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Design decision D4 is not pinned by any test",
+   "description": "Task 7.1's `test_all_five_registered` runs in whatever environment the developer has, so a registration path\nthat probed launchability (`shutil.which(\"npx\")`) would still pass on any machine with node \u2014 the thing D4\nexists to prevent (\"a pipeline's validity cannot depend on what's installed on this machine\"). One cheap\nassertion \u2014 set `cf.mcp_command` to an unlaunchable command and assert the five names are still registered \u2014\nwould pin it. Non-blocking, but it is the cheapest available defense of the decision.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:217"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Fixture justification names a consumer that does not use it",
+   "description": "\"Test infrastructure first: tasks 5, 6 both need a real stdio peer\" \u2014 only Task 5 needs `fake_mcp_server.py`;\nTask 6 is descriptor implementation and its tests (Task 7) explicitly run \"with no network and no node\", while\nTask 8 uses the real CF server. A junior implementer following that note could wire `test_cf_tools.py` to the\nfake server and break Task 7's stated isolation. Correct the note to \"Task 5's tests need a real stdio peer\".",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+  }
+ ]
+}

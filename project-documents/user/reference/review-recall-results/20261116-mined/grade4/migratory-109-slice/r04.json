@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Force path keeps a per-agent Python loop, violating the slice's defining constraint",
+   "description": "The success criteria call \"no Python-level per-agent loops in any `BulkForce.__call__`\" the defining constraint (line 198). The weight section then prescribes `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` inside each force, and line 136 concedes it is \"a Python list comprehension over `n` agents.\" It runs once per force call and per weight field. The walkthrough's grep (line 223, `for.*eval_indices`) matches that exact line, so step 4 fails against the design as written. The architecture asks for index-based dispatch through lookup tables (`100-arch.behavior-engine.md`, GPU compute path). Fix: build one weight table per profile field (length = number of profiles, so Python cost is O(profiles), not O(agents)) and gather with `table[state.profile_indices[eval_indices]]`. Drop the \"precompute at higher n if needed\" escape hatch, because the constraint has no size threshold.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:129-136"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Root cause and \"constant Python overhead\" are asserted without measurement",
+   "description": "The Value section attributes the 10\u201315 ms overrun to force-loop overhead (line 23). The architecture says neighbor finding \"typically dominates tick cost\" (`100-arch.behavior-engine.md`, Neighbor query cost dominance), and the slice itself leaves the per-agent `query_radius` loop in place (lines 45, 95; `BruteForceQuery` unchanged, line 43). The builder is also a per-agent pass (\"a single pass,\" line 101), so \"constant Python overhead regardless of agent count\" (line 19) is false as designed. The 50 ms budget is not sourced. Fix: before implementation, record per-phase timings (query loop, builder, each force, integrate) at 100 and about 10K agents, state which phase owns the overrun, and specify how the builder is vectorized or what its O(n) cost is.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:19-23"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Scale NFR is not restated, and padded worst-case memory exceeds it",
+   "description": "The architecture's NFR is \"tens of thousands of agents at full behavioral fidelity on a single CPU process,\" and the hot loop must avoid dynamic allocation (`100-arch`, lines 36, 88, 102). The slice restates neither. Its only target is 100 agents (lines 23, 215), and \"regardless of agent count\" is unverified. Padding is sized by the maximum neighbor count across all agents (line 82), so one dense cluster inflates every row. For example, 20,000 agents where one agent has 2,000 neighbors gives an index array of about 320 MB (intp) and about 640 MB per float64 gathered position array, reallocated each tick for each force. Line 148 defers the problem to \"100K+,\" which is above the architecture's stated tier. Fix: restate the NFR with a target (agent count, tick budget, memory ceiling); add a 10K\u201320K scaling check to the walkthrough; and either bound per-agent neighbor count with an observable warning or preallocate buffers so per-tick allocation is bounded.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:146-148"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "NeighborData cannot represent aggregate neighbors, so 108 will force a second breaking change",
+   "description": "The architecture says the neighbor interface \"must be designed from the start to accommodate heterogeneous neighbor types, or aggregate support will require a breaking change\" (`100-arch`, Multi-resolution simulation). This slice sets that interface. `NeighborData.indices` addresses `state.positions` only, and line 178 makes it the contract future forces consume. The slice also makes a breaking change to `BulkForce` (line 164). Slice 108 (plan line 52) would change both again. Fix: either define a kind-tagged or two-channel neighbor entry now, or state in this doc that heterogeneous neighbors are deliberately deferred, name 108 as the owner of the next protocol change, and explain why that is acceptable against the principle.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:68-77"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Slice 103 is designed against the list signature, and the plan orders 103 before 109",
+   "description": "The frontmatter lists 103 as an interface (line 7), and line 178 says predator-prey forces will consume `NeighborData`. But the plan (`100-slices`, lines 28 and 37) puts 103 and 104 before 109, and both are not started. The 103 design says \"No changes to tick()\" and that forces receive `neighbor_lists` (`103-slice.predator-prey-dynamics.md`, lines 396\u2013400). Its `FlightForce` sketch uses `for list_idx, agent_idx in enumerate(eval_indices)` and `neighbors[neighbors != agent_idx]` (lines 451\u2013453), which are the patterns 109 removes. Whichever ships first, the other must change, and 109's scope never mentions 103's forces. Slice 105 has no design doc yet, so the claim that `build_neighbor_data()` is the integration point for 105's batch query (line 184) cannot be checked. Fix: sequence 109 before 103 and 104 in the plan, state that 103's new forces are written against `NeighborData`, and record that dependency in 103.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:7"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Data flow has the engine building the spatial index, which the architecture assigns to the caller",
+   "description": "The slice touches `tick.py` and restates the flow with `spatial.build(positions)` inside `tick()` (line 94). The architecture says the engine is stateless between ticks and that \"the caller (world server) owns the spatial index, rebuilds or updates it between ticks, and passes it to the engine\" (`100-arch`, Envisioned State). Slice 103 repeats the same flow (its line 304). Fix: since `tick.py` is already changing, move the build out of `tick()` and take the index as a parameter. If that is deferred, state the deviation as pre-existing and name the slice that removes it.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:93-94"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The `-1` padding sentinel silently aliases agent N\u22121, and builder failure modes are not enumerated",
+   "description": "Line 80 says padded entries are \"never dereferenced thanks to `mask`.\" That is false: `state.positions[neighbor_data.indices]` (line 111) reads row \u22121, which is the last agent, for every pad. The read is harmless only if each force applies the mask, and the design leaves that to each author. Slices 103, 104, and 108 will consume this structure, and a force that skips the mask gets silently wrong values with no error, which CLAUDE.md forbids. `mask` is also fully derivable from `counts` (line 81), so storing both creates two sources of truth. Failure modes the builder does not enumerate: raw-list length differs from `eval_indices`, an index is out of range, the active set is empty, and `max_neighbors` is 0 across all agents (`np.max` on an empty reduction raises). Lines 170\u2013172 and 193 cover per-agent zero-neighbor and general edge cases only. Fix: give `NeighborData` a `gather(values)` method that returns zeros where invalid, so forces never index directly; derive the mask from counts; list the builder failure modes with explicit handling; and add a test that a pad index never reaches a force.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:80"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Test plan keeps duplicate loop implementations where golden fixtures would do",
+   "description": "The plan keeps five loop-based force copies in the test module (lines 236, 258) and a full old-versus-new tick comparison (line 260). That maintains the pre-slice force logic twice for the life of the codebase, against the \"do not duplicate logic\" principle. A lighter option meets the same requirement: before deleting the loops, run the pre-slice code once on fixed-seed states (zero neighbors, single agent, all clustered, active subset), save the outputs as committed fixtures, and assert the new code against them. The full-tick check can use the same fixture (positions after N ticks), so no old engine code stays in the repo. Also, `np.allclose(..., atol=1e-12)` keeps the default `rtol=1e-5`, so the stated tolerance is looser than written. Pick the tolerance explicitly.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:258-260"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "MomentumForce is labeled neighbor-dependent in scope and requirements",
+   "description": "Lines 35 and 190 call all five forces \"neighbor-dependent.\" Line 125 says `MomentumForce` \"does not use neighbors at all,\" and slice 102 (lines 326\u2013328) confirms it does not use `neighbor_lists`. The architecture section is correct and the scope label is not. Move `MomentumForce` to a no-neighbor group in scope and requirements. The implementation order (step 4) already treats it that way. The signature change still applies to it.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Query returns indices only, short of the architecture's squared-distance contract",
+   "description": "The architecture's minimal query contract returns \"the indices and squared distances\" (`100-arch`, Pluggable spatial queries). This slice keeps `query_radius` index-only (line 60) and has `SeparationForce` recompute distances from positions. That may be acceptable, but the doc should say which slice closes the gap. The builder could also store squared distances once, so Separation reuses them.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:60"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "aiModel semantic change is the highest-risk integration point",
+   "description": "The design changes `aiModel` from the requested model to the answering model. This is a semantic change to an existing consumed contract (context-forge gates, metrology identity). The design's argument \u2014 \"That is the meaning its consumers assumed all along\" \u2014 is reasonable but is an assertion about external consumer assumptions, not a verified claim. The metrology consequence (D10: OpenAI-direct judges change identity once, from `gpt-5` to `gpt-5-2025-08-07`) is acknowledged and accepted as correct calibration. This is not a blocking issue since the design explicitly calls out the consequence and the change is in the direction of correctness, but it is the integration point most likely to surprise a downstream consumer and warrants the design's stated care.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points"
+  }
+ ]
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Additive, correctly-scoped change set with preserved layer boundaries",
+      "description": "The design honors the parent's stated goals: dual-write compatibility (`:55`, \"Any changes to `.claude/` or `CLAUDE.md` (additive only)\"), compilation stays in the ai-project-guide submodule with CF core limited to validation/guide-detection/marker-check/exec/propagation (`:67-69`), and no MCP surface is added \u2014 consistent with 177's \"No MCP tool \u2014 this is a one-time terminal operation\". `cf init --ide copilot` genuinely requires no `init.ts` change (verified in `packages/cli/src/commands/init.ts`, which passes `opts.ide` straight to `setupIdeAction`), and `interfaces: [202-smart-cf-init-composition]` correctly names the slice that established `setupIdeAction` and the `--ide <target>` pass-through. No scope creep beyond the plan entry.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:17-34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice-plan success criterion for the tool guide is dropped",
+      "description": "The slice plan (`project-documents/user/architecture/200-slices.developer-onboarding.md:218`) lists as a success criterion: \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed\". The slice design never references that document \u2014 a search for \"tool-guide\" across the slice doc returns nothing, and the doc contains no pointer to the source material that justifies its file mapping (that file exists at `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` and is currently a raw Q&A export, not a published guide). Either add the reference (and state whether promotion is in or out of scope for this slice), or state explicitly that the mapping in `## Design Decisions` supersedes it.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Translation input is under-specified: skill source and rule frontmatter schema",
+      "description": "The plan's criterion \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter\" and the design's \"skills \u2192 `.github/prompts/*.prompt.md`\" both depend on inputs the design never pins down. The file-layout arrows name `.claude/rules/typescript.md` and `.claude/skills/commit.md`, but the guide-side script the design delegates to (`:67-69`, `:114`) reads from `project-guides/rules/` and `project-guides/agents/` and has no skills source at all \u2014 the only copy of that script in this repo (`project-documents/scripts/setup-ide`) defines only `RULES_SOURCE_DIR` and `AGENTS_SOURCE_DIR`. Two concrete consequences: (a) there is no stated directory from which the Copilot backend reads skills, so the `.github/prompts/` deliverable has no defined input; (b) that script's `validate_frontmatter` requires `globs:`/`alwaysApply:` frontmatter, whereas the design's translation rule (`:32`, `:71-83`) assumes `paths: string[]`. The repo's own `.claude/rules/*.md` use `paths:` while the guide's rule files appear to use `globs:`, so the design does not say which schema the translator must accept. Note: the ai-project-guide submodule is not checked out in this working copy, so I could not verify the submodule script's current contents \u2014 this should be confirmed against the submodule before the backend is written, and the design should name the source directory and accepted frontmatter fields (the CLAUDE.md guidance in the repo conventions explicitly requires lenient handling of both forms).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes not enumerated for the new propagation path or partial script writes",
+      "description": "The design adds a new I/O path (a four-target copy loop into every registered worktree) and a new backend invocation, but the sequence ends at \"Print `IDE setup complete for copilot.`\" with no failure strategy. Unstated: what happens when a worktree copy fails mid-loop (the Claude branch's `copyFileSync` loop throws out of `propagateToWorktrees`, leaving some worktrees updated and others stale, with no report of which); what happens when the guide script fails after writing a subset of files (e.g. `copilot-instructions.md` written, `.github/instructions/` partially populated); and which `.bak` name applies to which file when both `AGENTS.md` and `.github/copilot-instructions.md` are unmanaged (`:99` says \"backup to `.bak`\" without naming the paths). The `## Risks` section covers the guides-submodule coupling and VS Code churn but is not a failure-handling contract. Add an explicit failure table for these two paths (inherited script-exit handling can be cited, but the partial-write and per-worktree copy cases need a stated strategy).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Managed-marker safety covers two of the four write targets",
+      "description": "Step 4 checks only `.github/copilot-instructions.md` and `AGENTS.md`, yet the target writes four paths (`:17`, `:30`, `:114`) and the propagation branch copies `.github/instructions/` and `.github/prompts/` wholesale. The plan's criterion (`200-slices.developer-onboarding.md:214`) says \"Re-running on a project with existing unmanaged files prompts before overwriting\" \u2014 plural, unqualified. `.github/` is a conventional user-owned directory, so hand-authored `.github/instructions/*.instructions.md` or `.github/prompts/*.prompt.md` would be overwritten silently, and this risk is not acknowledged or deliberately accepted in the design. Either extend the check to the instruction/prompt directories (or state why the Claude path's single-file precedent is sufficient for a directory that users commonly own), or record the narrowing as an explicit, accepted risk. Related wording ambiguity in the same bullet: \"prompt (or skip with `--yes`)\" \u2014 \"skip\" reads as skip the overwrite, whereas the Claude path's `--yes` skips the prompt and proceeds with backup+overwrite; state which is intended, since `cf init` always calls `setupIdeAction(..., { yes: true })`.",
+      "file_ref": null,
+      "category": "safety",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Onboarding latency goal is not restated for the path this slice extends",
+      "description": "The parent architecture states a concrete end-to-end NFR \u2014 \"from `npm install` to useful context output in under two minutes\" (`200-arch.developer-onboarding.md:21`) \u2014 and this slice adds a step to that exact path (`cf init --ide copilot`). The design restates neither the goal nor any budget for the Copilot backend (e.g. file-count or runtime expectations for compiling rules and copying to N worktrees). Low-impact for a `3/5`-effort additive slice, but restating the target with the Copilot-specific expectation would make the NFR traceable.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:25-34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Helper name differs between the scope list and the file-change list",
+      "description": "Line 29 specifies `isManagedCopilot(filePath)`; line 109 specifies `isManagedCopilotFiles(projectPath)`. Pick one (the `projectPath`-taking variant matches the two-file check described in the sequence) so the implementer does not guess the contract.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Additive, correctly-scoped change set with preserved layer boundaries",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:17-34",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice-plan success criterion for the tool guide is dropped",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Translation input is under-specified: skill source and rule frontmatter schema",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes not enumerated for the new propagation path or partial script writes",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "safety",
+      "raw_category": null,
+      "summary": "Managed-marker safety covers two of the four write targets",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Onboarding latency goal is not restated for the path this slice extends",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:25-34",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Helper name differs between the scope list and the file-change list",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-16T21:29:15.708681",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 254408,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 18,
+  "prompt_tokens": 705414,
+  "cached_tokens": 646784,
+  "cache_write_tokens": null,
+  "completion_tokens": 64382,
+  "reasoning_tokens": 60163,
+  "duration_seconds": 285.0660572908819,
+  "cost_usd": 0.044406799999999996,
+  "cost_basis": "alias_pricing"
+}

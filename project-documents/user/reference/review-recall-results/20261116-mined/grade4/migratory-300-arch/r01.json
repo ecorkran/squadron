@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Thread-offload upgrade path silently breaks the \"tick as transaction\" invariant",
+   "description": "The \"Tick loop and asyncio coexistence\" bullet says the tick runs synchronously on the event loop and, if the budget is exhausted, \"offloading the tick to a thread or process (NumPy releases the GIL) becomes the upgrade path.\" That upgrade path contradicts the document's own Architectural Principles: \"Between ticks, the world is consistent and queryable\" is only true if the tick mutates state on the event-loop thread. The moment the tick runs in a worker thread, async handlers \u2014 snapshot-on-connect for new clients, serialization for distribution, logging \u2014 can read the canonical arrays mid-mutation. The document relies on this invariant in at least three places (new-client snapshots, log writes, state commit) and never specifies the handoff (double-buffer with commit-swap, or equivalent) that the thread path requires. Additionally, \"NumPy releases the GIL\" is only true for bulk array ops; the spatial hash rebuild and Python-level glue between subsystem calls still hold the GIL, so thread offload may not deliver the assumed win, and process offload implies per-tick state transfer that isn't accounted for. The doc should either specify the commit-swap handoff now (it is cheap and also gives you the atomicity that \"tick as transaction\" already claims) or remove the thread/process offload sentence, which conflicts with the stated goal that \"complexity arrives only when single-process scaling is genuinely exhausted.\"",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Slow-client backpressure policy deferred despite being the client layer's core risk",
+   "description": "The \"Client connection lifecycle\" bullet lists three strategies for stalled clients \u2014 \"buffering, dropping frames, or disconnecting unresponsive clients\" \u2014 and picks none. This is not a detail: the choice determines whether the connection manager owns bounded per-client queues, what happens at the high-water mark, and whether degradation is observable. Unbounded buffering is the classic WebSocket-server memory failure; silent frame-dropping violates the document's own \"No silent failures\" principle unless it is instrumented. The companion slice plan (305, WebSocket Client Layer) inherits the ambiguity (\"drop frames or disconnect stalled clients rather than blocking the tick loop\"). Also unresolved within the same bullet's scope: state distribution is step 5 of the tick, so the doc should state that serialization happens once per tick and is fanned out to clients, rather than per-client serialization inside the tick path (O(clients \u00d7 entities) copying at 50K entities is a real cliff). And no WebSocket library is named anywhere in the arch doc or the slice plan \u2014 `websockets` vs `aiohttp` have materially different buffering/drain/heartbeat APIs, which is precisely the surface this decision lives on.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Entity lifecycle ownership contradicts the behavior engine doc; ID\u2194slot indirection and the lifecycle-event channel are undefined",
+   "description": "This document states: \"The behavior engine operates on whatever entities the server provides \u2014 it does not manage the entity lifecycle itself,\" and \"The server assigns entity IDs, allocates space in the state arrays.\" The doc it depends on (100-arch.behavior-engine.md, \"Envisioned State\") states the engine \"presents a narrow interface: tick the simulation forward, query agent state, **register/remove agents**.\" Both cannot be true: either the server owns the arrays and the engine's register/remove API is dead surface, or the engine owns them and the server's allocation claim is wrong. Since 303 (Behavior Engine Integration) is already marked complete in the slice plan, the real interface exists in code and these two documents disagree about it. Second, the hard part is glossed: with SoA arrays plus removal (swap-remove vs free-list + dense/sparse mapping), stable entity IDs and array slot indices diverge, and the engine's subset interface (\"index array or mask\") must say which one it indexes. That indirection is the contract between server and engine and is specified nowhere. Third, tick step 4 says the server handles \"entity lifecycle events (spawning, removal, profile changes) **queued during the tick**\" \u2014 but in v1 there is no producer for that queue: clients can't send commands, and the engine (per 100-arch) returns only state arrays. Predator-driven deaths (a core concept scenario) have no defined path from engine to server. Define the event channel or descope it explicitly.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Environment boundary is self-contradictory: ownership, \"read-only\" claim, and a circular slice dependency",
+   "description": "Three connected problems. (1) Ownership: the Overview claims the server owns \"environment hosting... environment state,\" and \"Anticipated Slices\" includes \"**Environment layer foundation** \u2014 Terrain generation, resource placement, and the read-only query interface\" as a slice of this initiative. But the companion slice plan (304, dated later) re-scopes that slice to integration-only: \"The environment layer itself \u2014 terrain, biomes, resources, seasonal logic \u2014 is owned by initiative 500.\" The arch document still promises to build the layer. (2) The \"read-only query interface\" claim is contradicted by the project's own later planning: slice 304 requires \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" \u2014 the swarm archetype (concept, 100-arch) fundamentally requires agents to write to the environment. The document's stated contract with the engine is wrong as written, and 100-arch repeats the same \"read-only interface\" claim, so the error is doubled. (3) Dependency direction: the initiative plan says 500 depends on 300, while slice 304 depends on initiative 500's foundation slice \u2014 a cycle at initiative granularity that the slice plan resolves procedurally (\"(304) can be deferred\") but the architecture doc, which is supposed to define these boundaries, doesn't acknowledge at all.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No failure semantics for the tick pipeline; NaN corruption is unaddressed and violates the document's own principle",
+   "description": "Note: intended location is the world server doc's \"Architectural Principles\" / \"Envisioned State\" (state commit step) \u2014 flagging the path parse here rather than asserting a wrong one. The document's principles say \"No silent failures, no undefined states,\" and CLAUDE.md mandates \"Never use silent fallback values. Fail explicitly.\" Yet the only failure modes covered are config validation (explicit, good), tick overrun (warn and continue), and client stalls (undecided). Nothing addresses the two failure modes a NumPy simulation actually produces: (a) an exception mid-tick \u2014 step 4's \"Apply the updated entity state as the new canonical state\" *implies* compute-then-commit (so prior state survives), but atomicity/rollback is never stated, and it matters for whether a failed tick is skipped, retried, or fatal; (b) NaN propagation \u2014 unstable integration or a bad profile weight produces NaN forces that flow silently through positions, velocities, serialization, and the client stream, corrupting the world, the log, and replay without ever throwing. That is precisely the \"silent\" failure the project's own rules prohibit. The state commit step needs an explicit integrity check (non-finite detection with a defined response: halt, quarantine entity, or fail loudly) to make \"no silent failures\" true for the one failure mode this stack actually has.",
+   "location": "project-documents/user/architecture/300-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Persist state on shutdown\" is promised as a lifecycle primitive but deferred out of the foundation",
+   "description": "The \"Explicit lifecycle\" principle states the server \"knows how to... drain client connections gracefully, and **persist state on shutdown**.\" The companion slice plan files this under Future Work #3 (\"State Persistence and World Save/Load\"), not the foundation. The result: the foundation delivers a world that dies with its process \u2014 restart loses everything except what replay logging (307) happens to capture. That sits awkwardly against the project's central claim (\"the world is the primary artifact \u2014 a persistent, ongoing simulation that serves as a source of truth\") repeated in this document's own Motivation section. Either the principle should say persistence-on-shutdown is a later capability, or the dependency edge between the lifecycle design and Future Work #3 should be made explicit so the shutdown sequence has a defined placeholder rather than a promised behavior that doesn't exist. Relatedly, \"the world is persistent\" is asserted as motivation but the durability story is entirely log-replay, which is lossy in the ways described in the logging bullet itself.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Scaling treatise designs deferred initiative 620 in violation of the project's own scoping rule \u2014 name what to cut",
+   "description": "The \"Entity scaling and multi-resolution simulation\" section (roughly 40% of the document body) specifies 1M\u20134M GPU tiers (CuPy/CUDA), multi-GPU dynamic spatial partitioning, multi-machine distribution with \"predictive partition rebalancing,\" merge-event strategies for two 500K murmurations, and a three-tier fidelity model with prescribed rates (1/4, 1/16) and aggregate descriptor formats. The initiative plan says the opposite: Distribution & Scaling (620) is \"deliberately deferred \u2014 it could expand the product scope 5-fold or more. Interface decisions in earlier initiatives should not preclude it, but it **need not be designed proactively**.\" The document's own stated requirement is only \"the entity management and tick loop designs do not preclude these approaches\" \u2014 one sentence of constraint, not four paragraphs of GPU/multi-machine design. The slice plan correctly defers multi-resolution as \"premature for the foundation slice plan.\" Cut or compress to: the capacity table (10K\u201350K initial range plus the binding-order insight: spatial queries \u2192 egress \u2192 compute), the egress-wall observation, and the derived interface requirements (subset-evaluable tick, aggregate-as-neighbor representation, per-client culling hook). Delete the GPU/multi-GPU/multi-machine escalation detail and the merge-strategy enumeration \u2014 they belong to 620's future architecture document, and designing them now is the over-engineering the concept doc warns against.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Broken dependency reference: `001-concept.migratory` does not exist",
+   "description": "The frontmatter declares `dependsOn: [001-concept.migratory, 100-arch.behavior-engine]`, and \"Related Work\" links `[001-concept.migratory.md](../project-guides/001-concept.migratory.md)`. Neither exists: the concept document is `project-documents/user/project-guides/000-concept.migratory.md` (the 100-arch frontmatter correctly references `000-concept.migratory`), and `001-initiative-plan.migratory.md` is a different document. The dependency edge this architecture's technology choices rest on (\"Python 3.12... established in the concept document\") points at a nonexistent file \u2014 anything following `dependsOn` or the Related Work link (including AI navigation, which this project's conventions emphasize) lands nowhere or on the wrong document. One-line fix in both the frontmatter and the link.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "\"Exactly one truth about where every entity is\" is incompatible with the aggregate tier as described",
+   "description": "The \"Authoritative state ownership\" goal asserts \"exactly one truth about where every entity is and what it is doing.\" The scaling section's aggregate tier replaces 480K+ individual states with \"center of mass, average heading, dispersion radius, population count,\" and disaggregation \"spawns\" individuals \"from the statistical model\" \u2014 i.e., per-entity truth is destroyed and regenerated on demand. That may be the right design, but the document should reconcile the two statements, because the semantics leak into real decisions: what save/load (Future Work #3) persists for an aggregated world, and what replay reconstructs. One paragraph acknowledging that the canonical state under aggregation is the aggregate-plus-statistical-model would close it.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#design-goals"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Framing protocol lacks a message-type/version envelope, undercutting the \"should not preclude commands\" claim",
+   "description": "The \"State representation and serialization\" bullet defines framing as \"tick number, entity count, array layout descriptor\" wrapping raw buffers \u2014 a snapshot-only shape. The document elsewhere requires the protocol to \"not preclude adding [client-to-server commands] later,\" the slice plan adds delta encoding (306), per-client LoD frames with aggregate descriptors (309), and admin commands (Future Work #4). All of those need a frame-type discriminator, and evolution needs a protocol version byte. Adding them later to a raw-buffer framing is a protocol break for deployed clients. One or two envelope bytes now is the entire cost.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "\"Sleep for the remainder of the tick budget\" accumulates drift; schedule against an absolute deadline",
+   "description": "Tick step 6 describes sleeping for the remainder of the budget after the tick completes. Relative sleeping (`sleep(budget \u2212 elapsed)`) compounds overshoot every tick, so effective tick rate degrades below the configured rate under load, and the recorded per-tick timestamps drift from tick-number \u00d7 budget. Deadline-based scheduling (next tick fires at `tick_start + n \u00d7 budget`, catch-up policy defined for overrun) is the standard fix and is also what makes the tick metrics meaningful. Simulation determinism is unaffected (state depends on tick number, not wall clock), so this is quality-of-orchestration, not correctness \u2014 but the doc describes the mechanism, so it should describe the right one.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Behavioral profile configuration ownership is split across two initiatives without a stated source of truth",
+   "description": "The server's configuration surface includes \"entity population definitions (which profiles, how many, where)\" and entities are \"created from behavioral profiles defined in configuration.\" But profile *definitions* (weights, thresholds) are engine-domain data per 100-arch (\"Profiles are not code... loaded from configuration... The engine interprets profiles\"). Two config surfaces, two validating components, one concept. The doc should state that the server config references profiles by identifier and the engine owns profile definitions and their validation \u2014 otherwise \"Failures should be explicit and immediate\" has no owner for the most likely config error (a population referencing a malformed or unknown profile).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  }
+ ]
+}

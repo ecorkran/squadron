@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Doctor's \"ships no Codex content\" classification is unspecified for pack sources doctor cannot inspect without network",
+   "description": "D8 says a pack with no `agents/` content reports `WARN \u2014 pack ships no Codex content` with no install hint (because the hint would fail), while an installed-or-not determination uses `installed_path(entry, root)`. But `installed_path` inspects only the destination; distinguishing \"not installed\" from \"ships no Codex content\" requires inspecting the pack's *source* for `agents/`. For local and bundled sources that is a filesystem read, but for a `github:` source it requires a clone \u2014 which `doctor_checks.py`'s own module contract forbids (\"no network, no subprocesses\") and which D8 never addresses. The walkthrough (step 7) only exercises a local `/tmp` source, so the gap is untested. The requirement left unmet: doctor must decide the two WARN shapes with a network-free rule for every source kind, and say what a github-source pack reports on the agents target (and that the decision must not produce the install hint D8 itself calls broken). State the rule in D8 and add a github-source row to criterion 5's tests.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"One line each\" understates the `sq model list` fix surface",
+   "description": "The Overview says the `sq model list` \u2192 `sq models list` fix is \"one line each\" in `commands/sq/review.md` and `commands/agents/sq-review/SKILL.md`. Grep shows three occurrences per file (lines 60/112/158 and 82/134/180 respectively) \u2014 six edits, not two. Trivially small either way, but the description should match the surface so the task breakdown doesn't under-count. Criterion 9 (\"both review command files say `sq models list`\") is correctly stated.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#overview"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "D4's claim that nothing else reads `commands/analysis/` recursively is not fully verifiable from this review",
+   "description": "D4 asserts \"Nothing else reads `commands/analysis/` recursively: the Claude writers and `metrology/audit.py` glob `*.md` at the top level, so the new subdirectory is invisible to them.\" The Claude writers' top-level globs are confirmed (`install.py` via `bundle_subdirs`, `installer.py:87` `source_path.glob(\"*.md\")`). The `metrology/audit.py` claim could not be confirmed from the files reviewed \u2014 the metrology globs found (`audit.py:283`, `capture.py:98`, `discovery.py:46`) operate on review directories, not the bundled command tree, and nothing in metrology was seen reading `commands/analysis/`. The implementer should confirm that specific citation before relying on it, since the safety of the move rests on it.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Agents-target status glob can attribute one pack's skills to another when prefixes overlap",
+   "description": "The status table defines the agents-side proof for a prefix pack as \"first `root/p-*/SKILL.md`\". In the shared `~/.agents/skills` root, a pack with prefix `foo` will match a pack with prefix `foobar`'s skill directories, which D3's own naming rule (`<prefix>-<something>`) makes syntactically valid. The Excluded section covers collisions with squadron's own receipt names or skill names, not pack-vs-pack prefix overlap. On the Claude path the analogous check is exact (`root/p/`), so this is new looseness introduced by the new status path. Edge-case only, but a one-line note on the collision (or tightening the proof to receipts) would keep D6's \"one place that knows where a pack lands\" honest.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#data-flow"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "D9's file-name deviation from the plan is deliberate and correctly recorded",
+   "description": "The plan's Part B names `~/.codex/rules/default.rules`; the design puts the rule in `~/.codex/rules/squadron.rules` (D9), justified because Codex appends its own approvals to and rewrites `default.rules`. The deviation is explicit (\"README's existing `default.rules` snippet is replaced, not duplicated\"), consistent with the README state verified at lines 87\u201392, and is the right call \u2014 recording it here so the plan-vs-design difference is a reviewed decision, not drift.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+  }
+ ]
+}

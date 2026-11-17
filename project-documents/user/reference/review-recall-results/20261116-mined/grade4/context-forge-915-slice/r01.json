@@ -1,0 +1,26 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Delete routing cannot clear a stale shared-file copy, contradicting the design's own collision remediation and walkthrough step 9",
+   "description": "The Delete rule states delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to.\" For a personal key (`git.integration_branch`), that is `.context-forge.local.toml` only. But the collision semantics (line 146) instruct the user to clear a skipped stale shared-file copy via \"a separate, explicit `cf config unset <key> --project`\", and Verification Walkthrough step 9 (line 259) relies on exactly that command to make `cf check` clean again. Under the design's own routing, `cf config unset git.integration_branch --project` deletes from the **personal** file \u2014 destroying the developer's local value the collision rule just protected \u2014 while the stale shared copy survives, so the `personal-config-in-shared-file` finding persists and step 9's expected outcomes fail on both counts. The design provides no user-facing path that removes a personal-scope key from the *shared* file outside `migrate-personal`'s happy path, yet the skip-case remediation and the \"cf check is clean again\" success expectation depend on one. The requirement left unmet is the plan's \"defined migration/compat story\": the collision branch of that story is not actually executable as specified. Fix in design before task breakdown \u2014 e.g. personal-key `unset --project` clears both project files, or `migrate-personal` gains an explicit overwrite/clear action for the skipped case \u2014 and update lines 146 and 259 to match.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Design declares a dependency the slice plan entry does not",
+   "description": "Frontmatter and Prerequisites declare `dependencies: [914]`, while the 900 slice plan's 915 entry says \"Dependencies: none.\" This is a benign refinement, not a contradiction: the design classifies `git.integration_branch`, which only exists under that name because of 914, and 914 is already marked complete in the plan. Worth a one-line sync in the plan entry (or a note in the design explaining the delta) so the artifact trail stays consistent, but no action blocking.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:44-46"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`cf init` gitignore insertion point is unspecified, though the walkthrough requires it in the `--lite` path",
+   "description": "The component structure lists `init.ts` but not where in `cf init`'s flow the gitignore line lands. Current `init.ts` skips guides/commands/IDE steps under `--lite`, and the Verification Walkthrough (steps 1 and 3) runs `cf init --lite` and then expects `.gitignore` to contain the line \u2014 so the addition must sit outside the `if (!opts.lite)` block, alongside project registration. The walkthrough would catch a wrong placement during implementation, but stating the placement (and that it applies in lite mode) would remove the ambiguity cheaply.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#gitignore-handling-in-cf-init"
+  }
+ ]
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria are fully traced; sequencing, sizing, and granularity are sound",
+      "description": "SC1 \u2192 Tasks 6.4/7.1/7.4; SC2 \u2192 7.2/7.3; SC3 \u2192 5.1/5.2/5.4; SC4 \u2192 5.3/5.4; SC5 \u2192 Task 8; SC7 \u2192 9.2. Task 7.4's pipeline-surface test matches the verified registry-driven implementation of `validate_allowed_tools` (`src/squadron/pipeline/steps/utils.py:32`), and Task 1's `get_config`/`get_typed_config` calls match real signatures (`src/squadron/config/manager.py:87,94`). No circular dependencies; Task 3 correctly precedes Tasks 5\u20136 with the rationale stated. Effort ratings (1/5\u20133/5) fit the ~230 new source lines plus four test files the design lists; no task needs splitting, and Tasks 1\u20132 are minimal but mirror the file's deliberate impl+test pairing rather than being gratuitously granular.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6's registration breaks existing registry tests, and no task covers updating them",
+      "description": "`tests/tools/test_package.py:11` asserts `set(tools.list_tools()) == {\"read_file\", \"write_file\", \"bash\"}` and `:20` asserts `len(executors) == 3`. Task 6.4 (task file line 210) registers five `cf_*` tools unconditionally at import and edits `__init__.py`, which makes both assertions fail \u2014 yet Tasks 6 and 7 only create new test files and never mention `tests/tools/test_package.py`. The context summary (task file line 59) even names the pre-slice registry contents, so the collision was foreseeable. This directly contradicts the sequencing promise \"Each task leaves the suite green\" (task file line 55): the suite is red at Task 6's commit point, and Task 6's success criteria specify no scoped test command that would catch it. Related: `src/squadron/tools/__init__.py:5-7` states \"registers the built-in tools and does nothing else\", which becomes stale after 6.4. Fix: add a Task 6 item updating the exact-set assertion to include the five `cf_*` names (extending, not weakening, it), bumping the materialize count, and refreshing the package docstring.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "tests/tools/test_package.py:11-20"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5 leaves two design-mandated behaviors untested: non-text block mapping and the transport-error WARNING",
+      "description": "The slice design's Result mapping rule \"Non-text blocks are noted by type in the content\" (slice design line 137, reinforced as context fact 3 at task file line 35) is implemented in 4.2 but never tested: Task 3's fake server offers only echo/fail/sleep/empty, none producing a non-text block, and Task 5 has no corresponding assertion. Since SC2 requires executors to \"map results per the Result mapping rules,\" this rule is unverified. Similarly, the failure-mode table's transport-error row (`McpError`/closed stream, slice design line 146) is implemented in 4.3, but 5.4's observability list names only \"timeout, server isError, spawn failure\" \u2014 and the design states \"Each row above has a test asserting the observable signal\" (slice design line 149). `test_unknown_tool_name` may incidentally exercise an error path depending on SDK behavior, but the task neither claims that nor asserts the row's WARNING. Fix: add a fixture tool returning a non-text block plus one assertion, and either an explicit transport-error test or a stated rationale that the unknown-tool test covers the row, with its WARNING asserted.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-177"
+    },
+    {
+      "severity": "NOTE",
+      "title": "SC6's model-dispatch half has no completing task (deliberately, but the deferral should be surfaced to the PM)",
+      "description": "SC6 (slice design lines 229-231) has two halves: the `cf_workflow_status` live smoke, which Task 9.1 step 2 completes, and the non-SDK-model dispatch calling `cf_build_context` (walkthrough step 4), which Task 9.3 explicitly leaves open \"alongside 263's demo.\" The deferral is justified \u2014 the `sq run` guard refuses execution inside Claude Code (`src/squadron/cli/commands/run.py:148`) \u2014 and the slice design itself says step 4 needs a standard terminal. Still, SC6 is only half-verified within the slice; the PM should track the step-4 demo as an open item rather than treat SC6 as done at merge.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Environment ownership is stated in both Task 4.1 and Task 6.3",
+      "description": "Task 4.1 says the bridge should \"Use the SDK's `get_default_environment()` as the spawned process env\" while simultaneously saying \"callers construct `StdioServerParameters`; the bridge does not read config\" \u2014 but Task 6.3 has the caller build the parameters with `env=get_default_environment()`. A junior implementer cannot tell whether the bridge applies the env itself or consumes what the caller passed. Assign env construction to exactly one side (the caller, per 6.3, is the cleaner read) and trim the bullet in 4.1.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Timeout-test example contradicts the task's own sleep bound, and the process-gone assertion can race teardown escalation",
+      "description": "Section 5.2 suggests \"sleep 10, timeout 1\", but Task 5's success criteria (line 180) state \"No test sleeps longer than a few seconds.\" Additionally, \"Assert the server child process is gone after the call returns\" races the SDK's teardown escalation the design itself describes (SIGKILL only after 2s, slice design line 150); a same-group python child dies on SIGTERM promptly, but the assertion would be more robust with a short bounded wait rather than an immediate check.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:164-169"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The live contract test will actually run in this repo's CI, including an npx cold fetch",
+      "description": "Task 8.1 frames the availability gate as protecting \"CI without node,\" but `.github/workflows/ci.yml` installs Node 22, globally installs `@context-forge/cli`, and runs `cf init --lite`, so the gate passes there and the live test \u2014 including an `npx -y @context-forge/mcp` cold fetch, the risk the slice design itself flags \u2014 executes on every CI run. That is acceptable per the design's Risks section, but the task text should acknowledge it so the implementer isn't surprised by CI latency or the network dependency, and can decide whether to pin via `cf.mcp_command` for determinism.",
+      "file_ref": null,
+      "category": "ci",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:255-258"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria are fully traced; sequencing, sizing, and granularity are sound",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 6's registration breaks existing registry tests, and no task covers updating them",
+      "location": "tests/tools/test_package.py:11-20",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 5 leaves two design-mandated behaviors untested: non-text block mapping and the transport-error WARNING",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-177",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC6's model-dispatch half has no completing task (deliberately, but the deferral should be surfaced to the PM)",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Environment ownership is stated in both Task 4.1 and Task 6.3",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Timeout-test example contradicts the task's own sleep bound, and the process-gone assertion can race teardown escalation",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:164-169",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "ci",
+      "raw_category": null,
+      "summary": "The live contract test will actually run in this repo's CI, including an npx cold fetch",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:255-258",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-16T21:06:38.891906",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 28,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 349414,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 17,
+  "prompt_tokens": 391351,
+  "cached_tokens": 341760,
+  "cache_write_tokens": null,
+  "completion_tokens": 88824,
+  "reasoning_tokens": 85363,
+  "duration_seconds": 716.0499720829539,
+  "cost_usd": 0.06210345,
+  "cost_basis": "alias_pricing"
+}

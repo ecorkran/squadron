@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`cf config unset --project` cannot clear the stale shared-file copy and deletes the personal value instead",
+   "description": "The Delete rule (line 89) says a project-scoped delete removes the key from whichever file its scope maps to, with `migrate-personal` as \"the one exception that touches the *other* project file\". For `git.integration_branch` that file is `.context-forge.local.toml`.\n\nCollision semantics (line 146) and walkthrough step 9 (line 259) nevertheless tell the user to run `cf config unset git.integration_branch --project` to clear the stale **shared** copy. Under the stated routing, that command:\n- deletes the developer's personal value, which is the one the collision rule exists to protect;\n- leaves the stale shared copy in place;\n- makes the stale value the resolved one, through the read fallback (line 79);\n- leaves the `cf check` warning active, so step 9's \"confirm `cf check` is clean again\" cannot pass.\n\nThe same routing means unsetting a personal key never really unsets it while a shared copy exists. The design has no CLI path that removes a differing shared copy.\n\nFix one of:\n- **Simplest:** have `migrate-personal` delete the shared copy in the differing-value case too, since the personal value already wins at read time. This also removes the `skipped` branch.\n- **Alternative:** define delete of a personal key to clear both project files.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Migration story covers only the developer who runs `migrate-personal`",
+   "description": "The slice plan requires \"a defined migration/compat story for projects that already committed personal keys\". The design states \"reads must not silently drop that value\" (line 138), but only analyses a single checkout.\n\nThe shared file is committed. Once one developer runs `migrate-personal` and commits the shared-file deletion, every teammate who pulls has the key in neither file. Their `git.integration_branch` silently falls through to user/default, which changes their fork and merge target with no warning, because the check rule only fires while the key is still in the shared file.\n\nState the intended team behaviour: either accept this and print it in the command output, or have the command tell the user that teammates must set their own value before the change is pulled.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#migration-plan"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Existing projects get an un-ignored `.context-forge.local.toml`",
+   "description": "The `.gitignore` line is added only by `cf init`, and the success criterion covers only \"a fresh project\" (line 216). Existing projects are the ones the migration targets. There, `cf config set git.integration_branch \u2026 --project` or `migrate-personal` creates the personal file with no ignore entry, so the next `git add .` commits it. That reproduces the leak the plan entry says must never happen.\n\nEither have the new `ConsistencyChecker` rule also warn when the personal file exists but is not ignored, or apply the same one-line ensure when the personal file is first written. Either reuses logic already in the slice.\n\nSeparately, the \"substring\" check (line 159) would treat `#.context-forge.local.toml` or `!.context-forge.local.toml` as already covered. Specify an exact trimmed-line match.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`migrate-personal` carries more mechanism than one personal key needs",
+   "description": "Exactly one key is classified personal (line 111), yet the command specifies a three-way collision rule, per-key independent processing, continue-past-failure and a `failed: <error>` summary line.\n\n- **Cut:** continue-past-failure and per-key failure reporting. Fail fast on the first error; the write-then-delete ordering already makes a re-run safe, and fail-fast matches the project's \"fail explicitly\" principle.\n- **Cut:** the `skipped (personal value already set)` branch, if the FAIL above is fixed by deleting the stale shared copy.\n- **Add:** tests for whatever collision and failure behaviour remains. The Technical Requirements (line 222) list only \"happy path + no-op path\" for the command.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146-149"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`list()` behaviour under the two-file split is not specified",
+   "description": "Data Flow defines `get`, `set` and `delete`; `list()` appears only in the component table (\"precedence order updated in get()/list()\"). Add one line confirming `list()` applies the same per-key fallback and `source` values, so a personal key in the shared file reports `project` in both.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#data-flow"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Dependency declaration differs from the slice plan",
+   "description": "The frontmatter lists `dependencies: [914]` and the body cites the 916 prerequisite fix; the plan entry for 915 says \"Dependencies: none\". 914 and 916 are both complete, so this is harmless, but the plan entry should be updated to match.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D3's mandatory grep over `packages/mcp-server/src` is not assigned to any task",
+   "description": "The design's D3 states: \"the implementation task must grep for `createContextPipeline`, `resolvePromptFilePath`, and `GUIDE_RELATIVE_PATH` in `packages/cli/src` **and `packages/mcp-server/src`** and cover every hit.\" Task 20 performs the grep for `packages/cli/src` only; Task 22 covers the three known MCP call sites by name but contains no grep instruction and no \"cover every hit\" step (its only grep is for `notices` output shape). The mcp-server half of the safety net against an unenumerated guide-reading call site silently skipping auto-init is unassigned. Fix: add the same grep-and-cover-every-hit step to Task 22 (or move the combined grep into Task 32's verification).",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:291-325"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Tasks 1\u20133 deliberately leave the tree red; first green point is Task 4",
+   "description": "Task 1's success criterion is \"typecheck reports errors only at the `'manual'` sites\" \u2014 a non-green state by design, resolved by Task 3 and first committed at Task 4. This is a documented and reasonable pattern for the widest change (the design's Implementation Notes even call for it), and no commit marker sits in the red window, so nothing broken gets committed. Flagging only so the executor understands Tasks 1\u20133 are not independently \"done and green.\"",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:58-100"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 10's success criterion is deferred to Task 11",
+   "description": "Task 10 adds a required `checkout` field to `GuideInfo` but its criterion reads \"typecheck passes once Task 11 populates the field,\" so Task 10 alone cannot reach a typechecking tree. It is still completable by a junior AI with clear instructions, and the pair is committed together at Task 12, but the two tasks are effectively one unit of work split across the impl/test boundary. Merging Task 10 into Task 11 (keeping Task 12 as the test task) would remove the ambiguity.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-195"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Several adjacent effort-1 pairs could be merged without losing test-with discipline",
+   "description": "The slice is genuinely broad (three issues across core, CLI, MCP, and docs), so 32 tasks in one file is defensible. Still, four same-file pairs at effort 1 each \u2014 Tasks 10+11, 13+14, 25+26, and 28+29 \u2014 each implement one small thing and test it, and merging each pair into a single task with its own commit marker would cut task overhead with no loss of coverage or sequencing clarity. Informational; not blocking.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-389"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Commit markers are embedded in checkbox success-criteria lines rather than standalone plain lines",
+   "description": "Markers appear as `- [ ] Success criteria: tests pass. Commit: \\`refactor(...)\\`` \u2014 the commit text rides inside a checklist item rather than standing as its own plain `**Commit**:` line. Placement (working, tested points, well distributed) is correct; only the format deviates from the plain-line convention. Cosmetic.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  }
+ ]
+}

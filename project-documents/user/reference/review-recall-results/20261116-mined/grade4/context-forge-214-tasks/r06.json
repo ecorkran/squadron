@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Integration Requirement \"guide can replace every reference\" is not a code task, and that is intentional",
+   "description": "The design's Technical Scope explicitly excludes guide-side edits, and the Context Summary notes \"After release (not a task here): send the ai-project-guide-old session the cf version and the exact command `cf validate design <path>`.\" The prerequisite (parity proven by Task 5's sweep) is met. No gap.",
+   "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:Integration-Requirements"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No NFRs requiring load tests in this slice",
+   "description": "The slice is a CLI command that validates local markdown files; the design states no throughput, latency, or concurrency NFRs. No load test or CI-gating task is warranted, so none is missing.",
+   "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:Success-Criteria"
+  }
+ ]
+}

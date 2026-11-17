@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Design leaves the `openai-codex` upper bound undecided \u2014 the packaging half of Part A cannot be implemented as written",
+      "description": "The slice plan (line 79 of `100-slices.orchestration-v2.md`) explicitly requires `codex = [\"openai-codex>=\u2026\"]` under `[project.optional-dependencies]`, and D1 in the design proposes `codex = [\"openai-codex>=0.159.3,<1\"]` \u2014 but \"Special Considerations\" then states the upper bound \"is not decided here: \u2026 PM to say whether to cap.\" A `[project.optional-dependencies]` entry with an unresolved upper bound is not implementable as a single decision; the design also names the floor as \"the version this design was inspected against,\" which means the exact constraint string is unspecified. Resolve the bound (or explicitly declare the entry as `openai-codex>=0.159.3` with no cap) inside this design, since the extra declaration is this slice's own deliverable and cannot be deferred to implementation.",
+      "file_ref": null,
+      "category": "scope-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part C adds a shared auth-layer capability that the parent architecture does not describe, and the design asserts the architecture \"stays accurate\" without a stated owner for the follow-up edit",
+      "description": "The design introduces `InteractiveLogin` in `providers/auth.py` and `ExtraRequirement` in `providers/base.py` \u2014 both in shared layers \u2014 while `100-arch.orchestration-v2.md` (Authentication Patterns, line 231ff) states only \"Squadron does not attempt to unify authentication. Each provider's credential resolution is self-contained.\" The design's own argument (an optional capability implemented by exactly one provider, with no credential storage) is sound, but the conclusion \"the architecture text stays accurate\" is asserted rather than demonstrated, and the deferred edit (\"if a second provider adopts `InteractiveLogin`, the architecture's \u2026 section should gain a sentence then\") leaves the architecture knowingly incomplete with no owner. Either state the single sentence the architecture needs now and name who applies it, or record explicitly in the design that the architecture amendment is out of scope for this slice and that the shared-layer Protocols are provider-local extensions of the provider layer, not of the core auth model.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `OPENAI_API_KEY` fallback decision is scheduled as \"step 0\" of implementation, but the slice's own success criteria and Part A already depend on the answer",
+      "description": "`OAuthFileStrategy.is_valid()` currently reports a key-only environment as valid (`src/squadron/providers/codex/auth.py`), and the \"Special Considerations\" bullet says the outcome is \"resolved in this slice, not deferred,\" with the check as implementation task 0. But the Design's Data Flow and Failure Modes already specify behavior in both directions (\"Not logged in / token rejected \u2192 \u2026 includes `sq auth login openai-oauth`\"; `sq auth status` shows source), and Success Criteria state \"`sq auth status` shows email and plan for a logged-in `openai-oauth`\" without covering the key-only case. The consequence of \"fails\" \u2014 removing the key fallback from `is_valid`, `active_source`, `get_credentials`, `setup_hint` \u2014 changes `sq auth login`/`status` output for a profile that other slices and users rely on today, which is a behavior change beyond this slice's stated scope. The design should either resolve the question before Part A/C begin (it is the very first task) and state the resulting `sq auth status`/`login` output for a key-only environment in the Success Criteria, or explicitly scope the removal as an observable behavior change with its own acceptance criteria \u2014 currently the outcome is undecided inside a slice whose other decisions are pinned.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#special-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq model list` marker mechanism contradicts the slice plan's stated goal and adds cost to a hot path",
+      "description": "D9 requires `sq model list` to resolve every alias's profile via `ensure_provider_loaded` + `get_provider` and then `isinstance(provider, ExtraRequirement)` per alias, and the doctor's row to reach the same abstractions. This turns a purely local alias-table render (`src/squadron/cli/commands/models.py` currently reads `get_all_aliases()` and never touches the provider registry) into a registry-resolving call for each alias, and it adds a second shared Protocol (`ExtraRequirement`) for a single consumer. The slice plan asks only for \"`sq model list` marks `openai-oauth` aliases that need the extra.\" A narrower mechanism achieves the same user-visible outcome: resolve the profile's provider once per distinct profile (not per alias), and mark only when that provider reports the extra missing. Consider deferring `ExtraRequirement` to `providers/base.py` as a shared abstraction until a second provider needs it, and scoping the doctor's row to consume the provider's report without a second new Protocol method.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#d9--extra-missing-signal-is-a-provider-side-protocol"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq doctor` Codex row duplicates an existing `codex CLI` row and its \"no subprocess\" constraint conflicts with the shared resolver",
+      "description": "The design adds a `codex provider` row while keeping the existing `codex CLI` row (`src/squadron/cli/commands/doctor_checks.py:316`, which probes `shutil.which(\"codex\")` and fixes the hint at `npm i -g @openai/codex`). The new row's detail is said to come from `resolve_codex_runtime()` \u2014 which per D2 checks the bundled binary then `shutil.which(\"codex\")` \u2014 while the existing row independently does `shutil.which(\"codex\")`. The two rows can therefore disagree on a machine where the npm CLI is on PATH but the SDK's bundled binary is preferred. The design should state which row is authoritative for \"which binary will actually be used\" and whether the old row's `npm i -g @openai/codex` hint is now stale (the SDK's bundled binary makes the npm install unnecessary).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#sub-part-b-surfaces"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Effort` \u2192 `ReasoningEffort` mapping rests on an unverified external enum claim",
+      "description": "D5 asserts \"Every squadron `Effort` value (`none, low, medium, high, xhigh`) exists in `ReasoningEffort`, so no mapping table,\" and `src/squadron/core/models.py` confirms squadron's `Effort` has exactly those five members. The claim about the external SDK's `ReasoningEffort` members could not be verified from the repository (the `openai-codex` package is not vendored and is not installed here), and the design's own Technical Requirements ask for \"at least one test imports against the real `openai_codex` types (skipped when the extra is absent)\" \u2014 which would catch a mismatch only after the extra is installed. Given `ReasoningEffort` is the newer API's enum and `none` is the one non-obvious member, pin the verified member list in the design (or specify the fallback when a member is absent) so the \"no mapping table\" claim is not an assumption.",
+      "file_ref": null,
+      "category": "external-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#d5--effort"
+    },
+    {
+      "severity": "PASS",
+      "title": "Provider registration survives a missing optional extra, preserving the install-hint path",
+      "description": "The design's constraint that `openai_codex` is imported only inside functions \u2014 never at module top level in `runtime.py`, `login.py`, `agent.py` \u2014 matches the existing lazy-import discipline (`src/squadron/providers/loader.py` imports provider modules to trigger registration; `src/squadron/providers/codex/agent.py` already imports the SDK inside `_run_prompt`), so `get_provider(\"openai-oauth\")` still resolves and the missing-extra error is raised at `create_agent` rather than as an unknown provider. Dependency direction is also correct: `providers/` imports no CLI layer, and the new `runtime.py` module probes importability only, keeping SDK types confined to `agent.py` and `login.py`.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#architecture"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes are enumerated per new I/O path with explicit handling, and the new timeouts are registered as config keys",
+      "description": "The Codex-turn table covers every row the instructions require: missing package, no binary on either path, subprocess/`initialize` failure, turn hang (`asyncio.timeout(codex.turn_timeout_s)` with cancel-then-raise), transport close mid-turn with agent state reset, server-busy/rate-limit (no squadron-side retry), login-wait hang with `handle.cancel()`, not-logged-in, failed/interrupted turn, empty `final_response`, absent usage, and teardown error. No row reads \"TBD\". The three new timeout keys are registered in `config/keys.py` beside `cf.mcp_timeout_s` rather than as module constants, matching the project's no-magic-defaults rule.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#failure-modes--codex-turn"
+    },
+    {
+      "severity": "PASS",
+      "title": "Effort and usage flow through the capability declarations the review client already consumes",
+      "description": "Setting `applies_effort=True` on `CodexProvider.capabilities` is the mechanism the review client already honors (`src/squadron/review/review_client.py:262` reads `provider.capabilities.applies_effort` to decide what the artifact may claim), so closing #171 needs no review-layer change. Mapping `TurnResult.usage.last` onto `squadron.core.usage.TokenUsage` and stamping `metadata[\"usage\"]`/`metadata[\"turns\"]` reuses the existing OpenAI-agent metadata keys, so review artifacts need no change \u2014 consistent with the design's claim and with `TokenUsage`'s \"`None` means not reported\" contract.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#data-flow"
+    },
+    {
+      "severity": "PASS",
+      "title": "No squadron-side credential store is introduced; the Codex runtime remains the only owner of `~/.codex/auth.json`",
+      "description": "The design explicitly excludes any squadron-side token store and keeps `login_api_key` out of scope (API-key users keep the `openai` profile), which preserves the architecture's per-provider self-contained credential resolution. The login flow delegates entirely to the SDK (`login_chatgpt` / `login_chatgpt_device_code`), and squadron reads only the account email/plan from `account()` \u2014 never `auth.json` contents \u2014 which keeps the credential boundary where the parent architecture puts it.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#state-management"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-clarity",
+      "raw_category": null,
+      "summary": "Design leaves the `openai-codex` upper bound undecided \u2014 the packaging half of Part A cannot be implemented as written",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Part C adds a shared auth-layer capability that the parent architecture does not describe, and the design asserts the architecture \"stays accurate\" without a stated owner for the follow-up edit",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "The `OPENAI_API_KEY` fallback decision is scheduled as \"step 0\" of implementation, but the slice's own success criteria and Part A already depend on the answer",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#special-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`sq model list` marker mechanism contradicts the slice plan's stated goal and adds cost to a hot path",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#d9--extra-missing-signal-is-a-provider-side-protocol",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`sq doctor` Codex row duplicates an existing `codex CLI` row and its \"no subprocess\" constraint conflicts with the shared resolver",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#sub-part-b-surfaces",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "external-dependency",
+      "raw_category": null,
+      "summary": "`Effort` \u2192 `ReasoningEffort` mapping rests on an unverified external enum claim",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#d5--effort",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Provider registration survives a missing optional extra, preserving the install-hint path",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes are enumerated per new I/O path with explicit handling, and the new timeouts are registered as config keys",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#failure-modes--codex-turn",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Effort and usage flow through the capability declarations the review client already consumes",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "No squadron-side credential store is introduced; the Codex runtime remains the only owner of `~/.codex/auth.json`",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#state-management",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T21:35:57.104289",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 98,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 671452,
+  "cached_tokens": 515072,
+  "cache_write_tokens": null,
+  "completion_tokens": 4633,
+  "reasoning_tokens": 25,
+  "duration_seconds": 209.03701454214752,
+  "cost_usd": 0.08337792,
+  "cost_basis": "alias_pricing"
+}

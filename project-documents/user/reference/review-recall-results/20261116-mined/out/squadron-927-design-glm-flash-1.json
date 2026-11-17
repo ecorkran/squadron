@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D6's premise is an unreachable parser state, and its prescribed fix would render a false degraded notice",
+      "description": "`parse_review_output` sets `fallback_used=True` in exactly two branches (src/squadron/review/parsers.py:993 and the mismatch branch), and neither can produce the state D6 describes. The mismatch branch is `verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings` \u2014 it excludes PASS by construction, so \"a PASS parsed with `fallback_used=True` (verdict read, findings not)\" cannot occur. The only capped run that can carry `fallback_used=True` is a *derived* PASS (verdict UNKNOWN derived from findings that did parse) \u2014 and there the findings were extracted, so D6's fix (\"the `fallback_used` notice renders whenever `fallback_used` is set, after any findings\") would append `_findings_not_parsed_section(\"A verdict of X was parsed, but no findings could be extracted\u2026\")` to an artifact whose findings parsed \u2014 a false claim of exactly the class #72/#61 removed; the same false \"verdict parsed, findings did not.\" would print from `_display_terminal`. SC7 is consequently testable only with a hand-built fixture no production path produces. The real capped-plus-degraded interaction the design should address instead: when the cap fires on a derived verdict, D5 overwrites `verdictSource` DERIVED\u2192IMPOSED, and since `fallback_used` is JSON-only (src/squadron/review/models.py comment on the stop-reason fields), the human-readable artifact loses every trace that the verdict was not stated by the model. Re-derive D6 (drop it, or re-scope it to the derived\u2192imposed provenance loss) and rewrite SC7 accordingly.",
+      "file_ref": null,
+      "category": "design-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6 \u2014 A synthetic finding must not hide a degraded parse"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the plan entry; exclusions are explicit and each carries a reason",
+      "description": "Parts A/B/C correspond to plan entry 25's Parts A/B/C, including the decisions the plan delegates to design (minimum frontmatter fact \u2192 `diffTruncated` tri-state, cap-vs-fail \u2192 CONCERNS with `verdictSource: imposed`, the substitution rule \u2192 D9). Deferrals (#137, #138, #114, judge `round_diff`, provider-failure artifacts) are each named; D13's reasoning that a `requestedModel` on provider-failure artifacts would break D10's presence-means-substitution rule is consistent with `format_provider_failure_markdown`'s existing shape.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Excluded"
+    },
+    {
+      "severity": "PASS",
+      "title": "CLI/pipeline parity is structural, not merely asserted",
+      "description": "Both entry points verified calling `run_review_with_profile` (src/squadron/cli/commands/review.py:762, src/squadron/pipeline/actions/review.py:274) and persisting through `save_review_result` \u2192 `format_review_markdown`, so carrying all facts on `ReviewResult` genuinely yields one rendering path. `metadata[\"model\"]` exists today on the pipeline result (actions/review.py) and the change to the answering model plus additive `requested_model` matches the design; the executor's `model=` log line (executor.py:101) follows it as intended.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Data Flow"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new read paths are enumerated; no new I/O paths or message types are introduced",
+      "description": "The `<synthetic>` placeholder is skipped and single-defined as a module constant; subagent messages are excluded via `parent_tool_use_id`; `chunk.model` is read from every streamed chunk including choice-less ones; Codex's not-reported case is handled by D11 with the `None`-vs-`[]` distinction that keeps hand-built results and the `clean_pass_artifact.md` snapshot byte-identical (the snapshot guard at tests/review/test_persistence.py:879 builds a result with no diff and no `answering_models`, which D2/D11's emission rules leave untouched).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D8 \u2014 Where each provider reads the answering model"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D2 does not specify the \"diff key present but diff body empty\" case",
+      "description": "When `inputs` carries a `diff` key but `_run_git_diff` returns None (its git-failure path logs a WARNING and returns None), no diff injection occurs and D2's rule \u2014 stated only for \"inputs has no `diff` key\" \u2014 does not say whether `diff_injection` is None (key absent; a gate reads \"no diff\" though one was requested) or `DiffInjection(total, 0)` per D3's worst-case logic. Thin in practice because `EmptyDiffError` guards the no-changed-files case upstream, but the tri-state is the gate contract, so the choice should be stated.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D2 \u2014 `diffTruncated` is present exactly when the review had a diff"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Two `review_client` call sites\" \u2014 only one production call site exists",
+      "description": "Implementation Notes step 2 says \"Update its two `review_client` call sites\"; a grep of `src/` shows a single call site (src/squadron/review/review_client.py:154). I could not verify `test_convention_root.py`/`test_injection_decision.py` as direct `_inject_file_contents` callers (only tests/review/test_content_injection.py confirmed). Minor, but an implementer hunting a second call site wastes time \u2014 verify the count and the test-file list before task breakdown.",
+      "file_ref": null,
+      "category": "factual-drift",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Development Approach"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The cap changes loop convergence for `until: review.pass` pipelines; the design discusses only the checkpoint path",
+      "description": "D4 argues via `CheckpointTrigger.ON_CONCERNS`, but a pipeline loop gated on `review.pass` whose diff stays truncated and unread will now re-review each round until `loop.max` and exit through `on_exhaust` (910's semantics) instead of silently converging \u2014 the intended fail-visible direction, and `CONCERNS` is a valid member everywhere that consumes verdicts (`_aggregate_verdicts`' rank dict, `LoopCondition.REVIEW_CONCERNS_OR_BETTER`), but the retry is futile until the config or diff changes. Recording that consequence in D4 or the risk section would complete the picture.",
+      "file_ref": null,
+      "category": "behavioral-impact",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "design-correctness",
+      "raw_category": null,
+      "summary": "D6's premise is an unreachable parser state, and its prescribed fix would render a false degraded notice",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6 \u2014 A synthetic finding must not hide a degraded parse",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Scope matches the plan entry; exclusions are explicit and each carries a reason",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Excluded",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "CLI/pipeline parity is structural, not merely asserted",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Data Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new read paths are enumerated; no new I/O paths or message types are introduced",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D8 \u2014 Where each provider reads the answering model",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D2 does not specify the \"diff key present but diff body empty\" case",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D2 \u2014 `diffTruncated` is present exactly when the review had a diff",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "factual-drift",
+      "raw_category": null,
+      "summary": "\"Two `review_client` call sites\" \u2014 only one production call site exists",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Development Approach",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "behavioral-impact",
+      "raw_category": null,
+      "summary": "The cap changes loop convergence for `until: review.pass` pipelines; the design discusses only the checkpoint path",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T20:58:47.210288",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 47,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 311834,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1667804,
+  "cached_tokens": 1271040,
+  "cache_write_tokens": null,
+  "completion_tokens": 75586,
+  "reasoning_tokens": 72147,
+  "duration_seconds": 425.59263541619293,
+  "cost_usd": 0.1354388,
+  "cost_basis": "alias_pricing"
+}

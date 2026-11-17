@@ -1,0 +1,19 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "NOTE",
+   "title": "Commit markers are inline within checkbox lines rather than standalone plain lines",
+   "description": "The review format expects `**Commit**:` markers as plain lines, never checkboxes. In this file every commit marker (e.g. Task 4 line 100, Task 6 line 127, Task 8 line 153, etc.) is appended inline to the success-criteria checkbox subitem as plain `Commit:` text rather than rendered as a bold standalone line. This is a minor format deviation driven by the project's \"all task files use checklist format\" convention in CLAUDE.md, which creates tension with the plain-line expectation. The substantive placement requirement is fully met: markers sit at working, tested points (always after the paired test task), are not emitted after every task, and are not deferred to the end. No action required; flagged only for format consistency awareness.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Malformed-config failure is tested at the core layer, not the CLI `cf guides install` surface",
+   "description": "The functional success criterion \"a malformed shared config file makes `cf guides install` fail with the config error\" is covered by Task 6's core-level test in `GuideManager.test.ts` (a `ConfigManager.get()` that throws causes `install()` to reject with no install attempted). There is no dedicated CLI-level test asserting `cf guides install` surfaces that error to the user. Because the CLI install action delegates directly to `manager.install()` and the core test exercises the rejection path, the behavior is adequately verified; the gap is only at the integration surface and does not leave the requirement unmet.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:117"
+  }
+ ]
+}

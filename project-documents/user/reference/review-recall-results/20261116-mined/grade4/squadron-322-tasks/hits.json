@@ -1,0 +1,72 @@
+{
+ "case": "squadron-322-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "T7 lists `classify_direction` precedence as 1 `n < floor` -> `INSUFFICIENT_EVIDENCE`, 2 unversioned -> same, 3 graduate, 4 `match_rate <= tighten_rate` -> `TIGHTEN`, 5 `HOLD`, and says case 4 is \"reachable even if `n < floor`\". Taken as a precedence list, case 1 returns first for every below-floor cell, so `TIGHTEN` is unreachable there. That contradicts the same task, T8's test (\"a below-floor cell with a low match rate returns `TIGHTEN`\") and the design (`322-slice` line 37 \"tightening is not floor-gated\"; Direction Bands table line 183). **VALID**: self-contradiction. Needs: doc alone. Raised by the original review (F001).",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     1
+    ],
+    "r06": []
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The Coverage Check says the malformed `judge:` block row is \"exercised in T8\", but T8's tests list only registered and unregistered templates. **VALID** (minor): self-contradiction between the Coverage Check and T8. Needs: doc alone. Raised by the original review (F002).",
+   "hits": {
+    "r01": [],
+    "r02": [
+     3
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [
+     5
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "T13 says to \"reuse 320's existing result-discovery surface\" to find unsampled judge results, falling back to \"store-recorded samples only\". At `9360d61c`, `metrology/capture.py` has only `resolve_target` (a glob scoped to one `{index}`), and no module enumerates judge results across the project. Unsampled results are by definition absent from the store, so the fallback cannot meet T13's own success criterion (3 unsampled results at `rate=1.0` yield 3 `OfferTarget`s). **VALID**: the task cannot be completed as written, and it names code that does not exist. Needs: code. Raised by the original review (F003, as a note).",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     1
+    ],
+    "r05": [
+     3
+    ],
+    "r06": []
+   }
+  }
+ ],
+ "note": "Borderline: r01 finding 2 (T13) counted for F3; it argues the store-only fallback cannot cover the walkthrough and a discovery surface must be defined, without stating outright that no surface exists. r03 finding 3 and r04 finding 5 mention the malformed-block row beyond the T8 claim; counted for F2 since they flag the false T8 claim."
+}

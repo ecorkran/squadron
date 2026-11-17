@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "Parent field points to the architecture document, not the slice plan",
+      "description": "The slice design's `parent:` frontmatter points to `project-documents/user/architecture/900-arch.maintenance-and-refactoring.md` (the architecture doc), while slice 911 (a sibling in the same slice plan) uses `project-documents/user/architecture/900-slices.maintenance-and-refactoring.md` (the slice plan). The review instructions explicitly tell me not to flag this, so this is informational only \u2014 flagging in case the convention is worth aligning across siblings later.",
+      "file_ref": null,
+      "category": "convention",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:5"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Site-count accounting in the survey table is inconsistent with actual source",
+      "description": "Two rows in the \"Confirmed sites\" table disagree with what `grep -oE \"'(complete|in-progress|not-started|deprecated)'\"` actually returns from those files: (a) `statusNormalizer.ts` row claims \"13 (of 16 total; 3 are alias keys, see Excluded)\" but the map has 14 keys and 14 value-side literals (lines 5\u201318), not 16 \u2014 and there are no \"alias keys\" as a distinct category; every key is an alias. (b) `types.ts` row claims \"5 (of 8 total; 4 are the STATUS definition itself)\" but 8 \u2212 4 = 4 sweep sites, not 5. Because the verification grep in Success Criteria is keyed to \"zero matches in the six swept files,\" the counts themselves don't gate correctness \u2014 but the table is the developer's working map for verifying the sweep, and the post-sweep grep expects the developer to recognize \"4 (STATUS const) + 3 (intentionally-excluded frontmatterSchema) + 4 (intentionally-excluded SliceStatus)\" rather than the \"5/8\" figure cited in the survey. Recount both rows against the actual files and update the table; the rest of the design is sound.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architecture scope and principles alignment",
+      "description": "The slice directly addresses two of the architecture's explicit scope items (\"Hard-coded values \u2192 configuration or constants\" and \"Pattern consolidation and code quality improvements\") and complies with all three architectural principles: it is themed (one coherent sweep, not open-ended), it relies on the existing test suite as the regression guard (no behavior change without tests), and it has a clear \"no remaining bare NormalizedStatus literals in production code outside types.ts\" success criterion rather than an open-ended cleanup.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice-plan entry alignment",
+      "description": "Slice plan entry #10 (`(910) Centralize NormalizedStatus Value References`, dependencies `[241]`, Risk: Medium, Effort: 3/5) matches this design precisely in description, dependency, scope files, and the \"241 introduces the const; this slice completes the sweep of pre-existing sites\" framing. No drift between the slice plan and the slice design.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Exclusions are well-reasoned and bounded",
+      "description": "TD-2 (frontmatterSchema uses a different vocabulary \u2014 `not_started`, `deferred` with no `NormalizedStatus` equivalent) and TD-3 (`SliceStatus.status` is a workflow-position union, not `NormalizedStatus`) both exclude real correctness hazards, not just extra work. The `'unknown'` sentinel (ProjectModelBuilder line 181) is correctly excluded as an unrelated sentinel, and the ConsistencyChecker.ts file-size overage is correctly delegated to a separate, larger effort rather than being silently folded in.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality",
+      "description": "No new abstractions, no helper functions, no new I/O paths, no new message types \u2014 purely a find-and-replace-with-verification sweep plus one widening type retype. The order-of-work section is appropriately granular for a 65-site mechanical sweep but does not introduce any heavyweight mechanism (no codemod tooling, no intermediate aliases) that would be overkill. The verification grep, before/after counts, type-safety spot-check, and behavior-unchanged test pass are exactly the right level for this kind of refactor.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes and NFRs \u2014 not applicable to this slice",
+      "description": "This slice introduces no new I/O paths and no new message types \u2014 every code path it touches (file parse, frontmatter parse, task-file parse) already exists with its existing error-handling contract unchanged. The parent maintenance architecture states no NFRs, and the slice touches no I/O path that would inherit one from another architecture. No failure-mode enumeration or NFR restatement is required.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "convention",
+      "raw_category": null,
+      "summary": "Parent field points to the architecture document, not the slice plan",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:5",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Site-count accounting in the survey table is inconsistent with actual source",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Architecture scope and principles alignment",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Slice-plan entry alignment",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Exclusions are well-reasoned and bounded",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes and NFRs \u2014 not applicable to this slice",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-16T21:40:38.692385",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 3472,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 11,
+  "prompt_tokens": 255412,
+  "cached_tokens": 181248,
+  "cache_write_tokens": null,
+  "completion_tokens": 6354,
+  "reasoning_tokens": 679,
+  "duration_seconds": 86.1049284581095,
+  "cost_usd": 0.04074888,
+  "cost_basis": "alias_pricing"
+}

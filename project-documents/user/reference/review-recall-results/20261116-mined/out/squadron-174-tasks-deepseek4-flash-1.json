@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`item_started` has no path to the `each` item loop",
+      "description": "Task 5 asks for `observer.item_started(each_name, ActiveItem(...))` \"at each `each` item start (`executor.py` each loop\u2026)\", but `observer` is only added to `execute_pipeline`'s signature (`src/squadron/pipeline/executor.py:378-390`). The `each` loop lives in `_execute_each_step`, which is reached through `_execute_step`; neither takes an observer (neither `_execute_step` at `:704` nor `_execute_each_step` at `:1511` has such a parameter). The design's API Contracts do not say how it arrives either, and `_execute_step` is also called from `loop:` bodies and from each-item bodies, so a naive threading of the observer would fire `item_started` for inner steps that are not the outer `each`'s items. No task adds the parameter threading or says which call sites may fire it.\n\nWithout that step the Success Criteria \"during an `each` step `active_item` names the running item\" and the `At` column's `[item P/T \u00b7 index]` (Tasks 21, 25) cannot be met, and Task 7's call-order test asserts a notification that no production code emits. A task should be added to Thread `RunObserver` through `_execute_step`/`_execute_each_step` (and to state explicitly that inner steps of a loop body and nested `each` bodies do not emit `item_started`), before Task 7's ordering test.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/executor.py:1511"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Owner/heartbeat wiring is placed in a function that never calls `init_run`",
+      "description": "Task 13 says \"In `cli/commands/run.py` `_run_pipeline_sdk`: new runs build `RunOwner.current(...)` before `init_run(owner=...)`\". `_run_pipeline_sdk` does not call `init_run`; the call is at `src/squadron/cli/commands/run.py:227` inside `_run_pipeline`, which `_run_pipeline_sdk` delegates to (`:373`) and which the prompt-only resume path also calls. `_handle_prompt_only_init` calls `init_run` directly at `:653`.\n\nFollowed literally, Task 13 edits the wrong function: the SDK new-run path still calls `init_run(pipeline_name, params, execution_mode=...)` with no owner, leaving a v5 `running` file with `owner=None` \u2014 exactly the state D13 forbids and directly contradicting the Success Criteria \"A new SDK run's state file has its `owner` from the write that creates it\" and \"A process killed between `init_run` and the first heartbeat lists as `orphaned`\". Task 13 should name the actual call sites (`_run_pipeline` gaining an `owner: RunOwner | None` parameter, `_handle_prompt_only_init` passing `owner=None`) and say which caller supplies it. Task 14's CLI test would otherwise fail against the code as described.",
+      "file_ref": null,
+      "category": "task-sequencing",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:227"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "ORPHANED wait outcome prints two stderr lines, and no task reconciles them",
+      "description": "Task 19 specifies the wait function itself emits stderr `sq runs wait: run <id> orphaned (process <pid> gone)`. The CLI wrapper at `src/squadron/cli/commands/runs.py:57-60` already emits `sq runs wait: run {run_id} {outcome}` for every non-zero exit code, and adding `WaitOutcome.ORPHANED` (exit 8) to `WAIT_EXIT_CODES` makes it non-zero. The user therefore sees the message twice, the second time without the PID that the design's D8 text exists to provide. Task 20's test list only says \"`ORPHANED` ends the wait (exit 8, WARNING)\" and does not assert the exact stderr, so the duplication would ship untested.\n\nEither the library should not write to stderr (the message belongs to the CLI, as every other outcome does) or the CLI needs an exclusion like `_STATUS_PANEL_OUTCOMES`, plus a test asserting one exact line. One of those needs to be a task item.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/runs.py:57-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 25 silently drops the `sq runs list` resume hints",
+      "description": "Task 25 replaces the rich table in `render_run_listing` with `render_rows` and lists the columns, the summary line and `-v`, but says nothing about the trailing `_RESUME_HINTS` block the current implementation prints after the table (`src/squadron/cli/run_views.py:163-166`, asserted at `tests/cli/test_run_views.py:114-121`). The design's UI Specification sample output shows no hints either, yet no Success Criterion asks for them to be removed and no task item says to remove them \u2014 so the change is either an unintended regression that breaks an existing test, or an unadvertised output change. Task 26 only promises to update \"199 view tests that expect the old table\", which would leave the hint assertions failing. Task 25 should state explicitly whether the hints stay (and where, under the summary line) or go, and Task 26 should update or drop the corresponding assertions.",
+      "file_ref": null,
+      "category": "regression-risk",
+      "raw_category": null,
+      "location": "src/squadron/cli/run_views.py:145-166"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 9 drops the run-id from the unknown-PID WARNING that the design requires",
+      "description": "Task 9 says a non-positive PID or unexpected `OSError` logs \"WARNING naming the PID (the run-id is logged by the caller that has it)\". The design's Technology Choices and its Error handling summary both say the warning names \"run and PID\". The task's reasoning is sound (`assess_liveness` is pure and has no run-id), but the result is that the one diagnostic an operator needs to find the affected run is absent, and three callers (listing, wait, prune) would each have to add it. Either the design should be amended or `assess_liveness` should take the run-id for logging. Worth resolving before Task 10 writes the test that pins the message shape.",
+      "file_ref": null,
+      "category": "design-divergence",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_liveness.py"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 32 bundles two unrelated changes under one commit",
+      "description": "`StateManager.scan_runs` (a new state-layer read API with its own error contract) and the move of the report-sibling glob into `batch_report.py` (a one-line constant used by prune) are independent. They share no test and no consumer. The pairing is small enough not to be a correctness problem, but splitting them would let `scan_runs` land with its state tests while the prune-side glob waits for Part F.",
+      "file_ref": null,
+      "category": "task-scoping",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are checklist items rather than plain lines",
+      "description": "Every checkpoint is written as `- [ ] Commit: \u2026` (Tasks 7, 10, 12, 14, 18, 20, 22, 22a, 24, 26, 28, 31, 35, 37, 39, 40, 42). This matches the project's \"use `[ ]` for every item\" convention and the older task files, but a tickable commit line reads as \"committed\" once checked and is easy to tick without committing. The placement itself is correct \u2014 each marker sits after that unit's tests, and the Part A/B/C/D boundaries are all at working, tested points.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Load test exists and CI gating is real",
+      "description": "Task 22a adds `tests/load/test_run_listing_scale.py` for the listing-time NFR restated in the slice's Special Considerations. I verified the CI claim: `pyproject.toml` sets `testpaths = [\"tests\"]` and `.github/workflows/ci.yml` runs `uv run pytest` as a required step, so a file under `tests/load/` is collected and gating without extra wiring \u2014 the task's statement that \"no new CI wiring is needed\" is accurate, and leaving gating implicit here is safe. The task also mirrors the existing tier's shape (`tests/load/test_usage_reader_loop.py` uses a module docstring naming the slice and NFR plus named bound constants), which is what makes the bound reviewable.",
+      "file_ref": null,
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "location": "tests/load/test_usage_reader_loop.py:1"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "`item_started` has no path to the `each` item loop",
+      "location": "src/squadron/pipeline/executor.py:1511",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-sequencing",
+      "raw_category": null,
+      "summary": "Owner/heartbeat wiring is placed in a function that never calls `init_run`",
+      "location": "src/squadron/cli/commands/run.py:227",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "ORPHANED wait outcome prints two stderr lines, and no task reconciles them",
+      "location": "src/squadron/cli/commands/runs.py:57-60",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "regression-risk",
+      "raw_category": null,
+      "summary": "Task 25 silently drops the `sq runs list` resume hints",
+      "location": "src/squadron/cli/run_views.py:145-166",
+      "location_verified": false
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "design-divergence",
+      "raw_category": null,
+      "summary": "Task 9 drops the run-id from the unknown-PID WARNING that the design requires",
+      "location": "src/squadron/pipeline/run_liveness.py",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "task-scoping",
+      "raw_category": null,
+      "summary": "Task 32 bundles two unrelated changes under one commit",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Commit markers are checklist items rather than plain lines",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "summary": "Load test exists and CI gating is real",
+      "location": "tests/load/test_usage_reader_loop.py:1",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T21:20:47.895814",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 343779,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1080628,
+  "cached_tokens": 878336,
+  "cache_write_tokens": null,
+  "completion_tokens": 93684,
+  "reasoning_tokens": 89481,
+  "duration_seconds": 523.2488407909404,
+  "cost_usd": 0.07802672,
+  "cost_basis": "alias_pricing"
+}

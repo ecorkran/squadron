@@ -1,0 +1,242 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The adoption flow cannot resume: detection's \"already planned\" rule contradicts the flow it is handed to",
+      "description": "The Detection section orders outcomes as opted-out \u2192 **already planned** (\"the repo holds a CF/SQ planning artifact (an initiative plan, an architecture doc or a slice plan)\") \u2192 brownfield/greenfield, and \"the outcome is derived from the files every time and never stored.\" The adoption flow's step 2 then says: \"Read cf's detection report. If the project is greenfield or already planned, adoption doesn't apply.\" But step 5 writes the derived architecture *and then* the existing-state slice plan. In `findPlanningArtifacts` (`packages/core/src/detection/planningArtifacts.ts`), an `nnn-arch.*.md` under `project-documents/user/architecture/` matches `ARCHITECTURE_FILE_PATTERN`, so the moment the architecture lands, detection flips to `already-planned` and step 2 aborts. Any interrupted or re-run `sq onboard` (agent session ends after step 5's architecture, PM resumes tomorrow) can never write the existing-state slice plan \u2014 and the guide's own adoption prompt is explicitly built for that case (\"Work from whichever of these already exist; if an artifact is present, review it with the PM and continue from there\"). This section is labelled \"In outline, so squadron and the guide can design against it\", so the defect propagates to two other repos. The amendment removed the persisted `in_progress` state that previously made mid-adoption resumption detectable, without providing a filesystem signal that distinguishes \"adopted, mid-flight\" from \"already planned\".",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Nothing in the amended flow registers the derived architecture or existing-state plan, so `cf next` cannot point at new work",
+      "description": "The design goal is \"After adoption, the artifacts describe the system that exists, and `cf next` recommends the first piece of new work\", and Navigation asserts \"An adopted project is navigated like any other planned project. Retroactive entries count as complete, so `cf next` points at the first unbuilt slice.\" That assertion only holds if `project.fileSlicePlan` is set: `WorkflowNavigator.parseSlicePlanSafe` returns `null` when `project.fileSlicePlan` is unset, and `detectFirstRunContext` then routes to \"Create or assign a slice plan\" / `cf set plan <stem>`. The adoption flow's six steps cover project registration (\"Register the project (`cf init` or the MCP equivalent)\") and artifact *writing*, but never `cf set arch` / `cf set plan`. Slice 270 explicitly deletes the step that did this \u2014 the current `buildRegisterPlanAction` in `packages/core/src/introspection/adoptionNavigation.ts` (\"Adoption is complete. Register the derived architecture and existing-state slice plan.\") \u2014 and replaces it with nothing. The shipped guide prompt (`prompt.ai-project.system.md`, \"Brownfield Adoption\") also has no registration step. Either the flow or the guide prompt needs an explicit registration step, or the stated design goal is not reachable.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#navigation"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The prompt-delivery primitive (271) does not cover the facts the shipped adoption prompt hard-requires",
+      "description": "The primitive is specified as \"(b) Prompt delivery: the guide's adoption prompt by key, with the comprehension doc's path filled in when one exists.\" The guide prompt that cf must deliver does not work that way: it says \"The Adoption Facts section, appended after this prompt, holds the detection facts and squadron's probe output. Do not run the probe yourself. If the section is missing, stop and say: 'The Adoption Facts section is missing; cf build should always supply it.' Do not continue on any path.\" The arch removes cf's probe integration and its Adoption Facts rendering (`cf build` is pure), so the facts \u2014 including the `surfaces` entry the prompt uses to pick the squadron vs CF-only path, and `graph.commits_behind` \u2014 must be produced and appended by someone. Slice 271(a) returns the facts as JSON *to `sq onboard`*, and nothing states who renders them into the prompt. The same gap applies to the other three profile variables: the profile is `brownfield-adoption: [fileConcept, fileArch, fileSlicePlan, fileComprehension]`, and the arch settles only `fileComprehension`. Three of four variables are unaccounted for, in a slice whose stated purpose is \"exactly what [sq onboard] needs from cf, with no logic duplicated across the two repos\".",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The derived architecture is recorded history but is not exempt from the arch review gate",
+      "description": "Architectural Principles says \"**Retroactive artifacts say so.** Anything recording work that predates adoption is marked as retroactive. The consistency checker and review gate can then tell recorded history from work executed under the process.\" The mechanism delivered is per-slice-plan-entry only: the marker, `retroactiveRules.ts`, `evaluateEntryGate`'s `skipped` result. The derived architecture instead gets `provenance: derived`, and the schema comment in `packages/core/src/schema/frontmatterSchema.ts` states it is \"Informational only: no behavior branches on it\". The arch gate is not exemptible by that field: `ConsistencyChecker.ruleArchReviewGate` evaluates `preSlicePlan` for **every** discovered `nnn-arch.*.md`, and `evaluateExemption` only honours `review: none` when `boundary !== 'preSlicePlan'` and the `workflow.review_gate_effective_date` cutoff (which compares against the artifact's own `dateCreated` \u2014 today for a derived architecture, so it never grandfathers). After the rework deletes `gateDerivedArchitecture` (called from `routeAdoption`), an adopted project with `review_enabled = true` will get a `pending-review` finding on its derived architecture \u2014 a review of a machine-derived document that the arch says \"was never reviewed\" by definition. The arch is silent on this.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Detection has three outcomes but several failure modes, and one of them throws on real repos",
+      "description": "The report is specified as one of three outcomes plus facts, \"It writes nothing\", and the arch's error strategy is spelled out for squadron only (\"an unknown version or unreadable output as 'squadron unavailable', stated to the user, never silently\"). Detection itself can fail hard: `measureSourceVolume` throws an `AdoptionError` when the walk visits `MAX_WALK_ENTRIES` (20,000) entries without reaching `BROWNFIELD_MIN_SOURCE_LINES`, and throws `walkFailure` on any non-ENOENT filesystem error; `readHistory` degrades to `unknown`, `recognizeCi` can throw on a non-ENOENT readdir. Because detection stops at \"already planned\" only when artifacts exist, the full walk runs on every unplanned project \u2014 i.e. every greenfield Phase 0/1 repo and every repo of mostly non-source files. The arch makes `cf next` a consumer of this report (\"`cf init` and `cf next` consume\" it), and `cf next` is the primary read-only entry point; a throw there breaks navigation on exactly the large, unusual repos adoption is meant for. No fourth outcome, no degradation rule, and no statement of which consumers may fail and how is given.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cf next` is named a detection consumer in the principles but is never wired to detection in the slices",
+      "description": "\"One detection, many consumers ... It is exposed as a read-only report (CLI and MCP) that `sq onboard`, `cf init` and `cf next` consume. ... No surface carries its own heuristic.\" But slice 270 (\"Remove Adoption Navigation from cf next\") declares \"Dependencies: 269\", and its work is only deletion plus \"one line saying adoption arrives with `sq onboard`\" \u2014 to emit that line it must know the repo is brownfield, which is detection. The detection report's CLI/MCP exposure is slice 271, which is *after* 270 and whose stated consumer is only `sq onboard`. 271's success criterion names only \"`cf init` and the state command share one detection function\" \u2014 `cf next` is absent. Either 270 depends on the 271 primitive (and the slice order is wrong), or `cf next` re-derives brownfield-ness, violating the principle the same document states.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependencies section is stale against the shipped guide and cf",
+      "description": "Three claims no longer hold. (1) \"cf releases that select the brownfield profile require at least **v0.22.2**\" \u2014 cf no longer selects the profile (268 removes the swap), and the actual floor in `packages/core/src/guides/guideMinimum.ts` is `MIN_GUIDE_VERSION = '0.22.6'`, which slice 272 says to raise again. (2) \"Still pending, both written after cf specifies them in slice design: the retroactive-marker rule, and the naming-conventions entry for the docs map file (`050-docs-map.{project}.md`, slice 267)\" \u2014 the guide shipped both: v0.22.3 added \"Retroactive-slice marker in `guide.ai-project.brownfield-adoption` (Retroactive Slices)\", and v0.22.6 added \"Docs map file convention: `050-docs-map.{project}.md`\". Slices 263 and 267 both show `[x]` in `260-slices.brownfield-adoption.md`, so cf specified them long ago. A dependency list that understates the installed guide version and calls shipped guide work \"pending\" will mislead the 272 alignment work.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#dependencies"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Thresholds and the override are described as open when both are already fixed in code",
+      "description": "\"**Brownfield thresholds.** ... Signals and thresholds are set in slice design; the override is the safety valve.\" Slice 261 shipped long ago and `packages/core/src/adoption/adoptionOutcome.ts` fixes the threshold: \"Brownfield iff the project folder holds at least this many non-blank source lines (D1). The one place the threshold is written; deliberately not configurable (the `adoption.state` override is the safety valve).\" The same document then amends the override away in one direction: Detection's step 1 is only the opt-out (\"the user said to treat the project as new\"), and 269 keeps \"only an explicit opt-out\". So the ability to force brownfield detection (today `cf adoption.state in_progress`, which the shipped error messages in `sourceVolume.ts` and `planningArtifacts.ts` both point at) disappears, and the arch's Technical Considerations never states that this is intentional or names a replacement for a false greenfield (e.g. a 1,500-line service below the fixed 2,000-line floor).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 271 ships an additive external contract with no consumer and an unconfirmed interface",
+      "description": "271 is the one rework slice with an external consumer, and that consumer does not exist: the amendment says \"Adoption is orchestrated by `sq onboard`, which squadron builds once the cf core is stable\", and 273 (the real adoption run) is parked until `sq onboard` exists. 271's own risk note concedes the contract is unvalidated: \"the contract squadron will build against; confirm it with the sq session before design is final.\" The slice bundles two very different things: the *deletions* (removing the probe code that 268 also needs gone) and *additions* (a new CLI command, a new MCP tool, and the prompt-delivery primitive). The additions are what nothing can exercise yet. Split 271 so the probe deletion rides with 268, and defer the additive primitive (or at least the MCP-tool half) to 273, when `sq onboard` can consume and validate it \u2014 this also removes the need to guess at the facts-rendering and profile-variable questions raised above before there is anything to test against. Note that `cf init`'s one-line detection notice is separable and can stay, since `cf init` is a live consumer.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The remaining cf\u2194squadron contact point depends on an unspecified provenance block",
+      "description": "After the amendment the single point of contact is the comprehension doc, and the arch defines it as \"cf finds it by filename and `docType` (plus squadron 361's provenance block)\". That provenance block is not specified anywhere in this document \u2014 no field name, no required value, no version \u2014 yet it is load-bearing for the claim that cf can trust the file is squadron's. The shipped implementation does not check it: `findComprehensionAnalysis` in `packages/core/src/detection/comprehensionAnalysis.ts` matches `^(\\d+)-analysis\\.codebase-comprehension\\.md$` and requires only `docType: analysis`. A second provenance block is also referenced for the concept (\"The prompt detects 363's provenance block and has the PM confirm or correct a machine-derived concept\"), likewise unspecified. Since the arch replaces the one contract that *was* versioned and pinned (`probe_version` 1, squadron commit 32b3c609, with CF tests asserting the field names) with an unversioned filename-plus-frontmatter convention, the replacement is a step down in contract rigour at the exact boundary the amendment is about.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The adoption flow cannot resume: detection's \"already planned\" rule contradicts the flow it is handed to",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Nothing in the amended flow registers the derived architecture or existing-state plan, so `cf next` cannot point at new work",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#navigation",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The prompt-delivery primitive (271) does not cover the facts the shipped adoption prompt hard-requires",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The derived architecture is recorded history but is not exempt from the arch review gate",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Detection has three outcomes but several failure modes, and one of them throws on real repos",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "`cf next` is named a detection consumer in the principles but is never wired to detection in the slices",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Dependencies section is stale against the shipped guide and cf",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Thresholds and the override are described as open when both are already fixed in code",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Slice 271 ships an additive external contract with no consumer and an unconfirmed interface",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The remaining cf\u2194squadron contact point depends on an unspecified provenance block",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-16T21:30:15.735068",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 334223,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 14,
+  "prompt_tokens": 773081,
+  "cached_tokens": 647936,
+  "cache_write_tokens": null,
+  "completion_tokens": 82776,
+  "reasoning_tokens": 77507,
+  "duration_seconds": 405.790142999962,
+  "cost_usd": 0.061229240000000004,
+  "cost_basis": "alias_pricing"
+}

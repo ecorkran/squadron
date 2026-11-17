@@ -1,0 +1,19 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "A few adjacent task pairs are split finer than strictly necessary",
+   "description": "Three observations, none blocking: (1) Tasks 15 and 16 both edit `sdk_session.py` (timer + error class vs. interrupt + drain) and could be one task, though the split lets Task 16 absorb the Task 2 spike findings cleanly; (2) Tasks 33 and 34 both build `plan_prune` (selection vs. protection rules) and could merge, though the split mirrors D9's own two rule groups and Task 35 tests both together; (3) Task 5's success criterion (\"grep \u2026 is empty after Task 6\") is only satisfiable once Task 6 has run, so the tree is intentionally red between them \u2014 the commit at Task 7 keeps history green, and the task is honest about the deferral. Each split traces to a distinct design subsection, so this is granularity taste, not a defect.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 13's wiring pointer names `_run_pipeline_sdk`, but `init_run` and the executor call live in `_run_pipeline`",
+   "description": "In `src/squadron/cli/commands/run.py`, fresh SDK runs call `init_run` inside `_run_pipeline` (which `_run_pipeline_sdk` invokes), the `execute_pipeline` call is `_run_pipeline`'s, and the prompt-only init site is `_handle_prompt_only_init`. Implementing Task 13 as described (owner built before `init_run(owner=...)`, executor call inside `RunHeartbeat`, prompt-only paths untouched) will necessarily thread the owner through `_run_pipeline` and touch the prompt-only init site too. The file-level reference is correct and the slice design uses the same phrasing (D13/Data Flow), so a junior AI resolves this by reading the file; noting it so the implementer is not surprised that the change spans two functions in `run.py`.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:189-203"
+  }
+ ]
+}

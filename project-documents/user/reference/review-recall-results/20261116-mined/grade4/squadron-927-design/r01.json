@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D6's premise is an unreachable parser state, and its prescribed fix would render a false degraded notice",
+   "description": "`parse_review_output` sets `fallback_used=True` in exactly two branches (src/squadron/review/parsers.py:993 and the mismatch branch), and neither can produce the state D6 describes. The mismatch branch is `verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings` \u2014 it excludes PASS by construction, so \"a PASS parsed with `fallback_used=True` (verdict read, findings not)\" cannot occur. The only capped run that can carry `fallback_used=True` is a *derived* PASS (verdict UNKNOWN derived from findings that did parse) \u2014 and there the findings were extracted, so D6's fix (\"the `fallback_used` notice renders whenever `fallback_used` is set, after any findings\") would append `_findings_not_parsed_section(\"A verdict of X was parsed, but no findings could be extracted\u2026\")` to an artifact whose findings parsed \u2014 a false claim of exactly the class #72/#61 removed; the same false \"verdict parsed, findings did not.\" would print from `_display_terminal`. SC7 is consequently testable only with a hand-built fixture no production path produces. The real capped-plus-degraded interaction the design should address instead: when the cap fires on a derived verdict, D5 overwrites `verdictSource` DERIVED\u2192IMPOSED, and since `fallback_used` is JSON-only (src/squadron/review/models.py comment on the stop-reason fields), the human-readable artifact loses every trace that the verdict was not stated by the model. Re-derive D6 (drop it, or re-scope it to the derived\u2192imposed provenance loss) and rewrite SC7 accordingly.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D6 \u2014 A synthetic finding must not hide a degraded parse"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "D2 does not specify the \"diff key present but diff body empty\" case",
+   "description": "When `inputs` carries a `diff` key but `_run_git_diff` returns None (its git-failure path logs a WARNING and returns None), no diff injection occurs and D2's rule \u2014 stated only for \"inputs has no `diff` key\" \u2014 does not say whether `diff_injection` is None (key absent; a gate reads \"no diff\" though one was requested) or `DiffInjection(total, 0)` per D3's worst-case logic. Thin in practice because `EmptyDiffError` guards the no-changed-files case upstream, but the tri-state is the gate contract, so the choice should be stated.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D2 \u2014 `diffTruncated` is present exactly when the review had a diff"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"Two `review_client` call sites\" \u2014 only one production call site exists",
+   "description": "Implementation Notes step 2 says \"Update its two `review_client` call sites\"; a grep of `src/` shows a single call site (src/squadron/review/review_client.py:154). I could not verify `test_convention_root.py`/`test_injection_decision.py` as direct `_inject_file_contents` callers (only tests/review/test_content_injection.py confirmed). Minor, but an implementer hunting a second call site wastes time \u2014 verify the count and the test-file list before task breakdown.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Development Approach"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The cap changes loop convergence for `until: review.pass` pipelines; the design discusses only the checkpoint path",
+   "description": "D4 argues via `CheckpointTrigger.ON_CONCERNS`, but a pipeline loop gated on `review.pass` whose diff stays truncated and unread will now re-review each round until `loop.max` and exit through `on_exhaust` (910's semantics) instead of silently converging \u2014 the intended fail-visible direction, and `CONCERNS` is a valid member everywhere that consumes verdicts (`_aggregate_verdicts`' rank dict, `LoopCondition.REVIEW_CONCERNS_OR_BETTER`), but the retry is futile until the config or diff changes. Recording that consequence in D4 or the risk section would complete the picture.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+  }
+ ]
+}

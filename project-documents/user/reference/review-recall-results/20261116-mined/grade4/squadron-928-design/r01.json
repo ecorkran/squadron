@@ -1,0 +1,40 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Receipt name scheme lets two different packs resolve to the same receipt",
+   "description": "D5 builds the name as `base + \"-agents\" + \"-local\"`, with a user-chosen pack name as the base. Pack names are not constrained, so these pairs collide:\n- pack `foo` installed for agents and pack `foo-agents` installed for Claude both write `foo-agents.toml`;\n- pack `foo` installed `--local` and pack `foo-local` installed machine-wide both write `foo-local.toml`.\n\nUninstall takes its destination from the receipt (API Contracts, line 194). So `sq skills uninstall foo --ide codex` could read the other pack's receipt and remove its files from a different root. An install of one would also overwrite the other's receipt and run stale-removal against it.\n\nThis breaks the design's own invariant that receipts are \"the only authority for what squadron owns in a shared directory\". The Excluded list covers only collisions with squadron's own names as pre-existing; this pack-versus-pack case is new with D5.\n\nSmallest fix: reject pack names ending in a reserved suffix at install time, or have uninstall verify that the receipt's recorded pack and target match the request. Add the case to the receipt-name test table.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Agents install status is a prefix glob over a shared root, not the receipt",
+   "description": "For a prefix pack on the agents target, `installed_path` returns the \"first `root/p-*/SKILL.md`\". On Claude, `root/p/` is a directory the pack owns. On agents the root is shared with every other skill source, as D3 itself states. Any unrelated skill named `p-something` makes `sq skills list --ide codex` and the `<pack> (codex)` doctor row report the pack as installed. A partially removed pack also reads as installed.\n\nThis contradicts the convention at line 176 that receipts are the only authority in a shared directory. The per-target receipt already exists and lists exact files. Status on the agents target should come from that receipt (present, and its recorded files exist) rather than a name glob. That also removes the need for a per-surface path rule on the agents side.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:104-109"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Doctor's \"pack ships no Codex content\" row has no stated data source or failure handling",
+   "description": "D8 has `check_skill_packs` emit `WARN \u2014 pack ships no Codex content` for packs with no `agents/` directory. Knowing that requires inspecting the pack source. The Data Flow only resolves sources during install, via `resolve_source(entry) | clone_github(entry)`.\n\nFor a GitHub-sourced pack the design does not say whether doctor clones, reads a cache, or skips the row. A clone would put network I/O into a command that 905 defines as read-only inspection, with hang, timeout and offline cases not enumerated. A local source path that no longer exists is also unhandled.\n\nState how each source kind is checked and what the row shows when the source cannot be inspected without network. For example, show \"not installed\" with no content claim. Add that case to the \"doctor rows with and without Codex\" tests.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The rule's subcommand list is deferred to an implementation-time probe",
+   "description": "The plan asks the slice to enumerate every `sq` command that reaches a provider or the network. D10 gives a sound method and partial evidence. It leaves `sq auth login`, the daemon-client commands and three \"confirm by probe\" rows open, so the D9 snippet carries placeholders. This is acceptable because the procedure, the recording location and success criterion 8 are concrete.\n\nOne thing to settle in the task breakdown: D9 specifies a single `prefix_rule` whose second element is a list of alternatives. The \"yes\" rows include the two-token `sq skills install`. A second-position alternative `skills` would also allow `sq skills uninstall` and `sq skills list` to run unsandboxed. Either accept that and say so in the docs, or use a second rule with a three-token pattern.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Scope grew beyond the plan entry but is justified; nothing to cut",
+   "description": "The plan names `skills install/uninstall` and docs. The design adds:\n- `skills list --ide` and per-target doctor rows;\n- `PACK_LAYOUTS`;\n- the `analysis` pack move;\n- D12 hints in three skills;\n- the `sq models list` fix.\n\nEach traces to a stated defect: `list` and doctor hardcode the same root, D4 is needed for `sq skills install analysis --ide codex`, and D12 addresses #127's misleading error. The effort revision to 3/5 is recorded in the plan. If the status concern above is resolved by reading receipts, `installed_path` shrinks on the agents side, which offsets some of the added weight.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-scope"
+  }
+ ]
+}

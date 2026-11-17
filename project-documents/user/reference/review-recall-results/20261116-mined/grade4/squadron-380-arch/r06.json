@@ -1,0 +1,110 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "PR-keyed artifact naming is load-bearing and unstated, and collides with index-keyed consumers",
+   "description": "\"Persistence accepts a PR target\" says only that a PR review \"saves under a PR-keyed name that satisfies the review frontmatter contract without a slice index.\" The name is not decoration: it is the only durable key for the artifact, and at least four existing consumers glob the reviews directory by *index*:\n- `metrology/capture.py:resolve_target` globs `{index}-review.*` and errors on ambiguity;\n- `metrology/discovery.py:discover_judge_results` globs `*-review.*` in `REVIEWS_SUBDIR`;\n- `review/resolution_evidence.py:locate_review` globs `{index}-review.{type}.*.md` and `review_type_of()` splits the filename at position 1;\n- `review/resolution_artifact.py:next_revision` globs a `{index}-review.{type}.{slice}...` pattern.\n\nBecause a PR number and a slice index are both small integers, any PR name beginning with a bare number makes `sq review resolve 380` or `sq metrology capture 380` silently able to bind to the wrong artifact. The name also determines whether re-reviewing a PR overwrites-and-archives (one artifact) or accumulates (head sha in the name) \u2014 which is exactly the difference between \"Archiving ... apply unchanged\" being true or false. The document must at least state the constraint the name has to satisfy (not index-shaped, parseable by `review_type_of`) and who reads it. `Anticipated Slices` lists \"the PR naming and frontmatter\" as a task, but the constraint is architectural, not incidental.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Rules degrade explicitly\" is built on a premise the code does not have",
+   "description": "`Current State` asserts \"rules directories ... are resolved relative to the project\" and `Technical Considerations` promises that \"[i]n an unplanned repository the review runs with the template's rules and language auto-detection only, and says so, rather than silently reviewing with no conventions.\" `review/rules.py:resolve_rules_dir` has no notion of a project or of `project-documents/` at all \u2014 its precedence is CLI flag \u2192 `rules_dir` config \u2192 `{cwd}/rules/` \u2192 `{cwd}/.claude/rules/` \u2192 `~/.config/squadron/rules/` \u2192 None. Two consequences the design does not account for:\n- There is nothing to detect and no \"planned project\" predicate to detect it with; the promised explicit degradation and its reporting are new logic, not a switch on existing behaviour.\n- Because `resolve_rules_dir` keys on a *directory*, and the isolated-checkout principle makes the tool-enabled review's `cwd` the scratch worktree, the rules that resolve for a PR review are the PR head's `rules/` or `.claude/rules/` (if tracked), while `~/.config/squadron/rules/` still applies. So the statement \"the template's rules ... only\" is wrong in both directions for the default (sdk, tool-enabled) path.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The recorded head sha cannot come from the existing persistence writer",
+   "description": "`Technical Considerations` states \"The head sha recorded in the artifact is what was reviewed; a review posted against a PR whose head has since moved must say so,\" and `Envisioned State` says the comment \"carries ... the reviewed head sha.\" The only writer of that field is `review/persistence.py:format_review_markdown(reviewed_sha=...)`, and `save_review_result` calls `resolve_reviewed_sha(\".\")` \u2014 a hardcoded process cwd, not `inputs[\"cwd\"]` and not anything the caller supplies. Under the document's own \"never checks out or mutates the operator's working tree\" rule, the process cwd remains the operator's checkout, so a PR review would stamp the *operator's* HEAD as `reviewedSha`. This is not cosmetic: `review/resolution_evidence.py:resolve_review_diff_base` uses `reviewedSha` as the diff base for `sq review resolve`, so the provenance anchor for PR reviews would point at an unrelated commit. `save_review_result` has no parameter for it; the document never names this seam or says the head sha is threaded through explicitly.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Every existing review flag behaving as it does today\" is not achievable and not qualified",
+   "description": "The Overview promises the PR target runs \"the existing code review over it, with every existing review flag behaving as it does today,\" and `Anticipated Slices` promises \"full parity with the existing review flags.\" `sq review code` accepts `--diff`, `--files`, `--cwd`, `--rules`, `--rules-dir`, `--no-rules`, `--model`, `--profile`, `--no-tools`, `-v`, `--output`, `--output-path`, `--json`, `--no-save`. `--diff` is definitionally in conflict with a resolved PR range (it is the input the PR target replaces), `--cwd` is in conflict with the scratch worktree being the review cwd, and `--files` scoping interacts with range resolution. Slice 916 already established that an explicit `--diff` overrides everything else, so `sq review pr 123 --diff main` has no defined meaning in this document. Even the plan entry enumerates a narrower set (`--model`, `--profile`, `--no-tools`, `--rules`, `--files`, `-v`, `--output`) and omits `--diff`. The document needs an explicit accept/reject list, not \"parity.\"",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Overview"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "PR metadata will not reach the prompt on the default (tool-enabled) path",
+   "description": "\"hands range, working directory, and PR metadata to the existing code review\" and \"PR metadata ... is available to the prompt as additional inputs\" treat this as free reuse. In `review/review_client.py`, prompt inputs are only materialized by `template.build_prompt(inputs)` (the `code` builder understands `cwd`/`diff`/`files`/`diff_exclude_patterns`) and by `_inject_file_contents`, which (a) treats every input value as a *file path* unless the key is in `_SKIP_KEYS = {\"cwd\",\"diff\",\"files\"}`, and (b) is invoked with `include_bodies=should_inject_file_bodies(...)`, which is False whenever the run has an effective `read_file` tool \u2014 the default for the `code` template under the `sdk` profile. So title/body/linked-issues/threads added as inputs would be silently dropped on the primary path, and lifting that requires editing the *shared* injection function (also used by `pipeline/actions/review.py`), including its \"sized with the same truncation discipline as file injection\" requirement, which currently lives inside `_add_injection`'s total-size accounting. The \"One review engine ... passes through the same parser, rules loading, scope assertion, and tool wiring\" claim understates this as a boundary-crossing change.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The enumerated failure taxonomy contradicts the base-movement design and omits write-path failures",
+   "description": "\"Failure modes are enumerated and observable\" lists six modes that \"each ... [have] a WARNING-or-higher log line and a non-zero exit,\" including \"base moved since resolution.\" But `Technical Considerations` says a review against a moved head \"must say so\" \u2014 i.e. proceed and annotate \u2014 and the document elsewhere defines no re-resolution step that would make \"base moved since resolution\" an error rather than a fact. Meanwhile the actual hazard, the head moving between resolution and `--post`, appears nowhere, and there is no exit-code/observability statement for a rejected `--post`, for a comment exceeding the host's body limit, or for a failed save on the PR-keyed path. Because `--post` is the one write and the whole \"never surprise the operator\" principle rests on it, its failure semantics should be enumerated at the same level of detail as resolution.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`sq pr create`'s host-side preconditions and failure modes are missing",
+   "description": "`sq pr create` \"gathers the branch's commits against the target ... shows it; and creates the PR through the adapter.\" Nothing addresses the preconditions `gh pr create` actually enforces: the local branch must exist on the remote (or an upstream must be resolvable), the remote must be identified when the repository has several, and a PR may already exist for the head branch (a re-run after a failed first attempt). None of these appear in the enumerated failure modes, which cover only the review path, and none appear in `Anticipated Slices` (\"dry-run, and creation through the adapter\"). The document's own design goal \u2014 \"PR descriptions traceable to inputs\" \u2014 depends on the commit list, which is derived from a base ref that must be fetched/resolvable in a repository that \"squadron did not plan\" and that may have no local `origin/main`.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The squadron data directory is unnamed and would be silently ignored by the config registry",
+   "description": "\"For an unplanned repository ... the location is a configured squadron data directory\" is stated three times without naming a key. `config/keys.py` is a closed registry: `load_config` warns and **ignores** any key not in `CONFIG_KEYS`, and `get_config` raises `KeyError` for unknown keys. So \"configured\" is not a property squadron currently has; the document must name the key, its scope (user-level is the only one that works in a foreign repo, since `project_config_path` resolves `.squadron.toml` relative to cwd), and its default. This matters more than it looks: `save_review_result` does `target.mkdir(parents=True, exist_ok=True)` unconditionally, so the failure mode of an unset key is not \"no artifact\" but `project-documents/user/reviews/` being created inside someone else's repository \u2014 precisely the outcome the document promises to avoid. `metrology.store_dir` is the existing precedent for how such a key is named and documented.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Doctor's adapter checks break the pure-check contract and change `sq doctor`'s exit semantics",
+   "description": "\"`sq doctor` gains checks for the host adapter (`gh` present, authenticated, host reachable).\" `cli/commands/doctor_checks.py` states its contract in its docstring \u2014 \"Pure check functions ... no network, no subprocesses\" \u2014 and enforces it structurally: `run_all_checks` calls each check with pre-resolved values (the caller resolves `git_hooks_path` via `run_git` and passes it in). Three of the proposed checks are subprocesses, one is a network call, and they would need cwd/remote context threaded the same way. Separately, the doctor's exit code is `1 if any(r.status == CheckStatus.MISSING ...)`, and the document says only that setup \"reports its absence\" \u2014 if the adapter checks are MISSING rather than WARN, `sq doctor` starts exiting non-zero for the majority of installations that have no `gh`, a behaviour change to an existing command that the document does not acknowledge or size.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The traceability rule is adopted, then contradicted by the body-composition mechanism",
+   "description": "\"PR descriptions traceable to inputs\" states \"Nothing is asserted that no input supports, and the body says which inputs it was built from,\" explicitly adopting 360's rule. But `Technical Considerations` has a one-shot model call produce the body, with only four deterministic parts called out (\"commit list, linked slice, review provenance, reviewed sha\"). Two of the five fixed sections have no named input at all \u2014 \"why\" is inference over the diff, and \"known gaps\" is not derived from anything the document names. Either the model-composed sections need a constraint (cite the input for each claim; leave the section empty when unsupported), or the traceability goal needs to be qualified to the deterministic parts. As written, the document asserts a property its own mechanism cannot guarantee.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design Goals"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The one-shot composition machinery is not identified, and the only candidate lives in the pipeline package",
+   "description": "\"a one-shot model call through the existing provider-profile machinery, with the same model and profile flags reviews use.\" There is no generic one-shot client: `review/review_client.py:run_review_with_profile` requires a `ReviewTemplate` (prompt builder, structured-output injection, rules, parsing), and the only non-review one-shot implementation is `pipeline/summary_oneshot.capture_summary_via_profile_with_telemetry` (~90 lines: profile lookup, `AgentConfig`, agent lifecycle, `sdk_type` filtering). A new `pr` component reusing it would depend on the pipeline package; not reusing it means a third hand-rolled copy of that loop, which is the duplication CLAUDE.md forbids and which the document's \"There is no second reviewer\" principle was written to avoid. The document should name which one it means.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Stated pipeline interface parity has no seam in the pipeline review action",
+   "description": "\"Interface parity\" says \"Whatever `sq review pr` accepts, the `/sq:review` slash command and any later pipeline input accept identically.\" `pipeline/actions/review.py` is not structured as a transport for an arbitrary target: its `_INPUT_PASSTHROUGH_KEYS` is a fixed tuple, its slice resolution goes through `resolve_template_inputs`, and `review/template_inputs.py:TemplateInputSpec.source` is typed `Callable[[SliceInfo, str], str | None]` with `TEMPLATE_INPUTS` keyed by template name. A PR target therefore needs a new param, a new branch in `_review`, and a target abstraction that is not `SliceInfo` \u2014 an edit to the review action, not a new transport. Given the document explicitly declares the pipeline the \"later decision\" and simultaneously relies on parity as a design principle, the extension point should be stated (and the `SliceInfo`-bound registry acknowledged as a constraint).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "The protocol's operation list is GitHub-shaped in two places, and one of them contradicts the token rule",
+   "description": "\"Host behind a protocol\" claims \"A second host is a new implementation, not an edit,\" and `Technical Considerations` insists \"[t]he protocol must not leak `gh`-specific shapes.\" Yet the enumerated operations include \"read its threads\" and \"identify the operator.\" Unresolved *review threads* are a GitHub review-thread concept with no direct analogue in hosts whose review model is per-note resolvability; modeling it neutrally requires a stated abstraction the document does not give. More consequentially, \"identify the operator\" plus \"never holds a token of its own\" means the protocol's contract is implicitly \"an already-authenticated host CLI exists,\" so the promised direct-API implementation is not buildable under the design's own constraint \u2014 a direct-API adapter needs a token, which the `Design Goals` forbid. The protocol is described by prose operation names with no signatures, no result types, and no error taxonomy binding to the six named failure modes.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Design Goals"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "`--post` idempotency is two behaviours, and the comment's limits are unspecified",
+   "description": "\"A later invocation on the same PR updates or supersedes rather than stacking\" names two different mechanisms for one requirement; updating destroys the prior comment's text, which is the same loss 306/917 spent `archive_existing_review` and a verification read-back to prevent. \"find and update its own prior comment\" also does not constrain \"own\" to the *current* login, which matters when a different operator runs `--post` on the same PR. Separately, one comment carrying verdict, findings, model, and head sha plus (per 917) a digest and possibly a raw response can exceed the host's per-comment body limit, and no truncation rule is stated for it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The isolated checkout is the primary path, and the fetch leg's credentials are outside the doctor's model",
+   "description": "\"Concurrency with the operator's own worktrees, disk use, and cleanup on failure are the slice-level questions\" defers the mechanics of what is not an edge case: the `code` template declares `allowed_tools: [read_file, list_files, grep]` and the default profile is `sdk`, so tool-enabled is the normal PR-review path and the scratch worktree is its normal working tree \u2014 including its failure path, which leaves a registered worktree in the operator's repository, a persisted mutation of the thing the design promises not to touch. The fetch leg likewise depends on git-transport credentials to the host (SSH key, or an HTTPS credential helper) that `gh` being authenticated does not imply, particularly on enterprise hosts with SSO; the proposed doctor checks cover `gh` presence/authentication/reachability only, so doctor would report healthy while \"head ref not fetchable\" is the actual outcome, with no distinction between no-remote, unexposed ref, and missing credential.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+  }
+ ]
+}

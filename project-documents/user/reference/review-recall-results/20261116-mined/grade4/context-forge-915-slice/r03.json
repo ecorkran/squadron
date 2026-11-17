@@ -1,0 +1,26 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Detection rule's file-reading mechanism is unspecified and has no supporting API",
+   "description": "The design states the new `ConsistencyChecker` rule \"scans the shared project file for any key whose `CONFIG_KEYS[key].scope === 'personal'`,\" but no mechanism is specified and none currently exists. `ConfigManager` exposes no API to enumerate the raw keys present in a *specific* file: `get()` resolves one key through the full precedence chain, and `list()` is built on `get()`, so with the new precedence a personal key present in *both* files resolves as `source: 'project-personal'` and the shared-file copy is invisible. The `readToml` helper that would be needed is module-private and not exported (`packages/core/src/config/ConfigManager.ts`), and the `Component Structure` / `API Contracts` sections add only `getProjectPersonalConfigPath` \u2014 no key-enumeration helper. Since the design's own Collision Semantics acknowledge the both-files case exists, the detection rule needs a concrete read API (e.g. an exported per-file key enumerator or a new `ConfigManager` method), and the design should name it. As written, the implementer must invent an unstated cross-layer dependency (reading TOML directly from `introspection/`) to satisfy the rule.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "\"existing config-hygiene-style checks\" do not exist in ConsistencyChecker",
+   "description": "The design says the rule is \"added alongside the existing config-hygiene-style checks.\" No such rule category exists \u2014 the current rules are `task-vs-plan`, `frontmatter-vs-computed`, `missing-artifact`, `plan-vs-frontmatter`, `task-file-status`, `review-gate`, `duplicate-index`, `plan-status-vs-entries`, `arch-status-vs-plans`, `initiative-*`, `stale-worktree-path`, and `frontmatter-schema`; the only existing config interaction is `resolveGateConfig()`. The reference could mislead an implementer into looking for a pattern to copy. Minor wording fix.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "MCP `workflow_check` tool description is not updated for the new rule",
+   "description": "The design correctly notes the rule \"surfaces automatically through ... MCP `workflow_check`,\" but the `Component Structure` MCP entry lists only `configTools.ts` as changed. `packages/mcp-server/src/tools/workflowTools.ts`'s `workflow_check` description enumerates the categories it detects, so adding a rule leaves that description stale. Either add `workflowTools.ts` to the change list or state explicitly that the description is left as-is.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#component-structure"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers formatted as checkboxes, not plain lines",
+   "description": "The review instruction specifies that `**Commit**:` markers should be \"plain lines, never checkboxes.\" All eight commit markers in this file are formatted as checklist items with unchecked boxes: `- [ ] **Task 2C: Commit** \u2014 feat(core): ...` (and similarly for Tasks 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). This conflicts with AGENTS.md's general convention that \"each item and subitem should have a `[ ]` checkbox,\" creating genuine tension. However, commit markers function as commit-point markers rather than tasks to check off \u2014 the commit either happens or doesn't. The placement and frequency are correct (at working, tested points, not after every task, not only at the end), so this is a format issue only. Converting them to plain lines (e.g., `**Commit:** feat(core): add adoption.state config key and state helpers`) would resolve the conflict.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

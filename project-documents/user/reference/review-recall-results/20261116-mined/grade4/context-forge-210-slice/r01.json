@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Managed-marker overwrite protection covers only 2 of the 4 Copilot write targets",
+   "description": "The slice declares (line 17) that the Copilot target writes to `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/`, and `.github/prompts/`, but the safety check \u2014 `isManagedCopilotFiles(projectPath)` \"checks marker in `.github/copilot-instructions.md` and `AGENTS.md`\" (line 109; sequence step 4, lines ~99-100) \u2014 guards only the first two. Nothing defines the overwrite policy for `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`: if a user has hand-authored instruction/prompt files there, step 5 (the script run) can overwrite them with no prompt and no backup. The parent plan's success criterion is unqualified: \"Re-running on a project with existing unmanaged files prompts before overwriting (same safety as Claude path)\" (`200-slices.developer-onboarding.md:214`). This also conflicts with the project principle \"Never use silent fallback values. Fail explicitly.\" Fix is one sentence: either extend the marker/backup policy to the two directories (per-file check, or an explicit \"directories are CF-owned, backed up on first collision\" rule), or state the script-side per-file policy the guide backend implements \u2014 but the design must specify it, since the plan criterion leaves it unmet as written.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:109"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tool-guide deliverable from the plan's success criteria is dropped",
+   "description": "Plan entry 210's success criteria require the tool guide be \"referenced in slice design, promoted to a proper published tool guide if needed\" (`200-slices.developer-onboarding.md:218`). The slice design does not reference `user/tool-guides/copilot-vscode/setup-ide.md` at all \u2014 no docs task, no test-coverage line. The existing file is a raw AI-chat capture (a Perplexity answer with citations), not a published guide, so the \"promoted if needed\" clause is likely active \u2014 especially since the slice's own Value section names an external user as the driver, and that user needs instructions for the new flow. This is a small, cheap deliverable to add back; dropping it leaves the plan criterion partially unmet without a stated reason.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Worktree propagation writes have no stated overwrite policy",
+   "description": "Sequence step 6 runs `propagateToWorktrees(project, 'copilot')` after the root-level managed check, satisfying the plan criterion that propagation copies to all registered worktrees \"after root setup-ide\" (`200-slices.developer-onboarding.md:215`). However, the slice doesn't state whether per-worktree copies respect the managed-marker/backup policy or are silent writes, nor whether propagation still runs when the user declined the root overwrite prompt. Two unspecified behaviors on a write path that multiplies by the worktree count; one clarifying sentence would pin it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:102"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "\"Unless it lands cleanly\" clause on custom agents is an unlocked conditional",
+   "description": "\"Not included: Copilot custom agents translation (... defer implementation unless the instruction + prompt layer lands cleanly)\" matches the plan's non-goal wording, but the escape clause has no criterion \u2014 it leaves the door open to pulling agent translation into this slice mid-flight. Deferral is the conservative and correct call (the plan's table also hedges with \"implement if backend is stable\"); consider making the deferral unconditional here and recording agent translation as its own follow-up.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Skill \u2192 prompt-file frontmatter translation contract is unspecified",
+   "description": "The plan's file-mapping table lists the prompt-file frontmatter surface (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`), but the slice only shows file-layout examples and gives no mapping rule for skill frontmatter (which has no `argument-hint`/`agent`/`model`/`tools` equivalents). The `applyTo` translation gets a dedicated design-decision section; this one doesn't. The guide-script implementer will have to invent defaults \u2014 which the project rules forbid (\"Do not hard-code magic defaults\", \"Never use silent fallback values\"). One line (e.g., \"skill `name`/`description` carry through; unsupported fields omitted, never defaulted\") closes it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:46-47"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Helper described with two different signatures",
+   "description": "Technical Scope introduces `isManagedCopilot(filePath)` (line 29) while Files Changed names `isManagedCopilotFiles(projectPath)` checking two files (line 109). Same convention, different shape \u2014 trivial editorial drift, but worth unifying to one name and signature so the implementation and tests reference a single definition.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+  }
+ ]
+}

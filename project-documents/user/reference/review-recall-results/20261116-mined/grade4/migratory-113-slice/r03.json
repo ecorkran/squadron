@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Density signal records post-cap counts, contradicting the stated pre-cap intent",
+   "description": "The design states the density signal is \"recorded from the CSR `filtered_counts` (post-`exclude_self`, pre-cap) at the end of each tick\" and explicitly argues (citing perf journal Entry 5) that the dispatch decision must use pre-cap density, not capped density. However, the Tick Integration diagram places `spatial.record_density(filtered_counts)` as step 8 \u2014 *after* step 4's optional `apply_neighbor_cap`, which reassigns `filtered_counts`. In the actual `tick.py` flow, `apply_neighbor_cap` overwrites `filtered_counts` with the capped version, so by step 8 the variable holds post-cap counts. With `max_neighbors` set (the production config per Entry 5 uses `k=1`), `filtered_counts` would be \u22641 per agent, giving `mean_neighbors_per_agent \u2264 1`, far below the default threshold of 10. The dispatcher would switch to grid after the first tick and never switch back, defeating the slice's core value proposition (the grid loses in the clustered regime). The design needs to explicitly capture the pre-cap `filtered_counts` (e.g., save it before step 4) and record that value, or move the `record_density` call before the cap.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:156-166"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`world_bounds` type mismatch under-specified in server wiring",
+   "description": "The design lists `ServerConfig.simulation.world_bounds` as \"provides the grid's `world_bounds`\" and shows `_build_spatial` passing `world_bounds=self.config.simulation.world_bounds` to `HashGridQuery(cell_size=..., world_bounds=...)`. But `HashGridQuery.__init__` expects `world_bounds: tuple[float, float, float, float]` \u2014 a `(x_min, y_min, x_max, y_max)` 4-tuple \u2014 while `ServerConfig.simulation.world_bounds` is a `WorldBoundsConfig` dataclass with `width`, `height`, `policy`, and `soft_bounds` fields (no `x_min/y_min/x_max/y_max`; the world is implicitly `[0, width] \u00d7 [0, height]`). The `_build_spatial` helper as described would pass a `WorldBoundsConfig` object where a 4-tuple is expected, causing a runtime error. The conversion `WorldBoundsConfig \u2192 (0.0, 0.0, width, height)` is not described anywhere in the design. The `_derive_cell_size` helper is specified but the `world_bounds` conversion is not.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:228-240"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`initial_backend` claimed configurable but not exposed in `SpatialConfig`",
+   "description": "The design's Technical Decisions section states: \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator running a scattered-start scenario can choose grid-first.\" However, the `SpatialConfig` dataclass (lines 187-192) includes only `backend`, `grid_threshold_mean_neighbors`, and `hysteresis_band` \u2014 no `initial_backend` field. The `_build_spatial` wiring (line 238) hardcodes `initial_backend=\"brute\"` for the adaptive case. An operator cannot actually choose grid-first without code changes, contradicting the stated design intent. Either add `initial_backend` to `SpatialConfig` or remove the configurability claim.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:142-143,298-301"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`record_density` feedback via `hasattr` is a documented, acceptable design choice",
+   "description": "The `hasattr(spatial, \"record_density\")` guard introduces a feedback channel from `tick.py` back into the spatial object \u2014 a mild departure from the architecture's unidirectional data-flow description (caller \u2192 engine). The design explicitly considered adding `record_density` to the `SpatialQuery` protocol with a no-op default and rejected it to avoid coupling the protocol to a dispatcher concern. This stays within the architecture's \"spatial index is stateful and owned by the caller\" principle (the engine itself remains stateless), and the `hasattr` guard keeps `BruteForceQuery`/`HashGridQuery` free of dispatcher-specific API. No action required; noting for the record.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:170-176"
+  }
+ ]
+}

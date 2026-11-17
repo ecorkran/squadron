@@ -1,0 +1,12 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "D10 sandbox probe results deferred to implementation; mechanism is specified",
+   "description": "The D10 subcommand-classification table marks several entries as \"yes \u2014 confirm by probe,\" \"probe with `sq serve` running,\" and one as \"unprobed\" (`sq auth login`). The exact rule alternatives therefore depend on runtime probing that has not yet been completed. This is appropriate for a design document: the mechanism (run each command under `codex sandbox`, classify by network/filesystem denial, build the rule from the \"yes\" rows) is fully specified, and the design states the probe results table goes into the DEVLOG. Success criterion 8 requires `codex execpolicy check` to return `allow` for each listed subcommand, which will be verified once the probe completes during implementation. No action needed \u2014 noted for traceability.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Technical Decisions"
+  }
+ ]
+}

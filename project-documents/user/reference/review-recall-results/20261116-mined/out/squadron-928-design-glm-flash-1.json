@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Plan's two open design questions are answered with recorded rationale",
+      "description": "The plan required the design to settle \"refusing an `agents` install of a pack that uses `$ARGUMENTS`\" vs \"a pack-format declaration of per-target content\" and to answer whether `sq doctor` should detect a missing Codex rule. D2 chooses declaration (`agents/` directory, loud exit 1 otherwise) with a substantive rejection of auto-conversion (frontmatter rewriting unowned content, prose-borne `$ARGUMENTS` dependencies). D11 answers the doctor question (no rule check) with concrete failure-mode reasons: false WARNs on valid setups (project layers, system layers, approvals-off) and coupling to a preview CLI surface. Both match the plan's intent and are testable via criteria 3, 5, and 8.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claude-path invariance and 925 consumption verified against source",
+      "description": "Verified against the code: `skills.py` currently hardcodes `~/.claude/commands` with no `--ide`/`--local` (#125 premise holds); `check_skill_packs` at `doctor_checks.py:428` re-derives destinations exactly as D6 claims, duplicating `skills list` logic; skills uninstall's flat `unlink` loop leaves nested skill directories behind, justifying D7; `_command_targets_to_check(None)` exists in `doctor_checks.py:577` for D8 to reuse; `receipt_base` is consumed only via `receipt_name` in `install.py`, so the D5 `receipt_suffix` rename is contained and produces exactly today's four receipt names; `commands/agents/analysis-*` exists today and `commands/analysis/` holds only flat `.md`, so the D4 move matches the stated before/after. Dependency direction is unchanged (CLI commands \u2192 skills package).",
+      "file_ref": null,
+      "category": "dependency-check",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#architecture"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor's \"ships no Codex content\" classification is unspecified for pack sources doctor cannot inspect without network",
+      "description": "D8 says a pack with no `agents/` content reports `WARN \u2014 pack ships no Codex content` with no install hint (because the hint would fail), while an installed-or-not determination uses `installed_path(entry, root)`. But `installed_path` inspects only the destination; distinguishing \"not installed\" from \"ships no Codex content\" requires inspecting the pack's *source* for `agents/`. For local and bundled sources that is a filesystem read, but for a `github:` source it requires a clone \u2014 which `doctor_checks.py`'s own module contract forbids (\"no network, no subprocesses\") and which D8 never addresses. The walkthrough (step 7) only exercises a local `/tmp` source, so the gap is untested. The requirement left unmet: doctor must decide the two WARN shapes with a network-free rule for every source kind, and say what a github-source pack reports on the agents target (and that the decision must not produce the install hint D8 itself calls broken). State the rule in D8 and add a github-source row to criterion 5's tests.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"One line each\" understates the `sq model list` fix surface",
+      "description": "The Overview says the `sq model list` \u2192 `sq models list` fix is \"one line each\" in `commands/sq/review.md` and `commands/agents/sq-review/SKILL.md`. Grep shows three occurrences per file (lines 60/112/158 and 82/134/180 respectively) \u2014 six edits, not two. Trivially small either way, but the description should match the surface so the task breakdown doesn't under-count. Criterion 9 (\"both review command files say `sq models list`\") is correctly stated.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#overview"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D4's claim that nothing else reads `commands/analysis/` recursively is not fully verifiable from this review",
+      "description": "D4 asserts \"Nothing else reads `commands/analysis/` recursively: the Claude writers and `metrology/audit.py` glob `*.md` at the top level, so the new subdirectory is invisible to them.\" The Claude writers' top-level globs are confirmed (`install.py` via `bundle_subdirs`, `installer.py:87` `source_path.glob(\"*.md\")`). The `metrology/audit.py` claim could not be confirmed from the files reviewed \u2014 the metrology globs found (`audit.py:283`, `capture.py:98`, `discovery.py:46`) operate on review directories, not the bundled command tree, and nothing in metrology was seen reading `commands/analysis/`. The implementer should confirm that specific citation before relying on it, since the safety of the move rests on it.",
+      "file_ref": null,
+      "category": "dependency-check",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Agents-target status glob can attribute one pack's skills to another when prefixes overlap",
+      "description": "The status table defines the agents-side proof for a prefix pack as \"first `root/p-*/SKILL.md`\". In the shared `~/.agents/skills` root, a pack with prefix `foo` will match a pack with prefix `foobar`'s skill directories, which D3's own naming rule (`<prefix>-<something>`) makes syntactically valid. The Excluded section covers collisions with squadron's own receipt names or skill names, not pack-vs-pack prefix overlap. On the Claude path the analogous check is exact (`root/p/`), so this is new looseness introduced by the new status path. Edge-case only, but a one-line note on the collision (or tightening the proof to receipts) would keep D6's \"one place that knows where a pack lands\" honest.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#data-flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D9's file-name deviation from the plan is deliberate and correctly recorded",
+      "description": "The plan's Part B names `~/.codex/rules/default.rules`; the design puts the rule in `~/.codex/rules/squadron.rules` (D9), justified because Codex appends its own approvals to and rewrites `default.rules`. The deviation is explicit (\"README's existing `default.rules` snippet is replaced, not duplicated\"), consistent with the README state verified at lines 87\u201392, and is the right call \u2014 recording it here so the plan-vs-design difference is a reviewed decision, not drift.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Plan's two open design questions are answered with recorded rationale",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "dependency-check",
+      "raw_category": null,
+      "summary": "Claude-path invariance and 925 consumption verified against source",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Doctor's \"ships no Codex content\" classification is unspecified for pack sources doctor cannot inspect without network",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "\"One line each\" understates the `sq model list` fix surface",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "dependency-check",
+      "raw_category": null,
+      "summary": "D4's claim that nothing else reads `commands/analysis/` recursively is not fully verifiable from this review",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Agents-target status glob can attribute one pack's skills to another when prefixes overlap",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "D9's file-name deviation from the plan is deliberate and correctly recorded",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-16T20:57:10.968876",
+  "model": "z-ai/glm-5.3-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 136973,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 128000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.3-flash",
+  "answering_models": [
+    "z-ai/glm-5.3-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1056393,
+  "cached_tokens": 811025,
+  "cache_write_tokens": null,
+  "completion_tokens": 34956,
+  "reasoning_tokens": 32946,
+  "duration_seconds": 323.97863687505014,
+  "cost_usd": 0.07861394999999999,
+  "cost_basis": "alias_pricing"
+}

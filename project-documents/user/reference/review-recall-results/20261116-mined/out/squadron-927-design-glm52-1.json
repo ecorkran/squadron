@@ -1,0 +1,171 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Design aligns with slice plan entry 25 and architecture scope",
+      "description": "The slice design covers all three parts the slice plan assigns (Part A: record truncation, Part B: cap truncated+unread PASS, Part C: record answering model) and stays within the maintenance initiative's scope \u2014 no new features, just recording facts about existing runs and closing a correctness gap. Exclusions match the plan's \"not in scope\" list (defaults, #114). Diff ordering and `--stat` are deferred to #137, which the plan explicitly permitted (\"in scope only if design shows it is small; otherwise it becomes an issue\"). The design's three parts are independently deliverable per the architecture's guidelines.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "VerdictSource.IMPOSED addition is justified and bounded",
+      "description": "The existing `VerdictSource` enum (verified in `src/squadron/review/models.py:28-30`) is a closed two-value vocabulary (`STATED`, `DERIVED`) whose docstring says it was kept closed to avoid open reason strings. The design's D5 adds `IMPOSED` and argues the docstring's concern was about reason strings, not member count \u2014 which is accurate reading of the existing docstring. The design verifies no external reader consumes `verdictSource` (grep of context-forge) and that only `impose_diff_coverage` sets it. This is a contract expansion that is well-justified and properly bounded.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "aiModel semantic change is the highest-risk integration point",
+      "description": "The design changes `aiModel` from the requested model to the answering model. This is a semantic change to an existing consumed contract (context-forge gates, metrology identity). The design's argument \u2014 \"That is the meaning its consumers assumed all along\" \u2014 is reasonable but is an assertion about external consumer assumptions, not a verified claim. The metrology consequence (D10: OpenAI-direct judges change identity once, from `gpt-5` to `gpt-5-2025-08-07`) is acknowledged and accepted as correct calibration. This is not a blocking issue since the design explicitly calls out the consequence and the change is in the direction of correctness, but it is the integration point most likely to surprise a downstream consumer and warrants the design's stated care.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for all provider-reporting paths are enumerated",
+      "description": "The design enumerates handling for every provider-reporting case: normal match (D10), dated snapshot (D9/D10), substitution (D9/D10), provider reports nothing/Codex (D11), multiple models in one run (D12), and provider-failure artifacts with no answer (D13). Each has an explicit strategy, not \"TBD.\" The \"not reported\" case (D11) is deliberately not a silent fallback \u2014 the artifact states it in the Run Digest. No new I/O paths are introduced; the design instruments existing git-diff and provider-stream paths, so no new hang/timeout/disconnect enumeration is required.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality \u2014 mechanism count fits the slice",
+      "description": "The design introduces three focused mechanisms (DiffInjection accounting, impose_diff_coverage rule, answering-model stamping) across a reasonable set of components. The `answers_as_requested` regex rule (D9) is the heaviest piece, but the design explicitly avoids speculative model-id forms and defers real-id capture to Phase 6 verification (walkthrough step 6), which is the lighter approach. The design names what can be cut: file-body truncation (#138), diff ordering (#137), and judge-findings `round_diff` are all excluded with issue references. No abstraction is introduced that nothing uses \u2014 `DiffInjection` is consumed by Part A rendering, Part B's cap, and the JSON contract.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Interface parity between CLI and pipeline paths is structural",
+      "description": "Both `sq review` and the pipeline `review` action call `run_review_with_profile` then `save_review_result` \u2192 `format_review_markdown`, and every new fact rides `ReviewResult`. The design explicitly states \"No second code path to keep in sync\" and success criteria SC1 and SC12 verify both paths. This matches the interface-parity requirement the slice plan implies and that prior slices (916, 919) enforced.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#data-flow"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Design aligns with slice plan entry 25 and architecture scope",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "VerdictSource.IMPOSED addition is justified and bounded",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "aiModel semantic change is the highest-risk integration point",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes for all provider-reporting paths are enumerated",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality \u2014 mechanism count fits the slice",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Interface parity between CLI and pipeline paths is structural",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#data-flow",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T20:46:44.164259",
+  "model": "z-ai/glm-5.2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 18437,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "z-ai/glm-5.2",
+  "answering_models": [
+    "z-ai/glm-5.2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 345218,
+  "cached_tokens": 295360,
+  "cache_write_tokens": null,
+  "completion_tokens": 6772,
+  "reasoning_tokens": 4131,
+  "duration_seconds": 30.121271167183295,
+  "cost_usd": 0.0802272,
+  "cost_basis": "alias_pricing"
+}

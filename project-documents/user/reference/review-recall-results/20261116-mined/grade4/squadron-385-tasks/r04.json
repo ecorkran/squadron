@@ -1,0 +1,12 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "No `**Commit**:` markers in the file",
+   "description": "The file contains no commit markers. Per the review criteria, \"A file with no markers is acceptable; do not require them.\" Recording this as an observation, not a finding \u2014 the breakdown is otherwise complete.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

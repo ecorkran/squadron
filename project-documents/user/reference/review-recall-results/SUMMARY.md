@@ -8,7 +8,7 @@ status: draft
 
 # Model benchmark: what we measured and what it says
 
-The short version of [RESULTS.md](RESULTS.md) (18 sections of tables) for a person. The same answers in a form an agent can look up: [ANSWERS.yaml](ANSWERS.yaml). Where the two disagree, RESULTS.md and the data files are the source.
+The short version of [RESULTS.md](RESULTS.md) (19 sections of tables) for a person. The same answers in a form an agent can look up: [ANSWERS.yaml](ANSWERS.yaml). Where the two disagree, RESULTS.md and the data files are the source.
 
 ## What was measured
 
@@ -21,6 +21,7 @@ The short version of [RESULTS.md](RESULTS.md) (18 sections of tables) for a pers
 | Design review on mined cases | 43 cases (19 arch, 32 slice, 31 task flaws; 82 flaws in all) from squadron, context-forge and migratory history | 258 + 344 + 43 reviews, up to 7 configs | RESULTS 16-17 |
 | Writers | 5 design slices, 4 task slices | 4 writers per slice, opus-high judging both orders | RESULTS 17 |
 | Comb on design reviews | the 43 mined cases, haiku-xhigh reviews | 129 comb calls | RESULTS 18 |
+| Cheap OpenRouter design reviewers | the 43 mined cases | glm52, glm-flash, deepseek4-flash, minimax, one run each | RESULTS 19 |
 
 A design flaw counts only if the document contradicts itself, its parent or the code, omits a success criterion, or has a task that cannot be done as written. Later decisions and scope changes never count. Flaws were mined from review history and checked against the text at that commit.
 
@@ -32,6 +33,7 @@ Confidence is about the evidence, not the model.
 |---|---|---|
 | Worst reviewer | Sonnet at any effort. About 40% recall against 47-57% for the other Claude configs; on task breakdowns 9-10 of 31 flaws against 17-21. Also last in the code grid. | High |
 | Best design reviewer for the money | haiku-xhigh: $0.34 a review, ties the dearer configs on recall (43.7 flaws per run of 82, fable-medium 46.3, opus-high 42.7, opus-medium 38.7). | High on value; medium on who is top, because the top three are inside the 3-6 flaw run-to-run spread |
+| Cheap reviewers (OpenRouter) | glm-flash finds 37 of 82 for $0.06 a review (haiku-xhigh 43 for $0.24) and is the best of all on slice designs (19); weak on tasks (10) and arch (8). deepseek4-flash 33. glm52 19 and minimax 13 are not worth a slot. glm-flash as a second reviewer matches fable-medium's addition to haiku-xhigh at 1/40 the cost. | Medium (one run; precision not measured) |
 | Design review against code review | haiku-xhigh leads both. The rest differs: sol (Codex) found 12 of 42 known bugs at 79% precision on code, and 2 of 25 flaws on design. | Medium (sol design: 9 cases, one run) |
 | Combs | Code: the opus-high comb keeps 91% of real findings and all known bugs, and cuts noise by 93%. Design: it keeps 78% of real findings, loses 7 of 58 distinct flaws, and costs three times the review. | Design medium-high; code medium (one run, 10 cases) |
 | Two reviewers | fable-medium plus haiku-xhigh find 66 of 82 flaws; haiku-xhigh alone, over three runs, 58. On code, haiku-xhigh plus sol cover 8 of 14 known bugs, more than either alone. | Medium |
@@ -53,14 +55,15 @@ Ideas that came out of the data, so they are not lost:
 
 ## Costs
 
-API-equivalent dollars on a subscription, not charges. Design review per review: haiku-xhigh $0.34, opus-medium $0.79, opus-high $0.96, fable-medium $2.10. Code review per review: haiku-xhigh $0.53-0.62, sonnet-high $0.52-0.57. Design writing per draft (two rounds with a haiku reviewer): haiku-xhigh $0.95, sonnet-high $1.99, opus-high $3.47, fable-medium $4.88. Comb per call: code $0.26 (opus-high), design about $1.00. Grading is about 60k tokens per case with one Sonnet agent.
+API-equivalent dollars on a subscription, not charges. Design review per review: glm-flash $0.06, haiku-xhigh $0.24-0.34, opus-medium $0.79, opus-high $0.96, fable-medium $2.10. Code review per review: haiku-xhigh $0.53-0.62, sonnet-high $0.52-0.57. Design writing per draft (two rounds with a haiku reviewer): haiku-xhigh $0.95, sonnet-high $1.99, opus-high $3.47, fable-medium $4.88. Comb per call: code $0.26 (opus-high), design about $1.00. Grading is about 60k tokens per case with one Sonnet agent.
 
 ## What we cannot say
 
 - Who writes the best architecture document: `sq replay` has no arch phase (issue #368).
 - How fable and opus review code: the code grids did not include them.
 - Precision of design reviews: only recall was measured; noise is seen only through the comb.
-- Defaults for the P4, P5 and P6 pipelines (#339): the data now supports a recommendation, but nobody has compared defaults.
+- Defaults for the P4, P5 and P6 pipelines (#339): set from this data on 2026-11-17 (haiku-xhigh reviewers, fable-medium and opus-high writers); no run has compared the new defaults against the old.
+- Implementation writers (the model behind P6): not measured.
 - Combs on fable-medium or pooled design reviews: skipped by decision, since the haiku result gave no reason to expect a different answer.
 
 ## Limits

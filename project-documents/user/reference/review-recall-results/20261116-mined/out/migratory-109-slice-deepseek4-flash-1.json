@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Protocol change collides with slices 103/104 without recording the required update or sequencing",
+      "description": "The slice declares an interface to 103 (`interfaces: [103-predator-prey-dynamics, ...]`) and changes `BulkForce.__call__`'s `neighbor_lists` parameter to `NeighborData`. But 103's design explicitly asserts the opposite: \"No changes to tick(). The tick function remains unchanged. Forces receive the same `(state, neighbor_lists, profiles, active_indices)` arguments\" (103-slice, \"No changes to tick()\"), and both `FlightForce` and `PursuitForce` sketches are written against `neighbor_lists`. The same applies to slice 104's territorial forces, which the 100-slices plan says may land in either order relative to 103. 109's Included list enumerates only the five existing forces plus the three non-neighbor forces, and its verification step (line 223) greps only `flocking.py` and `herding.py`. Nothing in the document states that 103/104's force implementations must be updated in this slice (or that this slice must be sequenced before them). The requirement this leaves unmet: after 109 lands, every `BulkForce` implementation must carry the new signature \u2014 the slice should name 103/104's forces explicitly, add them to the Included/verification surface, or state an ordering constraint.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:31-39"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Retained per-agent Python profile lookup contradicts the slice's own defining constraint and the architecture's hot-loop requirement",
+      "description": "The Technical Requirements call \"no Python-level per-agent loops in any `BulkForce.__call__` implementation\" *the defining constraint* (line 198), and the parent slice plan states the outcome as force computation with \"O(1) Python overhead regardless of agent count or clustering density\". Yet the prescribed implementation pattern is `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` \u2014 a Python-level per-agent loop over every active agent, executed once per force per tick (i.e. five times per tick). The document acknowledges this and then defers the fix (\"At higher n, profile weights can be precomputed per tick if needed\"), which defers the stated outcome, not an optimization. The parent architecture is explicit that the force interface must stay GPU-compatible with \"no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop\". Resolve the contradiction: either elevate the per-agent weight gather to a vectorized form in this slice (e.g. `profile_weight_arrays[profile_indices[eval_indices]]` built once per tick), or restate the slice's success criterion honestly so it is not contradicted by its own pattern.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Padded representation's memory and allocation cost at the architecture's target tier is unbounded, unquantified and untested",
+      "description": "The doc quantifies the padded structure only at the small scale that is trivially cheap (\"At n=100 with max_neighbors~100, the padded array is ~80KB\"). The architecture's stated goal is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\", and the slice's own premise is that clustering drives k \u2192 n. Under that premise the design allocates `indices` and `mask` of shape (n, max_neighbors) plus, per force, a gather temporary of (n, max_neighbors, 2) float64: at n = k = 10,000 that is roughly 800 MB for indices plus 1.6 GB per gather, per force, per tick. This is the same O(n\u00b7k) growth the slice exists to eliminate, moved from time to memory, and the parent architecture warns that \"at tens of thousands of agents across multiple SoA arrays, per-tick allocation creates GC pressure\" and that the interface should support pre-allocated/reused buffers. The doc defers CSR to \"future work\" (line 148) with no bound, trigger condition, or test. State a quantitative ceiling for the padded representation and what happens above it (fallback, chunking, or a scheduled CSR follow-up), or the slice cannot claim to unlock the architecture's scaling goal.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`-1` padding is a silently valid index and is dereferenced before masking, contrary to the document's own statement",
+      "description": "The design states \"`indices[i, counts[i]:]` are padded with `-1` (never dereferenced thanks to `mask`)\". This is contradicted three lines later by the prescribed gather `neighbor_pos = state.positions[neighbor_data.indices]` (line 111), which dereferences padded entries; the mask is applied afterwards. Because `-1` is a valid NumPy index, a force that applies the mask incorrectly does not fail loudly \u2014 it silently gathers the *last* agent of the population and contributes a wrong (or, after the inverse-square step in `SeparationForce`, a division-by-zero \u2192 NaN) force. That is the silent-fallback anti-pattern the project guidelines prohibit. The requirement this leaves unmet: an explicit invariant that padded entries must not influence any reduction, division, or filter, plus a test asserting padded-entry neutrality per force (the risk is only mentioned in passing for `SeparationForce` at line 231).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:78-83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification does not demonstrate the scaling outcome the slice is justified by",
+      "description": "The NFR is correctly restated with a concrete target (50 ms budget; pre-slice 58\u201360 ms after clustering), which is good. But the only performance criterion is a manual 5-minute live run at 100 agents against that single data point, and the Success Criteria contain no assertion about behavior as agent count or clustering density grows \u2014 precisely the claim in the Overview (\"constant Python overhead, regardless of agent count or clustering density\") and in the parent slice-plan entry (\"O(1) Python overhead regardless of agent count or clustering density\"). A tick-duration comparison at a larger N (e.g. 1,000 agents clustered, before vs. after) or an explicit \"scale verification deferred to slice N\" statement would close the gap between the stated goal and what this slice can show.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:203-226"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`NeighborData` indexing convention is not stated precisely",
+      "description": "The struct is described as `(n_active, max_neighbors)` with `indices[i, :counts[i]]` \"for active agent `i`\", but it is not stated whether row `i` corresponds to the *agent index* or to *position i in `eval_indices`* (the existing convention for `neighbor_lists` per 101's design is the latter). The cohesion example then uses `counts`, `self_positions` and `weights` without defining how they are aligned to rows or how the N\u00d72 result is scattered back so inactive agents receive zeros. Given this document is the implementation template for five forces, state the convention once (row order == `eval_indices` order; result scattered at `eval_indices`) to avoid an off-by-one class of implementation error.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:103-121"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Protocol change collides with slices 103/104 without recording the required update or sequencing",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:31-39",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Retained per-agent Python profile lookup contradicts the slice's own defining constraint and the architecture's hot-loop requirement",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Padded representation's memory and allocation cost at the architecture's target tier is unbounded, unquantified and untested",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`-1` padding is a silently valid index and is dereferenced before masking, contrary to the document's own statement",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:78-83",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Verification does not demonstrate the scaling outcome the slice is justified by",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:203-226",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`NeighborData` indexing convention is not stated precisely",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:103-121",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-16T21:33:16.613300",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 223777,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 384000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "deepseek/deepseek-v4.1-flash",
+  "answering_models": [
+    "deepseek/deepseek-v4.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 10,
+  "prompt_tokens": 379146,
+  "cached_tokens": 318720,
+  "cache_write_tokens": null,
+  "completion_tokens": 54473,
+  "reasoning_tokens": 51236,
+  "duration_seconds": 239.70699787512422,
+  "cost_usd": 0.03658536,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,12 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"916 prerequisite fix\" label is non-load-bearing but potentially confusing",
+   "description": "The design refers to \"the 916 prerequisite fix (already merged to main) established `--project`/`--global` as the CLI's explicit scope-selection flags.\" Per the parent slice plan, entry 916 is \"Guide Update Branch Guard\" \u2014 a different concern \u2014 so the attribution is not obvious to reconcile. This does not affect correctness: the design's actual load-bearing assumption is only that the `--project`/`--global` flags already exist, which the plan entry for 915 itself confirms (`cf config set --project` is described as existing behavior), and the slice explicitly states it does not change that CLI surface. Flagging only so a reviewer does not waste time trying to map the prerequisite onto 916's actual scope.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#dependencies"
+  }
+ ]
+}

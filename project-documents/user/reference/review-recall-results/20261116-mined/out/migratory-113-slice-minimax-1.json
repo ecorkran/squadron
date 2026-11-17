@@ -1,0 +1,189 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Alignment with architecture's pluggable spatial query principle",
+      "description": "The `AdaptiveSpatial` wrapper implementing the `SpatialQuery` protocol directly reinforces the architecture's \"Pluggable spatial queries\" principle (100-arch.behavior-engine.md \u00a7Architectural Principles). The wrapper adds no protocol surface to non-dispatcher backends (`HashGridQuery`, `BruteForceQuery` unchanged), and the document explicitly notes the pattern extends to future backends (KD-tree, GPU) without further protocol churn. Architecture goals (archetype fidelity, profile-driven behavior, tick determinism, efficient large-scale evaluation, clean boundaries) are all preserved.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with slice plan entry and dependencies",
+      "description": "The slice's stated dependencies (100, 110, 111) match the slice plan entry (100-slices.behavior-engine.md \u00a7Feature Slices item 11) and all are marked complete in the plan. The orthogonal relationship to slice 112 (max_neighbors cap is post-query, dispatch signal is pre-cap density) is correctly grounded in perf journal Entry 5 \u2014 and matches the plan entry's own statement that \"max_neighbors affects only post-query truncation and does NOT shift the dispatch decision.\" The cell-size derivation fallback for empty profiles addresses the edge case surfaced in slice 105's caveats.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#dependencies"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`hasattr` guard in `tick.py` is a documented boundary compromise",
+      "description": "The `if hasattr(spatial, \"record_density\"): spatial.record_density(filtered_counts)` line in `tick.py` introduces a duck-typed backdoor to the spatial layer that is not part of the `SpatialQuery` protocol. The slice doc explicitly considers the alternative (add `record_density` to the protocol with a default no-op) and rejects it as \"couples the protocol to a dispatcher concern that no other backend needs.\" The trade-off is well-reasoned and documented, and the per-tick cost is trivial \u2014 but `tick.py` now carries implicit knowledge that some spatial implementations may expose a density-record hook. This is the right call given the constraints, and the rationale is sound; raising as a NOTE for visibility, not as an action item.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#tick-integration"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes and error handling",
+      "description": "The slice introduces no new I/O paths or message types \u2014 it is an in-process Python wrapper with delegation semantics, so the hang/timeout/peer-disconnect failure-mode criterion does not apply to the new component itself. Config validation failure modes are explicitly enumerated: `backend` outside `{adaptive, grid, brute}` raises `ConfigError` with the valid set listed; `grid_threshold_mean_neighbors <= 0` and `hysteresis_band < 0` each have their rejection rule stated. Verification walkthrough step 7 exercises the invalid-backend path end-to-end.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#server-configuration"
+    },
+    {
+      "severity": "PASS",
+      "title": "Configuration surface and default behavior change are well-handled",
+      "description": "The default changing from brute-force to adaptive is a behavior change for upgrading operators, but it is explicitly called out (\"the default changes from brute-force to adaptive\") and accompanied by two escape hatches: `backend: \"brute\"` and `backend: \"grid\"` both bypass the dispatcher entirely. The `initial_backend` constructor parameter is also configurable for operators who want grid-first behavior. Validation rules cover all fields. The CHANGELOG update is included in the scope.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#server-configuration"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verification walkthrough is proportional and complete",
+      "description": "Seven verification steps cover: (1) full suite under default adaptive backend, (2) full suite pinned to each backend (with env-var-vs-fixture flagged as an implementation detail), (3) dispatcher unit tests including threshold/hysteresis/initial-backend/protocol-conformance/output-parity, (4) threshold sweep on a realistic scenario, (5) live simulation across phase transition with explicit TPS targets from perf journal Entry 5, (6) escape hatch verification, (7) invalid-backend error path. The walkthrough ties to specific perf journal entries rather than asserting standalone TPS numbers, which is appropriate.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#verification-walkthrough"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality and absence of scope creep",
+      "description": "The slice's included scope (one wrapper class, one config dataclass, one wiring helper, one tick.py line, tests, perf journal entry, CHANGELOG) is proportional to the slice plan entry's mandate (\"Resurrect and activate `HashGridQuery` behind an adaptive dispatcher\"). Exclusions are clearly stated (KD-tree, per-agent dispatch, dynamic threshold tuning, multi-resolution grids, any force-pipeline change) and align with what the slice plan assigns to this slice vs. future work. No abstraction or configuration surface is added that nothing uses yet.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#excluded"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Alignment with architecture's pluggable spatial query principle",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Alignment with slice plan entry and dependencies",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#dependencies",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "`hasattr` guard in `tick.py` is a documented boundary compromise",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#tick-integration",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Failure modes and error handling",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#server-configuration",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Configuration surface and default behavior change are well-handled",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#server-configuration",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Verification walkthrough is proportional and complete",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#verification-walkthrough",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Proportionality and absence of scope creep",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#excluded",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-16T21:42:51.787499",
+  "model": "minimax/minimax-m3",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 22448,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 512000,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3",
+  "answering_models": [
+    "minimax/minimax-m3"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 82844,
+  "cached_tokens": 34688,
+  "cache_write_tokens": null,
+  "completion_tokens": 6252,
+  "reasoning_tokens": 5718,
+  "duration_seconds": 111.69718899996951,
+  "cost_usd": 0.02403048,
+  "cost_basis": "alias_pricing"
+}

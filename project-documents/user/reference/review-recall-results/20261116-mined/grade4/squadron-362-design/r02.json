@@ -1,0 +1,12 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "NFRs not restated",
+   "description": "The architecture and slice plan contain no quantitative NFRs (latency, throughput) tied to this slice path \u2014 the closest performance statement is the read-discipline constraint (never load whole graph), which the slice correctly preserves and explicitly verifies in walkthrough step 7. No missing-item finding is warranted because no NFR target exists in the parent documents to restate.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+  }
+ ]
+}
