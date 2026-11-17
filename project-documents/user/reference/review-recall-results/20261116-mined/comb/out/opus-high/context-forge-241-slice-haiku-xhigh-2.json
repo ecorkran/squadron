@@ -1,0 +1,63 @@
+{
+ "case": "context-forge-241-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The arch boundary has no slice, so the design never says which index goes to `detectDocuments` or what carries `pending-review`/`review-failed` there. It also never says which branch handles it, yet its success criteria require tests at this boundary."
+  ],
+  "F2": [
+   "KEEP",
+   "TD-7 and the walkthrough put prose in `recommendation`, but line 286 calls `review`/`blocked` \"the stable strings runners route on\", and arch lines 118/124/173 define those exact values."
+  ],
+  "F3": [
+   "DROP",
+   "The target is the arch, not this design, and the slice plan already records that the Phase 4 decisions supersede it."
+  ],
+  "F4": [
+   "DROP",
+   "The target is completed slice 240, not this design, and the slice plan already records that 244 is retired."
+  ],
+  "F5": [
+   "DROP",
+   "The slice plan leaves keeping or removing the inert keys to this design. Keeping them is a scope choice, and the arch's \"unrecognized config\" rule does not cover keys that are defined."
+  ],
+  "F6": [
+   "KEEP",
+   "Line 109 says the navigator calls `config.get` and passes raw values to `reviewGate`. Lines 149, 172 and 191 instead have `resolveGateConfig(config)` inside `reviewGate` reading the `ConfigManager`. Which module touches config is self-contradictory, and slice 242 imports `reviewGate`."
+  ],
+  "F7": [
+   "KEEP",
+   "ConfigManager.get` (ConfigManager.ts:91-130) returns stored values unvalidated, so a hand-edited invalid threshold or unknown-as value reaches the gate. The design defines no behavior for that, despite the arch's fail-fast principle (line 48)."
+  ],
+  "F8": [
+   "KEEP",
+   "Arch line 149 requires the rationale to name a parse failure explicitly, and slice 240 handed that to 241. This design collapses read failures into \"no verdict\" and neither its rationale templates nor its tests cover it."
+  ],
+  "F9": [
+   "KEEP",
+   "Line 25 says the tasks gate applies while the slice is \"not implemented\", but line 138 and line 57 apply it at \"not complete\"/`in-implementation`. Those triggers differ in practice: under the second, a slice already partly implemented flips to `pending-review` when gating is turned on."
+  ],
+  "F10": [
+   "DROP",
+   "The camelCase-to-snake_case mapping is trivial, and the hyphenated spelling is the arch's, already handled by 240. The \"(if set)\" wording means a user-set override, not a hedge."
+  ]
+ },
+ "wall_seconds": 62.2,
+ "cost_usd": 1.1094767,
+ "raw_output": "F1: KEEP \u2014 The arch boundary has no slice, so the design never says which index goes to `detectDocuments` or what carries `pending-review`/`review-failed` there. It also never says which branch handles it, yet its success criteria require tests at this boundary.\nF2: KEEP \u2014 TD-7 and the walkthrough put prose in `recommendation`, but line 286 calls `review`/`blocked` \"the stable strings runners route on\", and arch lines 118/124/173 define those exact values.\nF3: DROP \u2014 The target is the arch, not this design, and the slice plan already records that the Phase 4 decisions supersede it.\nF4: DROP \u2014 The target is completed slice 240, not this design, and the slice plan already records that 244 is retired.\nF5: DROP \u2014 The slice plan leaves keeping or removing the inert keys to this design. Keeping them is a scope choice, and the arch's \"unrecognized config\" rule does not cover keys that are defined.\nF6: KEEP \u2014 Line 109 says the navigator calls `config.get` and passes raw values to `reviewGate`. Lines 149, 172 and 191 instead have `resolveGateConfig(config)` inside `reviewGate` reading the `ConfigManager`. Which module touches config is self-contradictory, and slice 242 imports `reviewGate`.\nF7: KEEP \u2014 `ConfigManager.get` (ConfigManager.ts:91-130) returns stored values unvalidated, so a hand-edited invalid threshold or unknown-as value reaches the gate. The design defines no behavior for that, despite the arch's fail-fast principle (line 48).\nF8: KEEP \u2014 Arch line 149 requires the rationale to name a parse failure explicitly, and slice 240 handed that to 241. This design collapses read failures into \"no verdict\" and neither its rationale templates nor its tests cover it.\nF9: KEEP \u2014 Line 25 says the tasks gate applies while the slice is \"not implemented\", but line 138 and line 57 apply it at \"not complete\"/`in-implementation`. Those triggers differ in practice: under the second, a slice already partly implemented flips to `pending-review` when gating is turned on.\nF10: DROP \u2014 The camelCase-to-snake_case mapping is trivial, and the hyphenated spelling is the arch's, already handled by 240. The \"(if set)\" wording means a user-set override, not a hedge."
+}

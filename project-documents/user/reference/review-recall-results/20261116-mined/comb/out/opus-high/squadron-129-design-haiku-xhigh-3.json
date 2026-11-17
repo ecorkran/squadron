@@ -1,0 +1,38 @@
+{
+ "case": "squadron-129-design",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Line 82 says a startup hang is covered by `codex.turn_timeout_s`, but D7 and the failure table only put that timeout on `thread.run`, so runtime start, `thread_start`, login start and logout have no time limit."
+  ],
+  "F2": [
+   "KEEP",
+   "review_client._collect_review` gives one recovery turn only when it catches `EmptyFinalTurnError`, so D8's plain `ProviderError` quietly skips that recovery for Codex and D8 doesn't say so (the contract comes from slice 924 D7, not 931)."
+  ],
+  "F3": [
+   "DROP",
+   "Line 42 excludes the `login_api_key` login method, not the env-var fallback, and the design chooses on purpose to settle the fallback with a real test; that is a choice of approach, not a contradiction of the architecture doc, where each provider resolves its own credentials."
+  ],
+  "F4": [
+   "DROP",
+   "D9 names the two abstractions (`ExtraRequirement` and the shared `CodexRuntime`) and says doctor uses `resolve_codex_runtime()` just as agent and provider do; the hint text lives in `runtime.py` and `missing_extra_hint()` returns it, so the two lines agree."
+  ],
+  "F5": [
+   "DROP",
+   "Trimming prose and dropping one small flag is a style and scope preference, not a defect."
+  ]
+ },
+ "wall_seconds": 34.7,
+ "cost_usd": 0.7169013,
+ "raw_output": "F1: KEEP \u2014 Line 82 says a startup hang is covered by `codex.turn_timeout_s`, but D7 and the failure table only put that timeout on `thread.run`, so runtime start, `thread_start`, login start and logout have no time limit.\nF2: KEEP \u2014 `review_client._collect_review` gives one recovery turn only when it catches `EmptyFinalTurnError`, so D8's plain `ProviderError` quietly skips that recovery for Codex and D8 doesn't say so (the contract comes from slice 924 D7, not 931).\nF3: DROP \u2014 Line 42 excludes the `login_api_key` login method, not the env-var fallback, and the design chooses on purpose to settle the fallback with a real test; that is a choice of approach, not a contradiction of the architecture doc, where each provider resolves its own credentials.\nF4: DROP \u2014 D9 names the two abstractions (`ExtraRequirement` and the shared `CodexRuntime`) and says doctor uses `resolve_codex_runtime()` just as agent and provider do; the hint text lives in `runtime.py` and `missing_extra_hint()` returns it, so the two lines agree.\nF5: DROP \u2014 Trimming prose and dropping one small flag is a style and scope preference, not a defect."
+}

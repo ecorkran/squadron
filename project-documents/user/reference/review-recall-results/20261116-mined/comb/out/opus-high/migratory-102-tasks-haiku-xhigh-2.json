@@ -1,0 +1,58 @@
+{
+ "case": "migratory-102-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The tasks follow the slice's explicit Option A decision, and a forward force under the `max_speed` clamp does reduce the turn angle per tick, so the turn-resisting effect is not absent."
+  ],
+  "F2": [
+   "KEEP",
+   "The five leaders start at `[4.0, 0.0]`, so the mean heading probably has a positive x-component at tick 0; the assertion can pass without any force acting and does not check the slice's \"converges toward\" criterion."
+  ],
+  "F3": [
+   "DROP",
+   "The slice itself allows any one metric (\"heading variance, path straightness, or similar\"; walkthrough step 5 says \"Heading variance or mean heading direction\"), so the OR matches the parent."
+  ],
+  "F4": [
+   "DROP",
+   "The existing flocking forces already set the pattern of one loop per agent with vectorized neighbor math (`flocking.py:30-42`), and MomentumForce has no neighbors, so the gap is low value."
+  ],
+  "F5": [
+   "DROP",
+   "The slice's success criteria ask the integration test only for directional bias; \"corridor movement\" in the Included list is descriptive scope wording, not a missing requirement."
+  ],
+  "F6": [
+   "DROP",
+   "The existing forces already resolve `profiles[state.profile_indices[agent_idx]]` (`flocking.py:37`), so an implementer copying that pattern needs no extra instruction."
+  ],
+  "F7": [
+   "DROP",
+   "This asks for more detail; the expected value follows directly from the formula in 4.1, so the test can be written with an exact assertion."
+  ],
+  "F8": [
+   "DROP",
+   "Whether to keep a smoke test that overlaps with 5.2 is a scope preference, not a defect."
+  ],
+  "F9": [
+   "DROP",
+   "This project's CLAUDE.md has no rule against a commit that only checks boxes (the rule cited comes from a different project), and repeating a verification is harmless."
+  ]
+ },
+ "wall_seconds": 43.8,
+ "cost_usd": 0.8486215,
+ "raw_output": "F1: DROP \u2014 The tasks follow the slice's explicit Option A decision, and a forward force under the `max_speed` clamp does reduce the turn angle per tick, so the turn-resisting effect is not absent.\nF2: KEEP \u2014 The five leaders start at `[4.0, 0.0]`, so the mean heading probably has a positive x-component at tick 0; the assertion can pass without any force acting and does not check the slice's \"converges toward\" criterion.\nF3: DROP \u2014 The slice itself allows any one metric (\"heading variance, path straightness, or similar\"; walkthrough step 5 says \"Heading variance or mean heading direction\"), so the OR matches the parent.\nF4: DROP \u2014 The existing flocking forces already set the pattern of one loop per agent with vectorized neighbor math (`flocking.py:30-42`), and MomentumForce has no neighbors, so the gap is low value.\nF5: DROP \u2014 The slice's success criteria ask the integration test only for directional bias; \"corridor movement\" in the Included list is descriptive scope wording, not a missing requirement.\nF6: DROP \u2014 The existing forces already resolve `profiles[state.profile_indices[agent_idx]]` (`flocking.py:37`), so an implementer copying that pattern needs no extra instruction.\nF7: DROP \u2014 This asks for more detail; the expected value follows directly from the formula in 4.1, so the test can be written with an exact assertion.\nF8: DROP \u2014 Whether to keep a smoke test that overlaps with 5.2 is a scope preference, not a defect.\nF9: DROP \u2014 This project's CLAUDE.md has no rule against a commit that only checks boxes (the rule cited comes from a different project), and repeating a verification is harmless."
+}

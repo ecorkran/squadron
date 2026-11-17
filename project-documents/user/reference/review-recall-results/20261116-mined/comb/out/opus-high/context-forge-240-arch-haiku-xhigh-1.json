@@ -1,0 +1,98 @@
+{
+ "case": "context-forge-240-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The \"lexicographically last\" rule picks part-2 of a split review and ignores part-1, and a later re-review can sort before a stale FAIL; Squadron's reviews/ already has these split files."
+  ],
+  "F2": [
+   "KEEP",
+   "Only `pre-advance` gets an insertion point; `pre-tasks` and `pre-implementation` are configurable but never evaluated, so \"V1 implements the four slice-level transitions\" contradicts the design, and the Priority 7 `complete` path skips the gate."
+  ],
+  "F3": [
+   "KEEP",
+   "getNext(project)` takes no config and `ProjectData` holds none, so the doc leaves out how gate settings reach the navigator; 180 also covers project/context lookup, not worktree-scoped config, and ConfigManager has no worktree scope."
+  ],
+  "F4": [
+   "KEEP",
+   "The doc requires parse failures to become UNKNOWN with the failure named, but it extends paths that can't do that: `deriveSliceStatus`'s catch returns `no-active-slice`, and `parseFrontmatter` can't detect bad YAML or report errors."
+  ],
+  "F5": [
+   "DROP",
+   "The new `review`/`blocked` tokens are stable, and the slice status enum is already exposed through `getStatus`/`workflow_status`, so routing to a review agent works as written."
+  ],
+  "F6": [
+   "KEEP",
+   "The doc uses `review_unknown_as = \"concern\"` in one place and the `concerns` threshold token in another, and the `pending` value used by `pending-review` is never defined."
+  ],
+  "F7": [
+   "DROP",
+   "The default `fail` blocks unrecognized verdicts; `concern` is an explicit opt-in, so this is an opinion about scope, not a silent fallback."
+  ],
+  "F8": [
+   "DROP",
+   "Mismatches like `provenance` not being written to frontmatter touch nothing v1 reads; the doc only uses `verdict` and `score`, which are emitted."
+  ],
+  "F9": [
+   "KEEP",
+   "Adding a `review` slot to `DocumentDetectionResult`, and needing reviewType as an input, changes the public `IArtifactIntrospector` contract, which contradicts \"no 160 interfaces change\"."
+  ],
+  "F10": [
+   "KEEP",
+   "With `review_enabled = true` and no `[workflow.review_gates]` table, no transition has a reviewType, so the doc's \"threshold applies to every transition\" fallback has no defined behavior."
+  ],
+  "F11": [
+   "DROP",
+   "Checking the plan checkbox is a reasonable consistency-check signal distinct from the navigator's, and the exit-status question just asks for more detail."
+  ],
+  "F12": [
+   "DROP",
+   "It only produces warnings on historical slices; how far back the rule applies is a scope choice, not a defect."
+  ],
+  "F13": [
+   "DROP",
+   "A non-random sample used to argue about calibration is an opinion, and parser fixtures belong in slice design."
+  ],
+  "F14": [
+   "DROP",
+   "The doc already defers the nested-table question and offers flat dotted keys, which the existing scalar `validate` hook can handle."
+  ],
+  "F15": [
+   "DROP",
+   "pre-slice-plan` and score gating are explicitly deferred, and \"same mechanism, different insertion point\" is enough at architecture level; the worktree point repeats F3."
+  ],
+  "F16": [
+   "DROP",
+   "File and function size limits are \"where practical\" and already exceeded; asking for extraction is a refactoring preference."
+  ],
+  "F17": [
+   "DROP",
+   "This is a scope/YAGNI opinion; the real defect (unwired transitions) is covered by F2."
+  ]
+ },
+ "wall_seconds": 74.2,
+ "cost_usd": 1.1455036,
+ "raw_output": "Checking findings against the code: F1's split-review case is confirmed. Next I'm checking the worktree-config claim (F3).\nConfirmed F1\u2013F4 against the code. Now checking the Squadron slice 300 contract claims (F8).\nF1: KEEP \u2014 The \"lexicographically last\" rule picks part-2 of a split review and ignores part-1, and a later re-review can sort before a stale FAIL; Squadron's reviews/ already has these split files.\nF2: KEEP \u2014 Only `pre-advance` gets an insertion point; `pre-tasks` and `pre-implementation` are configurable but never evaluated, so \"V1 implements the four slice-level transitions\" contradicts the design, and the Priority 7 `complete` path skips the gate.\nF3: KEEP \u2014 `getNext(project)` takes no config and `ProjectData` holds none, so the doc leaves out how gate settings reach the navigator; 180 also covers project/context lookup, not worktree-scoped config, and ConfigManager has no worktree scope.\nF4: KEEP \u2014 The doc requires parse failures to become UNKNOWN with the failure named, but it extends paths that can't do that: `deriveSliceStatus`'s catch returns `no-active-slice`, and `parseFrontmatter` can't detect bad YAML or report errors.\nF5: DROP \u2014 The new `review`/`blocked` tokens are stable, and the slice status enum is already exposed through `getStatus`/`workflow_status`, so routing to a review agent works as written.\nF6: KEEP \u2014 The doc uses `review_unknown_as = \"concern\"` in one place and the `concerns` threshold token in another, and the `pending` value used by `pending-review` is never defined.\nF7: DROP \u2014 The default `fail` blocks unrecognized verdicts; `concern` is an explicit opt-in, so this is an opinion about scope, not a silent fallback.\nF8: DROP \u2014 Mismatches like `provenance` not being written to frontmatter touch nothing v1 reads; the doc only uses `verdict` and `score`, which are emitted.\nF9: KEEP \u2014 Adding a `review` slot to `DocumentDetectionResult`, and needing reviewType as an input, changes the public `IArtifactIntrospector` contract, which contradicts \"no 160 interfaces change\".\nF10: KEEP \u2014 With `review_enabled = true` and no `[workflow.review_gates]` table, no transition has a reviewType, so the doc's \"threshold applies to every transition\" fallback has no defined behavior.\nF11: DROP \u2014 Checking the plan checkbox is a reasonable consistency-check signal distinct from the navigator's, and the exit-status question just asks for more detail.\nF12: DROP \u2014 It only produces warnings on historical slices; how far back the rule applies is a scope choice, not a defect.\nF13: DROP \u2014 A non-random sample used to argue about calibration is an opinion, and parser fixtures belong in slice design.\nF14: DROP \u2014 The doc already defers the nested-table question and offers flat dotted keys, which the existing scalar `validate` hook can handle.\nF15: DROP \u2014 `pre-slice-plan` and score gating are explicitly deferred, and \"same mechanism, different insertion point\" is enough at architecture level; the worktree point repeats F3.\nF16: DROP \u2014 File and function size limits are \"where practical\" and already exceeded; asking for extraction is a refactoring preference.\nF17: DROP \u2014 This is a scope/YAGNI opinion; the real defect (unwired transitions) is covered by F2."
+}

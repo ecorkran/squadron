@@ -1,0 +1,98 @@
+{
+ "case": "migratory-100-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The doc says the tick \"returns the updated state array\" (\"feed in state, get back state\"), but the implemented tick changes state in place and returns None, and with the world server's \"tick as transaction\" the doc must say which model applies."
+  ],
+  "F2": [
+   "KEEP",
+   "Determinism has no defined level and no canonical neighbor or reduction order, so slice 105's \"identical before and after the swap\" fails bitwise once the spatial hash changes neighbor order."
+  ],
+  "F3": [
+   "DROP",
+   "The caller can make a separate tick call per rate group with its own dt, the world-server doc already gives interpolation to the server, and rejecting duplicate indices is hardening for a mode not yet used."
+  ],
+  "F4": [
+   "DROP",
+   "Code fits both docs: EntityManager owns the lifecycle and calls AgentState add/remove, and the spatial index is rebuilt every tick, so the engine holds no state between ticks."
+  ],
+  "F5": [
+   "DROP",
+   "Slice 302 already decided a server-owned ID-to-index map with compaction, and the engine never sees IDs."
+  ],
+  "F6": [
+   "DROP",
+   "Float64 raw buffers can be serialized directly, the doc already asks for a conversion path at the serialization boundary, and slice 100 chose float64; the large-coordinate float32 argument is speculative."
+  ],
+  "F7": [
+   "DROP",
+   "An architecture doc may leave detailed choices to the slices, and slice 100 recorded them."
+  ],
+  "F8": [
+   "DROP",
+   "Asking for benchmark targets and metrics, and objecting to slice order, is a scope opinion, not a contradiction or a missing success criterion."
+  ],
+  "F9": [
+   "DROP",
+   "Implementation-level library details (bincount dtype, cKDTree output, scratch buffers) are more detail than an architecture doc needs."
+  ],
+  "F10": [
+   "DROP",
+   "A general request for an error-handling section and epsilon/clamp details; slice 100 already clamps velocity to max_speed."
+  ],
+  "F11": [
+   "DROP",
+   "The state arrays listed are examples, not a closed schema, and target selection can be expressed as forces, so this is speculation about future slices."
+  ],
+  "F12": [
+   "DROP",
+   "Trails can be updated by the environment layer during the server's environment-update step, so the read-only interface does not contradict stigmergy; the rest asks for more detail."
+  ],
+  "F13": [
+   "DROP",
+   "Splitting the engine into components is a design opinion."
+  ],
+  "F14": [
+   "DROP",
+   "Line 97 says the server presents aggregates through the existing neighbor-query interface, so there is no upward dependency; the duplication is a style issue."
+  ],
+  "F15": [
+   "DROP",
+   "Anticipated Slices are provisional, and the child slice plan has already settled the order, so the drift is housekeeping with no effect on the work."
+  ],
+  "F16": [
+   "KEEP",
+   "200-arch.world-server-foundation.md` does not exist (the file is `300-arch.worldserver-foundation.md`), and the Overview calls the same doc \"300-arch\"."
+  ],
+  "F17": [
+   "DROP",
+   "An opinion about scope and over-building, not a defect."
+  ]
+ },
+ "wall_seconds": 74.2,
+ "cost_usd": 1.0226213,
+ "raw_output": "F1: KEEP \u2014 The doc says the tick \"returns the updated state array\" (\"feed in state, get back state\"), but the implemented tick changes state in place and returns None, and with the world server's \"tick as transaction\" the doc must say which model applies.\nF2: KEEP \u2014 Determinism has no defined level and no canonical neighbor or reduction order, so slice 105's \"identical before and after the swap\" fails bitwise once the spatial hash changes neighbor order.\nF3: DROP \u2014 The caller can make a separate tick call per rate group with its own dt, the world-server doc already gives interpolation to the server, and rejecting duplicate indices is hardening for a mode not yet used.\nF4: DROP \u2014 Code fits both docs: EntityManager owns the lifecycle and calls AgentState add/remove, and the spatial index is rebuilt every tick, so the engine holds no state between ticks.\nF5: DROP \u2014 Slice 302 already decided a server-owned ID-to-index map with compaction, and the engine never sees IDs.\nF6: DROP \u2014 Float64 raw buffers can be serialized directly, the doc already asks for a conversion path at the serialization boundary, and slice 100 chose float64; the large-coordinate float32 argument is speculative.\nF7: DROP \u2014 An architecture doc may leave detailed choices to the slices, and slice 100 recorded them.\nF8: DROP \u2014 Asking for benchmark targets and metrics, and objecting to slice order, is a scope opinion, not a contradiction or a missing success criterion.\nF9: DROP \u2014 Implementation-level library details (bincount dtype, cKDTree output, scratch buffers) are more detail than an architecture doc needs.\nF10: DROP \u2014 A general request for an error-handling section and epsilon/clamp details; slice 100 already clamps velocity to max_speed.\nF11: DROP \u2014 The state arrays listed are examples, not a closed schema, and target selection can be expressed as forces, so this is speculation about future slices.\nF12: DROP \u2014 Trails can be updated by the environment layer during the server's environment-update step, so the read-only interface does not contradict stigmergy; the rest asks for more detail.\nF13: DROP \u2014 Splitting the engine into components is a design opinion.\nF14: DROP \u2014 Line 97 says the server presents aggregates through the existing neighbor-query interface, so there is no upward dependency; the duplication is a style issue.\nF15: DROP \u2014 Anticipated Slices are provisional, and the child slice plan has already settled the order, so the drift is housekeeping with no effect on the work.\nF16: KEEP \u2014 `200-arch.world-server-foundation.md` does not exist (the file is `300-arch.worldserver-foundation.md`), and the Overview calls the same doc \"300-arch\".\nF17: DROP \u2014 An opinion about scope and over-building, not a defect."
+}

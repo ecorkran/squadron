@@ -1,0 +1,93 @@
+{
+ "case": "squadron-360-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The onboard code and `.gitignore` entry exist only on later `main`; in the reviewed worktree neither exists, so the document's Current State is accurate."
+  ],
+  "F2": [
+   "DROP",
+   "It mainly asks for a PM confirmation gate, which is not a valid finding here; the interview answers come from the PM, so recording them as PM-provided concept is a defensible choice."
+  ],
+  "F3": [
+   "KEEP",
+   "Output Conventions says both capabilities write `docType: analysis` to `user/analysis/`, but Capability 1 writes `000-concept` with `docType: concept` to `user/project-guides/`, so the document contradicts itself."
+  ],
+  "F4": [
+   "DROP",
+   "The principle itself says to stop when the plugin is absent, so the document is consistent; the teammate-clone case is a design preference."
+  ],
+  "F5": [
+   "DROP",
+   "The architecture is explicitly skill-level document transforms; asking for a Python/Pydantic reader and a version gate is an approach opinion and hardening."
+  ],
+  "F6": [
+   "KEEP",
+   "The plugin's `SKILL.md` makes TOUR Phase 5 and REVIEW Phase 6, so the \"Critical\" contract statement is wrong, and an empty `tour[]` (which the validator allows) has no defined handling."
+  ],
+  "F7": [
+   "DROP",
+   "Staleness only warns and never blocks, so these edge cases are slice-design detail, not an architectural defect."
+  ],
+  "F8": [
+   "DROP",
+   "understand-knowledge` builds graphs for wiki directories; it colliding with a code repo's graph is unlikely, so this is low-value hardening."
+  ],
+  "F9": [
+   "DROP",
+   "autoUpdate` is an opt-in plugin setting whose commit hook fires whether or not this design exists; it is not a defect of these capabilities."
+  ],
+  "F10": [
+   "KEEP",
+   "The plugin also writes `fingerprints.json` (needed for incremental updates) and keeps `intermediate/scan-result.json`, but the hygiene section never says whether they are tracked or ignored, so they would sit untracked and leave the tree dirty."
+  ],
+  "F11": [
+   "DROP",
+   "A collision needs an overview or comprehension generated in the audited repo during a variance run, which is unlikely; this is speculative hardening."
+  ],
+  "F12": [
+   "DROP",
+   "Every numbered document in the project faces the same branch race; that is not specific to this design and is speculative."
+  ],
+  "F13": [
+   "DROP",
+   "Capability 2 already gives inputs, output, a field schema and translation rules, which is enough for architecture; the rest asks for more detail."
+  ],
+  "F14": [
+   "KEEP",
+   "The translation rules call emphasis a generation parameter while Resolved Design Decisions say none is added, and the example uses `draft`, a status the document itself says the gate rejects."
+  ],
+  "F15": [
+   "DROP",
+   "Provenance and `[INFERRED]` marker details are slice-design detail, and the `[INFERRED]` reuse is already listed in Open Questions."
+  ],
+  "F16": [
+   "DROP",
+   "This is a scope and proportionality opinion that mostly repeats F1 and F14."
+  ]
+ },
+ "wall_seconds": 100.3,
+ "cost_usd": 1.151935,
+ "raw_output": "Checking the naming convention and plugin files to verify F3, F6\u2013F10.\nF1: DROP \u2014 The onboard code and `.gitignore` entry exist only on later `main`; in the reviewed worktree neither exists, so the document's Current State is accurate.\nF2: DROP \u2014 It mainly asks for a PM confirmation gate, which is not a valid finding here; the interview answers come from the PM, so recording them as PM-provided concept is a defensible choice.\nF3: KEEP \u2014 Output Conventions says both capabilities write `docType: analysis` to `user/analysis/`, but Capability 1 writes `000-concept` with `docType: concept` to `user/project-guides/`, so the document contradicts itself.\nF4: DROP \u2014 The principle itself says to stop when the plugin is absent, so the document is consistent; the teammate-clone case is a design preference.\nF5: DROP \u2014 The architecture is explicitly skill-level document transforms; asking for a Python/Pydantic reader and a version gate is an approach opinion and hardening.\nF6: KEEP \u2014 The plugin's `SKILL.md` makes TOUR Phase 5 and REVIEW Phase 6, so the \"Critical\" contract statement is wrong, and an empty `tour[]` (which the validator allows) has no defined handling.\nF7: DROP \u2014 Staleness only warns and never blocks, so these edge cases are slice-design detail, not an architectural defect.\nF8: DROP \u2014 `understand-knowledge` builds graphs for wiki directories; it colliding with a code repo's graph is unlikely, so this is low-value hardening.\nF9: DROP \u2014 `autoUpdate` is an opt-in plugin setting whose commit hook fires whether or not this design exists; it is not a defect of these capabilities.\nF10: KEEP \u2014 The plugin also writes `fingerprints.json` (needed for incremental updates) and keeps `intermediate/scan-result.json`, but the hygiene section never says whether they are tracked or ignored, so they would sit untracked and leave the tree dirty.\nF11: DROP \u2014 A collision needs an overview or comprehension generated in the audited repo during a variance run, which is unlikely; this is speculative hardening.\nF12: DROP \u2014 Every numbered document in the project faces the same branch race; that is not specific to this design and is speculative.\nF13: DROP \u2014 Capability 2 already gives inputs, output, a field schema and translation rules, which is enough for architecture; the rest asks for more detail.\nF14: KEEP \u2014 The translation rules call emphasis a generation parameter while Resolved Design Decisions say none is added, and the example uses `draft`, a status the document itself says the gate rejects.\nF15: DROP \u2014 Provenance and `[INFERRED]` marker details are slice-design detail, and the `[INFERRED]` reuse is already listed in Open Questions.\nF16: DROP \u2014 This is a scope and proportionality opinion that mostly repeats F1 and F14."
+}

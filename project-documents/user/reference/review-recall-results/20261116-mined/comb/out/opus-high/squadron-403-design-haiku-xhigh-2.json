@@ -1,0 +1,58 @@
+{
+ "case": "squadron-403-design",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_iter_records` skips an unreadable record with only a WARNING, so a \"one store scan\" read of a corrupt `slice_ranges` record looks empty and the next write overwrites stored fast-forward landings for good; the failure table has no row for this."
+  ],
+  "F2": [
+   "KEEP",
+   "402's contract says records with `commit_sha is None` roll up at project level only, but D9, report history and line 325 attribute reviews by `slice_index` alone."
+  ],
+  "F3": [
+   "KEEP",
+   "_find_slice_branch` returns None on a git failure, so a git error becomes `NO_LANDING` with an INFO line, which contradicts line 327 and `slice-ranges` \"exits 1 on a git error\"."
+  ],
+  "F4": [
+   "KEEP",
+   "no test covers criterion 2 (resolving after the branch and reflog are gone), and walkthrough step 2 uses a merge-commit slice that never reads the store, in a clone whose local-path remote gives a different ProjectId."
+  ],
+  "F5": [
+   "DROP",
+   "mainly an opinion about approach; the D5 rejection holds, because a `.venv` symlink would run the uv check against the export's `pyproject.toml`, and the builders needing one more field is minor."
+  ],
+  "F6": [
+   "DROP",
+   "hardening for rare landing shapes (merge then fast-forward, squash merges in squadron's merge-convention project); the walkthrough already accepts `no_landing` for deleted branches."
+  ],
+  "F7": [
+   "KEEP",
+   "400 D9's porcelain integrity check is missing from the export flow, and nothing automated checks criterion 4's \"working tree unchanged\"."
+  ],
+  "F8": [
+   "DROP",
+   "the design excludes a review floor in Technical Scope and labels every review figure \"no floor measured\", like the audit no-floor state, so this asks only for extra documentation."
+  ],
+  "F9": [
+   "KEEP",
+   "at a clean HEAD the live and exported trees are identical, so the in-place-equals-export test cannot catch pyright resolving `squadron` through the editable install; the stated mitigation does not work."
+  ]
+ },
+ "wall_seconds": 83.2,
+ "cost_usd": 1.2636490000000002,
+ "raw_output": "Checked F1\u2013F3 against `store.py` and `git_utils.py`. Now checking project identity in a fresh clone (F4) and the remaining findings.\nF1: KEEP \u2014 `_iter_records` skips an unreadable record with only a WARNING, so a \"one store scan\" read of a corrupt `slice_ranges` record looks empty and the next write overwrites stored fast-forward landings for good; the failure table has no row for this.\nF2: KEEP \u2014 402's contract says records with `commit_sha is None` roll up at project level only, but D9, report history and line 325 attribute reviews by `slice_index` alone.\nF3: KEEP \u2014 `_find_slice_branch` returns None on a git failure, so a git error becomes `NO_LANDING` with an INFO line, which contradicts line 327 and `slice-ranges` \"exits 1 on a git error\".\nF4: KEEP \u2014 no test covers criterion 2 (resolving after the branch and reflog are gone), and walkthrough step 2 uses a merge-commit slice that never reads the store, in a clone whose local-path remote gives a different ProjectId.\nF5: DROP \u2014 mainly an opinion about approach; the D5 rejection holds, because a `.venv` symlink would run the uv check against the export's `pyproject.toml`, and the builders needing one more field is minor.\nF6: DROP \u2014 hardening for rare landing shapes (merge then fast-forward, squash merges in squadron's merge-convention project); the walkthrough already accepts `no_landing` for deleted branches.\nF7: KEEP \u2014 400 D9's porcelain integrity check is missing from the export flow, and nothing automated checks criterion 4's \"working tree unchanged\".\nF8: DROP \u2014 the design excludes a review floor in Technical Scope and labels every review figure \"no floor measured\", like the audit no-floor state, so this asks only for extra documentation.\nF9: KEEP \u2014 at a clean HEAD the live and exported trees are identical, so the in-place-equals-export test cannot catch pyright resolving `squadron` through the editable install; the stated mitigation does not work."
+}

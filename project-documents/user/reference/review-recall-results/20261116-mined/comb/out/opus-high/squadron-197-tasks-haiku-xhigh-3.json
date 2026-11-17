@@ -1,0 +1,43 @@
+{
+ "case": "squadron-197-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This heading names a feature the slice builds (the catch-up merge code), not a step where the implementer merges the slice branch."
+  ],
+  "F2": [
+   "DROP",
+   "This describes how `enter_slice_branch` behaves when it runs; it is not a merge or push the implementer is told to do."
+  ],
+  "F3": [
+   "DROP",
+   "This describes the merge command the product code will issue during catch-up, not a Phase 7 merge of the slice into the target."
+  ],
+  "F4": [
+   "DROP",
+   "This specifies how the code handles a conflict (abort and report the failure), which is product behaviour, not a task to merge the slice branch."
+  ],
+  "F5": [
+   "DROP",
+   "This is a test assertion for a temp repo, not a merge the implementer performs."
+  ],
+  "F6": [
+   "DROP",
+   "This is a normal commit marker whose message happens to contain the word \"merge\"; it schedules no merge."
+  ]
+ },
+ "wall_seconds": 15.1,
+ "cost_usd": 0.47906669999999996,
+ "raw_output": "F1: DROP \u2014 This heading names a feature the slice builds (the catch-up merge code), not a step where the implementer merges the slice branch.\nF2: DROP \u2014 This describes how `enter_slice_branch` behaves when it runs; it is not a merge or push the implementer is told to do.\nF3: DROP \u2014 This describes the merge command the product code will issue during catch-up, not a Phase 7 merge of the slice into the target.\nF4: DROP \u2014 This specifies how the code handles a conflict (abort and report the failure), which is product behaviour, not a task to merge the slice branch.\nF5: DROP \u2014 This is a test assertion for a temp repo, not a merge the implementer performs.\nF6: DROP \u2014 This is a normal commit marker whose message happens to contain the word \"merge\"; it schedules no merge."
+}

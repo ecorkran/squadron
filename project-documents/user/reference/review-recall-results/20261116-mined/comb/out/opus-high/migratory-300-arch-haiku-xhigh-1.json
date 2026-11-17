@@ -1,0 +1,98 @@
+{
+ "case": "migratory-300-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The buffer model, tick-failure policy and commit-time validation are slice-level detail, and slice 303, which wires the engine in and commits its results, is already complete."
+  ],
+  "F2": [
+   "DROP",
+   "The replay contract details (RNG ownership, what canonical state includes, platform scope) belong to slice 307 and initiative 320, and the \"configuration changes\" wording is a minor slip."
+  ],
+  "F3": [
+   "DROP",
+   "Asks for column and argument design that belongs in slice designs (302 is complete, and aggregation is future work). The register/remove wording that clashes sits in 100-arch, not this document."
+  ],
+  "F4": [
+   "DROP",
+   "Overrun handling, timing drift, clock injection and per-client queues are implementation detail for slices 301 and 305, and the document already says the tick must not block on clients."
+  ],
+  "F5": [
+   "DROP",
+   "The document never claims full snapshots fit the bandwidth at 50K, and culling is already planned in slice 309. A send-rate budget is a detail request."
+  ],
+  "F6": [
+   "DROP",
+   "Mostly asks for benchmarks and argues with the scale estimates. In context, \"memory never the constraint\" refers to state size, which the document gets right."
+  ],
+  "F7": [
+   "DROP",
+   "Byte layout, endianness and library choice are wire-protocol detail that slice 306 exists to define. The architecture does not need them."
+  ],
+  "F8": [
+   "KEEP",
+   "The document lists terrain generation and seasonal systems as 300 slices and says it owns environment state, but its own slice plan (304, 308) and the initiative plan put terrain, biomes and season meaning under initiative 500."
+  ],
+  "F9": [
+   "DROP",
+   "Slice 304 already covers post-tick environment writes. Leaving that step out of the architecture's tick outline is a request for more detail, not a contradiction."
+  ],
+  "F10": [
+   "DROP",
+   "Updated positions and velocities\" and \"updated entity state\" say the same thing in different words, and slice 303 has already settled the integration."
+  ],
+  "F11": [
+   "DROP",
+   "A component table with an owner for each piece of state is a design-detail and style request, not a defect in an architecture overview."
+  ],
+  "F12": [
+   "DROP",
+   "Separating operational logs, replay recording and metrics is design detail. The slice plan (307) agrees that logging and replay sit in 300, so nothing in the child documents contradicts this one."
+  ],
+  "F13": [
+   "DROP",
+   "Asks for a table of decisions (2D or 3D, edge behavior, precision) that slice designs settle. \"YAML or similar\" does not conflict with the finished YAML slice."
+  ],
+  "F14": [
+   "DROP",
+   "The stream is read-only in v1 and admin commands are future work, so Origin checks and auth now are hardening against a risk that does not exist yet."
+  ],
+  "F15": [
+   "KEEP",
+   "Line 45 requires the server to \"persist state on shutdown\", but the slice plan defers persistence to future work and no planned slice delivers it, so the principle contradicts the plan."
+  ],
+  "F16": [
+   "DROP",
+   "This is an opinion about how long the scaling section should be, not a defect."
+  ],
+  "F17": [
+   "KEEP",
+   "The `dependsOn` field and the Related Work link point to `001-concept.migratory`, which does not exist. The concept file is `000-concept.migratory.md`, so both references are broken."
+  ]
+ },
+ "wall_seconds": 62.8,
+ "cost_usd": 0.9089184000000001,
+ "raw_output": "F1: DROP \u2014 The buffer model, tick-failure policy and commit-time validation are slice-level detail, and slice 303, which wires the engine in and commits its results, is already complete.\nF2: DROP \u2014 The replay contract details (RNG ownership, what canonical state includes, platform scope) belong to slice 307 and initiative 320, and the \"configuration changes\" wording is a minor slip.\nF3: DROP \u2014 Asks for column and argument design that belongs in slice designs (302 is complete, and aggregation is future work). The register/remove wording that clashes sits in 100-arch, not this document.\nF4: DROP \u2014 Overrun handling, timing drift, clock injection and per-client queues are implementation detail for slices 301 and 305, and the document already says the tick must not block on clients.\nF5: DROP \u2014 The document never claims full snapshots fit the bandwidth at 50K, and culling is already planned in slice 309. A send-rate budget is a detail request.\nF6: DROP \u2014 Mostly asks for benchmarks and argues with the scale estimates. In context, \"memory never the constraint\" refers to state size, which the document gets right.\nF7: DROP \u2014 Byte layout, endianness and library choice are wire-protocol detail that slice 306 exists to define. The architecture does not need them.\nF8: KEEP \u2014 The document lists terrain generation and seasonal systems as 300 slices and says it owns environment state, but its own slice plan (304, 308) and the initiative plan put terrain, biomes and season meaning under initiative 500.\nF9: DROP \u2014 Slice 304 already covers post-tick environment writes. Leaving that step out of the architecture's tick outline is a request for more detail, not a contradiction.\nF10: DROP \u2014 \"Updated positions and velocities\" and \"updated entity state\" say the same thing in different words, and slice 303 has already settled the integration.\nF11: DROP \u2014 A component table with an owner for each piece of state is a design-detail and style request, not a defect in an architecture overview.\nF12: DROP \u2014 Separating operational logs, replay recording and metrics is design detail. The slice plan (307) agrees that logging and replay sit in 300, so nothing in the child documents contradicts this one.\nF13: DROP \u2014 Asks for a table of decisions (2D or 3D, edge behavior, precision) that slice designs settle. \"YAML or similar\" does not conflict with the finished YAML slice.\nF14: DROP \u2014 The stream is read-only in v1 and admin commands are future work, so Origin checks and auth now are hardening against a risk that does not exist yet.\nF15: KEEP \u2014 Line 45 requires the server to \"persist state on shutdown\", but the slice plan defers persistence to future work and no planned slice delivers it, so the principle contradicts the plan.\nF16: DROP \u2014 This is an opinion about how long the scaling section should be, not a defect.\nF17: KEEP \u2014 The `dependsOn` field and the Related Work link point to `001-concept.migratory`, which does not exist. The concept file is `000-concept.migratory.md`, so both references are broken."
+}

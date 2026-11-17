@@ -1,0 +1,88 @@
+{
+ "case": "squadron-400-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "A temporary local clone checks out an old commit without touching the measured repo, so the stated rules don't block it; picking the mechanism and environment is slice-level detail."
+  ],
+  "F2": [
+   "DROP",
+   "Line 95 does set the default (\"On demand from the CLI is the baseline\"), and the exact absent-with-reason record shape is slice-level detail."
+  ],
+  "F3": [
+   "KEEP",
+   "The goal of a baseline without config edits contradicts `derive_project_id`, which for a repo with no remote raises an error telling the user to run `sq config set ... --project`."
+  ],
+  "F4": [
+   "KEEP",
+   "The doc makes `other` the review fallback without separating missing categories (which the code already maps to `\"uncategorized\"`) from invented ones, which muddies the `AuditCategory` signal where a rising `other` share means the vocabulary doesn't fit."
+  ],
+  "F5": [
+   "KEEP",
+   "Lines 33 and 75 say review-sourced numbers are shown against a noise floor, but the existing floor (`AuditNoiseFloor`) only covers audit runs and no slice produces a review floor."
+  ],
+  "F6": [
+   "DROP",
+   "Where the vocabulary module lives, and the cycle that might follow, is an implementation decision the doc doesn't make; the naming point is style."
+  ],
+  "F7": [
+   "DROP",
+   "Asks an architecture doc to spell out the adapter Protocol and payload schema, which the keystone slice is explicitly assigned to define."
+  ],
+  "F8": [
+   "DROP",
+   "Analyzer thresholds fit under the recorded rule set; environment fingerprints and a determinism re-run are extra hardening, not a contradiction."
+  ],
+  "F9": [
+   "DROP",
+   "Metric definitions, config key names and the reference rule set's location are slice-level detail; the doc already requires every count to name its rule set."
+  ],
+  "F10": [
+   "DROP",
+   "Timeouts, the async execution model and load tests are implementation concerns for the slice that adds pipeline capture."
+  ],
+  "F11": [
+   "DROP",
+   "A speculative performance worry: on-demand snapshots add few records, and nothing shows the full scan becoming a real cost."
+  ],
+  "F12": [
+   "DROP",
+   "Reused as they are\" next to adding sibling payloads matches the 322/323 extension precedent; the file-size and validator refactors are opinions."
+  ],
+  "F13": [
+   "DROP",
+   "323 is a slice of initiative 320, which is already listed in the dependencies."
+  ],
+  "F14": [
+   "DROP",
+   "The doc already makes coverage optional, recorded as absent when not taken, and never says the default path runs project code; the rest is an opinion about where the decision belongs."
+  ],
+  "F15": [
+   "DROP",
+   "An opinion about scope and what to defer, not a defect."
+  ]
+ },
+ "wall_seconds": 52.1,
+ "cost_usd": 1.013389,
+ "raw_output": "F1: DROP \u2014 A temporary local clone checks out an old commit without touching the measured repo, so the stated rules don't block it; picking the mechanism and environment is slice-level detail.\nF2: DROP \u2014 Line 95 does set the default (\"On demand from the CLI is the baseline\"), and the exact absent-with-reason record shape is slice-level detail.\nF3: KEEP \u2014 The goal of a baseline without config edits contradicts `derive_project_id`, which for a repo with no remote raises an error telling the user to run `sq config set ... --project`.\nF4: KEEP \u2014 The doc makes `other` the review fallback without separating missing categories (which the code already maps to `\"uncategorized\"`) from invented ones, which muddies the `AuditCategory` signal where a rising `other` share means the vocabulary doesn't fit.\nF5: KEEP \u2014 Lines 33 and 75 say review-sourced numbers are shown against a noise floor, but the existing floor (`AuditNoiseFloor`) only covers audit runs and no slice produces a review floor.\nF6: DROP \u2014 Where the vocabulary module lives, and the cycle that might follow, is an implementation decision the doc doesn't make; the naming point is style.\nF7: DROP \u2014 Asks an architecture doc to spell out the adapter Protocol and payload schema, which the keystone slice is explicitly assigned to define.\nF8: DROP \u2014 Analyzer thresholds fit under the recorded rule set; environment fingerprints and a determinism re-run are extra hardening, not a contradiction.\nF9: DROP \u2014 Metric definitions, config key names and the reference rule set's location are slice-level detail; the doc already requires every count to name its rule set.\nF10: DROP \u2014 Timeouts, the async execution model and load tests are implementation concerns for the slice that adds pipeline capture.\nF11: DROP \u2014 A speculative performance worry: on-demand snapshots add few records, and nothing shows the full scan becoming a real cost.\nF12: DROP \u2014 \"Reused as they are\" next to adding sibling payloads matches the 322/323 extension precedent; the file-size and validator refactors are opinions.\nF13: DROP \u2014 323 is a slice of initiative 320, which is already listed in the dependencies.\nF14: DROP \u2014 The doc already makes coverage optional, recorded as absent when not taken, and never says the default path runs project code; the rest is an opinion about where the decision belongs.\nF15: DROP \u2014 An opinion about scope and what to defer, not a defect."
+}

@@ -1,0 +1,93 @@
+{
+ "case": "migratory-146-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 11,
+  "F11": 12,
+  "F12": 13,
+  "F13": 14,
+  "F14": 15,
+  "F15": 16,
+  "F16": 17
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The GPU path never writes positions back to `entity_manager.state`, so `sync_from_entity_manager` re-uploads setup-time positions and snaps live agents back; test 6 would not catch it."
+  ],
+  "F2": [
+   "KEEP",
+   "_apply_reflect` flips velocities in place, but the sync-back uploads positions only, so the GPU keeps the outward velocity."
+  ],
+  "F3": [
+   "KEEP",
+   "SOFT is a no-op in `apply_bounds_policy` and depends on `WorldBoundsRepulsor` from `build_forces`; the fused kernel has no wall term and the slice gives it none, so A4 cannot hold for SOFT."
+  ],
+  "F4": [
+   "KEEP",
+   "_select_arch` checks only the OS name, so a Linux host without CUDA picks `qd.cuda`, `qd.init` raises, the error is fatal per the Open Notes, and A7 cannot pass."
+  ],
+  "F5": [
+   "DROP",
+   "The parent's 146 entry asks for exactly this `GpuSimulationDriver`/`SimulationManager` shape, and `server.py`'s call site is unchanged; this is an architecture preference."
+  ],
+  "F6": [
+   "KEEP",
+   "Fields are sized once from `entity_manager.count`, and 145 says fields are never resized, so the slice's own spawn/despawn sync has no capacity or reallocation strategy."
+  ],
+  "F7": [
+   "KEEP",
+   "SpatialConfig.backend` and the interaction forces (`FlightForce`/`PursuitForce`) are silently ignored on the GPU path, with no stated valid combinations and no rejection at parse time."
+  ],
+  "F8": [
+   "KEEP",
+   "build_spatial_hash` and `fused_force_integrate_kernel` stay in `bench/backends/quadrants_fused_kernels.py`, so `gpu_driver.step()` still imports from bench and the Open Note's claim is false."
+  ],
+  "F9": [
+   "KEEP",
+   "export_positions` and `export_velocities` return f32 in the code (`.astype(np.float32)`), which contradicts the slice's \"Quadrants upcasts on download\" and breaks A3's f64 contract."
+  ],
+  "F10": [
+   "DROP",
+   "This is a generic hardening request; the doc already states that GPU failure is fatal to the process and that restarting is the recovery path."
+  ],
+  "F11": [
+   "KEEP",
+   "Bench tests import `GpuAgentState` from `quadrants_fused_state`, which the slice moves without listing test changes (A5 conflict); A3, A7 and three of the four A4 policies have no test."
+  ],
+  "F12": [
+   "DROP",
+   "_positions_dirty` and `_pending_positions` are read and written only inside `sim.step` on the single-worker executor thread, so they are not shared across threads; the `qd.init` thread concern is speculative."
+  ],
+  "F13": [
+   "KEEP",
+   "The A6 pass/fail gate leaves `subdivision_factor` unset (default S=1, while S=3 is the validated setting at 50k) and has no warmup exclusion, so whether the gate passes depends on choices the doc does not make."
+  ],
+  "F14": [
+   "DROP",
+   "The parent assigns the TPS-miss model to slice 145, not 146; asking 146 to cover it is a scope opinion."
+  ],
+  "F15": [
+   "DROP",
+   "In the code, the environment hooks advance layer state and route trail/threat writes; they do not modify agent state or the profile table."
+  ],
+  "F16": [
+   "DROP",
+   "These are proportionality and duplication style suggestions, not defects."
+  ]
+ },
+ "wall_seconds": 70.8,
+ "cost_usd": 1.2372614999999998,
+ "raw_output": "Checking the remaining findings against config and server code, then I'll give the verdicts.\nF1: KEEP \u2014 The GPU path never writes positions back to `entity_manager.state`, so `sync_from_entity_manager` re-uploads setup-time positions and snaps live agents back; test 6 would not catch it.\nF2: KEEP \u2014 `_apply_reflect` flips velocities in place, but the sync-back uploads positions only, so the GPU keeps the outward velocity.\nF3: KEEP \u2014 SOFT is a no-op in `apply_bounds_policy` and depends on `WorldBoundsRepulsor` from `build_forces`; the fused kernel has no wall term and the slice gives it none, so A4 cannot hold for SOFT.\nF4: KEEP \u2014 `_select_arch` checks only the OS name, so a Linux host without CUDA picks `qd.cuda`, `qd.init` raises, the error is fatal per the Open Notes, and A7 cannot pass.\nF5: DROP \u2014 The parent's 146 entry asks for exactly this `GpuSimulationDriver`/`SimulationManager` shape, and `server.py`'s call site is unchanged; this is an architecture preference.\nF6: KEEP \u2014 Fields are sized once from `entity_manager.count`, and 145 says fields are never resized, so the slice's own spawn/despawn sync has no capacity or reallocation strategy.\nF7: KEEP \u2014 `SpatialConfig.backend` and the interaction forces (`FlightForce`/`PursuitForce`) are silently ignored on the GPU path, with no stated valid combinations and no rejection at parse time.\nF8: KEEP \u2014 `build_spatial_hash` and `fused_force_integrate_kernel` stay in `bench/backends/quadrants_fused_kernels.py`, so `gpu_driver.step()` still imports from bench and the Open Note's claim is false.\nF9: KEEP \u2014 `export_positions` and `export_velocities` return f32 in the code (`.astype(np.float32)`), which contradicts the slice's \"Quadrants upcasts on download\" and breaks A3's f64 contract.\nF10: DROP \u2014 This is a generic hardening request; the doc already states that GPU failure is fatal to the process and that restarting is the recovery path.\nF11: KEEP \u2014 Bench tests import `GpuAgentState` from `quadrants_fused_state`, which the slice moves without listing test changes (A5 conflict); A3, A7 and three of the four A4 policies have no test.\nF12: DROP \u2014 `_positions_dirty` and `_pending_positions` are read and written only inside `sim.step` on the single-worker executor thread, so they are not shared across threads; the `qd.init` thread concern is speculative.\nF13: KEEP \u2014 The A6 pass/fail gate leaves `subdivision_factor` unset (default S=1, while S=3 is the validated setting at 50k) and has no warmup exclusion, so whether the gate passes depends on choices the doc does not make.\nF14: DROP \u2014 The parent assigns the TPS-miss model to slice 145, not 146; asking 146 to cover it is a scope opinion.\nF15: DROP \u2014 In the code, the environment hooks advance layer state and route trail/threat writes; they do not modify agent state or the profile table.\nF16: DROP \u2014 These are proportionality and duplication style suggestions, not defects."
+}

@@ -1,0 +1,73 @@
+{
+ "case": "squadron-920-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Task 3's `ClaudeSDKError(\"rate_limit_event: slow down\")` test in `test_agent.py` is the exact pattern Task 10's success grep requires to be absent from that file, so an implementer cannot satisfy both tasks."
+  ],
+  "F2": [
+   "KEEP",
+   "agent.py:180` is a third `RATE_LIMIT_MARKER in str(exc)` gate that Task 6 never mentions; left as is, an exhausted `RateLimitRejected` whose message lacks `rate_limit` would raise plain `ProviderError` and break criterion 6."
+  ],
+  "F3": [
+   "KEEP",
+   "sdk_session.dispatch` has no `RateLimitStats` at all, yet criterion 3 requires `throttles` to increment on all three paths; the design wrongly says the stats already exist and no task adds them."
+  ],
+  "F4": [
+   "KEEP",
+   "after Task 6, `test_a_rejected_rate_limit_event_reaches_the_backoff` (`test_agent.py:648`) still raises a `MessageParseError` with a rate-limit payload, which would now be skipped; after Task 9 the `test_the_shim_*` tests fail; neither task runs the tests, so both commits go in red."
+  ],
+  "F5": [
+   "DROP",
+   "these are interim behavior gaps on an unmerged slice branch with the tests still passing, so this is a commit-ordering preference rather than a defect in the finished plan."
+  ],
+  "F6": [
+   "DROP",
+   "the project's CLAUDE.md only requires a commit at least once per task, which the checkbox commit lines meet; no rule in this checkout says commit markers must be plain `**Commit**:` lines."
+  ],
+  "F7": [
+   "DROP",
+   "Tasks 14 and 15 already say plainly to run from a straight CLI terminal; adding a BLOCKED fallback is only a request for more detail."
+  ],
+  "F8": [
+   "DROP",
+   "Task 8 already tells the implementer to grep `SDK_RESULT_TYPE` across `src/` and add the entry wherever another exclusion list needs it, which would turn up both extra sites."
+  ],
+  "F9": [
+   "DROP",
+   "the backoff WARNING code is unchanged, Task 15's forced-throttle check confirms the WARNING and stats, and `test_budget_resets_when_work_comes_through` already exercises client mode."
+  ],
+  "F10": [
+   "DROP",
+   "Task 12 gives its reasons for leaving those two files alone, and the audit `RATE_LIMITED` path sits downstream of an unchanged `ProviderRateLimitError`, which the rewritten exhaustion test already covers."
+  ],
+  "F11": [
+   "KEEP",
+   "Task 6 tells the implementer both not to yield informational events and to let them flow to translation, which cannot both happen, and the design's D4 and D6/Data Flow sections contradict each other the same way."
+  ],
+  "F12": [
+   "DROP",
+   "whether the task breakdown is too fine-grained is a matter of taste, not a defect."
+  ]
+ },
+ "wall_seconds": 58.5,
+ "cost_usd": 1.0593142,
+ "raw_output": "F1: KEEP \u2014 Task 3's `ClaudeSDKError(\"rate_limit_event: slow down\")` test in `test_agent.py` is the exact pattern Task 10's success grep requires to be absent from that file, so an implementer cannot satisfy both tasks.\nF2: KEEP \u2014 `agent.py:180` is a third `RATE_LIMIT_MARKER in str(exc)` gate that Task 6 never mentions; left as is, an exhausted `RateLimitRejected` whose message lacks `rate_limit` would raise plain `ProviderError` and break criterion 6.\nF3: KEEP \u2014 `sdk_session.dispatch` has no `RateLimitStats` at all, yet criterion 3 requires `throttles` to increment on all three paths; the design wrongly says the stats already exist and no task adds them.\nF4: KEEP \u2014 after Task 6, `test_a_rejected_rate_limit_event_reaches_the_backoff` (`test_agent.py:648`) still raises a `MessageParseError` with a rate-limit payload, which would now be skipped; after Task 9 the `test_the_shim_*` tests fail; neither task runs the tests, so both commits go in red.\nF5: DROP \u2014 these are interim behavior gaps on an unmerged slice branch with the tests still passing, so this is a commit-ordering preference rather than a defect in the finished plan.\nF6: DROP \u2014 the project's CLAUDE.md only requires a commit at least once per task, which the checkbox commit lines meet; no rule in this checkout says commit markers must be plain `**Commit**:` lines.\nF7: DROP \u2014 Tasks 14 and 15 already say plainly to run from a straight CLI terminal; adding a BLOCKED fallback is only a request for more detail.\nF8: DROP \u2014 Task 8 already tells the implementer to grep `SDK_RESULT_TYPE` across `src/` and add the entry wherever another exclusion list needs it, which would turn up both extra sites.\nF9: DROP \u2014 the backoff WARNING code is unchanged, Task 15's forced-throttle check confirms the WARNING and stats, and `test_budget_resets_when_work_comes_through` already exercises client mode.\nF10: DROP \u2014 Task 12 gives its reasons for leaving those two files alone, and the audit `RATE_LIMITED` path sits downstream of an unchanged `ProviderRateLimitError`, which the rewritten exhaustion test already covers.\nF11: KEEP \u2014 Task 6 tells the implementer both not to yield informational events and to let them flow to translation, which cannot both happen, and the design's D4 and D6/Data Flow sections contradict each other the same way.\nF12: DROP \u2014 whether the task breakdown is too fine-grained is a matter of taste, not a defect."
+}

@@ -1,0 +1,68 @@
+{
+ "case": "migratory-102-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "simulation.py:18` builds `BehavioralProfile` with only the six existing fields, so making the new fields required breaks it, and task 2.2 only searches `tests/`, not `src/`."
+  ],
+  "F2": [
+   "KEEP",
+   "entities.py:136-147` merges each array by hand and leaves `leadership` out, so after a batch spawn its length no longer matches `positions` and `state.leadership[neighbors]` will index past the end."
+  ],
+  "F3": [
+   "DROP",
+   "Task 3.1 follows the slice's explicit Option A decision word for word, so this argues against a design choice already made, not a defect in the task file."
+  ],
+  "F4": [
+   "KEEP",
+   "With 5 leaders at `[4,0]` among 50 agents, the mean x-component is already positive at tick 0, so the sign check passes without any dynamics and does not test the slice's convergence criterion."
+  ],
+  "F5": [
+   "KEEP",
+   "An OR of two plain inequalities on one deterministic run passes on any tiny difference, so it cannot show the \"statistically different\" result the slice's success criterion requires."
+  ],
+  "F6": [
+   "KEEP",
+   "The slice's technical requirement for no nested Python loops is missing from task 4.1, and its per-neighbor `sum(velocity[i] * leadership[i])` invites exactly that loop."
+  ],
+  "F7": [
+   "DROP",
+   "The epsilon is given as an \"e.g.\" hint, and asking for one named constant is low-value style."
+  ],
+  "F8": [
+   "DROP",
+   "This project's CLAUDE.md requires a checkbox on every item and a commit per task, so commit checkboxes follow its rules; the `**Commit**:` marker convention comes from a different project."
+  ],
+  "F9": [
+   "DROP",
+   "The slice explicitly says `add_agent` takes an optional `leadership` parameter defaulting to 0.0, and the task matches it; the \"required\" rule applies to profile fields, not this parameter."
+  ],
+  "F10": [
+   "DROP",
+   "The expected result for uniform leadership (the plain mean of neighbor velocities) is easy to derive, and a smoke test that only checks the run completes is fine for 5.1, so this asks for more detail than needed."
+  ],
+  "F11": [
+   "DROP",
+   "Neither the slice's verification walkthrough nor the project rules require lint or type-check steps inside task files, so adding them is a process preference."
+  ]
+ },
+ "wall_seconds": 43.6,
+ "cost_usd": 0.8778021999999999,
+ "raw_output": "F1: KEEP \u2014 `simulation.py:18` builds `BehavioralProfile` with only the six existing fields, so making the new fields required breaks it, and task 2.2 only searches `tests/`, not `src/`.\nF2: KEEP \u2014 `entities.py:136-147` merges each array by hand and leaves `leadership` out, so after a batch spawn its length no longer matches `positions` and `state.leadership[neighbors]` will index past the end.\nF3: DROP \u2014 Task 3.1 follows the slice's explicit Option A decision word for word, so this argues against a design choice already made, not a defect in the task file.\nF4: KEEP \u2014 With 5 leaders at `[4,0]` among 50 agents, the mean x-component is already positive at tick 0, so the sign check passes without any dynamics and does not test the slice's convergence criterion.\nF5: KEEP \u2014 An OR of two plain inequalities on one deterministic run passes on any tiny difference, so it cannot show the \"statistically different\" result the slice's success criterion requires.\nF6: KEEP \u2014 The slice's technical requirement for no nested Python loops is missing from task 4.1, and its per-neighbor `sum(velocity[i] * leadership[i])` invites exactly that loop.\nF7: DROP \u2014 The epsilon is given as an \"e.g.\" hint, and asking for one named constant is low-value style.\nF8: DROP \u2014 This project's CLAUDE.md requires a checkbox on every item and a commit per task, so commit checkboxes follow its rules; the `**Commit**:` marker convention comes from a different project.\nF9: DROP \u2014 The slice explicitly says `add_agent` takes an optional `leadership` parameter defaulting to 0.0, and the task matches it; the \"required\" rule applies to profile fields, not this parameter.\nF10: DROP \u2014 The expected result for uniform leadership (the plain mean of neighbor velocities) is easy to derive, and a smoke test that only checks the run completes is fine for 5.1, so this asks for more detail than needed.\nF11: DROP \u2014 Neither the slice's verification walkthrough nor the project rules require lint or type-check steps inside task files, so adding them is a process preference."
+}

@@ -1,0 +1,68 @@
+{
+ "case": "migratory-141-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Plan 141 puts \"force totals per force\" in this slice's scope, but the slice keeps `force_total` as one number and pushes the per-force split to slice 142."
+  ],
+  "F2": [
+   "KEEP",
+   "The slice contradicts itself: lines 131\u2013132 and 541 say the NumPy runner calls `tick()` directly, but lines 255\u2013258 and 496\u2013501 make a copied `tick_instrumented()` the timed path, and the engine internals that copy re-implements are missing from Interfaces Required (the \"ask the Project Manager\" remedy is a process step to ignore)."
+  ],
+  "F3": [
+   "KEEP",
+   "Lines 341 and 589 give the `numba` runner to slice 144, but plan 144 only ports forces to Quadrants, and slice 142 runs before 144 and needs a Numba comparison, so no slice actually owns the Numba runner when it is first needed."
+  ],
+  "F4": [
+   "KEEP",
+   "The Open Questions call the trajectory tool the parity oracle while Integration Points make the harness hash slice 145's reference, and hashing whole arrays instead of `[:count]` breaks once a backend returns max-N buffers, which slice 140 allows."
+  ],
+  "F5": [
+   "DROP",
+   "Plan 145 already owns the 250k-on-NVIDIA (Tier 3) validation, and no CUDA-capable backend exists inside slice 141, so the owner the finding asks for already exists."
+  ],
+  "F6": [
+   "DROP",
+   "Cutting CLI options is a scope opinion, and the plan expects the harness to run the same workload across several backends."
+  ],
+  "F7": [
+   "DROP",
+   "Mostly a list of hardening details (git missing, unwritable output folder, a bare literal) that a design doc doesn't need to spell out; the try/finally and missing-field handling already cover the main paths."
+  ],
+  "F8": [
+   "KEEP",
+   "The slice says a run is reproducible \"by repo hash + workload name\", but its main use, timing uncommitted changes, would label results with a commit they did not measure."
+  ],
+  "F9": [
+   "KEEP",
+   "The schema is declared stable but `tps_observed` and `wall_seconds` are never defined, and the sample contradicts itself: a 9.55 ms mean tick means about 105 TPS, not the 65.1 reported."
+  ],
+  "F10": [
+   "DROP",
+   "Density follows from the formation parameters, and the schema is explicitly open for later slices to add large-N workloads, so the gaps are minor or belong to later slices."
+  ],
+  "F11": [
+   "DROP",
+   "The slice explicitly makes TPS gating out of scope as a measurement tool, and the tier TPS targets are checked by slices 143 and 145, not restated here."
+  ]
+ },
+ "wall_seconds": 45.3,
+ "cost_usd": 0.8562109,
+ "raw_output": "F1: KEEP \u2014 Plan 141 puts \"force totals per force\" in this slice's scope, but the slice keeps `force_total` as one number and pushes the per-force split to slice 142.\nF2: KEEP \u2014 The slice contradicts itself: lines 131\u2013132 and 541 say the NumPy runner calls `tick()` directly, but lines 255\u2013258 and 496\u2013501 make a copied `tick_instrumented()` the timed path, and the engine internals that copy re-implements are missing from Interfaces Required (the \"ask the Project Manager\" remedy is a process step to ignore).\nF3: KEEP \u2014 Lines 341 and 589 give the `numba` runner to slice 144, but plan 144 only ports forces to Quadrants, and slice 142 runs before 144 and needs a Numba comparison, so no slice actually owns the Numba runner when it is first needed.\nF4: KEEP \u2014 The Open Questions call the trajectory tool the parity oracle while Integration Points make the harness hash slice 145's reference, and hashing whole arrays instead of `[:count]` breaks once a backend returns max-N buffers, which slice 140 allows.\nF5: DROP \u2014 Plan 145 already owns the 250k-on-NVIDIA (Tier 3) validation, and no CUDA-capable backend exists inside slice 141, so the owner the finding asks for already exists.\nF6: DROP \u2014 Cutting CLI options is a scope opinion, and the plan expects the harness to run the same workload across several backends.\nF7: DROP \u2014 Mostly a list of hardening details (git missing, unwritable output folder, a bare literal) that a design doc doesn't need to spell out; the try/finally and missing-field handling already cover the main paths.\nF8: KEEP \u2014 The slice says a run is reproducible \"by repo hash + workload name\", but its main use, timing uncommitted changes, would label results with a commit they did not measure.\nF9: KEEP \u2014 The schema is declared stable but `tps_observed` and `wall_seconds` are never defined, and the sample contradicts itself: a 9.55 ms mean tick means about 105 TPS, not the 65.1 reported.\nF10: DROP \u2014 Density follows from the formation parameters, and the schema is explicitly open for later slices to add large-N workloads, so the gaps are minor or belong to later slices.\nF11: DROP \u2014 The slice explicitly makes TPS gating out of scope as a measurement tool, and the tier TPS targets are checked by slices 143 and 145, not restated here."
+}

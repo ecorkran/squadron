@@ -1,0 +1,53 @@
+{
+ "case": "squadron-928-design",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "prompt_renderer.py` builds `sq _dispatch-run` and `sq _summary-run` commands for the harness to run, and both reach a provider, yet D10's table leaves both out. The parent asks for every network-reaching `sq` command to be listed."
+  ],
+  "F2": [
+   "KEEP",
+   "Before this slice no skill-pack receipt name had a suffix, so the D5 `-agents` and `-local` suffixes create a new way for names to collide (Claude pack `foo-agents` and Codex pack `foo` both map to `foo-agents.toml`). The exclusion's \"pre-existing and unchanged\" claim is false for that case (the `sq-review` half is pre-existing, since Claude dispatch packs already share `sq/`)."
+  ],
+  "F3": [
+   "DROP",
+   "Asks for more detail rather than naming a defect: a missing receipt already makes uninstall exit 1 in `skills.py`, and partial-write handling is unchanged from today's install paths."
+  ],
+  "F4": [
+   "KEEP",
+   "The drift test's `_agents_root()` looks for analysis twins only under `commands/agents/`, so the D4 move breaks `test_every_claude_command_has_an_agents_twin`. The Migration Plan wrongly says only fixture paths change, and it never says it supersedes 925 D8."
+  ],
+  "F5": [
+   "DROP",
+   "Low value: D3's rules don't forbid a per-skill `agents/openai.yaml`, D2 already mentions it, and squadron's own bundle is already guarded by the drift tests."
+  ],
+  "F6": [
+   "KEEP",
+   "925's verified walkthrough shows a bare `sq doctor` hides WARN rows without `-v`, so step 7's expected `demo (codex)` WARN row would not appear as written."
+  ],
+  "F7": [
+   "DROP",
+   "D1's paragraph already says plainly that `--commands-dir` keeps its name and takes `--target`'s role, so the asymmetry is recorded."
+  ],
+  "F8": [
+   "DROP",
+   "This is an opinion about scope, and the effort increase to 3/5 is already recorded in both the slice and the parent."
+  ]
+ },
+ "wall_seconds": 55.5,
+ "cost_usd": 1.3085313999999997,
+ "raw_output": "Checking the skills uninstall code and the drift test, then I'll give the verdicts.\nF1: KEEP \u2014 `prompt_renderer.py` builds `sq _dispatch-run` and `sq _summary-run` commands for the harness to run, and both reach a provider, yet D10's table leaves both out. The parent asks for every network-reaching `sq` command to be listed.\nF2: KEEP \u2014 Before this slice no skill-pack receipt name had a suffix, so the D5 `-agents` and `-local` suffixes create a new way for names to collide (Claude pack `foo-agents` and Codex pack `foo` both map to `foo-agents.toml`). The exclusion's \"pre-existing and unchanged\" claim is false for that case (the `sq-review` half is pre-existing, since Claude dispatch packs already share `sq/`).\nF3: DROP \u2014 Asks for more detail rather than naming a defect: a missing receipt already makes uninstall exit 1 in `skills.py`, and partial-write handling is unchanged from today's install paths.\nF4: KEEP \u2014 The drift test's `_agents_root()` looks for analysis twins only under `commands/agents/`, so the D4 move breaks `test_every_claude_command_has_an_agents_twin`. The Migration Plan wrongly says only fixture paths change, and it never says it supersedes 925 D8.\nF5: DROP \u2014 Low value: D3's rules don't forbid a per-skill `agents/openai.yaml`, D2 already mentions it, and squadron's own bundle is already guarded by the drift tests.\nF6: KEEP \u2014 925's verified walkthrough shows a bare `sq doctor` hides WARN rows without `-v`, so step 7's expected `demo (codex)` WARN row would not appear as written.\nF7: DROP \u2014 D1's paragraph already says plainly that `--commands-dir` keeps its name and takes `--target`'s role, so the asymmetry is recorded.\nF8: DROP \u2014 This is an opinion about scope, and the effort increase to 3/5 is already recorded in both the slice and the parent."
+}

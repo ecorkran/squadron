@@ -1,0 +1,48 @@
+{
+ "case": "context-forge-261-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "context_build`'s existing catch already turns any thrown error into `errorResult`, so once the integrator rethrows `AdoptionError` (tested in 10T and 12 #12) the error result follows by construction, and the design's Technical Requirements don't ask for this test."
+  ],
+  "F2": [
+   "DROP",
+   "the breakdown already says, at line 38, that the target is covered only by the cap tests, which is the second remedy the finding asks for."
+  ],
+  "F3": [
+   "DROP",
+   "writing about 20k empty files is slow but the task can still be done as written; whether it fits the default timeout is a tuning detail the implementer will see and fix."
+  ],
+  "F4": [
+   "KEEP",
+   "vi.mock` is hoisted and applies to the whole file, so mocking `gitExec` in the same file as the real-git cases would break those cases unless the task says to use a partial mock or a separate file."
+  ],
+  "F5": [
+   "KEEP",
+   "the design's Technical Requirements say `renderAdoptionFacts` is tested for \"every outcome\", and Task 8T leaves out `adoption-closed`, `already-planned` and `greenfield`."
+  ],
+  "F6": [
+   "DROP",
+   "mcp-server integration tests already load core fixtures by relative path (`mcpIntegration.test.ts:295`), and \"brownfield temp fixture\" plus the pointer to follow `mcpIntegration.test.ts` is enough to go on."
+  ],
+  "F7": [
+   "DROP",
+   "the `projectPath`/`checkoutPath` guard copies the integrator's existing resolver pattern, and `createContextPipeline` callers always supply a path, so the silent-skip case doesn't come up."
+  ]
+ },
+ "wall_seconds": 42.5,
+ "cost_usd": 1.0677438000000001,
+ "raw_output": "F1: DROP \u2014 `context_build`'s existing catch already turns any thrown error into `errorResult`, so once the integrator rethrows `AdoptionError` (tested in 10T and 12 #12) the error result follows by construction, and the design's Technical Requirements don't ask for this test.\nF2: DROP \u2014 the breakdown already says, at line 38, that the target is covered only by the cap tests, which is the second remedy the finding asks for.\nF3: DROP \u2014 writing about 20k empty files is slow but the task can still be done as written; whether it fits the default timeout is a tuning detail the implementer will see and fix.\nF4: KEEP \u2014 `vi.mock` is hoisted and applies to the whole file, so mocking `gitExec` in the same file as the real-git cases would break those cases unless the task says to use a partial mock or a separate file.\nF5: KEEP \u2014 the design's Technical Requirements say `renderAdoptionFacts` is tested for \"every outcome\", and Task 8T leaves out `adoption-closed`, `already-planned` and `greenfield`.\nF6: DROP \u2014 mcp-server integration tests already load core fixtures by relative path (`mcpIntegration.test.ts:295`), and \"brownfield temp fixture\" plus the pointer to follow `mcpIntegration.test.ts` is enough to go on.\nF7: DROP \u2014 the `projectPath`/`checkoutPath` guard copies the integrator's existing resolver pattern, and `createContextPipeline` callers always supply a path, so the silent-skip case doesn't come up."
+}

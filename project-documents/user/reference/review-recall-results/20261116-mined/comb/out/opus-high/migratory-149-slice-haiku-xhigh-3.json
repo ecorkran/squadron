@@ -1,0 +1,53 @@
+{
+ "case": "migratory-149-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cost model uses two-flock density but the gate runs `mid-flock-50k`, and the doc never squares its premise with the recorded density-independence result (145 Shared Memory section; 140-slices item 9)."
+  ],
+  "F2": [
+   "DROP",
+   "145's A7 only requires the kernel signature to stay the same, which the break does not change; the R1 `break` prototype already exists in `145-notes.phase-2-risk-poc.md`; the duplicated cap check is minor."
+  ],
+  "F3": [
+   "KEEP",
+   "Line 58's \"S=3 alone \u2192 ~5000 candidates\" is wrong by the doc's own 7\u00d77 \u00d7 555 figures (\u224827,000), and it contradicts the 148 notes it draws from."
+  ],
+  "F4": [
+   "KEEP",
+   "The four Step 3 runs are two identical pairs of commands, and with no break toggle or pinned baseline the counter-gating and early-exit configurations cannot be run as written."
+  ],
+  "F5": [
+   "DROP",
+   "Default S=1 matches the plan, production wiring belongs to 146, and \"146 is unblocked\" agrees with 146 depending only on 145."
+  ],
+  "F6": [
+   "KEEP",
+   "cell_size = query_radius / S` doesn't say which radius, while the code and 145 derive cell size from `max_query_radius` and keep a per-profile radius, so a wrong choice would silently miss neighbors."
+  ],
+  "F7": [
+   "DROP",
+   "The code already defines 0 as uncapped (`quadrants_fused_state.py:272`, `k_max <= 0`); the bound literal and its rationale are minor style points."
+  ],
+  "F8": [
+   "DROP",
+   "The deletion rests on a \"per original plan\" claim in sibling notes that the 148 slice doesn't back up; it is low-value housekeeping, not a defect in this design."
+  ]
+ },
+ "wall_seconds": 77.3,
+ "cost_usd": 1.1128798000000002,
+ "raw_output": "Checking slice 145's risk-POC notes for a recorded `break` check, then I'll write the verdicts.\nF1: KEEP \u2014 The cost model uses two-flock density but the gate runs `mid-flock-50k`, and the doc never squares its premise with the recorded density-independence result (145 Shared Memory section; 140-slices item 9).\nF2: DROP \u2014 145's A7 only requires the kernel signature to stay the same, which the break does not change; the R1 `break` prototype already exists in `145-notes.phase-2-risk-poc.md`; the duplicated cap check is minor.\nF3: KEEP \u2014 Line 58's \"S=3 alone \u2192 ~5000 candidates\" is wrong by the doc's own 7\u00d77 \u00d7 555 figures (\u224827,000), and it contradicts the 148 notes it draws from.\nF4: KEEP \u2014 The four Step 3 runs are two identical pairs of commands, and with no break toggle or pinned baseline the counter-gating and early-exit configurations cannot be run as written.\nF5: DROP \u2014 Default S=1 matches the plan, production wiring belongs to 146, and \"146 is unblocked\" agrees with 146 depending only on 145.\nF6: KEEP \u2014 `cell_size = query_radius / S` doesn't say which radius, while the code and 145 derive cell size from `max_query_radius` and keep a per-profile radius, so a wrong choice would silently miss neighbors.\nF7: DROP \u2014 The code already defines 0 as uncapped (`quadrants_fused_state.py:272`, `k_max <= 0`); the bound literal and its rationale are minor style points.\nF8: DROP \u2014 The deletion rests on a \"per original plan\" claim in sibling notes that the 148 slice doesn't back up; it is low-value housekeeping, not a defect in this design."
+}

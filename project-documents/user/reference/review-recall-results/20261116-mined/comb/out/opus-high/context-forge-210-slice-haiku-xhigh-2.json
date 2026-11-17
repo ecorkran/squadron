@@ -1,0 +1,68 @@
+{
+ "case": "context-forge-210-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Step 4 checks the marker only on `copilot-instructions.md` and `AGENTS.md`, even though line 65 says every generated file carries it; the script can overwrite user files in `.github/instructions/` and `.github/prompts/` with no check, which breaks the \"same safety\" contract and the Risks claim of no data loss."
+  ],
+  "F2": [
+   "DROP",
+   "Line 83 already squares the `**` default with the routing (paths-less always-on rules go to `copilot-instructions.md`), and the default comes from the parent plan; at worst it is a default that never fires, not a contradiction."
+  ],
+  "F3": [
+   "DROP",
+   "The existing `setupIdeAction` already turns a script failure into a clear error with its exit code, slice 202 makes IDE-step failures non-fatal on purpose, and per-worktree handling matches the existing Claude path; the rest is hardening."
+  ],
+  "F4": [
+   "DROP",
+   "The marker check is a few lines and line 65 commits to the existing pattern, so the helper's name and signature can be settled in task breakdown; the backup handling matches the existing code, and marker placement in frontmatter files is moot because CF checks only the two root files, which have no frontmatter."
+  ],
+  "F5": [
+   "DROP",
+   "The project's real `.claude/rules` files use no brace globs; the empty or malformed `paths` cases and the skill-field mapping are detail requests for the guide script, not defects in this design."
+  ],
+  "F6": [
+   "DROP",
+   "The parent plan's mapping requires writing always-on content to both `copilot-instructions.md` and `AGENTS.md`, so the duplicate follows the plan."
+  ],
+  "F7": [
+   "KEEP",
+   "The parent plan's success criterion for path\u2192applyTo translation (plan line 216) has no test in the Test Coverage section, and the slice doesn't say where translator tests would live."
+  ],
+  "F8": [
+   "DROP",
+   "The parent slice plan puts Copilot ahead of Cursor (Cursor \"once Copilot is proven\"), and the slice follows it; any clash with the architecture belongs to the plan and is a PM priority call."
+  ],
+  "F9": [
+   "DROP",
+   "Restating the two-minute onboarding target and giving the copilot step a time budget is low-value detail; neither the design nor the plan requires it."
+  ],
+  "F10": [
+   "DROP",
+   "Whether CF's own user-level commands are in scope is a scope opinion; the parent plan maps prompts from skills only."
+  ],
+  "F11": [
+   "KEEP",
+   "The parent plan's success criterion (line 218) says the tool guide `copilot-vscode/setup-ide.md` must be referenced in the slice design, and the slice never references it; the custom-agent mapping it promises to \"document\" is also missing."
+  ]
+ },
+ "wall_seconds": 50.7,
+ "cost_usd": 0.9250290999999999,
+ "raw_output": "I've checked all eleven findings against the slice, its parent plan, slice 202, `setup-ide.ts` and the Copilot tool guide. Here are the verdicts:\n\nF1: KEEP \u2014 Step 4 checks the marker only on `copilot-instructions.md` and `AGENTS.md`, even though line 65 says every generated file carries it; the script can overwrite user files in `.github/instructions/` and `.github/prompts/` with no check, which breaks the \"same safety\" contract and the Risks claim of no data loss.\nF2: DROP \u2014 Line 83 already squares the `**` default with the routing (paths-less always-on rules go to `copilot-instructions.md`), and the default comes from the parent plan; at worst it is a default that never fires, not a contradiction.\nF3: DROP \u2014 The existing `setupIdeAction` already turns a script failure into a clear error with its exit code, slice 202 makes IDE-step failures non-fatal on purpose, and per-worktree handling matches the existing Claude path; the rest is hardening.\nF4: DROP \u2014 The marker check is a few lines and line 65 commits to the existing pattern, so the helper's name and signature can be settled in task breakdown; the backup handling matches the existing code, and marker placement in frontmatter files is moot because CF checks only the two root files, which have no frontmatter.\nF5: DROP \u2014 The project's real `.claude/rules` files use no brace globs; the empty or malformed `paths` cases and the skill-field mapping are detail requests for the guide script, not defects in this design.\nF6: DROP \u2014 The parent plan's mapping requires writing always-on content to both `copilot-instructions.md` and `AGENTS.md`, so the duplicate follows the plan.\nF7: KEEP \u2014 The parent plan's success criterion for path\u2192applyTo translation (plan line 216) has no test in the Test Coverage section, and the slice doesn't say where translator tests would live.\nF8: DROP \u2014 The parent slice plan puts Copilot ahead of Cursor (Cursor \"once Copilot is proven\"), and the slice follows it; any clash with the architecture belongs to the plan and is a PM priority call.\nF9: DROP \u2014 Restating the two-minute onboarding target and giving the copilot step a time budget is low-value detail; neither the design nor the plan requires it.\nF10: DROP \u2014 Whether CF's own user-level commands are in scope is a scope opinion; the parent plan maps prompts from skills only.\nF11: KEEP \u2014 The parent plan's success criterion (line 218) says the tool guide `copilot-vscode/setup-ide.md` must be referenced in the slice design, and the slice never references it; the custom-agent mapping it promises to \"document\" is also missing."
+}

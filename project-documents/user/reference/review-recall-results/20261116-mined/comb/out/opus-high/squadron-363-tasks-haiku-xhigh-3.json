@@ -1,0 +1,63 @@
+{
+ "case": "squadron-363-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Lines 389 and 392 of `understand.md` become false once `concept` is recognized (\"the only one this skill implements\", \"any argument other than the comprehension default is unrecognized\"), but Task 7.4 says no other comprehension-flow text changes and Task 1.1 never names these lines."
+  ],
+  "F2": [
+   "DROP",
+   "The pointer exists at lines 307\u2013309 (\"Governance for that use belongs to 363\"), so Task 7.1 can update it as written, and line 291 already names the comprehension document."
+  ],
+  "F3": [
+   "DROP",
+   "Task 2.1 follows the design's own wording (\"read \u2026 at write time\"), and moving the precondition checks earlier is a design-approach preference, not a defect in the task file."
+  ],
+  "F4": [
+   "DROP",
+   "SC10 asks for provenance that can record the full outcome set, not a walkthrough that triggers every outcome, and the task walkthrough matches the design's."
+  ],
+  "F5": [
+   "KEEP",
+   "No walkthrough step checks SC4 (dropped topics absent from the output), SC12 (PM would edit rather than discard) or SC10's \"every `[INFERRED]` sentence satisfies the rule\", so success criteria go unverified."
+  ],
+  "F6": [
+   "KEEP",
+   "The guide path is fixed and no mechanism exists to \"point the check at\" a scratch copy of the guide, so Task 8.3 cannot be run as written; SC7's absent or unreadable guide cases are also never exercised."
+  ],
+  "F7": [
+   "KEEP",
+   "SC8 names mechanical refillability, but Task 8.4 re-runs against the fully answered 8.1 document, so the fill-gap-marked-sections branch is never verified."
+  ],
+  "F8": [
+   "DROP",
+   "The governing CLAUDE.md requires a commit at least once per task and checkbox format for every item, so markers as checkboxes after each task follow the rules; their placement is a preference."
+  ],
+  "F9": [
+   "KEEP",
+   "Task 0.1 hardcodes \"integration branch is unset; target is `main`\" instead of reading `cf config get git.integration_branch`, which the git rules require before starting work."
+  ],
+  "F10": [
+   "DROP",
+   "This is an opinion about task granularity and scope, not a defect."
+  ]
+ },
+ "wall_seconds": 56.1,
+ "cost_usd": 0.9259451999999999,
+ "raw_output": "F1: KEEP \u2014 Lines 389 and 392 of `understand.md` become false once `concept` is recognized (\"the only one this skill implements\", \"any argument other than the comprehension default is unrecognized\"), but Task 7.4 says no other comprehension-flow text changes and Task 1.1 never names these lines.\nF2: DROP \u2014 The pointer exists at lines 307\u2013309 (\"Governance for that use belongs to 363\"), so Task 7.1 can update it as written, and line 291 already names the comprehension document.\nF3: DROP \u2014 Task 2.1 follows the design's own wording (\"read \u2026 at write time\"), and moving the precondition checks earlier is a design-approach preference, not a defect in the task file.\nF4: DROP \u2014 SC10 asks for provenance that can record the full outcome set, not a walkthrough that triggers every outcome, and the task walkthrough matches the design's.\nF5: KEEP \u2014 No walkthrough step checks SC4 (dropped topics absent from the output), SC12 (PM would edit rather than discard) or SC10's \"every `[INFERRED]` sentence satisfies the rule\", so success criteria go unverified.\nF6: KEEP \u2014 The guide path is fixed and no mechanism exists to \"point the check at\" a scratch copy of the guide, so Task 8.3 cannot be run as written; SC7's absent or unreadable guide cases are also never exercised.\nF7: KEEP \u2014 SC8 names mechanical refillability, but Task 8.4 re-runs against the fully answered 8.1 document, so the fill-gap-marked-sections branch is never verified.\nF8: DROP \u2014 The governing CLAUDE.md requires a commit at least once per task and checkbox format for every item, so markers as checkboxes after each task follow the rules; their placement is a preference.\nF9: KEEP \u2014 Task 0.1 hardcodes \"integration branch is unset; target is `main`\" instead of reading `cf config get git.integration_branch`, which the git rules require before starting work.\nF10: DROP \u2014 This is an opinion about task granularity and scope, not a defect."
+}

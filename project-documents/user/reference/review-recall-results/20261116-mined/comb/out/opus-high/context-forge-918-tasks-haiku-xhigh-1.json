@@ -1,0 +1,53 @@
+{
+ "case": "context-forge-918-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding lines to `sample-slice-plan.md` breaks tests no task mentions: `ArtifactIntrospector.test.ts:52` expects 5 slices, `slicePlanParser.test.ts:10` expects 5 entries, and `:128` expects every entry to be `explicit`, which the new unindexed line violates. It also contradicts the design's criterion that the existing fixture tests pass unchanged."
+  ],
+  "F2": [
+   "DROP",
+   "The claim is true, but the gap exists only between commits on an unmerged slice branch, Task 10 closes it before Phase 7, and no rule requires every intermediate commit to be shippable."
+  ],
+  "F3": [
+   "DROP",
+   "Both rules use the same `completedSlices === totalSlices` check on the parser's output, and the existing rule tests feed it mocked counts, so a second mocked case for `arch-status-vs-plans` would prove nothing new."
+  ],
+  "F4": [
+   "DROP",
+   "Task 5's 7/5 assertion (3 checked + 2 deprecated) already tests at parser level that deprecated entries count as resolved; the equality case follows directly from that."
+  ],
+  "F5": [
+   "DROP",
+   "This project's CLAUDE.md asks for checklist items and a commit at least once per task, and has no `**Commit**:` marker convention; the subject length and commit types are style points."
+  ],
+  "F6": [
+   "DROP",
+   "Which task tests run in, and whether to merge tasks, is a preference about structure; no task is impossible or wrong as written."
+  ],
+  "F7": [
+   "DROP",
+   "renderEntryStatus` already handles `Deprecated` and is unchanged by this slice; the JSON status assertion plus Task 13's manual walkthrough are enough."
+  ],
+  "F8": [
+   "DROP",
+   "The task count is an opinion about granularity, not a defect."
+  ]
+ },
+ "wall_seconds": 47.5,
+ "cost_usd": 1.0084607,
+ "raw_output": "F1: KEEP \u2014 Adding lines to `sample-slice-plan.md` breaks tests no task mentions: `ArtifactIntrospector.test.ts:52` expects 5 slices, `slicePlanParser.test.ts:10` expects 5 entries, and `:128` expects every entry to be `explicit`, which the new unindexed line violates. It also contradicts the design's criterion that the existing fixture tests pass unchanged.\nF2: DROP \u2014 The claim is true, but the gap exists only between commits on an unmerged slice branch, Task 10 closes it before Phase 7, and no rule requires every intermediate commit to be shippable.\nF3: DROP \u2014 Both rules use the same `completedSlices === totalSlices` check on the parser's output, and the existing rule tests feed it mocked counts, so a second mocked case for `arch-status-vs-plans` would prove nothing new.\nF4: DROP \u2014 Task 5's 7/5 assertion (3 checked + 2 deprecated) already tests at parser level that deprecated entries count as resolved; the equality case follows directly from that.\nF5: DROP \u2014 This project's CLAUDE.md asks for checklist items and a commit at least once per task, and has no `**Commit**:` marker convention; the subject length and commit types are style points.\nF6: DROP \u2014 Which task tests run in, and whether to merge tasks, is a preference about structure; no task is impossible or wrong as written.\nF7: DROP \u2014 `renderEntryStatus` already handles `Deprecated` and is unchanged by this slice; the JSON status assertion plus Task 13's manual walkthrough are enough.\nF8: DROP \u2014 The task count is an opinion about granularity, not a defect."
+}

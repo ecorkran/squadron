@@ -1,0 +1,58 @@
+{
+ "case": "squadron-401-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Task 14 puts `MemoryError` in TypeScript's `token_errors`, and Task 10 sends any token error to `unparsed_files`; that contradicts Tasks 10/11 and the design's failure table, which make `MemoryError` a `tool_failed` for the whole measurement."
+  ],
+  "F2": [
+   "KEEP",
+   "Both Python fixtures also fail `ast.parse`, so they are already unparsed for function length; \"function length is unaffected\" can't be checked as an isolation claim and invites an assertion that will fail."
+  ],
+  "F3": [
+   "KEEP",
+   "Tokens carry only their start line, so a multi-line string inside a duplicated block under-reports the block's lines, against D3 (\"every line under both occurrences\") and Success Criterion 4."
+  ],
+  "F4": [
+   "DROP",
+   "measure_duplication` returns only the duplication measurement, so the other metrics cannot change by construction, and Task 11 already has the lowered-constant test that Success Criterion 10 asks for."
+  ],
+  "F5": [
+   "DROP",
+   "D6 says the reader uses `get_config(key, cwd=repo_root)`, Task 16 points to D6 for the measurement-time lookup, and Task 22's tmp-repo tests would catch a missing `cwd`."
+  ],
+  "F6": [
+   "DROP",
+   "measure_parse_metrics` requires the complexity identity, so pyright fails if Python doesn't pass it, and `take_snapshot` raises if a declared metric is missing, so the Python wiring can't be silently left out."
+  ],
+  "F7": [
+   "DROP",
+   "Splitting Task 10 is an opinion about task size; the task as written can be completed."
+  ],
+  "F8": [
+   "DROP",
+   "Splitting `coverage.py` now is a speculative size opinion; the ~300-line rule is already checked in Task 30."
+  ],
+  "F9": [
+   "KEEP",
+   "The Phase 6 prompt (`prompt.ai-project.system.md:366`) finds commit points by looking for lines starting with `**Commit**:`, so the `- [ ] Commit:` checkbox lines won't be found and commits fall back to the end of each task (including the untested Task 8)."
+  ]
+ },
+ "wall_seconds": 52.8,
+ "cost_usd": 1.0058736000000001,
+ "raw_output": "F1: KEEP \u2014 Task 14 puts `MemoryError` in TypeScript's `token_errors`, and Task 10 sends any token error to `unparsed_files`; that contradicts Tasks 10/11 and the design's failure table, which make `MemoryError` a `tool_failed` for the whole measurement.\nF2: KEEP \u2014 Both Python fixtures also fail `ast.parse`, so they are already unparsed for function length; \"function length is unaffected\" can't be checked as an isolation claim and invites an assertion that will fail.\nF3: KEEP \u2014 Tokens carry only their start line, so a multi-line string inside a duplicated block under-reports the block's lines, against D3 (\"every line under both occurrences\") and Success Criterion 4.\nF4: DROP \u2014 `measure_duplication` returns only the duplication measurement, so the other metrics cannot change by construction, and Task 11 already has the lowered-constant test that Success Criterion 10 asks for.\nF5: DROP \u2014 D6 says the reader uses `get_config(key, cwd=repo_root)`, Task 16 points to D6 for the measurement-time lookup, and Task 22's tmp-repo tests would catch a missing `cwd`.\nF6: DROP \u2014 `measure_parse_metrics` requires the complexity identity, so pyright fails if Python doesn't pass it, and `take_snapshot` raises if a declared metric is missing, so the Python wiring can't be silently left out.\nF7: DROP \u2014 Splitting Task 10 is an opinion about task size; the task as written can be completed.\nF8: DROP \u2014 Splitting `coverage.py` now is a speculative size opinion; the ~300-line rule is already checked in Task 30.\nF9: KEEP \u2014 The Phase 6 prompt (`prompt.ai-project.system.md:366`) finds commit points by looking for lines starting with `**Commit**:`, so the `- [ ] Commit:` checkbox lines won't be found and commits fall back to the end of each task (including the untested Task 8)."
+}

@@ -1,0 +1,83 @@
+{
+ "case": "context-forge-240-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The config defines `pre-tasks` and `pre-implementation`, but the only insertion point is between P5 and P6, so neither has an evaluation point. The doc also calls the three slice-level transitions \"four.\""
+  ],
+  "F2": [
+   "KEEP",
+   "Filenames are `NNN-review.{type}.{slug}.md`, so \"lexicographically last\" sorts by slug, not by recency, and a rerun can leave an older FAIL selected."
+  ],
+  "F3": [
+   "DROP",
+   "The doc already says detection uses the configured reviewType, and the slot's shape and signature are reasonably left to slice design. The initiative-level arch review is explicitly deferred."
+  ],
+  "F4": [
+   "KEEP",
+   "review_unknown_as` is given as `\"fail\"` (line 75), `\"concern\"` (line 147) and an undefined \"pending\" (line 106), and the \"concerns or lower\" ordering is never defined."
+  ],
+  "F5": [
+   "KEEP",
+   "Line 42 says `workflow_next` returns a `pending-review` recommendation, but line 118 returns `review`. Every existing recommendation is a sentence, so the \"stable vocabulary\" token values don't exist yet."
+  ],
+  "F6": [
+   "DROP",
+   "The doc never commits to reusing `parseFrontmatter`, and line 22 makes no such claim. Choosing a reader that can report parse failures is implementation detail."
+  ],
+  "F7": [
+   "KEEP",
+   "The v1 example config includes `pre-slice-plan`, but v1 has no logic for it. That makes it a silent no-op, which contradicts the doc's own fail-fast rule (line 48)."
+  ],
+  "F8": [
+   "DROP",
+   "The P6 `find(!isChecked)` behavior and the auto-fix checkbox predate this doc, and the drift concern is speculative, not a defect the doc introduces."
+  ],
+  "F9": [
+   "DROP",
+   "The doc correctly calls `auto_advance` a consumer-layer concern, and it is unused in CF, which is consistent with that."
+  ],
+  "F10": [
+   "DROP",
+   "The navigator can resolve config from `project.projectPath`. How config gets injected is a slice-design choice, not an impossibility."
+  ],
+  "F11": [
+   "DROP",
+   "Function size and refactor sequencing are opinions about approach, and the doc already says to convert the cascade to named stages."
+  ],
+  "F12": [
+   "DROP",
+   "Tying a PASS to a revision is extra hardening and scope, not something the doc's goals require."
+  ],
+  "F13": [
+   "DROP",
+   "This is an opinion about how much config surface v1 should carry."
+  ],
+  "F14": [
+   "KEEP",
+   "180 defines project/context resolution with no config resolution tier, so the worktree-scoped config reference is unsupported. \"No 160 interfaces change\" also contradicts the doc's own changes to `SliceStatus` and `DocumentDetectionResult`."
+  ]
+ },
+ "wall_seconds": 47.7,
+ "cost_usd": 1.0024043999999999,
+ "raw_output": "I've finished checking each finding against the document and the code. Here are the verdicts:\n\nF1: KEEP \u2014 The config defines `pre-tasks` and `pre-implementation`, but the only insertion point is between P5 and P6, so neither has an evaluation point. The doc also calls the three slice-level transitions \"four.\"\nF2: KEEP \u2014 Filenames are `NNN-review.{type}.{slug}.md`, so \"lexicographically last\" sorts by slug, not by recency, and a rerun can leave an older FAIL selected.\nF3: DROP \u2014 The doc already says detection uses the configured reviewType, and the slot's shape and signature are reasonably left to slice design. The initiative-level arch review is explicitly deferred.\nF4: KEEP \u2014 `review_unknown_as` is given as `\"fail\"` (line 75), `\"concern\"` (line 147) and an undefined \"pending\" (line 106), and the \"concerns or lower\" ordering is never defined.\nF5: KEEP \u2014 Line 42 says `workflow_next` returns a `pending-review` recommendation, but line 118 returns `review`. Every existing recommendation is a sentence, so the \"stable vocabulary\" token values don't exist yet.\nF6: DROP \u2014 The doc never commits to reusing `parseFrontmatter`, and line 22 makes no such claim. Choosing a reader that can report parse failures is implementation detail.\nF7: KEEP \u2014 The v1 example config includes `pre-slice-plan`, but v1 has no logic for it. That makes it a silent no-op, which contradicts the doc's own fail-fast rule (line 48).\nF8: DROP \u2014 The P6 `find(!isChecked)` behavior and the auto-fix checkbox predate this doc, and the drift concern is speculative, not a defect the doc introduces.\nF9: DROP \u2014 The doc correctly calls `auto_advance` a consumer-layer concern, and it is unused in CF, which is consistent with that.\nF10: DROP \u2014 The navigator can resolve config from `project.projectPath`. How config gets injected is a slice-design choice, not an impossibility.\nF11: DROP \u2014 Function size and refactor sequencing are opinions about approach, and the doc already says to convert the cascade to named stages.\nF12: DROP \u2014 Tying a PASS to a revision is extra hardening and scope, not something the doc's goals require.\nF13: DROP \u2014 This is an opinion about how much config surface v1 should carry.\nF14: KEEP \u2014 180 defines project/context resolution with no config resolution tier, so the worktree-scoped config reference is unsupported. \"No 160 interfaces change\" also contradicts the doc's own changes to `SliceStatus` and `DocumentDetectionResult`."
+}

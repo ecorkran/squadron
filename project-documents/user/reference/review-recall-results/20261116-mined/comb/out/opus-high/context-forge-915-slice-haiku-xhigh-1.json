@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-915-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Delete follows the key's scope (line 89), so `cf config unset git.integration_branch --project` would delete the personal value; the collision remediation (line 146) and step 9 would remove the confirmed value and leave the stale shared copy, contradicting step 9's own checks."
+  ],
+  "F2": [
+   "KEEP",
+   "readToml`/`deleteKey` etc. are module-private in `ConfigManager.ts` and `delete` routes by key scope, so the design gives `migrate-personal` and the new checker rule no defined way to read or delete in the shared file only, despite saying \"reuse as-is\" and \"no signature changes.\""
+  ],
+  "F3": [
+   "DROP",
+   "The reused `readToml` already throws on malformed or unreadable files (only ENOENT returns empty), so items 1\u20132 are already defined; item 3 asks for more detail on a CLI command's reporting, which is low value."
+  ],
+  "F4": [
+   "KEEP",
+   "Only `cf init` adds the ignore line, so in existing projects (the population the migration targets) both `cf config set ... --project` and `migrate-personal` create an un-ignored `.context-forge.local.toml`, which defeats the slice's stated goal of keeping personal settings out of git."
+  ],
+  "F5": [
+   "DROP",
+   "This is a scope/complexity opinion about failure isolation and a duplicated walkthrough, not a defect."
+  ]
+ },
+ "wall_seconds": 29.7,
+ "cost_usd": 0.791313,
+ "raw_output": "F1: KEEP \u2014 Delete follows the key's scope (line 89), so `cf config unset git.integration_branch --project` would delete the personal value; the collision remediation (line 146) and step 9 would remove the confirmed value and leave the stale shared copy, contradicting step 9's own checks.\nF2: KEEP \u2014 `readToml`/`deleteKey` etc. are module-private in `ConfigManager.ts` and `delete` routes by key scope, so the design gives `migrate-personal` and the new checker rule no defined way to read or delete in the shared file only, despite saying \"reuse as-is\" and \"no signature changes.\"\nF3: DROP \u2014 The reused `readToml` already throws on malformed or unreadable files (only ENOENT returns empty), so items 1\u20132 are already defined; item 3 asks for more detail on a CLI command's reporting, which is low value.\nF4: KEEP \u2014 Only `cf init` adds the ignore line, so in existing projects (the population the migration targets) both `cf config set ... --project` and `migrate-personal` create an un-ignored `.context-forge.local.toml`, which defeats the slice's stated goal of keeping personal settings out of git.\nF5: DROP \u2014 This is a scope/complexity opinion about failure isolation and a duplicated walkthrough, not a defect."
+}

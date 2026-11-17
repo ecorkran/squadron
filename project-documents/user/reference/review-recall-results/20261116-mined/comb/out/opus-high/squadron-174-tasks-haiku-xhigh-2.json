@@ -1,0 +1,73 @@
+{
+ "case": "squadron-174-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Task 22a already adds `tests/load/test_run_listing_scale.py` with a 1 s bound, and CI's plain `uv run pytest` picks up `tests/load/` through `testpaths = [\"tests\"]`."
+  ],
+  "F2": [
+   "DROP",
+   "Task 22a's load test now covers the listing-time NFR, so the scratch-HOME step 8 timing is not the only evidence, and the \"0.66\u20130.73 s\" figure the finding cites is not in the design."
+  ],
+  "F3": [
+   "DROP",
+   "the design's scratch setup takes paused, failed and completed runs from the existing 199 helpers, and the task points to that walkthrough; the \"gone-paused\" run and the \"eight runs\" the finding cites are in neither document."
+  ],
+  "F4": [
+   "DROP",
+   "the design itself marks steps 6\u20137 as needing credentials, and unit tests cover the success criteria; the request for an extra manual step and a `CLAUDECODE` guard is caution, not a defect in the text."
+  ],
+  "F5": [
+   "DROP",
+   "both the task and the design give `resolve_pipeline(name) -> PipelineInfo`; `PipelineLocation` appears in neither document."
+  ],
+  "F6": [
+   "DROP",
+   "Task 8 names only `tests/test_config.py`; the file never mentions `tests/config/test_keys.py`."
+  ],
+  "F7": [
+   "KEEP",
+   "the guide counts only lines starting `**Commit**:` as commit markers, so `- [ ] Commit:` lines fall back to a commit per task (and the project rules say at least once per task), which the grouped commits after Tasks 4\u20136, 8\u20139, 11, 13 and 15\u201317 break."
+  ],
+  "F8": [
+   "KEEP",
+   "the design requires the process-check WARNING to name the run and the PID (line 175 and the error table), but Task 9 logs only the PID, leaves the run-id to an unnamed \"caller\", and no task or test covers it."
+  ],
+  "F9": [
+   "DROP",
+   "the design contains no \"fresh iterator\" spike finding; the spike has not run, and Task 16 already says to adjust to whatever it finds."
+  ],
+  "F10": [
+   "DROP",
+   "Task 1 first confirms the integration branch is empty, so `main` is the resolved target and matches the frontmatter's stated state."
+  ],
+  "F11": [
+   "DROP",
+   "how large a task should be is an opinion about scope, not a defect."
+  ],
+  "F12": [
+   "DROP",
+   "Task 37 keeps \"an unwritable directory\" exactly as the design does, and Task 41's Phase 7 issue closure is a deliberate, flagged deviation that is the correct process."
+  ]
+ },
+ "wall_seconds": 64.3,
+ "cost_usd": 1.0994095,
+ "raw_output": "F1: DROP \u2014 Task 22a already adds `tests/load/test_run_listing_scale.py` with a 1 s bound, and CI's plain `uv run pytest` picks up `tests/load/` through `testpaths = [\"tests\"]`.\nF2: DROP \u2014 Task 22a's load test now covers the listing-time NFR, so the scratch-HOME step 8 timing is not the only evidence, and the \"0.66\u20130.73 s\" figure the finding cites is not in the design.\nF3: DROP \u2014 the design's scratch setup takes paused, failed and completed runs from the existing 199 helpers, and the task points to that walkthrough; the \"gone-paused\" run and the \"eight runs\" the finding cites are in neither document.\nF4: DROP \u2014 the design itself marks steps 6\u20137 as needing credentials, and unit tests cover the success criteria; the request for an extra manual step and a `CLAUDECODE` guard is caution, not a defect in the text.\nF5: DROP \u2014 both the task and the design give `resolve_pipeline(name) -> PipelineInfo`; `PipelineLocation` appears in neither document.\nF6: DROP \u2014 Task 8 names only `tests/test_config.py`; the file never mentions `tests/config/test_keys.py`.\nF7: KEEP \u2014 the guide counts only lines starting `**Commit**:` as commit markers, so `- [ ] Commit:` lines fall back to a commit per task (and the project rules say at least once per task), which the grouped commits after Tasks 4\u20136, 8\u20139, 11, 13 and 15\u201317 break.\nF8: KEEP \u2014 the design requires the process-check WARNING to name the run and the PID (line 175 and the error table), but Task 9 logs only the PID, leaves the run-id to an unnamed \"caller\", and no task or test covers it.\nF9: DROP \u2014 the design contains no \"fresh iterator\" spike finding; the spike has not run, and Task 16 already says to adjust to whatever it finds.\nF10: DROP \u2014 Task 1 first confirms the integration branch is empty, so `main` is the resolved target and matches the frontmatter's stated state.\nF11: DROP \u2014 how large a task should be is an opinion about scope, not a defect.\nF12: DROP \u2014 Task 37 keeps \"an unwritable directory\" exactly as the design does, and Task 41's Phase 7 issue closure is a deliberate, flagged deviation that is the correct process."
+}

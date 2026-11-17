@@ -1,0 +1,53 @@
+{
+ "case": "squadron-264-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The CLAUDE.md that governs this worktree says \"A slice branch merges into the target when its implementation is done\" and has no rule against merge tasks, so 9.4 follows it."
+  ],
+  "F2": [
+   "DROP",
+   "Re-checked as a follow-up: the second half of criterion 6 (a non-SDK model calling `cf_build_context`) has no task. Task 9.3 marks the slice `status: complete` even though it says walkthrough step 4 \"remains open\"."
+  ],
+  "F3": [
+   "KEEP",
+   "The design says every failure-mode row has a test, but no task tests the McpError/closed-stream row, and 5.4 lists only three signals."
+  ],
+  "F4": [
+   "KEEP",
+   "Criterion 2 requires all the result-mapping rules, but nothing tests joining several text blocks or noting non-text blocks, and the fake server has no tool that returns them."
+  ],
+  "F5": [
+   "DROP",
+   "5.2 already names workable ways to get the PID and gives an approximate bound; the Task 3 note naming Task 6 is a minor wording slip."
+  ],
+  "F6": [
+   "DROP",
+   "4.3 already says \"every path returns a `ToolResult`, never raises\", so nobody following it could pick the log-and-re-raise option."
+  ],
+  "F7": [
+   "DROP",
+   "The schema and argument checks are separate steps after the availability gate, so the skip cannot hide argument-name drift; the rest asks for more detail."
+  ],
+  "F8": [
+   "DROP",
+   "The CLAUDE.md that governs this checkout has no worktree section, and the worktree path is a side effect of where the review copy was made."
+  ]
+ },
+ "wall_seconds": 29.4,
+ "cost_usd": 0.7666022,
+ "raw_output": "F1: DROP \u2014 The CLAUDE.md that governs this worktree says \"A slice branch merges into the target when its implementation is done\" and has no rule against merge tasks, so 9.4 follows it.\nF2: DROP \u2014 Re-checked as a follow-up: the second half of criterion 6 (a non-SDK model calling `cf_build_context`) has no task. Task 9.3 marks the slice `status: complete` even though it says walkthrough step 4 \"remains open\".\nF2: KEEP \u2014 Correction to the line above, which was wrong: the defect is real, because the slice is marked complete while a success criterion is still unmet.\nF3: KEEP \u2014 The design says every failure-mode row has a test, but no task tests the McpError/closed-stream row, and 5.4 lists only three signals.\nF4: KEEP \u2014 Criterion 2 requires all the result-mapping rules, but nothing tests joining several text blocks or noting non-text blocks, and the fake server has no tool that returns them.\nF5: DROP \u2014 5.2 already names workable ways to get the PID and gives an approximate bound; the Task 3 note naming Task 6 is a minor wording slip.\nF6: DROP \u2014 4.3 already says \"every path returns a `ToolResult`, never raises\", so nobody following it could pick the log-and-re-raise option.\nF7: DROP \u2014 The schema and argument checks are separate steps after the availability gate, so the skip cannot hide argument-name drift; the rest asks for more detail.\nF8: DROP \u2014 The CLAUDE.md that governs this checkout has no worktree section, and the worktree path is a side effect of where the review copy was made."
+}

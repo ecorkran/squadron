@@ -386,3 +386,19 @@ Notes:
 - Anchor check: grading the same fable-medium run again gave 49 (identical hits); opus-high 43 against 44 earlier.
 - fable-high found 3 more than fable-medium on one run, all of them slice flaws (18 against 14). The per-run spread of fable-medium over 3 runs was 43-49, so this is inside run-to-run noise.
 - One run only.
+
+## 18. Comb on design review, haiku-xhigh reviews (2026-11-17)
+
+**Method:** a comb marks each CONCERN/FAIL finding of one finished review KEEP or DROP after reading the document and its parent in `wt/<case>` (prompt `20261116-mined/comb/design_comb.yaml`, adapted from section 9's code comb: KEEP means a contradiction with the document itself, its parent or the code, an omitted success criterion, or an uncompletable or unsafe task). opus-high combed all 129 haiku-xhigh reviews (43 cases × 3 runs). Harness, outputs and scoring: `20261116-mined/comb/` (`design_comb.py run|score`). A finding is real if it hit one of the 82 graded flaws; valid findings outside the 82 count as noise, so precision is a lower bound.
+
+| Output | Findings | Real | Precision | Flaw hits (summed over runs) | Distinct flaws, any of 3 runs |
+|---|---|---|---|---|---|
+| haiku-xhigh raw | 1393 | 125 | 9% | 127 | 58 |
+| after opus-high comb | 531 | 97 | 18% | 99 | 51 |
+
+Notes:
+- The comb drops 62% of findings, keeps 78% of the real ones, and loses 7 of the 58 distinct flaws (3 arch, 2 slice, 2 tasks).
+- Per run, haiku-xhigh finds 42.3 flaws raw and 33.0 after the comb.
+- Cost $130 API-equivalent for 129 calls (about $1 each, 56 s mean), three times a haiku-xhigh review ($0.34). The section 5 code comb cost $0.26 per call; design combs read whole documents.
+- Section 5's opus-high comb on code reviews kept 91% of real findings; on design reviews it keeps 78%.
+- Not tested: fable-medium reviews combed, pooled reviews combed, a cheaper comb model.

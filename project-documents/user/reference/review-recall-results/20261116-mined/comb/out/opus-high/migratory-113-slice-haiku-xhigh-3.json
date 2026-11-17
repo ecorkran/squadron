@@ -1,0 +1,83 @@
+{
+ "case": "migratory-113-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In `tick.py:71`, `apply_neighbor_cap` reassigns `filtered_counts`, so step 8 records the capped count. That contradicts line 116 and the Non-Risks section, and with `max_neighbors=1` the dispatcher would get stuck on grid."
+  ],
+  "F2": [
+   "DROP",
+   "Two runs from the same config replay the same dispatch history, so run-to-run determinism holds. The spatial object is owned by the caller (arch line 73), and replay in slice 307 reads logged state rather than re-simulating. The real bitwise issue is covered by F3."
+  ],
+  "F3": [
+   "KEEP",
+   "Grid row order differs from brute (`argsort` by cell vs `np.nonzero`; slice 105 says order may differ), and reduceat float sums depend on order. So Implementation Note 5's bit-exact equality over a run that includes grid ticks cannot pass as written."
+  ],
+  "F4": [
+   "KEEP",
+   "Line 210 computes about 132 neighbors for a uniform spread over the whole world. Line 211 then says the same uniform spread drops below 10, so the default-threshold rationale contradicts its own arithmetic and the grid-dominated expansion that step 5 expects."
+  ],
+  "F5": [
+   "DROP",
+   "The server never passes `active_indices`, and `tick()` returns early when `n == 0`, so neither the empty evaluation set nor the variable-rate subset case can arise in this slice."
+  ],
+  "F6": [
+   "DROP",
+   "The `hasattr` guard is a deliberate choice the doc justifies, with the alternative weighed and rejected. A rename silently disabling it is hardening, not a defect."
+  ],
+  "F7": [
+   "DROP",
+   "Provides says \"no protocol change\", which is true. Concrete constructor types are a style/DIP preference, not a real defect."
+  ],
+  "F8": [
+   "KEEP",
+   "initial_backend` is described as an operator setting (lines 301 and 400, \"set `initial_backend: grid`\"), but `SpatialConfig` has no such field and the wiring hardcodes `\"brute\"`. Also, `hysteresis_band` gets a second, different default in code (0.0 vs 2.0), against the doc's own statement that defaults live in config."
+  ],
+  "F9": [
+   "DROP",
+   "The existing config loader does not reject unknown keys anywhere, and band \u2265 threshold is a rare misconfiguration. Both are hardening requests."
+  ],
+  "F10": [
+   "DROP",
+   "HashGridQuery` is already in the tree and slice 112 is complete. The missing dependency entries are metadata that blocks nothing."
+  ],
+  "F11": [
+   "DROP",
+   "Restating the architecture's scale requirement and setting N=10K targets is a scope opinion, not something this slice's success criteria require."
+  ],
+  "F12": [
+   "KEEP",
+   "Verification step 5 reads `grid_selected`/`brute_selected` counts from \"the dispatcher's log output\", but the design specifies no logging or counters, so the step cannot be completed as written."
+  ],
+  "F13": [
+   "DROP",
+   "The doc explicitly leaves the pinning mechanism as an implementation detail, and a scratch benchmark harness is a reasonable choice for a one-off sweep."
+  ],
+  "F14": [
+   "DROP",
+   "Proportionality and duplication cuts are style and length preferences."
+  ]
+ },
+ "wall_seconds": 68.8,
+ "cost_usd": 1.1588402,
+ "raw_output": "Checking whether the server ever passes a subset of active agents, then finishing the verdicts.\nF1: KEEP \u2014 In `tick.py:71`, `apply_neighbor_cap` reassigns `filtered_counts`, so step 8 records the capped count. That contradicts line 116 and the Non-Risks section, and with `max_neighbors=1` the dispatcher would get stuck on grid.\nF2: DROP \u2014 Two runs from the same config replay the same dispatch history, so run-to-run determinism holds. The spatial object is owned by the caller (arch line 73), and replay in slice 307 reads logged state rather than re-simulating. The real bitwise issue is covered by F3.\nF3: KEEP \u2014 Grid row order differs from brute (`argsort` by cell vs `np.nonzero`; slice 105 says order may differ), and reduceat float sums depend on order. So Implementation Note 5's bit-exact equality over a run that includes grid ticks cannot pass as written.\nF4: KEEP \u2014 Line 210 computes about 132 neighbors for a uniform spread over the whole world. Line 211 then says the same uniform spread drops below 10, so the default-threshold rationale contradicts its own arithmetic and the grid-dominated expansion that step 5 expects.\nF5: DROP \u2014 The server never passes `active_indices`, and `tick()` returns early when `n == 0`, so neither the empty evaluation set nor the variable-rate subset case can arise in this slice.\nF6: DROP \u2014 The `hasattr` guard is a deliberate choice the doc justifies, with the alternative weighed and rejected. A rename silently disabling it is hardening, not a defect.\nF7: DROP \u2014 Provides says \"no protocol change\", which is true. Concrete constructor types are a style/DIP preference, not a real defect.\nF8: KEEP \u2014 `initial_backend` is described as an operator setting (lines 301 and 400, \"set `initial_backend: grid`\"), but `SpatialConfig` has no such field and the wiring hardcodes `\"brute\"`. Also, `hysteresis_band` gets a second, different default in code (0.0 vs 2.0), against the doc's own statement that defaults live in config.\nF9: DROP \u2014 The existing config loader does not reject unknown keys anywhere, and band \u2265 threshold is a rare misconfiguration. Both are hardening requests.\nF10: DROP \u2014 `HashGridQuery` is already in the tree and slice 112 is complete. The missing dependency entries are metadata that blocks nothing.\nF11: DROP \u2014 Restating the architecture's scale requirement and setting N=10K targets is a scope opinion, not something this slice's success criteria require.\nF12: KEEP \u2014 Verification step 5 reads `grid_selected`/`brute_selected` counts from \"the dispatcher's log output\", but the design specifies no logging or counters, so the step cannot be completed as written.\nF13: DROP \u2014 The doc explicitly leaves the pinning mechanism as an implementation detail, and a scratch benchmark harness is a reasonable choice for a one-off sweep.\nF14: DROP \u2014 Proportionality and duplication cuts are style and length preferences."
+}

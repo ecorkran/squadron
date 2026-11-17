@@ -1,0 +1,108 @@
+{
+ "case": "migratory-140-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17,
+  "F19": 18
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Line 84 says the hash grid failed only because of Python dispatch overhead, but journal Entries 4 and 8 also blame candidate counts that approach n in clusters, which a GPU does not remove; the doc also never bounds candidates with a kNN contract."
+  ],
+  "F2": [
+   "KEEP",
+   "The overview says the doc defines the tick return contract, but line 80 leaves three options open with no signature or buffer ownership, and ignores 100-arch's request for caller-provided output buffers."
+  ],
+  "F3": [
+   "KEEP",
+   "Rebuilding client positions by adding deltas breaks under the up-to-5% STATE_UPDATE drops that 300-arch allows, and the doc gives no keyframe or resync path, so client positions drift silently."
+  ],
+  "F4": [
+   "KEEP",
+   "Nothing in the journal supports \"N=3,500 at 57 TPS\"; the cited budget is the N=2492 synthetic bench, and its 9.42 ms total means about 106 TPS, which contradicts the stated 57."
+  ],
+  "F5": [
+   "DROP",
+   "Asks for per-tier budgets and multiplier tables; that is extra planning detail, not a contradiction or a task that can't be done."
+  ],
+  "F6": [
+   "DROP",
+   "100-arch only provides the subset-evaluable interface for the world server's multi-resolution ticking and does not assign it to this doc; asking for it in the plan or a justification is a scope opinion."
+  ],
+  "F7": [
+   "KEEP",
+   "int16 against float32 is a 2\u00d7 saving, not \"~32\u00d7\", and \"24 bytes \u00d7 3,500\" is a binary size, not the JSON size the same sentence describes."
+  ],
+  "F8": [
+   "KEEP",
+   "Numba `@njit` holds the GIL unless `nogil=True`, so a slice-118 kernel in the sim executor would stall the event loop, the slice-315 failure 300-arch documents; the doc never mentions the executor contract."
+  ],
+  "F9": [
+   "KEEP",
+   "100-arch says the engine is stateless and the world server owns the spatial index; cached neighbor lists, an engine-owned GPU hash and GPU-resident fields contradict that, and the doc neither amends 100-arch nor names an owner."
+  ],
+  "F10": [
+   "DROP",
+   "The problem depends on the sort physically reordering the agent arrays, an implementation choice the doc does not make, and v1 has no runtime removals; this is hardening against a hypothetical."
+  ],
+  "F11": [
+   "KEEP",
+   "Design goal 1 requires every optimization to be verifiable against NumPy, but line 86 admits staggering changes trajectories and float32 GPU results won't match, and no tolerance is given, so the required regression check can't be run as written."
+  ],
+  "F12": [
+   "KEEP",
+   "100-arch line 98 asks the engine to define its internal precision, and this doc never does, even though its Metal tier will run float32 against a float64 NumPy reference."
+  ],
+  "F13": [
+   "DROP",
+   "The transfer arithmetic uses 2M agents for slices that target Tier 2 (50k, where the CSR is a few MB), and the rest is opinion about gate choice, ordering and slice numbering."
+  ],
+  "F14": [
+   "DROP",
+   "query_knn_batch` is already part of the SpatialQuery protocol (slice 116), so the kNN point is wrong, and the aggregate and lookup-table points are future concerns, not current contradictions."
+  ],
+  "F15": [
+   "DROP",
+   "Choosing which implementation is authoritative is an opinion about approach; compiled backends of the same force are expected, not a DRY violation."
+  ],
+  "F16": [
+   "DROP",
+   "The Scope already says it excludes viewer and network hardware while treating them as downstream consumers; leaving tiers 4\u20135 open is a scope choice."
+  ],
+  "F17": [
+   "DROP",
+   "Proportionality suggestions about what to cut or defer are scope opinions."
+  ],
+  "F18": [
+   "DROP",
+   "Per-client cost estimates and ownership splits are speculative extra detail, and the ownership point mostly repeats F3."
+  ],
+  "F19": [
+   "DROP",
+   "The doc doesn't contradict 300-arch's NFRs; asking it to map tiers to them is a request for more detail."
+  ]
+ },
+ "wall_seconds": 82.0,
+ "cost_usd": 1.4321986,
+ "raw_output": "F1: KEEP \u2014 Line 84 says the hash grid failed only because of Python dispatch overhead, but journal Entries 4 and 8 also blame candidate counts that approach n in clusters, which a GPU does not remove; the doc also never bounds candidates with a kNN contract.\nF2: KEEP \u2014 The overview says the doc defines the tick return contract, but line 80 leaves three options open with no signature or buffer ownership, and ignores 100-arch's request for caller-provided output buffers.\nF3: KEEP \u2014 Rebuilding client positions by adding deltas breaks under the up-to-5% STATE_UPDATE drops that 300-arch allows, and the doc gives no keyframe or resync path, so client positions drift silently.\nF4: KEEP \u2014 Nothing in the journal supports \"N=3,500 at 57 TPS\"; the cited budget is the N=2492 synthetic bench, and its 9.42 ms total means about 106 TPS, which contradicts the stated 57.\nF5: DROP \u2014 Asks for per-tier budgets and multiplier tables; that is extra planning detail, not a contradiction or a task that can't be done.\nF6: DROP \u2014 100-arch only provides the subset-evaluable interface for the world server's multi-resolution ticking and does not assign it to this doc; asking for it in the plan or a justification is a scope opinion.\nF7: KEEP \u2014 int16 against float32 is a 2\u00d7 saving, not \"~32\u00d7\", and \"24 bytes \u00d7 3,500\" is a binary size, not the JSON size the same sentence describes.\nF8: KEEP \u2014 Numba `@njit` holds the GIL unless `nogil=True`, so a slice-118 kernel in the sim executor would stall the event loop, the slice-315 failure 300-arch documents; the doc never mentions the executor contract.\nF9: KEEP \u2014 100-arch says the engine is stateless and the world server owns the spatial index; cached neighbor lists, an engine-owned GPU hash and GPU-resident fields contradict that, and the doc neither amends 100-arch nor names an owner.\nF10: DROP \u2014 The problem depends on the sort physically reordering the agent arrays, an implementation choice the doc does not make, and v1 has no runtime removals; this is hardening against a hypothetical.\nF11: KEEP \u2014 Design goal 1 requires every optimization to be verifiable against NumPy, but line 86 admits staggering changes trajectories and float32 GPU results won't match, and no tolerance is given, so the required regression check can't be run as written.\nF12: KEEP \u2014 100-arch line 98 asks the engine to define its internal precision, and this doc never does, even though its Metal tier will run float32 against a float64 NumPy reference.\nF13: DROP \u2014 The transfer arithmetic uses 2M agents for slices that target Tier 2 (50k, where the CSR is a few MB), and the rest is opinion about gate choice, ordering and slice numbering.\nF14: DROP \u2014 `query_knn_batch` is already part of the SpatialQuery protocol (slice 116), so the kNN point is wrong, and the aggregate and lookup-table points are future concerns, not current contradictions.\nF15: DROP \u2014 Choosing which implementation is authoritative is an opinion about approach; compiled backends of the same force are expected, not a DRY violation.\nF16: DROP \u2014 The Scope already says it excludes viewer and network hardware while treating them as downstream consumers; leaving tiers 4\u20135 open is a scope choice.\nF17: DROP \u2014 Proportionality suggestions about what to cut or defer are scope opinions.\nF18: DROP \u2014 Per-client cost estimates and ownership splits are speculative extra detail, and the ownership point mostly repeats F3.\nF19: DROP \u2014 The doc doesn't contradict 300-arch's NFRs; asking it to map tiers to them is a request for more detail."
+}

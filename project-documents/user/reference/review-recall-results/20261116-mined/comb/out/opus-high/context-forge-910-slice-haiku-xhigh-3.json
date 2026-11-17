@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-910-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 1,
+  "F2": 2,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The doc names the existing suite as its before/after guard, which meets the parent's coverage rule; measuring coverage first is extra hardening against a gap nobody has shown exists."
+  ],
+  "F2": [
+   "KEEP",
+   "types.ts` has only 3 sweepable literals, not 5 (8 total = 4 definition + 3 `inferredStatus` + 1 `SliceStatus`); `statusNormalizer.ts` has 14 values plus 2 quoted keys that stay, so \"zero matches in the six swept files\" cannot pass; and line 150 says 8 out-of-scope sites while line 151 lists 7."
+  ],
+  "F3": [
+   "KEEP",
+   "packages/cli/src/commands/arch.ts:189` still compares a `NormalizedStatus` field to a bare `'complete'`, which contradicts the Value claim, and the doc neither sweeps nor excludes it (the `inferredStatus` consumer is already typed `NormalizedStatus`, so that part is harmless)."
+  ],
+  "F4": [
+   "DROP",
+   "The doc says 912 has landed and took its counts from the current code, so leaving 912 out of `dependencies` only affects the record and blocks nothing."
+  ],
+  "F5": [
+   "DROP",
+   "This is about repetition and how much verification is enough, not a defect that would mislead the implementer."
+  ]
+ },
+ "wall_seconds": 52.4,
+ "cost_usd": 0.8910378,
+ "raw_output": "Checking whether the CLI's `s.status === 'complete'` compares against a `NormalizedStatus`. That decides F3; the other findings are already checked.\nF1: DROP \u2014 The doc names the existing suite as its before/after guard, which meets the parent's coverage rule; measuring coverage first is extra hardening against a gap nobody has shown exists.\nF2: KEEP \u2014 `types.ts` has only 3 sweepable literals, not 5 (8 total = 4 definition + 3 `inferredStatus` + 1 `SliceStatus`); `statusNormalizer.ts` has 14 values plus 2 quoted keys that stay, so \"zero matches in the six swept files\" cannot pass; and line 150 says 8 out-of-scope sites while line 151 lists 7.\nF3: KEEP \u2014 `packages/cli/src/commands/arch.ts:189` still compares a `NormalizedStatus` field to a bare `'complete'`, which contradicts the Value claim, and the doc neither sweeps nor excludes it (the `inferredStatus` consumer is already typed `NormalizedStatus`, so that part is harmless).\nF4: DROP \u2014 The doc says 912 has landed and took its counts from the current code, so leaving 912 out of `dependencies` only affects the record and blocks nothing.\nF5: DROP \u2014 This is about repetition and how much verification is enough, not a defect that would mislead the implementer."
+}

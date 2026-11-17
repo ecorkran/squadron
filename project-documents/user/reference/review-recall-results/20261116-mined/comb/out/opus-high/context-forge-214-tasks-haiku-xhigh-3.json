@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-214-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Task 5 tells the implementer to fix code and add tests for any unexplained DIFF, but the only later commit is the `docs:` one in Task 5C, so a code fix would go in under the wrong commit type."
+  ],
+  "F2": [
+   "KEEP",
+   "Task 0 stops for the PM when `git.integration_branch` is set, where the git rules say to fork from the configured target; no named rule requires that stop (the worktree part is speculative, because this checkout has no worktree `.git` file)."
+  ],
+  "F3": [
+   "DROP",
+   "The project's own task files use both checkbox and plain `**Commit**:` commit lines, and AGENTS.md wants every item to have a checkbox, so \"never checkboxes\" is not an established convention."
+  ],
+  "F4": [
+   "DROP",
+   "Task 3's preflight already implements the unreadable-file and unreadable-template behaviour, and the success criteria only require a test for the valid-then-missing case, so extra unreadable/root-handling tests are hardening rather than a missing requirement."
+  ],
+  "F5": [
+   "DROP",
+   "The preflight checks readability right before `parseFrontmatter` runs and excludes directories, so the swallowed-read-error path only occurs in a small timing gap between the check and the read, which is hardening against a case that will almost never happen."
+  ]
+ },
+ "wall_seconds": 37.3,
+ "cost_usd": 0.8543074,
+ "raw_output": "F1: KEEP \u2014 Task 5 tells the implementer to fix code and add tests for any unexplained DIFF, but the only later commit is the `docs:` one in Task 5C, so a code fix would go in under the wrong commit type.\nF2: KEEP \u2014 Task 0 stops for the PM when `git.integration_branch` is set, where the git rules say to fork from the configured target; no named rule requires that stop (the worktree part is speculative, because this checkout has no worktree `.git` file).\nF3: DROP \u2014 The project's own task files use both checkbox and plain `**Commit**:` commit lines, and AGENTS.md wants every item to have a checkbox, so \"never checkboxes\" is not an established convention.\nF4: DROP \u2014 Task 3's preflight already implements the unreadable-file and unreadable-template behaviour, and the success criteria only require a test for the valid-then-missing case, so extra unreadable/root-handling tests are hardening rather than a missing requirement.\nF5: DROP \u2014 The preflight checks readability right before `parseFrontmatter` runs and excludes directories, so the swallowed-read-error path only occurs in a small timing gap between the check and the read, which is hardening against a case that will almost never happen."
+}

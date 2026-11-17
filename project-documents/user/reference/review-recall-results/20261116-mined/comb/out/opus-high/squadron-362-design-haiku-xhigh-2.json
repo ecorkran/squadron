@@ -1,0 +1,53 @@
+{
+ "case": "squadron-362-design",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The design contradicts itself: line 151 promises an \"explicit type allow-list\", but it then specifies an exclusion filter and says the exclusion was chosen on purpose. It also drops the architecture's nine-type set while claiming to match the architecture."
+  ],
+  "F2": [
+   "DROP",
+   "The architecture's interview-scope table already maps each concept section to its graph fields, and concept generation belongs to 363, so asking 362 to restate that mapping is a scope opinion."
+  ],
+  "F3": [
+   "DROP",
+   "The reading-order section is ordered by `tour[].order`, which does carry the \"which components matter, in what sequence\" signal. The design also explicitly hands any further inference from tour order to 363."
+  ],
+  "F4": [
+   "KEEP",
+   "The example closing sentence (\"seams where squadron meets an external SDK\") cannot be derived from a table of tiers and layers. It contradicts the design's own rule that no prose may go untraced to its fields, and its zero-inference success criteria."
+  ],
+  "F5": [
+   "DROP",
+   "The plan requires a gap marker when a section's fields are absent. Gap markers appear in the body and in provenance, so the failure is not silent, and the architecture only requires top-level key validation in preflight."
+  ],
+  "F6": [
+   "DROP",
+   "Mostly hardening and requests for more detail. \"Unreadable\" reasonably covers an absent file, and the 17-active-lines remark says this repo is not all-comments, which is accurate."
+  ],
+  "F7": [
+   "DROP",
+   "The `model:` frontmatter field comes from the 361 contract (`model: {generating model id}`), which this slice executes unchanged. Any gap there belongs to 361, not this design."
+  ],
+  "F8": [
+   "DROP",
+   "Cutting or deferring sections is a scope preference. Neither the plan nor the architecture forbids the project-identity or `languageNotes` content."
+  ]
+ },
+ "wall_seconds": 48.7,
+ "cost_usd": 0.9826336999999999,
+ "raw_output": "F1: KEEP \u2014 The design contradicts itself: line 151 promises an \"explicit type allow-list\", but it then specifies an exclusion filter and says the exclusion was chosen on purpose. It also drops the architecture's nine-type set while claiming to match the architecture.\nF2: DROP \u2014 The architecture's interview-scope table already maps each concept section to its graph fields, and concept generation belongs to 363, so asking 362 to restate that mapping is a scope opinion.\nF3: DROP \u2014 The reading-order section is ordered by `tour[].order`, which does carry the \"which components matter, in what sequence\" signal. The design also explicitly hands any further inference from tour order to 363.\nF4: KEEP \u2014 The example closing sentence (\"seams where squadron meets an external SDK\") cannot be derived from a table of tiers and layers. It contradicts the design's own rule that no prose may go untraced to its fields, and its zero-inference success criteria.\nF5: DROP \u2014 The plan requires a gap marker when a section's fields are absent. Gap markers appear in the body and in provenance, so the failure is not silent, and the architecture only requires top-level key validation in preflight.\nF6: DROP \u2014 Mostly hardening and requests for more detail. \"Unreadable\" reasonably covers an absent file, and the 17-active-lines remark says this repo is not all-comments, which is accurate.\nF7: DROP \u2014 The `model:` frontmatter field comes from the 361 contract (`model: {generating model id}`), which this slice executes unchanged. Any gap there belongs to 361, not this design.\nF8: DROP \u2014 Cutting or deferring sections is a scope preference. Neither the plan nor the architecture forbids the project-identity or `languageNotes` content."
+}

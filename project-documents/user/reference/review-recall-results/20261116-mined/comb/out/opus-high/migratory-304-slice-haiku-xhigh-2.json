@@ -1,0 +1,58 @@
+{
+ "case": "migratory-304-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The `step()` in Implementation Details returns early before `post_tick()` when there are no entities, which contradicts the note at line 291 and the claim at line 408, and the Technical Decisions copy has a different shape again."
+  ],
+  "F2": [
+   "KEEP",
+   "The plan says to pass environment context to `engine.tick()`, and arch:72 calls for a read-only query interface, but the design injects the full `Environment` into forces, including its mutating `pre_tick`/`post_tick`, and doesn't acknowledge the deviation."
+  ],
+  "F3": [
+   "KEEP",
+   "The plan gives this slice grid resolution, layer selection and the terrain summary in snapshots (deferred here from 305), but the design defers them to \"future work\" with no owner, so the snapshot item is lost between slices."
+  ],
+  "F4": [
+   "DROP",
+   "Calling `post_tick()` with no arguments is correct for v1 with no layers (500 defaults both parameters to None), so this only asks for wording that adds little."
+  ],
+  "F5": [
+   "KEEP",
+   "A magic `0.0` default on `step()` breaks the project rule against hard-coded silent defaults, and the \"mid-season\" label is wrong for a 0\u20131 cycle value."
+  ],
+  "F6": [
+   "DROP",
+   "The design names the `Environment | None` exception and gives its reason, and the server always passes an instance, so this is an opinion about the approach, not a contradiction."
+  ],
+  "F7": [
+   "DROP",
+   "With an empty environment the added calls do nothing, so restating the tick budget or adding a metric is a request for more detail, not a defect."
+  ],
+  "F8": [
+   "DROP",
+   "This slice adds no force that calls `query()` and always passes a valid seasonal value, so the failure paths cannot arise here."
+  ],
+  "F9": [
+   "DROP",
+   "Cutting the property, the illustrative example and the interface listings is a scope and style preference; the duplicate `step()` body is already covered by F1."
+  ]
+ },
+ "wall_seconds": 42.7,
+ "cost_usd": 0.8229974000000001,
+ "raw_output": "F1: KEEP \u2014 The `step()` in Implementation Details returns early before `post_tick()` when there are no entities, which contradicts the note at line 291 and the claim at line 408, and the Technical Decisions copy has a different shape again.\nF2: KEEP \u2014 The plan says to pass environment context to `engine.tick()`, and arch:72 calls for a read-only query interface, but the design injects the full `Environment` into forces, including its mutating `pre_tick`/`post_tick`, and doesn't acknowledge the deviation.\nF3: KEEP \u2014 The plan gives this slice grid resolution, layer selection and the terrain summary in snapshots (deferred here from 305), but the design defers them to \"future work\" with no owner, so the snapshot item is lost between slices.\nF4: DROP \u2014 Calling `post_tick()` with no arguments is correct for v1 with no layers (500 defaults both parameters to None), so this only asks for wording that adds little.\nF5: KEEP \u2014 A magic `0.0` default on `step()` breaks the project rule against hard-coded silent defaults, and the \"mid-season\" label is wrong for a 0\u20131 cycle value.\nF6: DROP \u2014 The design names the `Environment | None` exception and gives its reason, and the server always passes an instance, so this is an opinion about the approach, not a contradiction.\nF7: DROP \u2014 With an empty environment the added calls do nothing, so restating the tick budget or adding a metric is a request for more detail, not a defect.\nF8: DROP \u2014 This slice adds no force that calls `query()` and always passes a valid seasonal value, so the failure paths cannot arise here.\nF9: DROP \u2014 Cutting the property, the illustrative example and the interface listings is a scope and style preference; the duplicate `step()` body is already covered by F1."
+}

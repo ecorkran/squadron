@@ -1,0 +1,43 @@
+{
+ "case": "context-forge-261-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 3,
+  "F2": 4,
+  "F3": 5,
+  "F4": 6,
+  "F5": 7,
+  "F6": 8
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The slice's D2 says \"Tests assert the caps, not timings,\" and the task file follows that decision."
+  ],
+  "F2": [
+   "DROP",
+   "The slice's D7 makes the resolver optional, like the existing resolvers (`ContextIntegrator.ts:82-88`), and Task 11 always passes one in production, so a production build never skips detection."
+  ],
+  "F3": [
+   "DROP",
+   "The slice itself has the walk stop at the threshold and throw `AdoptionError` from `adoption/`, so importing the constant matches the design, and `import type` avoids a runtime cycle; the suggested option-passing is a design preference."
+  ],
+  "F4": [
+   "DROP",
+   "The existing `context_build` catch-all (`contextTools.ts:210-212`) already turns any thrown error into `errorResult`, so a rethrown `AdoptionError` becomes an error result, and the slice's Technical Requirements ask for no separate test."
+  ],
+  "F5": [
+   "KEEP",
+   "The slice's Technical Requirements say `renderAdoptionFacts` is tested for \"every outcome\", but Task 8T leaves out greenfield, already-planned and adoption-closed."
+  ],
+  "F6": [
+   "DROP",
+   "gitExec` rejects with a plain `Error` for every failure (`gitExec.ts:99-101`), so there is no narrower exception to catch, and the slice's D5 explicitly calls the catch-to-unknown a stated fact."
+  ]
+ },
+ "wall_seconds": 39.6,
+ "cost_usd": 1.0438042,
+ "raw_output": "F1: DROP \u2014 The slice's D2 says \"Tests assert the caps, not timings,\" and the task file follows that decision.\nF2: DROP \u2014 The slice's D7 makes the resolver optional, like the existing resolvers (`ContextIntegrator.ts:82-88`), and Task 11 always passes one in production, so a production build never skips detection.\nF3: DROP \u2014 The slice itself has the walk stop at the threshold and throw `AdoptionError` from `adoption/`, so importing the constant matches the design, and `import type` avoids a runtime cycle; the suggested option-passing is a design preference.\nF4: DROP \u2014 The existing `context_build` catch-all (`contextTools.ts:210-212`) already turns any thrown error into `errorResult`, so a rethrown `AdoptionError` becomes an error result, and the slice's Technical Requirements ask for no separate test.\nF5: KEEP \u2014 The slice's Technical Requirements say `renderAdoptionFacts` is tested for \"every outcome\", but Task 8T leaves out greenfield, already-planned and adoption-closed.\nF6: DROP \u2014 `gitExec` rejects with a plain `Error` for every failure (`gitExec.ts:99-101`), so there is no narrower exception to catch, and the slice's D5 explicitly calls the catch-to-unknown a stated fact."
+}

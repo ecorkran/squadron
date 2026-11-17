@@ -1,0 +1,63 @@
+{
+ "case": "context-forge-210-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The layout says Copilot files come \"from `.claude/rules/\u2026`\" and \"from `.claude/skills/\u2026`\", which a Copilot-only fresh project won't have, so the parent's fresh-directory `cf init --ide copilot` criterion can't produce instruction or prompt files as written."
+  ],
+  "F2": [
+   "DROP",
+   "Line 83 settles line 32: a rule with no `paths` counts as alwaysApply and goes into `copilot-instructions.md`, and every real rule file has `paths`, so the \"undefined case\" can't occur."
+  ],
+  "F3": [
+   "DROP",
+   "No real rule file uses brace globs, and the rest asks for more detail on the guide script's prompt-field mapping, which the parent already gives."
+  ],
+  "F4": [
+   "DROP",
+   "The Claude path also checks only the top-level file (`CLAUDE.md`) and overwrites `.claude/rules` and the worktree copies without asking, so the slice matches the \"same safety contract\" it claims; a marker anywhere in the first 20 lines also works after frontmatter."
+  ],
+  "F5": [
+   "DROP",
+   "The slice tells the implementer to copy the existing `isManagedClaudeMd` block, and that code already keeps an existing `.bak` and backs up regardless of `--yes`."
+  ],
+  "F6": [
+   "DROP",
+   "This hardens beyond the existing path, which already turns a non-zero script exit into a `UserError`; hangs, partial writes and timeouts are not new to this slice."
+  ],
+  "F7": [
+   "DROP",
+   "The parent also declares no dependencies (the frontmatter lists slices, not the submodule), and the Risks section already names the guide-script coupling; the script is called the same way as for `claude`."
+  ],
+  "F8": [
+   "KEEP",
+   "The helper is defined twice with different names and inputs (`isManagedCopilot(filePath)` vs `isManagedCopilotFiles(projectPath)`), and the slice says to replicate a marker check that is already generic, which breaks the project's DRY rule."
+  ],
+  "F9": [
+   "KEEP",
+   "Parent criteria 211 and 216 require correct `paths`\u2192`applyTo` translation and generated instruction/prompt files, but Test Coverage has no translation test and no test on real rule-file input, as the project's parsing rules require."
+  ],
+  "F10": [
+   "KEEP",
+   "Parent criterion 218 requires the tool guide `copilot-vscode/setup-ide.md` to be referenced in the slice design, and the slice never mentions it."
+  ]
+ },
+ "wall_seconds": 68.9,
+ "cost_usd": 0.9985868999999999,
+ "raw_output": "I've read the slice, its parent, slice 202 and `setup-ide.ts`. Now I'm checking the frontmatter of the real rule files to settle F3 (brace globs).\nF1: KEEP \u2014 The layout says Copilot files come \"from `.claude/rules/\u2026`\" and \"from `.claude/skills/\u2026`\", which a Copilot-only fresh project won't have, so the parent's fresh-directory `cf init --ide copilot` criterion can't produce instruction or prompt files as written.\nF2: DROP \u2014 Line 83 settles line 32: a rule with no `paths` counts as alwaysApply and goes into `copilot-instructions.md`, and every real rule file has `paths`, so the \"undefined case\" can't occur.\nF3: DROP \u2014 No real rule file uses brace globs, and the rest asks for more detail on the guide script's prompt-field mapping, which the parent already gives.\nF4: DROP \u2014 The Claude path also checks only the top-level file (`CLAUDE.md`) and overwrites `.claude/rules` and the worktree copies without asking, so the slice matches the \"same safety contract\" it claims; a marker anywhere in the first 20 lines also works after frontmatter.\nF5: DROP \u2014 The slice tells the implementer to copy the existing `isManagedClaudeMd` block, and that code already keeps an existing `.bak` and backs up regardless of `--yes`.\nF6: DROP \u2014 This hardens beyond the existing path, which already turns a non-zero script exit into a `UserError`; hangs, partial writes and timeouts are not new to this slice.\nF7: DROP \u2014 The parent also declares no dependencies (the frontmatter lists slices, not the submodule), and the Risks section already names the guide-script coupling; the script is called the same way as for `claude`.\nF8: KEEP \u2014 The helper is defined twice with different names and inputs (`isManagedCopilot(filePath)` vs `isManagedCopilotFiles(projectPath)`), and the slice says to replicate a marker check that is already generic, which breaks the project's DRY rule.\nF9: KEEP \u2014 Parent criteria 211 and 216 require correct `paths`\u2192`applyTo` translation and generated instruction/prompt files, but Test Coverage has no translation test and no test on real rule-file input, as the project's parsing rules require.\nF10: KEEP \u2014 Parent criterion 218 requires the tool guide `copilot-vscode/setup-ide.md` to be referenced in the slice design, and the slice never mentions it."
+}

@@ -1,0 +1,83 @@
+{
+ "case": "squadron-306-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The slice design says the cf `archive/` check must come before Part D lands, but T14 comes after T13's commit, and T12's note only holds back the checkbox, not the commit."
+  ],
+  "F2": [
+   "KEEP",
+   "verification.py` (and `judge.py`) import `RoundDiff` from `screens.py`, so moving them into `review/addressed/` while keeping that import makes `review/` import from `pipeline/`; T3 wrongly calls this the \"pipeline\u2192review direction\", and T21 adds more such imports, both against the design's F002 dependency rule."
+  ],
+  "F3": [
+   "KEEP",
+   "T12's fixed `archive/{original filename}` means a second re-review overwrites the first archived copy without warning, which breaks the \"nothing is silently destroyed\" success criterion."
+  ],
+  "F4": [
+   "KEEP",
+   "The design says the review content is still printed to the terminal when the overwrite is aborted; T12 leaves this out and does not say how the archive-write OSError is handled under the exception rule."
+  ],
+  "F5": [
+   "DROP",
+   "T13 already has the two tests the design's Part D section lists, and a read-back mismatch shares the same abort branch, so a contrived extra case adds little."
+  ],
+  "F6": [
+   "KEEP",
+   "The success criterion requires `reviewedSha` from both the CLI and pipeline paths, but T11's \"or \u2026 whichever is more directly testable\" lets the pipeline path go untested."
+  ],
+  "F7": [
+   "DROP",
+   "Running the suite before the move to get a baseline is obvious; asking for a separate step is a low-value request for more detail."
+  ],
+  "F8": [
+   "DROP",
+   "This worktree's CLAUDE.md does not define the `**Commit**:` marker format, so bare `Commit:` lines are a formatting nit."
+  ],
+  "F9": [
+   "DROP",
+   "judge_residue_core` is exercised through the unchanged wrapper tests and again directly on the resolve path in T26, so a separate test is not required."
+  ],
+  "F10": [
+   "KEEP",
+   "original}.archived` still contains `-review.` and would match a `*-review.*` glob, so the example fallback does not remove the match; also, the cited guide directory does not exist in this checkout."
+  ],
+  "F11": [
+   "KEEP",
+   "The design says the `yaml.safe_dump` helper is extracted and shared, so T29's option to keep `evidence.py`'s `_yaml_safe` copy and add an equivalent contradicts the design and the DRY rule."
+  ],
+  "F12": [
+   "DROP",
+   "T25 already says to reuse whatever cap already exists, and `review.max_total_injection_bytes` limits injected file content, not the judge's path list, so naming it as the single source is not clearly correct."
+  ],
+  "F13": [
+   "KEEP",
+   "The success criterion names an unreadable judge response as its own UNKNOWN+WARNING case, and T26 tests only a transport that raises."
+  ],
+  "F14": [
+   "KEEP",
+   "tests/cli/commands/test_review.py` does not exist, and the natural name `tests/cli/test_review_resolve.py` is already taken by tests of the unrelated `_resolve_slice_number`."
+  ]
+ },
+ "wall_seconds": 74.5,
+ "cost_usd": 1.2513492,
+ "raw_output": "Checking a few file paths cited by the remaining findings (F10, F14) and the `_yaml_safe` helper (F11).\nF1: KEEP \u2014 The slice design says the cf `archive/` check must come before Part D lands, but T14 comes after T13's commit, and T12's note only holds back the checkbox, not the commit.\nF2: KEEP \u2014 `verification.py` (and `judge.py`) import `RoundDiff` from `screens.py`, so moving them into `review/addressed/` while keeping that import makes `review/` import from `pipeline/`; T3 wrongly calls this the \"pipeline\u2192review direction\", and T21 adds more such imports, both against the design's F002 dependency rule.\nF3: KEEP \u2014 T12's fixed `archive/{original filename}` means a second re-review overwrites the first archived copy without warning, which breaks the \"nothing is silently destroyed\" success criterion.\nF4: KEEP \u2014 The design says the review content is still printed to the terminal when the overwrite is aborted; T12 leaves this out and does not say how the archive-write OSError is handled under the exception rule.\nF5: DROP \u2014 T13 already has the two tests the design's Part D section lists, and a read-back mismatch shares the same abort branch, so a contrived extra case adds little.\nF6: KEEP \u2014 The success criterion requires `reviewedSha` from both the CLI and pipeline paths, but T11's \"or \u2026 whichever is more directly testable\" lets the pipeline path go untested.\nF7: DROP \u2014 Running the suite before the move to get a baseline is obvious; asking for a separate step is a low-value request for more detail.\nF8: DROP \u2014 This worktree's CLAUDE.md does not define the `**Commit**:` marker format, so bare `Commit:` lines are a formatting nit.\nF9: DROP \u2014 `judge_residue_core` is exercised through the unchanged wrapper tests and again directly on the resolve path in T26, so a separate test is not required.\nF10: KEEP \u2014 `{original}.archived` still contains `-review.` and would match a `*-review.*` glob, so the example fallback does not remove the match; also, the cited guide directory does not exist in this checkout.\nF11: KEEP \u2014 The design says the `yaml.safe_dump` helper is extracted and shared, so T29's option to keep `evidence.py`'s `_yaml_safe` copy and add an equivalent contradicts the design and the DRY rule.\nF12: DROP \u2014 T25 already says to reuse whatever cap already exists, and `review.max_total_injection_bytes` limits injected file content, not the judge's path list, so naming it as the single source is not clearly correct.\nF13: KEEP \u2014 The success criterion names an unreadable judge response as its own UNKNOWN+WARNING case, and T26 tests only a transport that raises.\nF14: KEEP \u2014 `tests/cli/commands/test_review.py` does not exist, and the natural name `tests/cli/test_review_resolve.py` is already taken by tests of the unrelated `_resolve_slice_number`."
+}

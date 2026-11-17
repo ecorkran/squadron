@@ -1,0 +1,103 @@
+{
+ "case": "squadron-380-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "save_review_result` stamps `resolve_reviewed_sha(\".\")` (persistence.py:515) and writes to `REVIEWS_DIR` relative to the process cwd, so reusing it would record the operator's HEAD, not the \"what was reviewed\" SHA the document requires."
+  ],
+  "F2": [
+   "KEEP",
+   "The document fetches only the head ref, so the merge-base runs against whatever stale local base the operator has. Also, `normalize_diff_spec` hard-wires `...HEAD` (git_utils.py:390), so \"same merge-base semantics `--diff` uses\" would diff against the operator's branch."
+  ],
+  "F3": [
+   "DROP",
+   "resolve_rules_dir` falls back to `~/.config/squadron/rules`, and the document already assigns an explicit rules-degradation path to the persistence slice, so this is slice-level detail, not a contradiction."
+  ],
+  "F4": [
+   "KEEP",
+   "Every existing review flag behaving as it does today\" cannot hold: `--diff` conflicts with a PR range, `--files` globs against `review_cwd`, and `--cwd` changes meaning once the scratch worktree is the tool root."
+  ],
+  "F5": [
+   "DROP",
+   "The parenthetical operation list is illustrative, and Envisioned State already says the protocol carries \"the operations the three capabilities need\". Asking for an exhaustive list now is a request for more detail."
+  ],
+  "F6": [
+   "DROP",
+   "Whether `sq pr create` pushes, refuses or asks for an unpushed branch is a slice-level decision, and the push is not a PR write covered by the posting principle."
+  ],
+  "F7": [
+   "DROP",
+   "Must say so\" is about a head that moved between review and post, not about keeping history across updates, so there is no contradiction."
+  ],
+  "F8": [
+   "DROP",
+   "GraphQL versus REST and how the async path wraps subprocesses are implementation details for the slice, not architecture defects."
+  ],
+  "F9": [
+   "DROP",
+   "The document already puts fetching inside the adapter, so the GitHub-specific refspec is naturally an implementation detail. Fork and GC handling is slice-level."
+  ],
+  "F10": [
+   "KEEP",
+   "_resolve_review_cwd` loads `.claude/rules` from the git root of `review_cwd`, so a scratch worktree at the PR head lets untrusted PR content rewrite its own review rules. (The `allowed_tools` half is stale: provider.py:74 now sets `tools`.)"
+  ],
+  "F11": [
+   "DROP",
+   "The document correctly says only the CLI side is generic and plans to make persistence generic. Naming the protocol and choosing which builder to remove are design-level details."
+  ],
+  "F12": [
+   "DROP",
+   "Extracting a callable from `review_code` and adding template placeholders are how the slice implements \"one engine\", not a defect in the architecture."
+  ],
+  "F13": [
+   "DROP",
+   "The document explicitly defers worktree lifecycle to slice design. The CLAUDE.md worktree rules govern agents, not squadron's own scratch trees."
+  ],
+  "F14": [
+   "DROP",
+   "Asking for more failure modes is a request for more detail. The principle already requires each one to be named, logged and tested when it is designed."
+  ],
+  "F15": [
+   "DROP",
+   "The document's own traceability rule (\"nothing is asserted that no input supports\") already governs what that section may say, and checked task items and the review are available as inputs."
+  ],
+  "F16": [
+   "DROP",
+   "The document never says the PR base falls back to `main`. It only requires targeting the integration branch when one is set."
+  ],
+  "F17": [
+   "DROP",
+   "This is an opinion about scope and slice sequencing, not a defect."
+  ],
+  "F18": [
+   "DROP",
+   "Choosing between hosts only matters once a second host exists. Requiring a registry now is hardening for a case not in scope."
+  ]
+ },
+ "wall_seconds": 80.6,
+ "cost_usd": 1.1083652,
+ "raw_output": "Checking findings against the code. Next up: the diff normalization in `git_utils.py` and the remaining review.py claims.\nF1: KEEP \u2014 `save_review_result` stamps `resolve_reviewed_sha(\".\")` (persistence.py:515) and writes to `REVIEWS_DIR` relative to the process cwd, so reusing it would record the operator's HEAD, not the \"what was reviewed\" SHA the document requires.\nF2: KEEP \u2014 The document fetches only the head ref, so the merge-base runs against whatever stale local base the operator has. Also, `normalize_diff_spec` hard-wires `...HEAD` (git_utils.py:390), so \"same merge-base semantics `--diff` uses\" would diff against the operator's branch.\nF3: DROP \u2014 `resolve_rules_dir` falls back to `~/.config/squadron/rules`, and the document already assigns an explicit rules-degradation path to the persistence slice, so this is slice-level detail, not a contradiction.\nF4: KEEP \u2014 \"Every existing review flag behaving as it does today\" cannot hold: `--diff` conflicts with a PR range, `--files` globs against `review_cwd`, and `--cwd` changes meaning once the scratch worktree is the tool root.\nF5: DROP \u2014 The parenthetical operation list is illustrative, and Envisioned State already says the protocol carries \"the operations the three capabilities need\". Asking for an exhaustive list now is a request for more detail.\nF6: DROP \u2014 Whether `sq pr create` pushes, refuses or asks for an unpushed branch is a slice-level decision, and the push is not a PR write covered by the posting principle.\nF7: DROP \u2014 \"Must say so\" is about a head that moved between review and post, not about keeping history across updates, so there is no contradiction.\nF8: DROP \u2014 GraphQL versus REST and how the async path wraps subprocesses are implementation details for the slice, not architecture defects.\nF9: DROP \u2014 The document already puts fetching inside the adapter, so the GitHub-specific refspec is naturally an implementation detail. Fork and GC handling is slice-level.\nF10: KEEP \u2014 `_resolve_review_cwd` loads `.claude/rules` from the git root of `review_cwd`, so a scratch worktree at the PR head lets untrusted PR content rewrite its own review rules. (The `allowed_tools` half is stale: provider.py:74 now sets `tools`.)\nF11: DROP \u2014 The document correctly says only the CLI side is generic and plans to make persistence generic. Naming the protocol and choosing which builder to remove are design-level details.\nF12: DROP \u2014 Extracting a callable from `review_code` and adding template placeholders are how the slice implements \"one engine\", not a defect in the architecture.\nF13: DROP \u2014 The document explicitly defers worktree lifecycle to slice design. The CLAUDE.md worktree rules govern agents, not squadron's own scratch trees.\nF14: DROP \u2014 Asking for more failure modes is a request for more detail. The principle already requires each one to be named, logged and tested when it is designed.\nF15: DROP \u2014 The document's own traceability rule (\"nothing is asserted that no input supports\") already governs what that section may say, and checked task items and the review are available as inputs.\nF16: DROP \u2014 The document never says the PR base falls back to `main`. It only requires targeting the integration branch when one is set.\nF17: DROP \u2014 This is an opinion about scope and slice sequencing, not a defect.\nF18: DROP \u2014 Choosing between hosts only matters once a second host exists. Requiring a registry now is hardening for a case not in scope."
+}

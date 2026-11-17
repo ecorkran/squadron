@@ -1,0 +1,58 @@
+{
+ "case": "squadron-401-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 4,
+  "F2": 5,
+  "F3": 6,
+  "F4": 7,
+  "F5": 8,
+  "F6": 9,
+  "F7": 10,
+  "F8": 11,
+  "F9": 12
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "SC10 requires a test showing a language's other metrics are unchanged when `DUPLICATION_MAX_TOKENS` is passed, but Task 11 only tests `measure_duplication` on its own and Task 26 has no ceiling case."
+  ],
+  "F2": [
+   "KEEP",
+   "Listing `MemoryError` in Task 14's TypeScript `token_errors` sends it down the per-file unparsed path, which contradicts Task 10 and the design's failure table, where it makes `duplicated_lines` `tool_failed` for the whole language."
+  ],
+  "F3": [
+   "DROP",
+   "Splitting Task 10 is a scope opinion; the task is coherent and Task 11 already covers all of it."
+  ],
+  "F4": [
+   "DROP",
+   "The design's module table puts all four pieces in `coverage.py`, the size overrun is a guess about a file that doesn't exist yet, and Task 30 already checks module size."
+  ],
+  "F5": [
+   "DROP",
+   "A Task 26 test can write its own combined report, since the real-fixture rule applies to the parser tests; complexity and duplication being present is tested in Tasks 9, 13 and 15."
+  ],
+  "F6": [
+   "DROP",
+   "The malformed-report row of the failure table is already tested by several cases, and one more non-integer variant is low value."
+  ],
+  "F7": [
+   "DROP",
+   "Skipping old records with a WARNING is existing 400 store behavior that the design accepts, not new slice code, and producing an old record for Task 29 is extra hardening."
+  ],
+  "F8": [
+   "DROP",
+   "Renaming the function and adding a parameter forces the Python call site to change, pyright would flag a missed one, and Task 8 already defines the Python complexity identity to pass."
+  ],
+  "F9": [
+   "KEEP",
+   "CLAUDE.md and the system prompt tell agents to commit at lines starting with `**Commit**:`. The `- [ ] Commit:` checkboxes don't match, so an agent would fall back to committing after every top-level task and ignore the planned cadence."
+  ]
+ },
+ "wall_seconds": 51.4,
+ "cost_usd": 1.0981832,
+ "raw_output": "Checking the task-breakdown guide's commit-marker format to settle the last finding (F9).\nF1: KEEP \u2014 SC10 requires a test showing a language's other metrics are unchanged when `DUPLICATION_MAX_TOKENS` is passed, but Task 11 only tests `measure_duplication` on its own and Task 26 has no ceiling case.\nF2: KEEP \u2014 Listing `MemoryError` in Task 14's TypeScript `token_errors` sends it down the per-file unparsed path, which contradicts Task 10 and the design's failure table, where it makes `duplicated_lines` `tool_failed` for the whole language.\nF3: DROP \u2014 Splitting Task 10 is a scope opinion; the task is coherent and Task 11 already covers all of it.\nF4: DROP \u2014 The design's module table puts all four pieces in `coverage.py`, the size overrun is a guess about a file that doesn't exist yet, and Task 30 already checks module size.\nF5: DROP \u2014 A Task 26 test can write its own combined report, since the real-fixture rule applies to the parser tests; complexity and duplication being present is tested in Tasks 9, 13 and 15.\nF6: DROP \u2014 The malformed-report row of the failure table is already tested by several cases, and one more non-integer variant is low value.\nF7: DROP \u2014 Skipping old records with a WARNING is existing 400 store behavior that the design accepts, not new slice code, and producing an old record for Task 29 is extra hardening.\nF8: DROP \u2014 Renaming the function and adding a parameter forces the Python call site to change, pyright would flag a missed one, and Task 8 already defines the Python complexity identity to pass.\nF9: KEEP \u2014 CLAUDE.md and the system prompt tell agents to commit at lines starting with `**Commit**:`. The `- [ ] Commit:` checkboxes don't match, so an agent would fall back to committing after every top-level task and ignore the planned cadence."
+}

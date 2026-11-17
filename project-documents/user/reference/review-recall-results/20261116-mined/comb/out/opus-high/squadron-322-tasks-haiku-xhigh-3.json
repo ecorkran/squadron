@@ -1,0 +1,73 @@
+{
+ "case": "squadron-322-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "T7's numbered order returns INSUFFICIENT_EVIDENCE for any `n < floor` before the TIGHTEN check, so it contradicts its own step-4 note and the T8 below-floor TIGHTEN test."
+  ],
+  "F2": [
+   "KEEP",
+   "The only review-file lookup is `resolve_target`, which finds one slice index at a time, so nothing lists judge results by config; the store-only fallback holds only results that are already sampled, so T13's success line and T14's non-empty guarantee cannot pass."
+  ],
+  "F3": [
+   "KEEP",
+   "resolve_thresholds` calls `float()` and raises on a non-numeric floor, no task handles or flags that, and the Coverage Check wrongly says T8 tests it."
+  ],
+  "F4": [
+   "KEEP",
+   "The design (line 201) and success criterion F4 require the note to state the runtime-drawn-model limitation, but T9's note text covers only the config-time pairing and no test checks it."
+  ],
+  "F5": [
+   "KEEP",
+   "GraduatedConfig` in calibration_models.py needs `JudgeConfigId` from models.py, while T11 makes models.py import `GraduatedConfig`, a circular import that Pydantic needs resolved at runtime."
+  ],
+  "F6": [
+   "DROP",
+   "Adding an optional field that defaults to None cannot break loading existing records, and the existing 320 store tests plus the T17 full-suite run already cover this."
+  ],
+  "F7": [
+   "DROP",
+   "This worktree's CLAUDE.md says to commit at least once per task, so a marker after every task follows the convention; the reviewer's preference otherwise is an opinion."
+  ],
+  "F8": [
+   "KEEP",
+   "Neither T5 nor the design gives default values for the three new keys, so T6's \"correct defaults\" check cannot be verified without inventing values."
+  ],
+  "F9": [
+   "KEEP",
+   "T13 fixes the return type as `list[OfferTarget]`, yet the lapse must be distinguishable and pruned files counted, and T14 asserts on \"whatever signal T13 produces\", so the tests cannot be written as specified."
+  ],
+  "F10": [
+   "KEEP",
+   "T11 places `write_graduation` both as a graduation.py function and as a `MetrologyStore` method, and no task defines the in-place update that T15's idempotent re-graduate needs, since `find_graduation` returns no record id."
+  ],
+  "F11": [
+   "KEEP",
+   "The design requires a \"no evidence\" line for an empty store and a \"no offers due\" line for an exhausted config, but T15/T16 specify and test only the lapsed-graduation line."
+  ],
+  "F12": [
+   "DROP",
+   "This is an opinion about scope and task count, and updating the slice plan entry on completion is normal process."
+  ]
+ },
+ "wall_seconds": 46.9,
+ "cost_usd": 1.067288,
+ "raw_output": "F1: KEEP \u2014 T7's numbered order returns INSUFFICIENT_EVIDENCE for any `n < floor` before the TIGHTEN check, so it contradicts its own step-4 note and the T8 below-floor TIGHTEN test.\nF2: KEEP \u2014 The only review-file lookup is `resolve_target`, which finds one slice index at a time, so nothing lists judge results by config; the store-only fallback holds only results that are already sampled, so T13's success line and T14's non-empty guarantee cannot pass.\nF3: KEEP \u2014 `resolve_thresholds` calls `float()` and raises on a non-numeric floor, no task handles or flags that, and the Coverage Check wrongly says T8 tests it.\nF4: KEEP \u2014 The design (line 201) and success criterion F4 require the note to state the runtime-drawn-model limitation, but T9's note text covers only the config-time pairing and no test checks it.\nF5: KEEP \u2014 `GraduatedConfig` in calibration_models.py needs `JudgeConfigId` from models.py, while T11 makes models.py import `GraduatedConfig`, a circular import that Pydantic needs resolved at runtime.\nF6: DROP \u2014 Adding an optional field that defaults to None cannot break loading existing records, and the existing 320 store tests plus the T17 full-suite run already cover this.\nF7: DROP \u2014 This worktree's CLAUDE.md says to commit at least once per task, so a marker after every task follows the convention; the reviewer's preference otherwise is an opinion.\nF8: KEEP \u2014 Neither T5 nor the design gives default values for the three new keys, so T6's \"correct defaults\" check cannot be verified without inventing values.\nF9: KEEP \u2014 T13 fixes the return type as `list[OfferTarget]`, yet the lapse must be distinguishable and pruned files counted, and T14 asserts on \"whatever signal T13 produces\", so the tests cannot be written as specified.\nF10: KEEP \u2014 T11 places `write_graduation` both as a graduation.py function and as a `MetrologyStore` method, and no task defines the in-place update that T15's idempotent re-graduate needs, since `find_graduation` returns no record id.\nF11: KEEP \u2014 The design requires a \"no evidence\" line for an empty store and a \"no offers due\" line for an exhausted config, but T15/T16 specify and test only the lapsed-graduation line.\nF12: DROP \u2014 This is an opinion about scope and task count, and updating the slice plan entry on completion is normal process."
+}

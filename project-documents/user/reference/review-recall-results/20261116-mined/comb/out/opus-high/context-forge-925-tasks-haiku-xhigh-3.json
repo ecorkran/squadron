@@ -1,0 +1,73 @@
+{
+ "case": "context-forge-925-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "gitExec.ts:20-30` has only `/connection timed out/i` and `/etimedout/i`, so a \"timed out after N seconds\" message gets no remediation text and Task 14's assertion fails."
+  ],
+  "F2": [
+   "KEEP",
+   "gitExec` already appends `GUIDE_OFFLINE_REMEDIATION` to network-pattern failures (`gitExec.ts:42-50,67`), so Task 17's unconditional caller-side append duplicates it on exactly the failures auto-init expects."
+  ],
+  "F3": [
+   "KEEP",
+   "Task 15 gives `init(operationPath)` no options parameter and says it always uses the timeout, yet also says `sync()` passes the timeout as an option to stay unbounded; the two can't both hold."
+  ],
+  "F4": [
+   "KEEP",
+   "since git 2.38.1, submodule operations refuse local `file` transport by default, and no existing test sets `protocol.file.allow`, so the Task 9 fixture fails as written and blocks every task built on it."
+  ],
+  "F5": [
+   "DROP",
+   "configTools.test.ts:199` mocks a hard-coded rejection and only asserts \"must be one of\", so it doesn't break; `CloneStrategy.ts:34` and `SubmoduleStrategy.ts:39` are already in the design's rename-sweep list that Task 3 points to."
+  ],
+  "F6": [
+   "DROP",
+   "Task 6(b) tests the config-alias path in core and the CLI print is a thin pass-through; this asks for extra tests the success criteria don't require."
+  ],
+  "F7": [
+   "KEEP",
+   "the design lists `'error'` \u2192 throw as a branch and its technical criteria require a test for every branch, but neither Task 12 nor Task 18 tests the `'error'` path."
+  ],
+  "F8": [
+   "DROP",
+   "this project's CLAUDE.md only says \"commit at least once per task\", and the inline commit lines already set sensible commit points; this is a formatting preference based on another project's rule."
+  ],
+  "F9": [
+   "DROP",
+   "Task 8 runs the CLI and MCP suites at the end of design step 1 (Tasks 1\u20138), so the claim that nothing runs them until Task 32 is wrong."
+  ],
+  "F10": [
+   "DROP",
+   "Task 20's grep for `PROMPT_FILE_RELATIVE_PATH` finds `phaseShorthand.ts` and the task says to cover every hit, as the finding itself admits."
+  ],
+  "F11": [
+   "DROP",
+   "this asks for more detail and a DRY refactor; the design already gives the `ensureGuideReady(projectPath, operationPath)` contract, and Task 1 already provides a single alias lookup."
+  ],
+  "F12": [
+   "DROP",
+   "the approved design names 0.14.0, Task 32 already leaves the bump to the PM, and the versioning rule cited isn't in this project's CLAUDE.md."
+  ]
+ },
+ "wall_seconds": 64.1,
+ "cost_usd": 1.2038917,
+ "raw_output": "Checking is done; here is the verdict for each finding.\n\nF1: KEEP \u2014 `gitExec.ts:20-30` has only `/connection timed out/i` and `/etimedout/i`, so a \"timed out after N seconds\" message gets no remediation text and Task 14's assertion fails.\nF2: KEEP \u2014 `gitExec` already appends `GUIDE_OFFLINE_REMEDIATION` to network-pattern failures (`gitExec.ts:42-50,67`), so Task 17's unconditional caller-side append duplicates it on exactly the failures auto-init expects.\nF3: KEEP \u2014 Task 15 gives `init(operationPath)` no options parameter and says it always uses the timeout, yet also says `sync()` passes the timeout as an option to stay unbounded; the two can't both hold.\nF4: KEEP \u2014 since git 2.38.1, submodule operations refuse local `file` transport by default, and no existing test sets `protocol.file.allow`, so the Task 9 fixture fails as written and blocks every task built on it.\nF5: DROP \u2014 `configTools.test.ts:199` mocks a hard-coded rejection and only asserts \"must be one of\", so it doesn't break; `CloneStrategy.ts:34` and `SubmoduleStrategy.ts:39` are already in the design's rename-sweep list that Task 3 points to.\nF6: DROP \u2014 Task 6(b) tests the config-alias path in core and the CLI print is a thin pass-through; this asks for extra tests the success criteria don't require.\nF7: KEEP \u2014 the design lists `'error'` \u2192 throw as a branch and its technical criteria require a test for every branch, but neither Task 12 nor Task 18 tests the `'error'` path.\nF8: DROP \u2014 this project's CLAUDE.md only says \"commit at least once per task\", and the inline commit lines already set sensible commit points; this is a formatting preference based on another project's rule.\nF9: DROP \u2014 Task 8 runs the CLI and MCP suites at the end of design step 1 (Tasks 1\u20138), so the claim that nothing runs them until Task 32 is wrong.\nF10: DROP \u2014 Task 20's grep for `PROMPT_FILE_RELATIVE_PATH` finds `phaseShorthand.ts` and the task says to cover every hit, as the finding itself admits.\nF11: DROP \u2014 this asks for more detail and a DRY refactor; the design already gives the `ensureGuideReady(projectPath, operationPath)` contract, and Task 1 already provides a single alias lookup.\nF12: DROP \u2014 the approved design names 0.14.0, Task 32 already leaves the bump to the PM, and the versioning rule cited isn't in this project's CLAUDE.md."
+}

@@ -1,0 +1,73 @@
+{
+ "case": "migratory-100-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The BulkForce signature (lines 141-150) takes a ragged list of per-agent neighbor arrays and a list of profile dataclasses, and returns a new N\u00d72 array each call; that breaks the architecture's array-in/array-out, no-dynamic-allocation rule (100-arch:99), which slices 101\u2013104 will be written against."
+  ],
+  "F2": [
+   "KEEP",
+   "Data Flow step 3 calls `query_radius` once per active agent, which is the object-by-object iteration the architecture forbids (arch:33, 87), and line 247 narrows the no-loop requirement so it skips this step."
+  ],
+  "F3": [
+   "KEEP",
+   "tick()` accepts only `list[BulkForce]`, yet line 152 says it \"prefers the bulk variant when available\" and line 248 requires the placeholder forces to exercise the `Force` path too; nothing connects `Force` to the tick, so that criterion cannot be met as written."
+  ],
+  "F4": [
+   "KEEP",
+   "Line 152 says integration adds force to velocity for all agents, while line 215 restricts it to active indices; following line 152 would move inactive agents that have nonzero velocity and break criterion 241."
+  ],
+  "F5": [
+   "KEEP",
+   "The included scope (line 39) says the tick will \"return updated state\" and the architecture says \"Returns the updated state array\" / \"feed in state, get back state\", but the signature returns `None` and mutates in place, and the deviation is not recorded."
+  ],
+  "F6": [
+   "DROP",
+   "Environment is out of 100's planned scope, and the \"used as-is\" claim is about the behavioral slices 101\u2013104; 106 and 107 are future work gated on a separate initiative, so this is a scope opinion."
+  ],
+  "F7": [
+   "KEEP",
+   "The architecture assigns the engine to \"provide an efficient conversion path at the serialization boundary\" (arch:95), but the slice hands it to the world server (lines 49, 100), and no plan slice picks it up."
+  ],
+  "F8": [
+   "DROP",
+   "The slice explicitly targets hundreds of agents with a deliberately naive reference implementation and names slice 105 as the optimization owner (lines 46, 310), so the claim that it never names the owning slice is false and the N\u00b2 memory point does not apply at this scale."
+  ],
+  "F9": [
+   "KEEP",
+   "The SpatialQuery contract does not say whether the querying agent is returned, whether the radius boundary is `<` or `<=`, or what order results come back in, and those choices change float sums; slice 105 requires identical output after the swap, so the contract has to fix them."
+  ],
+  "F10": [
+   "DROP",
+   "With a full-shape force array, duplicate indices write the same value and apply the force once, so the state is not silently wrong; the rest (validating `dt`, signatures for `create`/add/remove) asks for hardening or more detail rather than naming a defect."
+  ],
+  "F11": [
+   "DROP",
+   "velocity += force * dt` states the force semantics, and a clamp to `max_speed` naturally means a magnitude clamp; the unused `accelerations` field is minor and not a contradiction."
+  ],
+  "F12": [
+   "DROP",
+   "106 and 108 are future-work slices, and the plan only requires that the interfaces \"not preclude\" aggregates, so omitting them from `interfaces` is low value."
+  ]
+ },
+ "wall_seconds": 54.5,
+ "cost_usd": 0.8656256,
+ "raw_output": "F1: KEEP \u2014 The BulkForce signature (lines 141-150) takes a ragged list of per-agent neighbor arrays and a list of profile dataclasses, and returns a new N\u00d72 array each call; that breaks the architecture's array-in/array-out, no-dynamic-allocation rule (100-arch:99), which slices 101\u2013104 will be written against.\nF2: KEEP \u2014 Data Flow step 3 calls `query_radius` once per active agent, which is the object-by-object iteration the architecture forbids (arch:33, 87), and line 247 narrows the no-loop requirement so it skips this step.\nF3: KEEP \u2014 `tick()` accepts only `list[BulkForce]`, yet line 152 says it \"prefers the bulk variant when available\" and line 248 requires the placeholder forces to exercise the `Force` path too; nothing connects `Force` to the tick, so that criterion cannot be met as written.\nF4: KEEP \u2014 Line 152 says integration adds force to velocity for all agents, while line 215 restricts it to active indices; following line 152 would move inactive agents that have nonzero velocity and break criterion 241.\nF5: KEEP \u2014 The included scope (line 39) says the tick will \"return updated state\" and the architecture says \"Returns the updated state array\" / \"feed in state, get back state\", but the signature returns `None` and mutates in place, and the deviation is not recorded.\nF6: DROP \u2014 Environment is out of 100's planned scope, and the \"used as-is\" claim is about the behavioral slices 101\u2013104; 106 and 107 are future work gated on a separate initiative, so this is a scope opinion.\nF7: KEEP \u2014 The architecture assigns the engine to \"provide an efficient conversion path at the serialization boundary\" (arch:95), but the slice hands it to the world server (lines 49, 100), and no plan slice picks it up.\nF8: DROP \u2014 The slice explicitly targets hundreds of agents with a deliberately naive reference implementation and names slice 105 as the optimization owner (lines 46, 310), so the claim that it never names the owning slice is false and the N\u00b2 memory point does not apply at this scale.\nF9: KEEP \u2014 The SpatialQuery contract does not say whether the querying agent is returned, whether the radius boundary is `<` or `<=`, or what order results come back in, and those choices change float sums; slice 105 requires identical output after the swap, so the contract has to fix them.\nF10: DROP \u2014 With a full-shape force array, duplicate indices write the same value and apply the force once, so the state is not silently wrong; the rest (validating `dt`, signatures for `create`/add/remove) asks for hardening or more detail rather than naming a defect.\nF11: DROP \u2014 `velocity += force * dt` states the force semantics, and a clamp to `max_speed` naturally means a magnitude clamp; the unused `accelerations` field is minor and not a contradiction.\nF12: DROP \u2014 106 and 108 are future-work slices, and the plan only requires that the interfaces \"not preclude\" aggregates, so omitting them from `interfaces` is low value."
+}

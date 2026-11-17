@@ -1,0 +1,128 @@
+{
+ "case": "migratory-300-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17,
+  "F19": 18,
+  "F20": 19,
+  "F21": 20,
+  "F22": 21,
+  "F23": 22
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The doc says to run the CPU-bound NumPy tick synchronously on the asyncio loop. The loaded Python rule requires sync code inside async functions to finish in under 1 ms, or to move to an executor or thread, so the design as written breaks the rule."
+  ],
+  "F2": [
+   "DROP",
+   "The doc openly leaves the replay strategy (inputs only vs. snapshots) as a trade-off for slice 307. It never says logs use float32, so the precision argument is the reviewer's inference."
+  ],
+  "F3": [
+   "DROP",
+   "Slice 302 is already done, and `entities.py` gives stable IDs through id\u2194index maps with removal that shifts later slots down. The \"decide before 302 starts\" concern is out of date."
+  ],
+  "F4": [
+   "KEEP",
+   "Step 3 passes no active subset, though 100-arch makes subset evaluation part of the contract. 100-arch also lists \"register/remove agents\" on the engine interface, which conflicts with this doc saying the engine does not manage the entity lifecycle."
+  ],
+  "F5": [
+   "DROP",
+   "The 24 MB figure is in-memory state and the 12 bytes/entity figure is wire format, so they don't contradict each other. The rest is guessed pair-memory sizes and a request for benchmarks."
+  ],
+  "F6": [
+   "DROP",
+   "Per-client bandwidth at v1 scale is a scope opinion. The doc already names culling (slice 309) as the egress fix."
+  ],
+  "F7": [
+   "DROP",
+   "The doc leaves deltas for later and names drop or disconnect strategies. The delta-plus-drop problem only arises with a delta mode that hasn't been chosen."
+  ],
+  "F8": [
+   "DROP",
+   "Log sizing, the writer thread and the write-failure policy are slice-level detail for slice 307, not an architecture contradiction."
+  ],
+  "F9": [
+   "KEEP",
+   "This doc makes the environment read-only and has no write step in the tick. Slice 304 and the stigmergy archetype in 100-arch both need post-tick environment writes, so the slice plan depends on a mechanism this architecture never defines."
+  ],
+  "F10": [
+   "KEEP",
+   "Anticipated Slices claims \"Environment layer foundation\" and \"Seasonal and temporal systems\" for this initiative. The slice plan gives both to initiative 500 and keeps only integration and the clock here."
+  ],
+  "F11": [
+   "DROP",
+   "This doc treats the environment layer as its own scope and never cites 500-arch. Asking for a separate environment architecture is a scope request, and the real ownership conflict is already covered by F10."
+  ],
+  "F12": [
+   "KEEP",
+   "dependsOn` and the Related Work link both point to `001-concept.migratory`, which doesn't exist; the concept file is `000-concept.migratory.md`. 100-arch also links to a nonexistent `200-arch.world-server-foundation.md` instead of this doc."
+  ],
+  "F13": [
+   "KEEP",
+   "Persist state on shutdown\" under Explicit lifecycle contradicts the slice plan, which puts state persistence in Future Work, and this doc designs no persistence format."
+  ],
+  "F14": [
+   "DROP",
+   "A failure table for each I/O path is a request for more detail. The failure-mode rule applies to code and can be met at slice design time."
+  ],
+  "F15": [
+   "DROP",
+   "This mostly repeats the subset-argument gap already kept in F4. The tier column and record-type tag are speculative design choices, not proven omissions."
+  ],
+  "F16": [
+   "DROP",
+   "Which component owns the culling index is a design detail for integration slice 309, which comes later."
+  ],
+  "F17": [
+   "DROP",
+   "The doc deliberately leaves exact wire-format details (dtype, endianness, header) to slice 306."
+  ],
+  "F18": [
+   "DROP",
+   "Choosing libraries is slice-level work, and slice 300 is already done. The wording about asyncio is loose but harmless."
+  ],
+  "F19": [
+   "DROP",
+   "Double buffering and cross-thread publication only matter for the future threaded upgrade. The current single-threaded in-place commit is consistent with the doc."
+  ],
+  "F20": [
+   "DROP",
+   "This asks for more timing-policy detail. The doc's \"warn on overrun, continue at best effort\" is enough for an architecture, and slice 301 already implements it."
+  ],
+  "F21": [
+   "DROP",
+   "Bind address, connection caps and auth are hardening for a read-only v1 server. The bind address is already part of the network config."
+  ],
+  "F22": [
+   "DROP",
+   "Whether to cut the scaling analysis is a scope and style opinion, not a defect."
+  ],
+  "F23": [
+   "DROP",
+   "Naming internal module boundaries is an opinion about structure. The code already splits the work into config, tick, entities and simulation modules."
+  ]
+ },
+ "wall_seconds": 74.8,
+ "cost_usd": 1.0578425999999999,
+ "raw_output": "F1: KEEP \u2014 The doc says to run the CPU-bound NumPy tick synchronously on the asyncio loop. The loaded Python rule requires sync code inside async functions to finish in under 1 ms, or to move to an executor or thread, so the design as written breaks the rule.\nF2: DROP \u2014 The doc openly leaves the replay strategy (inputs only vs. snapshots) as a trade-off for slice 307. It never says logs use float32, so the precision argument is the reviewer's inference.\nF3: DROP \u2014 Slice 302 is already done, and `entities.py` gives stable IDs through id\u2194index maps with removal that shifts later slots down. The \"decide before 302 starts\" concern is out of date.\nF4: KEEP \u2014 Step 3 passes no active subset, though 100-arch makes subset evaluation part of the contract. 100-arch also lists \"register/remove agents\" on the engine interface, which conflicts with this doc saying the engine does not manage the entity lifecycle.\nF5: DROP \u2014 The 24 MB figure is in-memory state and the 12 bytes/entity figure is wire format, so they don't contradict each other. The rest is guessed pair-memory sizes and a request for benchmarks.\nF6: DROP \u2014 Per-client bandwidth at v1 scale is a scope opinion. The doc already names culling (slice 309) as the egress fix.\nF7: DROP \u2014 The doc leaves deltas for later and names drop or disconnect strategies. The delta-plus-drop problem only arises with a delta mode that hasn't been chosen.\nF8: DROP \u2014 Log sizing, the writer thread and the write-failure policy are slice-level detail for slice 307, not an architecture contradiction.\nF9: KEEP \u2014 This doc makes the environment read-only and has no write step in the tick. Slice 304 and the stigmergy archetype in 100-arch both need post-tick environment writes, so the slice plan depends on a mechanism this architecture never defines.\nF10: KEEP \u2014 Anticipated Slices claims \"Environment layer foundation\" and \"Seasonal and temporal systems\" for this initiative. The slice plan gives both to initiative 500 and keeps only integration and the clock here.\nF11: DROP \u2014 This doc treats the environment layer as its own scope and never cites 500-arch. Asking for a separate environment architecture is a scope request, and the real ownership conflict is already covered by F10.\nF12: KEEP \u2014 `dependsOn` and the Related Work link both point to `001-concept.migratory`, which doesn't exist; the concept file is `000-concept.migratory.md`. 100-arch also links to a nonexistent `200-arch.world-server-foundation.md` instead of this doc.\nF13: KEEP \u2014 \"Persist state on shutdown\" under Explicit lifecycle contradicts the slice plan, which puts state persistence in Future Work, and this doc designs no persistence format.\nF14: DROP \u2014 A failure table for each I/O path is a request for more detail. The failure-mode rule applies to code and can be met at slice design time.\nF15: DROP \u2014 This mostly repeats the subset-argument gap already kept in F4. The tier column and record-type tag are speculative design choices, not proven omissions.\nF16: DROP \u2014 Which component owns the culling index is a design detail for integration slice 309, which comes later.\nF17: DROP \u2014 The doc deliberately leaves exact wire-format details (dtype, endianness, header) to slice 306.\nF18: DROP \u2014 Choosing libraries is slice-level work, and slice 300 is already done. The wording about asyncio is loose but harmless.\nF19: DROP \u2014 Double buffering and cross-thread publication only matter for the future threaded upgrade. The current single-threaded in-place commit is consistent with the doc.\nF20: DROP \u2014 This asks for more timing-policy detail. The doc's \"warn on overrun, continue at best effort\" is enough for an architecture, and slice 301 already implements it.\nF21: DROP \u2014 Bind address, connection caps and auth are hardening for a read-only v1 server. The bind address is already part of the network config.\nF22: DROP \u2014 Whether to cut the scaling analysis is a scope and style opinion, not a defect.\nF23: DROP \u2014 Naming internal module boundaries is an opinion about structure. The code already splits the work into config, tick, entities and simulation modules."
+}

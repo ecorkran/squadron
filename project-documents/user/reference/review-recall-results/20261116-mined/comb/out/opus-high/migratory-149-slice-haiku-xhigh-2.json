@@ -1,0 +1,58 @@
+{
+ "case": "migratory-149-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "149 builds on slice 148's finding that candidate count is the bottleneck, but 145's 9\u00d7 density sweep (and the plan's 148 entry) says inner-loop work is not the bottleneck at N=50k, and the doc never reconciles the two or lists the 148 notes as dependencies."
+  ],
+  "F2": [
+   "KEEP",
+   "Line 58's \"S=3 alone drops candidates to ~5000\" contradicts the rediagnosis (49 cells \u00d7 555 \u2248 27,000), and the \"multiplicative\" gain counts accepted neighbors as if they were candidates visited."
+  ],
+  "F3": [
+   "DROP",
+   "The doc already says the seam cannot issue a `break` and leaves A7 as future work, so the duplicated cap check and the naming point are a judgment about approach, not a defect."
+  ],
+  "F4": [
+   "DROP",
+   "The kernel docstring says both `break` and counter-gating were verified in the 145 Phase 2.1 POC, so R1 is resolved; the warp and residual-loop points are requests for more rationale on claims the CUDA gates will measure anyway."
+  ],
+  "F5": [
+   "KEEP",
+   "cell_size = query_radius / S` takes a single scalar radius, but `query_radius` is per profile in the kernel and 145 sizes cells by `max_query_radius`, and nothing checks `S \u00d7 cell_size \u2265 R_max`, so neighbors can be silently missed."
+  ],
+  "F6": [
+   "DROP",
+   "The plan gives 146 only one dependency (145), so \"Slice 146 is unblocked\" is consistent with it, and production config for 146 is outside this slice."
+  ],
+  "F7": [
+   "KEEP",
+   "The parent plan's 149 entry makes the 7-neighbor operating point a benchmark target, and the doc drops it without saying so; the gate runs `max_neighbors=32` only."
+  ],
+  "F8": [
+   "KEEP",
+   "The Step 3 command pairs are identical and there is no switch between `break` and counter-gating, so the baseline and ablation rows cannot be produced; also `scripts/bench.py --config` does not exist (the harness is `python -m migratory.bench(.cli) --workload`)."
+  ],
+  "F9": [
+   "DROP",
+   "Length and compression are style and scope opinions, not defects."
+  ]
+ },
+ "wall_seconds": 52.4,
+ "cost_usd": 1.0636568,
+ "raw_output": "F1: KEEP \u2014 149 builds on slice 148's finding that candidate count is the bottleneck, but 145's 9\u00d7 density sweep (and the plan's 148 entry) says inner-loop work is not the bottleneck at N=50k, and the doc never reconciles the two or lists the 148 notes as dependencies.\nF2: KEEP \u2014 Line 58's \"S=3 alone drops candidates to ~5000\" contradicts the rediagnosis (49 cells \u00d7 555 \u2248 27,000), and the \"multiplicative\" gain counts accepted neighbors as if they were candidates visited.\nF3: DROP \u2014 The doc already says the seam cannot issue a `break` and leaves A7 as future work, so the duplicated cap check and the naming point are a judgment about approach, not a defect.\nF4: DROP \u2014 The kernel docstring says both `break` and counter-gating were verified in the 145 Phase 2.1 POC, so R1 is resolved; the warp and residual-loop points are requests for more rationale on claims the CUDA gates will measure anyway.\nF5: KEEP \u2014 `cell_size = query_radius / S` takes a single scalar radius, but `query_radius` is per profile in the kernel and 145 sizes cells by `max_query_radius`, and nothing checks `S \u00d7 cell_size \u2265 R_max`, so neighbors can be silently missed.\nF6: DROP \u2014 The plan gives 146 only one dependency (145), so \"Slice 146 is unblocked\" is consistent with it, and production config for 146 is outside this slice.\nF7: KEEP \u2014 The parent plan's 149 entry makes the 7-neighbor operating point a benchmark target, and the doc drops it without saying so; the gate runs `max_neighbors=32` only.\nF8: KEEP \u2014 The Step 3 command pairs are identical and there is no switch between `break` and counter-gating, so the baseline and ablation rows cannot be produced; also `scripts/bench.py --config` does not exist (the harness is `python -m migratory.bench(.cli) --workload`).\nF9: DROP \u2014 Length and compression are style and scope opinions, not defects."
+}

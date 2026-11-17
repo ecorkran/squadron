@@ -1,0 +1,68 @@
+{
+ "case": "migratory-109-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "With zero neighbors the template returns `-self_pos * w` (and alignment returns `-v * w`), not the zero force that line 172 promises and the current `continue` guard gives."
+  ],
+  "F2": [
+   "KEEP",
+   "The weight comprehension loops over every agent inside `__call__`, which breaks line 198's defining constraint, and line 223's grep for `for.*eval_indices` matches that line."
+  ],
+  "F3": [
+   "KEEP",
+   "The 103 design still uses the `neighbor_lists`/`list_idx` signature, and the plan lets it land first, yet 109 says predator-prey will consume `NeighborData` and its list of forces to update leaves out 103's forces."
+  ],
+  "F4": [
+   "DROP",
+   "Asking for per-phase timing is process advice; the doc bases its claim on observed overruns, and the cost-model wording it disputes is in the plan, not this doc."
+  ],
+  "F5": [
+   "DROP",
+   "The slice targets n=100 and openly defers the large-scale layout; sizing for tens of thousands is a scope opinion, not a defect in this slice."
+  ],
+  "F6": [
+   "DROP",
+   "Calling -1 \"never dereferenced\" is loose wording, but the template applies the mask before reducing, so the output is correct; the redundant field is a style point."
+  ],
+  "F7": [
+   "DROP",
+   "Index-only queries were set in slice 100, and the doc leaves the query unchanged; asking for a neighbor-type extension point for 108 now is a scope opinion."
+  ],
+  "F8": [
+   "DROP",
+   "Calling MomentumForce \"neighbor-dependent\" in one place is a labeling slip that changes nothing; the doc is clear that the force is vectorized without neighbor data."
+  ],
+  "F9": [
+   "KEEP",
+   "The doc assigns batch-query vectorization to slice 105, but 105's plan entry covers only a hash grid behind the existing interface, so the doc contradicts its parent plan."
+  ],
+  "F10": [
+   "DROP",
+   "Vectorized NumPy stays deterministic from run to run, so the determinism goal still holds; choosing N and a tolerance for the integration test is detail the implementer can settle."
+  ],
+  "F11": [
+   "DROP",
+   "Line 215 already gives a pass criterion (ticks stay within the 50ms budget), and restating the architecture's large-scale target is not required for this slice."
+  ]
+ },
+ "wall_seconds": 56.3,
+ "cost_usd": 0.9550857,
+ "raw_output": "F1: KEEP \u2014 With zero neighbors the template returns `-self_pos * w` (and alignment returns `-v * w`), not the zero force that line 172 promises and the current `continue` guard gives.\nF2: KEEP \u2014 The weight comprehension loops over every agent inside `__call__`, which breaks line 198's defining constraint, and line 223's grep for `for.*eval_indices` matches that line.\nF3: KEEP \u2014 The 103 design still uses the `neighbor_lists`/`list_idx` signature, and the plan lets it land first, yet 109 says predator-prey will consume `NeighborData` and its list of forces to update leaves out 103's forces.\nF4: DROP \u2014 Asking for per-phase timing is process advice; the doc bases its claim on observed overruns, and the cost-model wording it disputes is in the plan, not this doc.\nF5: DROP \u2014 The slice targets n=100 and openly defers the large-scale layout; sizing for tens of thousands is a scope opinion, not a defect in this slice.\nF6: DROP \u2014 Calling -1 \"never dereferenced\" is loose wording, but the template applies the mask before reducing, so the output is correct; the redundant field is a style point.\nF7: DROP \u2014 Index-only queries were set in slice 100, and the doc leaves the query unchanged; asking for a neighbor-type extension point for 108 now is a scope opinion.\nF8: DROP \u2014 Calling MomentumForce \"neighbor-dependent\" in one place is a labeling slip that changes nothing; the doc is clear that the force is vectorized without neighbor data.\nF9: KEEP \u2014 The doc assigns batch-query vectorization to slice 105, but 105's plan entry covers only a hash grid behind the existing interface, so the doc contradicts its parent plan.\nF10: DROP \u2014 Vectorized NumPy stays deterministic from run to run, so the determinism goal still holds; choosing N and a tolerance for the integration test is detail the implementer can settle.\nF11: DROP \u2014 Line 215 already gives a pass criterion (ticks stay within the 50ms budget), and restating the architecture's large-scale target is not required for this slice."
+}

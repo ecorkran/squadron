@@ -1,0 +1,73 @@
+{
+ "case": "migratory-313-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 3,
+  "F2": 4,
+  "F3": 5,
+  "F4": 6,
+  "F5": 7,
+  "F6": 8,
+  "F7": 9,
+  "F8": 10,
+  "F9": 11,
+  "F10": 12,
+  "F11": 13,
+  "F12": 14
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The breakdown is a finished record (`status: complete`), so the code already being in the checkout is expected; the SOFT variant belongs to slice 314, which this slice puts out of scope."
+  ],
+  "F2": [
+   "DROP",
+   "The work is in fact done in code, so `status: complete` is accurate; changing it to match the unchecked boxes would make it wrong, and the conventions file it cites isn't in this checkout."
+  ],
+  "F3": [
+   "DROP",
+   "This is a defect in the code, not the document; Task 3.1 already says to make `world_bounds` required."
+  ],
+  "F4": [
+   "KEEP",
+   "For a tiny negative input, `np.mod` (like Python's `%`) returns exactly the divisor (`-1e-20 % 100.0 == 100.0`), which breaks criterion 7's `[0, width)` that Task 2.2 promises without caveat."
+  ],
+  "F5": [
+   "KEEP",
+   "The tests in this file use `dt=0.05`, at which an agent at x=99 with vx=10 only reaches 99.5, so it never crosses the edge and the reflect assertion fails; dt isn't specified."
+  ],
+  "F6": [
+   "DROP",
+   "The match covers all three variants this slice defines; adding a catch-all only guards against variants that don't exist yet."
+  ],
+  "F7": [
+   "DROP",
+   "Low value: the doc already offers deriving the list from the enum (which the code does), and repeating the OPEN default in the loader is what criterion 4 asks for."
+  ],
+  "F8": [
+   "DROP",
+   "This project's conventions require no particular commit-marker format, and no process guide that does exists in this checkout."
+  ],
+  "F9": [
+   "DROP",
+   "The `python -c` check prints the policy and expects `wrap`, so a misplaced key would show `open` and be caught; a config-only commit is low risk."
+  ],
+  "F10": [
+   "DROP",
+   "Line 233 already says to check the file for all call sites and update them, and 3.5 covers other files; that is enough to act on."
+  ],
+  "F11": [
+   "DROP",
+   "Criterion 14 explicitly calls for a manual viewer check, and the task faithfully follows the slice's walkthrough."
+  ],
+  "F12": [
+   "DROP",
+   "This is a scope and weight opinion; the Notes wording mismatch is cosmetic and changes no task."
+  ]
+ },
+ "wall_seconds": 59.0,
+ "cost_usd": 1.0745844,
+ "raw_output": "F4 and F5 are the only real defects, so I'm keeping those two and dropping the other ten.\n\nF1: DROP \u2014 The breakdown is a finished record (`status: complete`), so the code already being in the checkout is expected; the SOFT variant belongs to slice 314, which this slice puts out of scope.\nF2: DROP \u2014 The work is in fact done in code, so `status: complete` is accurate; changing it to match the unchecked boxes would make it wrong, and the conventions file it cites isn't in this checkout.\nF3: DROP \u2014 This is a defect in the code, not the document; Task 3.1 already says to make `world_bounds` required.\nF4: KEEP \u2014 For a tiny negative input, `np.mod` (like Python's `%`) returns exactly the divisor (`-1e-20 % 100.0 == 100.0`), which breaks criterion 7's `[0, width)` that Task 2.2 promises without caveat.\nF5: KEEP \u2014 The tests in this file use `dt=0.05`, at which an agent at x=99 with vx=10 only reaches 99.5, so it never crosses the edge and the reflect assertion fails; dt isn't specified.\nF6: DROP \u2014 The match covers all three variants this slice defines; adding a catch-all only guards against variants that don't exist yet.\nF7: DROP \u2014 Low value: the doc already offers deriving the list from the enum (which the code does), and repeating the OPEN default in the loader is what criterion 4 asks for.\nF8: DROP \u2014 This project's conventions require no particular commit-marker format, and no process guide that does exists in this checkout.\nF9: DROP \u2014 The `python -c` check prints the policy and expects `wrap`, so a misplaced key would show `open` and be caught; a config-only commit is low risk.\nF10: DROP \u2014 Line 233 already says to check the file for all call sites and update them, and 3.5 covers other files; that is enough to act on.\nF11: DROP \u2014 Criterion 14 explicitly calls for a manual viewer check, and the task faithfully follows the slice's walkthrough.\nF12: DROP \u2014 This is a scope and weight opinion; the Notes wording mismatch is cosmetic and changes no task."
+}

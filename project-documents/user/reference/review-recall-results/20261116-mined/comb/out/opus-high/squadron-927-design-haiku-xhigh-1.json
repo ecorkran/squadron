@@ -1,0 +1,53 @@
+{
+ "case": "squadron-927-design",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The #92 recovery turn already exists in the code (`review_client.py:248-271`, `turn_capture.py:7`, `ReviewResult.recovery_turn_used`), so 927 has no dependency on slice 924."
+  ],
+  "F2": [
+   "DROP",
+   "D11 makes a reasoned, explicit choice, discloses it in the artifact, and JSON always carries `answering_models: []`; this is an opinion about the design, not a contradiction."
+  ],
+  "F3": [
+   "DROP",
+   "Both providers stamp `failed_tool_calls` whenever they stamp `tool_calls_made` (`sdk/agent.py:187-190`, `openai/agent.py:562-568`), and Codex stamps neither, so the mixed-`None` state cannot occur."
+  ],
+  "F4": [
+   "DROP",
+   "The 904 contract covers findings the model emits, through the templates and parser; `ReviewFinding.location` is optional and persistence already skips a `None` location (`persistence.py:494`), and `unverified` would wrongly suggest a file citation the model didn't know."
+  ],
+  "F5": [
+   "DROP",
+   "The new keys are additive, following the same convention as the earlier telemetry and `verdictSource` keys; the Value sentence (\"saw the whole diff or read files with its tools\") states the rule exactly as D4 defines it."
+  ],
+  "F6": [
+   "DROP",
+   "Under `fail` or `checkpoint`, a loop that hits a non-converging imposed CONCERNS stops correctly, which is the intended outcome; asking to document it is extra detail, not a defect."
+  ],
+  "F7": [
+   "KEEP",
+   "D8 and the Patterns section make `answering_models` a string-literal lookup key written in two provider modules and read in `TurnCapture`, which directly contradicts the project rule to define lookup values once."
+  ],
+  "F8": [
+   "KEEP",
+   "The `gemini` profile is an OpenAI-compatible endpoint (`profiles.py:61-67`) whose returned ids may not match D9's exact rule, yet D9's capture list and walkthrough step 6 leave it out, so the slice's own pre-merge check for false substitutions misses one of the six profiles."
+  ]
+ },
+ "wall_seconds": 90.4,
+ "cost_usd": 1.3341280000000002,
+ "raw_output": "Checking the finding model's `location` handling for F4, then F7/F8 against the code.\nF1: DROP \u2014 The #92 recovery turn already exists in the code (`review_client.py:248-271`, `turn_capture.py:7`, `ReviewResult.recovery_turn_used`), so 927 has no dependency on slice 924.\nF2: DROP \u2014 D11 makes a reasoned, explicit choice, discloses it in the artifact, and JSON always carries `answering_models: []`; this is an opinion about the design, not a contradiction.\nF3: DROP \u2014 Both providers stamp `failed_tool_calls` whenever they stamp `tool_calls_made` (`sdk/agent.py:187-190`, `openai/agent.py:562-568`), and Codex stamps neither, so the mixed-`None` state cannot occur.\nF4: DROP \u2014 The 904 contract covers findings the model emits, through the templates and parser; `ReviewFinding.location` is optional and persistence already skips a `None` location (`persistence.py:494`), and `unverified` would wrongly suggest a file citation the model didn't know.\nF5: DROP \u2014 The new keys are additive, following the same convention as the earlier telemetry and `verdictSource` keys; the Value sentence (\"saw the whole diff or read files with its tools\") states the rule exactly as D4 defines it.\nF6: DROP \u2014 Under `fail` or `checkpoint`, a loop that hits a non-converging imposed CONCERNS stops correctly, which is the intended outcome; asking to document it is extra detail, not a defect.\nF7: KEEP \u2014 D8 and the Patterns section make `answering_models` a string-literal lookup key written in two provider modules and read in `TurnCapture`, which directly contradicts the project rule to define lookup values once.\nF8: KEEP \u2014 The `gemini` profile is an OpenAI-compatible endpoint (`profiles.py:61-67`) whose returned ids may not match D9's exact rule, yet D9's capture list and walkthrough step 6 leave it out, so the slice's own pre-merge check for false substitutions misses one of the six profiles."
+}

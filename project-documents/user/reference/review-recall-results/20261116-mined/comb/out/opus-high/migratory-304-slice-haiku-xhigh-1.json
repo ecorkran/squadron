@@ -1,0 +1,68 @@
+{
+ "case": "migratory-304-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The plan (`300-slices:27`) and `500-arch:52,81,137` say the environment is passed to `engine.tick()`, but the design calls `tick()` with no environment and uses constructor injection without saying it departs from them."
+  ],
+  "F2": [
+   "KEEP",
+   "The second `step()` body (`:276-277`) returns before `post_tick()` when there are no entities, which contradicts the design's own `:291` and `:408` and the first `step()` body."
+  ],
+  "F3": [
+   "KEEP",
+   "The plan gives this slice \"Handle post-tick environment writes\", but the design calls `post_tick()` with no arguments, names no source for deposits or mutations, and does not list the item under Excluded."
+  ],
+  "F4": [
+   "DROP",
+   "The deferral is stated in Excluded (`:48`) and `:153` with a reason, and with no layers registered, config for grid resolution or layer selection would have nothing to act on."
+  ],
+  "F5": [
+   "KEEP",
+   "A silent `seed=42` default contradicts `300-arch:47` (environment seed is explicit configuration, not a hard-coded default), the project rule against silent fallbacks, and the 303 design's choice to make missing config an error."
+  ],
+  "F6": [
+   "DROP",
+   "The (0,0) origin matches the existing server config and entity spawning, the design states the assumption openly, and the plan does not give origin configuration to this slice."
+  ],
+  "F7": [
+   "KEEP",
+   "_seasonal_parameter` is listed as state but never read, so there are two sources for the value, and the silent `0.0` default labelled \"mid-season\" goes against the no-silent-fallback rule and is mislabelled on a 0\u20131 cycle."
+  ],
+  "F8": [
+   "KEEP",
+   "The design contradicts itself: `:220` claims the environment is always present to avoid `is not None` checks, yet `step()` has two, and `:410` says existing tests need no changes while `:407` says every `step()` call must change."
+  ],
+  "F9": [
+   "DROP",
+   "This is a scope opinion: the property has a stated consumer (`:329`) and the illustration is clearly marked as not built here."
+  ],
+  "F10": [
+   "DROP",
+   "This asks for extra detail and measurement for an empty environment whose `pre_tick` and `post_tick` calls do nothing; no success criterion requires it."
+  ],
+  "F11": [
+   "DROP",
+   "It concerns the completed 303 document, not the document under review, and 304's own Excluded entry is already correct."
+  ]
+ },
+ "wall_seconds": 45.3,
+ "cost_usd": 1.0320977999999998,
+ "raw_output": "F1: KEEP \u2014 The plan (`300-slices:27`) and `500-arch:52,81,137` say the environment is passed to `engine.tick()`, but the design calls `tick()` with no environment and uses constructor injection without saying it departs from them.\nF2: KEEP \u2014 The second `step()` body (`:276-277`) returns before `post_tick()` when there are no entities, which contradicts the design's own `:291` and `:408` and the first `step()` body.\nF3: KEEP \u2014 The plan gives this slice \"Handle post-tick environment writes\", but the design calls `post_tick()` with no arguments, names no source for deposits or mutations, and does not list the item under Excluded.\nF4: DROP \u2014 The deferral is stated in Excluded (`:48`) and `:153` with a reason, and with no layers registered, config for grid resolution or layer selection would have nothing to act on.\nF5: KEEP \u2014 A silent `seed=42` default contradicts `300-arch:47` (environment seed is explicit configuration, not a hard-coded default), the project rule against silent fallbacks, and the 303 design's choice to make missing config an error.\nF6: DROP \u2014 The (0,0) origin matches the existing server config and entity spawning, the design states the assumption openly, and the plan does not give origin configuration to this slice.\nF7: KEEP \u2014 `_seasonal_parameter` is listed as state but never read, so there are two sources for the value, and the silent `0.0` default labelled \"mid-season\" goes against the no-silent-fallback rule and is mislabelled on a 0\u20131 cycle.\nF8: KEEP \u2014 The design contradicts itself: `:220` claims the environment is always present to avoid `is not None` checks, yet `step()` has two, and `:410` says existing tests need no changes while `:407` says every `step()` call must change.\nF9: DROP \u2014 This is a scope opinion: the property has a stated consumer (`:329`) and the illustration is clearly marked as not built here.\nF10: DROP \u2014 This asks for extra detail and measurement for an empty environment whose `pre_tick` and `post_tick` calls do nothing; no success criterion requires it.\nF11: DROP \u2014 It concerns the completed 303 document, not the document under review, and 304's own Excluded entry is already correct."
+}

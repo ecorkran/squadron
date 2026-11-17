@@ -1,0 +1,48 @@
+{
+ "case": "squadron-362-design",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The design says function- and class-level edge endpoints resolve to their owning file's layer but never says how, and the obvious way (reading the node's `filePath`) breaks criterion 9's ban on reading function- or class-level nodes."
+  ],
+  "F2": [
+   "KEEP",
+   "The \"closing observation\" every section must carry is not in the mapping table or the success criteria, and its hardcoded SDK/seams example cannot be derived from any named field, so it fails the design's own test and is the hallucination trap CLAUDE.md prohibits."
+  ],
+  "F3": [
+   "DROP",
+   "The exclusion filter is a deliberate decision with a stated rationale; it matches the architecture's own \"function- and class-level nodes are not read.\" The architecture's loud-failure rule covers missing or renamed keys that thin the document, not an added type."
+  ],
+  "F4": [
+   "DROP",
+   "The section 7 fallback already sends an unreadable file to a named gap marker; hang and timeout do not apply to local file reads, and a full matrix of cases per file is extra hardening and detail."
+  ],
+  "F5": [
+   "DROP",
+   "a) Where to put the shared rules is an opinion about structure; the slice plan already has 363 and 364 consume the 362 mapping. (b) The architecture's interview table already gives 363 its Initial Technical Direction fields, and `config` nodes are already selected by the file-level selector."
+  ],
+  "F6": [
+   "DROP",
+   "This is an opinion about length and scope, not a defect."
+  ],
+  "F7": [
+   "KEEP",
+   "git diff --stat main` hardcodes `main`, but the project's git rules say to read the target from `cf config get git.integration_branch`; with an integration branch set, this check compares against the wrong base."
+  ]
+ },
+ "wall_seconds": 49.1,
+ "cost_usd": 0.9328623,
+ "raw_output": "F1: KEEP \u2014 The design says function- and class-level edge endpoints resolve to their owning file's layer but never says how, and the obvious way (reading the node's `filePath`) breaks criterion 9's ban on reading function- or class-level nodes.\nF2: KEEP \u2014 The \"closing observation\" every section must carry is not in the mapping table or the success criteria, and its hardcoded SDK/seams example cannot be derived from any named field, so it fails the design's own test and is the hallucination trap CLAUDE.md prohibits.\nF3: DROP \u2014 The exclusion filter is a deliberate decision with a stated rationale; it matches the architecture's own \"function- and class-level nodes are not read.\" The architecture's loud-failure rule covers missing or renamed keys that thin the document, not an added type.\nF4: DROP \u2014 The section 7 fallback already sends an unreadable file to a named gap marker; hang and timeout do not apply to local file reads, and a full matrix of cases per file is extra hardening and detail.\nF5: DROP \u2014 (a) Where to put the shared rules is an opinion about structure; the slice plan already has 363 and 364 consume the 362 mapping. (b) The architecture's interview table already gives 363 its Initial Technical Direction fields, and `config` nodes are already selected by the file-level selector.\nF6: DROP \u2014 This is an opinion about length and scope, not a defect.\nF7: KEEP \u2014 `git diff --stat main` hardcodes `main`, but the project's git rules say to read the target from `cf config get git.integration_branch`; with an integration branch set, this check compares against the wrong base."
+}

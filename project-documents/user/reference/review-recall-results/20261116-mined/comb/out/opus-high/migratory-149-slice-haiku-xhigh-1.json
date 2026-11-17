@@ -1,0 +1,68 @@
+{
+ "case": "migratory-149-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Slice 148 shipped as a negative result and its tiled kernel was removed, so no tiled kernel or rename exists; the code still has the 145 `for kk` loop, and the 145 docstring says `break` was validated in the Phase 2.1 POC."
+  ],
+  "F2": [
+   "DROP",
+   "The doc cites 148's Phase 2 re-diagnosis note, which says exactly this (O(N \u00d7 candidates) is the real bottleneck and bandwidth is not); the earlier slice-doc line saying candidate count isn't the lever was later overturned."
+  ],
+  "F3": [
+   "KEEP",
+   "Option A puts the first-k stop condition (`k_found >= max_neighbors`) in the loop body and repeats the seam's cap logic, so swapping in distance-ranked selection would mean editing the loop, which contradicts 145's \"swap without changing the kernel structure\" seam and the \"A7 seam preserved\" claim."
+  ],
+  "F4": [
+   "KEEP",
+   "49 cells \u00d7 ~555 \u2248 27,000 candidates, not ~5000; the parent re-diagnosis note itself gives ~27,000, so the S=3 candidate figures are wrong."
+  ],
+  "F5": [
+   "KEEP",
+   "The code derives `cell_size` once from `max_query_radius` (quadrants_fused_state.py:141-150), but the doc has the harness read a separate config `cell_size = query_radius / S`, which contradicts 145/code and could make the \u00b1S scan miss neighbors."
+  ],
+  "F6": [
+   "KEEP",
+   "The four Step 3 commands are two identical pairs with no switch for the break, and Option A makes the break unconditional, so the \"counter-gating\" baseline and \"subdivision only\" runs cannot be performed as written."
+  ],
+  "F7": [
+   "DROP",
+   "This mostly asks for unit-test detail that belongs in the task breakdown; the first-k set already depends on scan order at S=1, and the spill-check wording is minor."
+  ],
+  "F8": [
+   "KEEP",
+   "The memory rationale for the S \u2264 8 cap contradicts the architecture's \"Memory is not a constraint that gates the roadmap\" (140-arch:94), and the bare `8` breaks the define-once rule."
+  ],
+  "F9": [
+   "DROP",
+   "146 depends only on 145, so \"unblocked\" is harmless, and where production config sets S is 146's job, which this slice explicitly puts out of scope."
+  ],
+  "F10": [
+   "KEEP",
+   "Plan entry 149 says \"the 7-neighbor operating point is a benchmark target,\" but the doc's gate and walkthrough use only `max_neighbors=32` and record no deferral."
+  ],
+  "F11": [
+   "DROP",
+   "This is a scope and style opinion about trimming content, not a defect."
+  ]
+ },
+ "wall_seconds": 62.6,
+ "cost_usd": 1.2334509,
+ "raw_output": "Checking slice 145's seam and config definitions and how `cell_size` is set in code, then I'll give the verdicts.\nF1: DROP \u2014 Slice 148 shipped as a negative result and its tiled kernel was removed, so no tiled kernel or rename exists; the code still has the 145 `for kk` loop, and the 145 docstring says `break` was validated in the Phase 2.1 POC.\nF2: DROP \u2014 The doc cites 148's Phase 2 re-diagnosis note, which says exactly this (O(N \u00d7 candidates) is the real bottleneck and bandwidth is not); the earlier slice-doc line saying candidate count isn't the lever was later overturned.\nF3: KEEP \u2014 Option A puts the first-k stop condition (`k_found >= max_neighbors`) in the loop body and repeats the seam's cap logic, so swapping in distance-ranked selection would mean editing the loop, which contradicts 145's \"swap without changing the kernel structure\" seam and the \"A7 seam preserved\" claim.\nF4: KEEP \u2014 49 cells \u00d7 ~555 \u2248 27,000 candidates, not ~5000; the parent re-diagnosis note itself gives ~27,000, so the S=3 candidate figures are wrong.\nF5: KEEP \u2014 The code derives `cell_size` once from `max_query_radius` (quadrants_fused_state.py:141-150), but the doc has the harness read a separate config `cell_size = query_radius / S`, which contradicts 145/code and could make the \u00b1S scan miss neighbors.\nF6: KEEP \u2014 The four Step 3 commands are two identical pairs with no switch for the break, and Option A makes the break unconditional, so the \"counter-gating\" baseline and \"subdivision only\" runs cannot be performed as written.\nF7: DROP \u2014 This mostly asks for unit-test detail that belongs in the task breakdown; the first-k set already depends on scan order at S=1, and the spill-check wording is minor.\nF8: KEEP \u2014 The memory rationale for the S \u2264 8 cap contradicts the architecture's \"Memory is not a constraint that gates the roadmap\" (140-arch:94), and the bare `8` breaks the define-once rule.\nF9: DROP \u2014 146 depends only on 145, so \"unblocked\" is harmless, and where production config sets S is 146's job, which this slice explicitly puts out of scope.\nF10: KEEP \u2014 Plan entry 149 says \"the 7-neighbor operating point is a benchmark target,\" but the doc's gate and walkthrough use only `max_neighbors=32` and record no deferral.\nF11: DROP \u2014 This is a scope and style opinion about trimming content, not a defect."
+}

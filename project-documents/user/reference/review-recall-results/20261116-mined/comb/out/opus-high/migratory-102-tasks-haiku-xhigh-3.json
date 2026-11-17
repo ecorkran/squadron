@@ -1,0 +1,53 @@
+{
+ "case": "migratory-102-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "heading * speed * momentum_weight` is just `momentum_weight * velocity`, the exact negative of `VelocityDrag` (`forces.py:92-94`), so it speeds agents up instead of resisting turns. The slice contradicts itself (lines 134-146 vs. Option A), and tasks 3.1/3.2 would lock in that behaviour."
+  ],
+  "F2": [
+   "DROP",
+   "Task 4.1 already uses array indexing (`state.leadership[neighbors]`), and the per-agent-loop-with-numpy pattern in `flocking.py` already meets the slice's vectorization requirement, so this only asks for more detail."
+  ],
+  "F3": [
+   "DROP",
+   "The slice's success criteria ask for directional bias plus a heading-variance or similar metric, and 5.2/5.3 cover those; \"corridor movement\" in the Included list is not a separate criterion."
+  ],
+  "F4": [
+   "KEEP",
+   "tick.py:48-52` builds `neighbor_lists` in active-index order, and every flocking force looks up `profiles[state.profile_indices[agent_idx]]`, but tasks 3.1/4.1 state neither, so an active subset would get wrong neighbors or an IndexError."
+  ],
+  "F5": [
+   "KEEP",
+   "Task 5.3 accepts lower variance OR eastward bias, where the slice walkthrough (lines 475-476) requires both, and \"statistically measurable\" and \"mean heading\" are never defined, so the assertion is under-specified and weaker than the parent."
+  ],
+  "F6": [
+   "DROP",
+   "pyproject.toml` configures no pyright or mypy, and the project's rules require no typecheck step in task files, so this is a process add-on rather than a document defect."
+  ],
+  "F7": [
+   "DROP",
+   "The migratory checkout's own CLAUDE.md says to branch slices from `main`, so the frontmatter matches the rules that govern this project."
+  ],
+  "F8": [
+   "DROP",
+   "A commit task per section follows this project's \"commit at least once per task\" rule, and the rest is about trimming and style, not defects."
+  ]
+ },
+ "wall_seconds": 40.9,
+ "cost_usd": 0.8395121000000001,
+ "raw_output": "F1: KEEP \u2014 `heading * speed * momentum_weight` is just `momentum_weight * velocity`, the exact negative of `VelocityDrag` (`forces.py:92-94`), so it speeds agents up instead of resisting turns. The slice contradicts itself (lines 134-146 vs. Option A), and tasks 3.1/3.2 would lock in that behaviour.\nF2: DROP \u2014 Task 4.1 already uses array indexing (`state.leadership[neighbors]`), and the per-agent-loop-with-numpy pattern in `flocking.py` already meets the slice's vectorization requirement, so this only asks for more detail.\nF3: DROP \u2014 The slice's success criteria ask for directional bias plus a heading-variance or similar metric, and 5.2/5.3 cover those; \"corridor movement\" in the Included list is not a separate criterion.\nF4: KEEP \u2014 `tick.py:48-52` builds `neighbor_lists` in active-index order, and every flocking force looks up `profiles[state.profile_indices[agent_idx]]`, but tasks 3.1/4.1 state neither, so an active subset would get wrong neighbors or an IndexError.\nF5: KEEP \u2014 Task 5.3 accepts lower variance OR eastward bias, where the slice walkthrough (lines 475-476) requires both, and \"statistically measurable\" and \"mean heading\" are never defined, so the assertion is under-specified and weaker than the parent.\nF6: DROP \u2014 `pyproject.toml` configures no pyright or mypy, and the project's rules require no typecheck step in task files, so this is a process add-on rather than a document defect.\nF7: DROP \u2014 The migratory checkout's own CLAUDE.md says to branch slices from `main`, so the frontmatter matches the rules that govern this project.\nF8: DROP \u2014 A commit task per section follows this project's \"commit at least once per task\" rule, and the rest is about trimming and style, not defects."
+}

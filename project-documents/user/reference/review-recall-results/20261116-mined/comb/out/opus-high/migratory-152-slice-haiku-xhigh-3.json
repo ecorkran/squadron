@@ -1,0 +1,83 @@
+{
+ "case": "migratory-152-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "radius_only` is the accept-all path slice 150 already had for uncapped agents, made into a named mode; it is not a new force type or movement model the architecture excludes."
+  ],
+  "F2": [
+   "KEEP",
+   "The plan gives 152 two exit criteria: within 20% of k-first at N=200k, and no regression on the k-first path; the slice removes k_first and gates against `radius_only`, which contradicts its parent."
+  ],
+  "F3": [
+   "KEEP",
+   "radius_only` accumulates every neighbour in radius while the 213.9 TPS baseline stops at the cap, so \"strictly less work\" is false and correct code could hit the slice-stop condition."
+  ],
+  "F4": [
+   "DROP",
+   "The heap, pruning and `neighbor_mode` code exist on main per 150's Implementation History, and the doc already states 150's ~88% regression, so the \"shipped\" wording does not block anything."
+  ],
+  "F5": [
+   "DROP",
+   "The 200k gate matches the plan's own entry for 152; calling it \"Tier 3\" is a mislabel that changes no gate, and the absolute-TPS demand is a scope request."
+  ],
+  "F6": [
+   "DROP",
+   "ComputeConfig.neighbor_mode` already exists in `config.py` (from slices 146/150), so no new coupling or undeclared dependency is added; the \"no file outside\" line is a minor wording slip, since the default-flip section names both files."
+  ],
+  "F7": [
+   "DROP",
+   "The doc already states that k_first is rejected with a `ConfigurationError` and gives the migration targets (lines 67, 199); \"three to two\" is a miscount, not a hidden break."
+  ],
+  "F8": [
+   "KEEP",
+   "Line 433 keeps k_first parsed until the final commit, but step 2 removes it from the kernel, and the drivers use `_NEIGHBOR_MODE_MAP.get(..., NEIGHBOR_MODE_DEFAULT)` (`gpu_driver.py:110`), so k_first would silently run another mode."
+  ],
+  "F9": [
+   "KEEP",
+   "The AFTER block has no `max_neighbors <= 0` branch, so with max_neighbors=0 the INF root triggers eviction of `heap_idx[0] = -1`, which drops slice 150's required uncapped path and reads out of bounds."
+  ],
+  "F10": [
+   "DROP",
+   "agent_state.py:294-299` shows the originals are `qd.f32`, so the coherent fields match and no precision is lost."
+  ],
+  "F11": [
+   "KEEP",
+   "Verification step 5 and criterion 3 (N=1M) use `mid-flock-500k` and `mid-flock-1M`, which neither exist in `bench/workloads` nor are added by the slice (it adds only `mid-flock-200k`), so those steps cannot run as written."
+  ],
+  "F12": [
+   "DROP",
+   "This concerns Future Work wording and a request for extra profiling; it is not a defect in what this slice delivers."
+  ],
+  "F13": [
+   "DROP",
+   "This is a length and scope preference, not a correctness defect."
+  ],
+  "F14": [
+   "KEEP",
+   "The mode set is already defined separately in `config.py`, `workload.py` and the kernels' `_VALID_NEIGHBOR_MODES`/`_NEIGHBOR_MODE_MAP`, and the slice adds `radius_only` to each, which breaks the project rule that changing a comparison value should mean editing one place."
+  ]
+ },
+ "wall_seconds": 79.1,
+ "cost_usd": 1.3038469000000001,
+ "raw_output": "I've checked F1\u2013F11 against the docs and code. Now looking at how `neighbor_mode` is defined in the code, for F8 and F14.\nF1: DROP \u2014 `radius_only` is the accept-all path slice 150 already had for uncapped agents, made into a named mode; it is not a new force type or movement model the architecture excludes.\nF2: KEEP \u2014 The plan gives 152 two exit criteria: within 20% of k-first at N=200k, and no regression on the k-first path; the slice removes k_first and gates against `radius_only`, which contradicts its parent.\nF3: KEEP \u2014 `radius_only` accumulates every neighbour in radius while the 213.9 TPS baseline stops at the cap, so \"strictly less work\" is false and correct code could hit the slice-stop condition.\nF4: DROP \u2014 The heap, pruning and `neighbor_mode` code exist on main per 150's Implementation History, and the doc already states 150's ~88% regression, so the \"shipped\" wording does not block anything.\nF5: DROP \u2014 The 200k gate matches the plan's own entry for 152; calling it \"Tier 3\" is a mislabel that changes no gate, and the absolute-TPS demand is a scope request.\nF6: DROP \u2014 `ComputeConfig.neighbor_mode` already exists in `config.py` (from slices 146/150), so no new coupling or undeclared dependency is added; the \"no file outside\" line is a minor wording slip, since the default-flip section names both files.\nF7: DROP \u2014 The doc already states that k_first is rejected with a `ConfigurationError` and gives the migration targets (lines 67, 199); \"three to two\" is a miscount, not a hidden break.\nF8: KEEP \u2014 Line 433 keeps k_first parsed until the final commit, but step 2 removes it from the kernel, and the drivers use `_NEIGHBOR_MODE_MAP.get(..., NEIGHBOR_MODE_DEFAULT)` (`gpu_driver.py:110`), so k_first would silently run another mode.\nF9: KEEP \u2014 The AFTER block has no `max_neighbors <= 0` branch, so with max_neighbors=0 the INF root triggers eviction of `heap_idx[0] = -1`, which drops slice 150's required uncapped path and reads out of bounds.\nF10: DROP \u2014 `agent_state.py:294-299` shows the originals are `qd.f32`, so the coherent fields match and no precision is lost.\nF11: KEEP \u2014 Verification step 5 and criterion 3 (N=1M) use `mid-flock-500k` and `mid-flock-1M`, which neither exist in `bench/workloads` nor are added by the slice (it adds only `mid-flock-200k`), so those steps cannot run as written.\nF12: DROP \u2014 This concerns Future Work wording and a request for extra profiling; it is not a defect in what this slice delivers.\nF13: DROP \u2014 This is a length and scope preference, not a correctness defect.\nF14: KEEP \u2014 The mode set is already defined separately in `config.py`, `workload.py` and the kernels' `_VALID_NEIGHBOR_MODES`/`_NEIGHBOR_MODE_MAP`, and the slice adds `radius_only` to each, which breaks the project rule that changing a comparison value should mean editing one place."
+}

@@ -1,0 +1,48 @@
+{
+ "case": "squadron-174-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The design's success criterion and walkthrough step 1 (which seeds a junk file) both say `sq runs list` prints \"no per-run warnings\", and Task 25 repeats that. But D10 and Task 21 keep the per-file WARNING for unreadable state files, so the two statements contradict each other."
+  ],
+  "F2": [
+   "DROP",
+   "The task file has no `PipelineLocation` anywhere, and line 383 belongs to Task 28; the Task 29 header's `-> PipelineInfo` matches the design at line 393."
+  ],
+  "F3": [
+   "DROP",
+   "Task 22a already adds `tests/load/test_run_listing_scale.py` with `MAX_LISTING_S = 1.0`, and notes that the existing `testpaths` setting already collects `tests/load/` in CI."
+  ],
+  "F4": [
+   "DROP",
+   "Task 42 is unchecked, and neither document mentions `sq run` refusing inside a Claude Code session; the requested BLOCKED gate is a process step, not a defect."
+  ],
+  "F5": [
+   "KEEP",
+   "The design (lines 175 and 373) requires a WARNING naming the run and the PID, but Task 9 hands the run-id to \"the caller\", and no caller task (19, 21, 33) adds that log. `LivenessAssessment` also has no way to tell a caller the process check was unknown."
+  ],
+  "F6": [
+   "DROP",
+   "Task 12 already tests that the exception propagates, and finalizing to `failed` is done by the existing `BaseException` handler, so this only asks for extra test coverage."
+  ],
+  "F7": [
+   "DROP",
+   "Splitting a task is an opinion about granularity; Task 38 can be completed as written, and Task 39 covers its tests."
+  ]
+ },
+ "wall_seconds": 33.4,
+ "cost_usd": 0.9453324,
+ "raw_output": "F1: KEEP \u2014 The design's success criterion and walkthrough step 1 (which seeds a junk file) both say `sq runs list` prints \"no per-run warnings\", and Task 25 repeats that. But D10 and Task 21 keep the per-file WARNING for unreadable state files, so the two statements contradict each other.\nF2: DROP \u2014 The task file has no `PipelineLocation` anywhere, and line 383 belongs to Task 28; the Task 29 header's `-> PipelineInfo` matches the design at line 393.\nF3: DROP \u2014 Task 22a already adds `tests/load/test_run_listing_scale.py` with `MAX_LISTING_S = 1.0`, and notes that the existing `testpaths` setting already collects `tests/load/` in CI.\nF4: DROP \u2014 Task 42 is unchecked, and neither document mentions `sq run` refusing inside a Claude Code session; the requested BLOCKED gate is a process step, not a defect.\nF5: KEEP \u2014 The design (lines 175 and 373) requires a WARNING naming the run and the PID, but Task 9 hands the run-id to \"the caller\", and no caller task (19, 21, 33) adds that log. `LivenessAssessment` also has no way to tell a caller the process check was unknown.\nF6: DROP \u2014 Task 12 already tests that the exception propagates, and finalizing to `failed` is done by the existing `BaseException` handler, so this only asks for extra test coverage.\nF7: DROP \u2014 Splitting a task is an opinion about granularity; Task 38 can be completed as written, and Task 39 covers its tests."
+}

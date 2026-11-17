@@ -1,0 +1,83 @@
+{
+ "case": "migratory-146-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_apply_reflect` changes velocities in place, but the sync-back uploads only positions, so REFLECT acts differently on the GPU path; the bounds policy also does nothing for SOFT, so the design's SOFT sync-back text is wrong."
+  ],
+  "F2": [
+   "KEEP",
+   "Nothing writes GPU results back to `entity_manager.state`, so `sync_from_entity_manager` re-uploads the state from before GPU ticks started and resets live agents on the first spawn or despawn."
+  ],
+  "F3": [
+   "KEEP",
+   "_select_arch` returns CUDA on Linux without checking for a device, and the Open Notes say a failing `qd.init` exits the server; that contradicts A7, line 117 and the plan's warn-and-fall-back requirement."
+  ],
+  "F4": [
+   "KEEP",
+   "The `migratory` library does not import `migratory_server` today; `setup_from_server(EntityManager, WorldBoundsConfig)` would make it import the server package, reversing the layering."
+  ],
+  "F5": [
+   "KEEP",
+   "remove_entity` shifts later indices, so a remove plus a spawn in the same tick leaves the count unchanged and the count check misses it; the design also never says what happens when spawning past the allocated N."
+  ],
+  "F6": [
+   "KEEP",
+   "SOFT relies on a `WorldBoundsRepulsor` force that `force_builder` adds, and the fused kernel never runs it; the configured `self._forces` are silently ignored on the GPU path."
+  ],
+  "F7": [
+   "KEEP",
+   "The Testing section never names the `qd.init` isolation the Open Notes require, has no tests for A3, A7 or REFLECT, tests only WRAP for A4, and says \"CPU-only\" while describing GPU-required tests."
+  ],
+  "F8": [
+   "KEEP",
+   "The f64 `TickResult` contract (A3) depends on an unverified claim that Quadrants upcasts f32 fields on download, and `to_numpy` normally returns the field's own dtype."
+  ],
+  "F9": [
+   "DROP",
+   "These are generic hardening requests, and the synchronous `step()` inside the event loop already exists on the current CPU path, so this slice does not introduce it."
+  ],
+  "F10": [
+   "DROP",
+   "This is an opinion about simplifying the design; the one real hazard it mentions, the ordering of resync and pending upload, is already covered by F2 and F5."
+  ],
+  "F11": [
+   "KEEP",
+   "Line 29 says `server.py` is unchanged and line 40 puts bench changes out of scope, but the Files Changed table and the Open Notes change both."
+  ],
+  "F12": [
+   "KEEP",
+   "The default backend is `quadrants`, so removing the `compute` block starts the GPU path; the walkthrough's expected \"no GPU initialization\" result is wrong."
+  ],
+  "F13": [
+   "DROP",
+   "The frontmatter matches the parent plan, which lists only 145 for slice 146; 148 and 149 are already complete, and `subdivision_factor` is passed to `setup_from_server`."
+  ],
+  "F14": [
+   "KEEP",
+   "The design types `backend` as a bare `str` and compares the `\"quadrants\"` literal in several places, breaking the project's single-definition and `StrEnum` rules; the existing `BoundsPolicy` enum shows the pattern to follow."
+  ]
+ },
+ "wall_seconds": 49.8,
+ "cost_usd": 1.0368566999999997,
+ "raw_output": "F1: KEEP \u2014 `_apply_reflect` changes velocities in place, but the sync-back uploads only positions, so REFLECT acts differently on the GPU path; the bounds policy also does nothing for SOFT, so the design's SOFT sync-back text is wrong.\nF2: KEEP \u2014 Nothing writes GPU results back to `entity_manager.state`, so `sync_from_entity_manager` re-uploads the state from before GPU ticks started and resets live agents on the first spawn or despawn.\nF3: KEEP \u2014 `_select_arch` returns CUDA on Linux without checking for a device, and the Open Notes say a failing `qd.init` exits the server; that contradicts A7, line 117 and the plan's warn-and-fall-back requirement.\nF4: KEEP \u2014 The `migratory` library does not import `migratory_server` today; `setup_from_server(EntityManager, WorldBoundsConfig)` would make it import the server package, reversing the layering.\nF5: KEEP \u2014 `remove_entity` shifts later indices, so a remove plus a spawn in the same tick leaves the count unchanged and the count check misses it; the design also never says what happens when spawning past the allocated N.\nF6: KEEP \u2014 SOFT relies on a `WorldBoundsRepulsor` force that `force_builder` adds, and the fused kernel never runs it; the configured `self._forces` are silently ignored on the GPU path.\nF7: KEEP \u2014 The Testing section never names the `qd.init` isolation the Open Notes require, has no tests for A3, A7 or REFLECT, tests only WRAP for A4, and says \"CPU-only\" while describing GPU-required tests.\nF8: KEEP \u2014 The f64 `TickResult` contract (A3) depends on an unverified claim that Quadrants upcasts f32 fields on download, and `to_numpy` normally returns the field's own dtype.\nF9: DROP \u2014 These are generic hardening requests, and the synchronous `step()` inside the event loop already exists on the current CPU path, so this slice does not introduce it.\nF10: DROP \u2014 This is an opinion about simplifying the design; the one real hazard it mentions, the ordering of resync and pending upload, is already covered by F2 and F5.\nF11: KEEP \u2014 Line 29 says `server.py` is unchanged and line 40 puts bench changes out of scope, but the Files Changed table and the Open Notes change both.\nF12: KEEP \u2014 The default backend is `quadrants`, so removing the `compute` block starts the GPU path; the walkthrough's expected \"no GPU initialization\" result is wrong.\nF13: DROP \u2014 The frontmatter matches the parent plan, which lists only 145 for slice 146; 148 and 149 are already complete, and `subdivision_factor` is passed to `setup_from_server`.\nF14: KEEP \u2014 The design types `backend` as a bare `str` and compares the `\"quadrants\"` literal in several places, breaking the project's single-definition and `StrEnum` rules; the existing `BoundsPolicy` enum shows the pattern to follow."
+}

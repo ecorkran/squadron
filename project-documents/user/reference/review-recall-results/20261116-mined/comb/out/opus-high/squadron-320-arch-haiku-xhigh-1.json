@@ -1,0 +1,83 @@
+{
+ "case": "squadron-320-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This worktree has no `metrology/` package, so the document's `not_started` state and its open questions match the code on its own branch."
+  ],
+  "F2": [
+   "DROP",
+   "It relies on `benchmark_models.py`, `snapshot/` and `quality_report/`, none of which exist in this worktree, so no Non-Goal is contradicted."
+  ],
+  "F3": [
+   "DROP",
+   "The `graduated_config` store it cites isn't in this worktree, and the document already says calibration only informs the operator-owned template/step config."
+  ],
+  "F4": [
+   "DROP",
+   "Measurements are keyed by judge configuration (template identity), and 300's judge templates are per level (e.g. `judge.slice-vs-arch`), so the level-to-template mapping is already implied; the rest is slice-design detail."
+  ],
+  "F5": [
+   "DROP",
+   "The human label's type is a reasonable slice-design detail for an architecture document; nothing here contradicts anything."
+  ],
+  "F6": [
+   "DROP",
+   "The document explicitly leaves metric choice to slice design and requires a floor; the code it cites isn't in this worktree."
+  ],
+  "F7": [
+   "DROP",
+   "Dispersion between judges on the same artifacts does show relative bias between models, and the Envisioned State already reports judge-vs-human agreement per judge/model."
+  ],
+  "F8": [
+   "KEEP",
+   "Line 81 says 300's multi-sample option \"exists\", but line 62 and 300-slices list it as deferred Future Work 1, and no multi-sample code exists in `src/squadron/pipeline/`."
+  ],
+  "F9": [
+   "KEEP",
+   "The principle says 320 won't change the judging path or the write semantics, then says 320 \"populates\" the `criteria` map, which 300-arch defines as judge sub-scores parsed from judge output; the two statements contradict each other."
+  ],
+  "F10": [
+   "DROP",
+   "The document already calls the delta observational and directional only; asking for a control group or a minimum detectable effect is a scope opinion."
+  ],
+  "F11": [
+   "DROP",
+   "This asks for normalization and invocation detail the architecture deliberately leaves to slice design, plus hardening against secrets in stored evidence."
+  ],
+  "F12": [
+   "DROP",
+   "Deferring the code-quality track to another initiative is a scope opinion, not a defect."
+  ],
+  "F13": [
+   "DROP",
+   "Failure semantics for individual records and stores are slice-level detail; the cited code isn't in this worktree."
+  ],
+  "F14": [
+   "DROP",
+   "340-slices itself installs `tech-debt-audit.md` and 340-arch line 81 uses that name too, so the naming claim is wrong; the missing 340 frontmatter entry is a minor declaration gap that Related Work already covers."
+  ]
+ },
+ "wall_seconds": 40.4,
+ "cost_usd": 0.8402525,
+ "raw_output": "F1: DROP \u2014 This worktree has no `metrology/` package, so the document's `not_started` state and its open questions match the code on its own branch.\nF2: DROP \u2014 It relies on `benchmark_models.py`, `snapshot/` and `quality_report/`, none of which exist in this worktree, so no Non-Goal is contradicted.\nF3: DROP \u2014 The `graduated_config` store it cites isn't in this worktree, and the document already says calibration only informs the operator-owned template/step config.\nF4: DROP \u2014 Measurements are keyed by judge configuration (template identity), and 300's judge templates are per level (e.g. `judge.slice-vs-arch`), so the level-to-template mapping is already implied; the rest is slice-design detail.\nF5: DROP \u2014 The human label's type is a reasonable slice-design detail for an architecture document; nothing here contradicts anything.\nF6: DROP \u2014 The document explicitly leaves metric choice to slice design and requires a floor; the code it cites isn't in this worktree.\nF7: DROP \u2014 Dispersion between judges on the same artifacts does show relative bias between models, and the Envisioned State already reports judge-vs-human agreement per judge/model.\nF8: KEEP \u2014 Line 81 says 300's multi-sample option \"exists\", but line 62 and 300-slices list it as deferred Future Work 1, and no multi-sample code exists in `src/squadron/pipeline/`.\nF9: KEEP \u2014 The principle says 320 won't change the judging path or the write semantics, then says 320 \"populates\" the `criteria` map, which 300-arch defines as judge sub-scores parsed from judge output; the two statements contradict each other.\nF10: DROP \u2014 The document already calls the delta observational and directional only; asking for a control group or a minimum detectable effect is a scope opinion.\nF11: DROP \u2014 This asks for normalization and invocation detail the architecture deliberately leaves to slice design, plus hardening against secrets in stored evidence.\nF12: DROP \u2014 Deferring the code-quality track to another initiative is a scope opinion, not a defect.\nF13: DROP \u2014 Failure semantics for individual records and stores are slice-level detail; the cited code isn't in this worktree.\nF14: DROP \u2014 340-slices itself installs `tech-debt-audit.md` and 340-arch line 81 uses that name too, so the naming claim is wrong; the missing 340 frontmatter entry is a minor declaration gap that Related Work already covers."
+}

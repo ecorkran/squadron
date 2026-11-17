@@ -1,0 +1,43 @@
+{
+ "case": "context-forge-910-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The success check needs zero matches in the six swept files, but `types.ts:269` (the excluded `SliceStatus` `'complete'`) is past the `[3-6]` line filter, so the grep can never return zero as written."
+  ],
+  "F2": [
+   "DROP",
+   "The CLI comparison is on `DocSummary.status`, which is typed `string`, not `NormalizedStatus`, so it is outside the slice's stated core-only scope; asking to cover it is a scope request."
+  ],
+  "F3": [
+   "KEEP",
+   "The code disagrees with the counts: `types.ts` has 3 sweepable literals, not 5; `statusNormalizer.ts` has 14 value entries and 2 quoted keys, not 13 and 3; and `SliceStatus` has 1 matching literal, not 4. The finding's own point about the ConsistencyChecker comment is wrong, since the 36 already includes it."
+  ],
+  "F4": [
+   "DROP",
+   "The rationale is wrong, since widening `inferredStatus` does not break the parser's literal assignments, but doing the two steps together is harmless, and the cited 900 \"Guidelines\" line does not exist."
+  ],
+  "F5": [
+   "DROP",
+   "This is an opinion about length and style, and 900 contains no \"lighter-weight\" requirement."
+  ],
+  "F6": [
+   "DROP",
+   "900's Scope has no \"Tech debt\" or \"module boundaries\" items, and noting deferred out-of-scope work without a destination is not a defect."
+  ]
+ },
+ "wall_seconds": 52.8,
+ "cost_usd": 0.8978364999999998,
+ "raw_output": "Checks finished: I compared each finding with the slice design, the 900 architecture doc and the code under `packages/`.\n\nF1: KEEP \u2014 The success check needs zero matches in the six swept files, but `types.ts:269` (the excluded `SliceStatus` `'complete'`) is past the `[3-6]` line filter, so the grep can never return zero as written.\nF2: DROP \u2014 The CLI comparison is on `DocSummary.status`, which is typed `string`, not `NormalizedStatus`, so it is outside the slice's stated core-only scope; asking to cover it is a scope request.\nF3: KEEP \u2014 The code disagrees with the counts: `types.ts` has 3 sweepable literals, not 5; `statusNormalizer.ts` has 14 value entries and 2 quoted keys, not 13 and 3; and `SliceStatus` has 1 matching literal, not 4. The finding's own point about the ConsistencyChecker comment is wrong, since the 36 already includes it.\nF4: DROP \u2014 The rationale is wrong, since widening `inferredStatus` does not break the parser's literal assignments, but doing the two steps together is harmless, and the cited 900 \"Guidelines\" line does not exist.\nF5: DROP \u2014 This is an opinion about length and style, and 900 contains no \"lighter-weight\" requirement.\nF6: DROP \u2014 900's Scope has no \"Tech debt\" or \"module boundaries\" items, and noting deferred out-of-scope work without a destination is not a defect."
+}

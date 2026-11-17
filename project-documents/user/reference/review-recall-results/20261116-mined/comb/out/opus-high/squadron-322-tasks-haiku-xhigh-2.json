@@ -1,0 +1,78 @@
+{
+ "case": "squadron-322-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Nothing in `src/squadron/metrology/` lists judge results by config identity (`capture.py:95` globs by index, `store.py:174` globs store records), and T13's fallback leaves no unsampled results, so the non-empty-offer guarantee can never be met."
+  ],
+  "F2": [
+   "KEEP",
+   "T7's numbered list puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` before the TIGHTEN check, which contradicts its own bullet and T8's test that tightening is not floor-gated."
+  ],
+  "F3": [
+   "KEEP",
+   "The design's success criteria and Technical Decisions require the note to state the runtime-drawn (180-pool) model limitation, but T9's `model_dimension_note` covers only the template-model pairing and no task adds the limitation."
+  ],
+  "F4": [
+   "KEEP",
+   "T8 has no malformed-judge-block test despite the coverage check saying it does, and `resolve_thresholds` calls `float()` on the raw value, so a non-numeric floor raises an error instead of being flagged as the design requires."
+  ],
+  "F5": [
+   "KEEP",
+   "T13 has no pruned-file handling and no count to report, yet T14 tests it, and T13 leaves the lapse signal undecided, so T14 has nothing definite to assert against."
+  ],
+  "F6": [
+   "DROP",
+   "Where to put commit markers is a process preference; the project rule asks for at least one commit per task, and these markers satisfy it."
+  ],
+  "F7": [
+   "DROP",
+   "The hash narrowing is specified work inside this slice's design, so the commit prefix is a labeling choice, not a defect."
+  ],
+  "F8": [
+   "KEEP",
+   "T15 requires `graduate` to update an existing record in place, but T11 defines only create-only `write_graduation`, and T15's CLI is meant to be a thin shell, so no task supplies the update path."
+  ],
+  "F9": [
+   "KEEP",
+   "T5/T6 require and assert \"correct defaults\" for three new keys, but neither the tasks nor the design names any value, and every existing metrology key in `keys.py` has an explicit default."
+  ],
+  "F10": [
+   "DROP",
+   "Adding an optional `None`-default field cannot break loading existing records, and existing store tests run in T17 already cover it."
+  ],
+  "F11": [
+   "KEEP",
+   "The design's failure table and API contract require \"no evidence\" and \"no offers due\" lines, but T15 renders only below-floor and lapse lines and T16 tests neither."
+  ],
+  "F12": [
+   "DROP",
+   "Documented path\" here means the CLI command plus its help text; asking for a separate docs task is an opinion about scope."
+  ],
+  "F13": [
+   "DROP",
+   "How tasks are split and how big they are is an opinion; the tasks are completable as written."
+  ]
+ },
+ "wall_seconds": 33.6,
+ "cost_usd": 0.9731057000000001,
+ "raw_output": "F1: KEEP \u2014 Nothing in `src/squadron/metrology/` lists judge results by config identity (`capture.py:95` globs by index, `store.py:174` globs store records), and T13's fallback leaves no unsampled results, so the non-empty-offer guarantee can never be met.\nF2: KEEP \u2014 T7's numbered list puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` before the TIGHTEN check, which contradicts its own bullet and T8's test that tightening is not floor-gated.\nF3: KEEP \u2014 The design's success criteria and Technical Decisions require the note to state the runtime-drawn (180-pool) model limitation, but T9's `model_dimension_note` covers only the template-model pairing and no task adds the limitation.\nF4: KEEP \u2014 T8 has no malformed-judge-block test despite the coverage check saying it does, and `resolve_thresholds` calls `float()` on the raw value, so a non-numeric floor raises an error instead of being flagged as the design requires.\nF5: KEEP \u2014 T13 has no pruned-file handling and no count to report, yet T14 tests it, and T13 leaves the lapse signal undecided, so T14 has nothing definite to assert against.\nF6: DROP \u2014 Where to put commit markers is a process preference; the project rule asks for at least one commit per task, and these markers satisfy it.\nF7: DROP \u2014 The hash narrowing is specified work inside this slice's design, so the commit prefix is a labeling choice, not a defect.\nF8: KEEP \u2014 T15 requires `graduate` to update an existing record in place, but T11 defines only create-only `write_graduation`, and T15's CLI is meant to be a thin shell, so no task supplies the update path.\nF9: KEEP \u2014 T5/T6 require and assert \"correct defaults\" for three new keys, but neither the tasks nor the design names any value, and every existing metrology key in `keys.py` has an explicit default.\nF10: DROP \u2014 Adding an optional `None`-default field cannot break loading existing records, and existing store tests run in T17 already cover it.\nF11: KEEP \u2014 The design's failure table and API contract require \"no evidence\" and \"no offers due\" lines, but T15 renders only below-floor and lapse lines and T16 tests neither.\nF12: DROP \u2014 \"Documented path\" here means the CLI command plus its help text; asking for a separate docs task is an opinion about scope.\nF13: DROP \u2014 How tasks are split and how big they are is an opinion; the tasks are completable as written."
+}

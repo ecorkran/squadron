@@ -1,0 +1,98 @@
+{
+ "case": "migratory-100-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Line 81 says the engine handles \"register/remove agents\", but 300-arch:70 says the engine \"does not manage the entity lifecycle itself\", so the two architecture docs give lifecycle ownership to different components."
+  ],
+  "F2": [
+   "DROP",
+   "Step 2 describes the tick conceptually, not as a Python loop; neighbor result shape belongs in slice design, and slice 100 has already defined the tick signature and is complete."
+  ],
+  "F3": [
+   "DROP",
+   "Stateless between ticks\" still holds with a spatial index rebuilt inside each tick, and the GPU bullet's \"no dynamic allocation\" is a future-compatibility aim; extra per-agent arrays fit the rule that all state lives in passed arrays."
+  ],
+  "F4": [
+   "KEEP",
+   "Swarm is one of the five archetypes the Design Goals commit to, yet the engine only reads the environment, no component owns trail deposition, and no anticipated slice covers swarm (the slice plan had to defer it for exactly this reason)."
+  ],
+  "F5": [
+   "DROP",
+   "This is an opinion on approach and a request for more design; the force interface (BulkForce protocol) and target selection are handled in slice 100 and planned slice 103."
+  ],
+  "F6": [
+   "DROP",
+   "The doc already sends aggregates through the neighbor query interface and has the subset tick from the start, which meets the concept's \"must not preclude\"; the weight-field and sequencing points are speculative."
+  ],
+  "F7": [
+   "DROP",
+   "Determinism for a fixed implementation and fixed inputs holds as written; cross-strategy bit identity, RNG and replay inputs are hardening, or belong to 300-arch and slice 105."
+  ],
+  "F8": [
+   "DROP",
+   "NumPy primitives, dtype and wire byte order are implementation details for slice design; the overlap on who owns the conversion function is minor."
+  ],
+  "F9": [
+   "DROP",
+   "Asking for a benchmark gate and offering a rough estimate is a scope suggestion; the line is a design goal, not a claim the doc says it has validated."
+  ],
+  "F10": [
+   "DROP",
+   "A neighbor cap or density assumption is hardening detail for the spatial query slice, not an architecture defect."
+  ],
+  "F11": [
+   "DROP",
+   "This is an opinion about scope and trimming, not a contradiction or missing requirement."
+  ],
+  "F12": [
+   "DROP",
+   "Handling zero denominators, NaN and bad indices is implementation-level detail for slice and task design, not missing architecture."
+  ],
+  "F13": [
+   "DROP",
+   "Variable-rate ticking is deferred (300-slices:47); this architecture commits only to the subset-evaluable interface, so per-agent dt and interpolation are future design."
+  ],
+  "F14": [
+   "DROP",
+   "Slice 100 has already settled dimensionality with a `DIMS = 2` constant so changing it is one edit, and 300-arch's byte counts are rough scaling estimates."
+  ],
+  "F15": [
+   "DROP",
+   "Speed clamps, the integrator choice and boundary rules are design detail for the behavior slices, not an architecture defect."
+  ],
+  "F16": [
+   "DROP",
+   "This is a build-vs-buy opinion; the doc already lets the spatial strategy be swapped, including for a KD-tree."
+  ],
+  "F17": [
+   "KEEP",
+   "Line 122 links `200-arch.world-server-foundation.md`, but the file is `300-arch.worldserver-foundation.md`, which the doc's own Scope (line 21) calls 300-arch."
+  ]
+ },
+ "wall_seconds": 71.4,
+ "cost_usd": 0.9296634,
+ "raw_output": "F1: KEEP \u2014 Line 81 says the engine handles \"register/remove agents\", but 300-arch:70 says the engine \"does not manage the entity lifecycle itself\", so the two architecture docs give lifecycle ownership to different components.\nF2: DROP \u2014 Step 2 describes the tick conceptually, not as a Python loop; neighbor result shape belongs in slice design, and slice 100 has already defined the tick signature and is complete.\nF3: DROP \u2014 \"Stateless between ticks\" still holds with a spatial index rebuilt inside each tick, and the GPU bullet's \"no dynamic allocation\" is a future-compatibility aim; extra per-agent arrays fit the rule that all state lives in passed arrays.\nF4: KEEP \u2014 Swarm is one of the five archetypes the Design Goals commit to, yet the engine only reads the environment, no component owns trail deposition, and no anticipated slice covers swarm (the slice plan had to defer it for exactly this reason).\nF5: DROP \u2014 This is an opinion on approach and a request for more design; the force interface (BulkForce protocol) and target selection are handled in slice 100 and planned slice 103.\nF6: DROP \u2014 The doc already sends aggregates through the neighbor query interface and has the subset tick from the start, which meets the concept's \"must not preclude\"; the weight-field and sequencing points are speculative.\nF7: DROP \u2014 Determinism for a fixed implementation and fixed inputs holds as written; cross-strategy bit identity, RNG and replay inputs are hardening, or belong to 300-arch and slice 105.\nF8: DROP \u2014 NumPy primitives, dtype and wire byte order are implementation details for slice design; the overlap on who owns the conversion function is minor.\nF9: DROP \u2014 Asking for a benchmark gate and offering a rough estimate is a scope suggestion; the line is a design goal, not a claim the doc says it has validated.\nF10: DROP \u2014 A neighbor cap or density assumption is hardening detail for the spatial query slice, not an architecture defect.\nF11: DROP \u2014 This is an opinion about scope and trimming, not a contradiction or missing requirement.\nF12: DROP \u2014 Handling zero denominators, NaN and bad indices is implementation-level detail for slice and task design, not missing architecture.\nF13: DROP \u2014 Variable-rate ticking is deferred (300-slices:47); this architecture commits only to the subset-evaluable interface, so per-agent dt and interpolation are future design.\nF14: DROP \u2014 Slice 100 has already settled dimensionality with a `DIMS = 2` constant so changing it is one edit, and 300-arch's byte counts are rough scaling estimates.\nF15: DROP \u2014 Speed clamps, the integrator choice and boundary rules are design detail for the behavior slices, not an architecture defect.\nF16: DROP \u2014 This is a build-vs-buy opinion; the doc already lets the spatial strategy be swapped, including for a KD-tree.\nF17: KEEP \u2014 Line 122 links `200-arch.world-server-foundation.md`, but the file is `300-arch.worldserver-foundation.md`, which the doc's own Scope (line 21) calls 300-arch."
+}

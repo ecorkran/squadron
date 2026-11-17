@@ -1,0 +1,58 @@
+{
+ "case": "context-forge-925-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "detect()` always calls `fetchLatestVersion()` (an `ls-remote` through `gitExec`, which has no timeout), so Task 17 adds an unbounded network call to every read command, which D10 says is not tolerable."
+  ],
+  "F2": [
+   "KEEP",
+   "NETWORK_ERROR_PATTERNS` has only `/connection timed out/i` and `/etimedout/i`, so a \"timed out after N seconds\" message gets no remediation text and Task 14's assertion fails as written."
+  ],
+  "F3": [
+   "KEEP",
+   "Task 15 says `init()` always runs with `GUIDE_INIT_TIMEOUT_MS` and also that `sync()` must call it without one, and no task makes `ensureCheckout` pass the timeout."
+  ],
+  "F4": [
+   "KEEP",
+   "the bare `catch` in `checkSyncStatus()` drops the git error, so Task 11's throw cannot surface the cause as D1/D7 require, and the `'error'` branch has no test."
+  ],
+  "F5": [
+   "KEEP",
+   "no task carries a config-sourced alias to the MCP `guide_install` notice that D5 requires, and the config-file success criterion has no CLI test for its warning."
+  ],
+  "F6": [
+   "DROP",
+   "ConfigManager.readToml` rethrows smol-toml parse errors and only swallows ENOENT, so there is no silent fallback for a mock to hide."
+  ],
+  "F7": [
+   "DROP",
+   "phaseShorthand.ts` is only called from `prompt.ts`, which Task 20 already wires, and Task 20's grep instruction finds it anyway."
+  ],
+  "F8": [
+   "DROP",
+   "this project's CLAUDE.md says \"at least once per task\" and each commit point is named with its message, so the request is about format."
+  ],
+  "F9": [
+   "DROP",
+   "both commands normalize through the shared `normalizeGuideMethod()` and alias lookup before calling `guidesInstallAction`, and a shared helper for the warning text is a minor DRY preference."
+  ]
+ },
+ "wall_seconds": 54.5,
+ "cost_usd": 1.1005475999999998,
+ "raw_output": "Checking how ConfigManager handles a malformed config file, then I'll write up the verdicts.\nF1: KEEP \u2014 `detect()` always calls `fetchLatestVersion()` (an `ls-remote` through `gitExec`, which has no timeout), so Task 17 adds an unbounded network call to every read command, which D10 says is not tolerable.\nF2: KEEP \u2014 `NETWORK_ERROR_PATTERNS` has only `/connection timed out/i` and `/etimedout/i`, so a \"timed out after N seconds\" message gets no remediation text and Task 14's assertion fails as written.\nF3: KEEP \u2014 Task 15 says `init()` always runs with `GUIDE_INIT_TIMEOUT_MS` and also that `sync()` must call it without one, and no task makes `ensureCheckout` pass the timeout.\nF4: KEEP \u2014 the bare `catch` in `checkSyncStatus()` drops the git error, so Task 11's throw cannot surface the cause as D1/D7 require, and the `'error'` branch has no test.\nF5: KEEP \u2014 no task carries a config-sourced alias to the MCP `guide_install` notice that D5 requires, and the config-file success criterion has no CLI test for its warning.\nF6: DROP \u2014 `ConfigManager.readToml` rethrows smol-toml parse errors and only swallows ENOENT, so there is no silent fallback for a mock to hide.\nF7: DROP \u2014 `phaseShorthand.ts` is only called from `prompt.ts`, which Task 20 already wires, and Task 20's grep instruction finds it anyway.\nF8: DROP \u2014 this project's CLAUDE.md says \"at least once per task\" and each commit point is named with its message, so the request is about format.\nF9: DROP \u2014 both commands normalize through the shared `normalizeGuideMethod()` and alias lookup before calling `guidesInstallAction`, and a shared helper for the warning text is a minor DRY preference."
+}

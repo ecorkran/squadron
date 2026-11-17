@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-268-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "adoptionBuild.integration.test.ts` still calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })` and checks Adoption Facts, state writes and `AdoptionError`. Those behaviors are removed in 3.2 and 3.3, but the file is only deleted at 4.1, so the 3.2a and 3.7 test gates cannot pass."
+  ],
+  "F2": [
+   "KEEP",
+   "ContextIntegrator.ts:9` has a comment containing `adoption/index.ts`, which matches the 3.3 grep (`adoption/\\|detection/`). Task 3.3 only says to remove imports, so that success check cannot print nothing as written."
+  ],
+  "F3": [
+   "DROP",
+   "the plain `**Commit**:` marker rule is not in this project's conventions (they say to commit at least once per task), so the checkbox format is a style point, not a defect."
+  ],
+  "F4": [
+   "DROP",
+   "line 87 already says cli passes once 3.5 is done. The stale-dist worry doesn't apply because the 4.x symbols are only used in core (which typechecks from source), and the 4.x greps cover cli and mcp-server."
+  ],
+  "F5": [
+   "DROP",
+   "task 5.1 follows design D5 exactly, which tests only \"no toml\" and `in_progress` and gives the reason (\"`complete` adds nothing, because the build no longer reads the key\")."
+  ]
+ },
+ "wall_seconds": 40.0,
+ "cost_usd": 0.9668351999999999,
+ "raw_output": "F1: KEEP \u2014 `adoptionBuild.integration.test.ts` still calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })` and checks Adoption Facts, state writes and `AdoptionError`. Those behaviors are removed in 3.2 and 3.3, but the file is only deleted at 4.1, so the 3.2a and 3.7 test gates cannot pass.\nF2: KEEP \u2014 `ContextIntegrator.ts:9` has a comment containing `adoption/index.ts`, which matches the 3.3 grep (`adoption/\\|detection/`). Task 3.3 only says to remove imports, so that success check cannot print nothing as written.\nF3: DROP \u2014 the plain `**Commit**:` marker rule is not in this project's conventions (they say to commit at least once per task), so the checkbox format is a style point, not a defect.\nF4: DROP \u2014 line 87 already says cli passes once 3.5 is done. The stale-dist worry doesn't apply because the 4.x symbols are only used in core (which typechecks from source), and the 4.x greps cover cli and mcp-server.\nF5: DROP \u2014 task 5.1 follows design D5 exactly, which tests only \"no toml\" and `in_progress` and gives the reason (\"`complete` adds nothing, because the build no longer reads the key\")."
+}

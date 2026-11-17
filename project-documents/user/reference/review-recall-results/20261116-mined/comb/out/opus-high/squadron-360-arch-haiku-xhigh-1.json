@@ -1,0 +1,88 @@
+{
+ "case": "squadron-360-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "meta.json.gitCommitHash` records HEAD at analysis time, so the commit that tracks the graph always leaves it at least one commit behind, and the doc's own drift warning would fire on every run."
+  ],
+  "F2": [
+   "KEEP",
+   "Problem, Audience and Approach come only from Concept sections, and the derive rule allows only concept or initiative-plan sources, so the no-concept \"plan plus interview\" path, which the doc calls the tested path, breaks the doc's own rules."
+  ],
+  "F3": [
+   "KEEP",
+   "intermediate/scan-result.json` is neither ignored nor in the tracked list, so it shows as untracked and breaks the \"leave the working tree clean\" goal; also, upstream's auto-update does `rm -rf` the intermediate directory, so \"upstream avoids destructive deletes\" is not true in general."
+  ],
+  "F4": [
+   "DROP",
+   "autoUpdate` is something the user opts into, and the hook tells the same agent to run the refresh as a later step, so the claimed read-while-rewrite race and the override of PM choice are not real problems."
+  ],
+  "F5": [
+   "DROP",
+   "Which extraction tool to use (jq or a script) and a token budget are slice-design details, not an architecture defect."
+  ],
+  "F6": [
+   "DROP",
+   "The principle already says squadron stops and reports when the plugin is absent, so the presence gate does not contradict it; version pinning and fixtures are hardening that the doc does not need."
+  ],
+  "F7": [
+   "DROP",
+   "Using the optional domain graph is a suggestion about scope, not a defect, and the open question is left to slice design on purpose."
+  ],
+  "F8": [
+   "DROP",
+   "For a codebase planned after the fact, describing its current approach from the tour plus interview confirmation is reasonable, and leaving the `project` subfields unlisted is minor."
+  ],
+  "F9": [
+   "KEEP",
+   "The current `file-naming-conventions.md` (in the main checkout) drops the 940\u2013949 range in favour of the initiative base index or 900\u2013989 per folder, so the doc's index section and its Resolved Decision contradict the governing convention."
+  ],
+  "F10": [
+   "DROP",
+   "Provenance can sit in the document body without a schema change, and asking for more provenance detail is a request for detail, not a contradiction."
+  ],
+  "F11": [
+   "DROP",
+   "The list of failure modes is generic hardening that belongs in slice design, not a defect in this architecture."
+  ],
+  "F12": [
+   "KEEP",
+   "The doc writes the User-Provided Concept section of `000-concept` from the interview but gives no rule for when that file already exists, so a re-run could overwrite a section the convention says must never be rewritten."
+  ],
+  "F13": [
+   "KEEP",
+   "Translation rules say \"Emphasis is a generation parameter,\" but Resolved Decisions defer that parameter until real use shows the need, which is a direct self-contradiction; the candidates also have no output path."
+  ],
+  "F14": [
+   "DROP",
+   "Share that shape and nothing else\" is about structure; (b) reading (a)'s concept when it exists needs no shared interview component, so this is wording, not a defect."
+  ],
+  "F15": [
+   "DROP",
+   "Making the dispatcher generic is an opinion about design approach, and the doc already accepts the three-edit pattern on purpose."
+  ]
+ },
+ "wall_seconds": 69.1,
+ "cost_usd": 1.0419041,
+ "raw_output": "F1: KEEP \u2014 `meta.json.gitCommitHash` records HEAD at analysis time, so the commit that tracks the graph always leaves it at least one commit behind, and the doc's own drift warning would fire on every run.\nF2: KEEP \u2014 Problem, Audience and Approach come only from Concept sections, and the derive rule allows only concept or initiative-plan sources, so the no-concept \"plan plus interview\" path, which the doc calls the tested path, breaks the doc's own rules.\nF3: KEEP \u2014 `intermediate/scan-result.json` is neither ignored nor in the tracked list, so it shows as untracked and breaks the \"leave the working tree clean\" goal; also, upstream's auto-update does `rm -rf` the intermediate directory, so \"upstream avoids destructive deletes\" is not true in general.\nF4: DROP \u2014 `autoUpdate` is something the user opts into, and the hook tells the same agent to run the refresh as a later step, so the claimed read-while-rewrite race and the override of PM choice are not real problems.\nF5: DROP \u2014 Which extraction tool to use (jq or a script) and a token budget are slice-design details, not an architecture defect.\nF6: DROP \u2014 The principle already says squadron stops and reports when the plugin is absent, so the presence gate does not contradict it; version pinning and fixtures are hardening that the doc does not need.\nF7: DROP \u2014 Using the optional domain graph is a suggestion about scope, not a defect, and the open question is left to slice design on purpose.\nF8: DROP \u2014 For a codebase planned after the fact, describing its current approach from the tour plus interview confirmation is reasonable, and leaving the `project` subfields unlisted is minor.\nF9: KEEP \u2014 The current `file-naming-conventions.md` (in the main checkout) drops the 940\u2013949 range in favour of the initiative base index or 900\u2013989 per folder, so the doc's index section and its Resolved Decision contradict the governing convention.\nF10: DROP \u2014 Provenance can sit in the document body without a schema change, and asking for more provenance detail is a request for detail, not a contradiction.\nF11: DROP \u2014 The list of failure modes is generic hardening that belongs in slice design, not a defect in this architecture.\nF12: KEEP \u2014 The doc writes the User-Provided Concept section of `000-concept` from the interview but gives no rule for when that file already exists, so a re-run could overwrite a section the convention says must never be rewritten.\nF13: KEEP \u2014 Translation rules say \"Emphasis is a generation parameter,\" but Resolved Decisions defer that parameter until real use shows the need, which is a direct self-contradiction; the candidates also have no output path.\nF14: DROP \u2014 \"Share that shape and nothing else\" is about structure; (b) reading (a)'s concept when it exists needs no shared interview component, so this is wording, not a defect.\nF15: DROP \u2014 Making the dispatcher generic is an opinion about design approach, and the doc already accepts the three-edit pattern on purpose."
+}

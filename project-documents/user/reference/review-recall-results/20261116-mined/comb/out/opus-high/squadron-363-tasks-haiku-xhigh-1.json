@@ -1,0 +1,53 @@
+{
+ "case": "squadron-363-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "SC4 says the dropped topics appear nowhere in the document, but neither 8.1 nor 8.2 searches the generated concept for them, so a success criterion goes unverified."
+  ],
+  "F2": [
+   "KEEP",
+   "SC10 requires per-section sourcing over the full outcome set and that every `[INFERRED]` sentence meets the rule, but 8.1 only checks that the engagement-questions and inferred-claims lines exist."
+  ],
+  "F3": [
+   "DROP",
+   "the proposed fix is a PM edit-or-discard verdict, which is a PM judgment gate, and the PM already reviews the slice at hand-off in 9.3."
+  ],
+  "F4": [
+   "DROP",
+   "no success criterion and no step in the design's walkthrough requires running the refused-confirmation or missing-README branches, so this asks for coverage beyond what the parent specifies."
+  ],
+  "F5": [
+   "DROP",
+   "the governing worktree CLAUDE.md asks for checkboxes on every item and a commit at least once per task, so one checkbox commit per task follows convention, and cutting to two commits would break it."
+  ],
+  "F6": [
+   "KEEP",
+   "the git rules say to read `cf config get git.integration_branch` before starting, but 0.1 states the target is `main` without reading the config, so a configured target would be skipped."
+  ],
+  "F7": [
+   "DROP",
+   "this is an opinion about granularity and size, not a defect; the repeated checks are harmless and the tasks can be done as written."
+  ],
+  "F8": [
+   "DROP",
+   "extra ruff and pytest runs are harmless, so this is low-value hardening rather than a wrong or impossible step."
+  ]
+ },
+ "wall_seconds": 31.0,
+ "cost_usd": 0.7973198,
+ "raw_output": "F1: KEEP \u2014 SC4 says the dropped topics appear nowhere in the document, but neither 8.1 nor 8.2 searches the generated concept for them, so a success criterion goes unverified.\nF2: KEEP \u2014 SC10 requires per-section sourcing over the full outcome set and that every `[INFERRED]` sentence meets the rule, but 8.1 only checks that the engagement-questions and inferred-claims lines exist.\nF3: DROP \u2014 the proposed fix is a PM edit-or-discard verdict, which is a PM judgment gate, and the PM already reviews the slice at hand-off in 9.3.\nF4: DROP \u2014 no success criterion and no step in the design's walkthrough requires running the refused-confirmation or missing-README branches, so this asks for coverage beyond what the parent specifies.\nF5: DROP \u2014 the governing worktree CLAUDE.md asks for checkboxes on every item and a commit at least once per task, so one checkbox commit per task follows convention, and cutting to two commits would break it.\nF6: KEEP \u2014 the git rules say to read `cf config get git.integration_branch` before starting, but 0.1 states the target is `main` without reading the config, so a configured target would be skipped.\nF7: DROP \u2014 this is an opinion about granularity and size, not a defect; the repeated checks are harmless and the tasks can be done as written.\nF8: DROP \u2014 extra ruff and pytest runs are harmless, so this is low-value hardening rather than a wrong or impossible step."
+}

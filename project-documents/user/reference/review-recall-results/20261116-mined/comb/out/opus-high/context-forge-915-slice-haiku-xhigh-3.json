@@ -1,0 +1,53 @@
+{
+ "case": "context-forge-915-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "delete` picks its file by the key's scope (line 89), so `unset git.integration_branch --project` clears the local file and leaves the stale shared copy, which breaks step 9's \"cf check clean\" outcome."
+  ],
+  "F2": [
+   "KEEP",
+   "readToml`/`resolveKey`/`deleteKey` are private to `ConfigManager.ts`, and the public API only routes by key scope, so `migrate-personal` and the checker cannot reach the shared file the way the design says (\"API unchanged\", \"reused as-is\")."
+  ],
+  "F3": [
+   "KEEP",
+   "Only `cf init` adds the gitignore line, so an existing project that runs `migrate-personal` or `set --project` creates a local file that nothing ignores; this defeats the migration story, and line 32 claims to reuse a gitignore pattern that line 159 says does not exist."
+  ],
+  "F4": [
+   "KEEP",
+   "After migration is committed, teammates who never set a personal value silently fall back to the default, which contradicts the design's own \"nothing breaks silently\" claim (lines 138 and 264); the design names no teammate step or warning."
+  ],
+  "F5": [
+   "KEEP",
+   "A per-key failure in `migrate-personal` is only printed in the summary and the exit code is never stated as non-zero, so scripts see success after a partial failure; the defined collision branch also has no unit test."
+  ],
+  "F6": [
+   "DROP",
+   "Opinion about scope and redundancy, not a defect."
+  ],
+  "F7": [
+   "DROP",
+   "scope` is a typed literal union that the compiler checks, and filename constants are an implementation detail a design need not spell out."
+  ],
+  "F8": [
+   "DROP",
+   "Fixes are committed without plan entries under project rules, so an ad hoc fix done ahead of 916 can exist without one; the 914 dependency mismatch is trivial and 914 is already done."
+  ]
+ },
+ "wall_seconds": 42.3,
+ "cost_usd": 0.8296555000000001,
+ "raw_output": "F1: KEEP \u2014 `delete` picks its file by the key's scope (line 89), so `unset git.integration_branch --project` clears the local file and leaves the stale shared copy, which breaks step 9's \"cf check clean\" outcome.\nF2: KEEP \u2014 `readToml`/`resolveKey`/`deleteKey` are private to `ConfigManager.ts`, and the public API only routes by key scope, so `migrate-personal` and the checker cannot reach the shared file the way the design says (\"API unchanged\", \"reused as-is\").\nF3: KEEP \u2014 Only `cf init` adds the gitignore line, so an existing project that runs `migrate-personal` or `set --project` creates a local file that nothing ignores; this defeats the migration story, and line 32 claims to reuse a gitignore pattern that line 159 says does not exist.\nF4: KEEP \u2014 After migration is committed, teammates who never set a personal value silently fall back to the default, which contradicts the design's own \"nothing breaks silently\" claim (lines 138 and 264); the design names no teammate step or warning.\nF5: KEEP \u2014 A per-key failure in `migrate-personal` is only printed in the summary and the exit code is never stated as non-zero, so scripts see success after a partial failure; the defined collision branch also has no unit test.\nF6: DROP \u2014 Opinion about scope and redundancy, not a defect.\nF7: DROP \u2014 `scope` is a typed literal union that the compiler checks, and filename constants are an implementation detail a design need not spell out.\nF8: DROP \u2014 Fixes are committed without plan entries under project rules, so an ad hoc fix done ahead of 916 can exist without one; the 914 dependency mismatch is trivial and 914 is already done."
+}

@@ -1,0 +1,73 @@
+{
+ "case": "squadron-129-design",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 11,
+  "F11": 12,
+  "F12": 13
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The design's line 89 already explains why an opt-in capability that only Codex implements doesn't unify auth, and the missing `openai-oauth` row in the auth table is an existing gap from slice 128, not this slice's doing."
+  ],
+  "F2": [
+   "KEEP",
+   "Line 82 says a hang is bounded by `codex.turn_timeout_s`, but the table (line 125) puts that timeout only around `thread.run`. A hang during `__aenter__`, `initialize` or `thread_start` therefore has no bound."
+  ],
+  "F3": [
+   "DROP",
+   "Line 138 and the tests at line 199 already cover login timeout, `success=False`, `account()` failure and logout. The rest asks for more detail on minor paths."
+  ],
+  "F4": [
+   "KEEP",
+   "Line 134 logs absent `usage` at DEBUG, which contradicts line 118's rule that every row in that table is logged at WARNING or above."
+  ],
+  "F5": [
+   "DROP",
+   "Status shows the same output whether the account is unknown or the lookup failed, and the CLI exit behavior is already stated (line 127). The rest is interface detail the implementer can settle."
+  ],
+  "F6": [
+   "DROP",
+   "The design settles this in the slice: step 0 runs a real check, and the outcome rules spell out the behavior and test for each result. Wanting the default decided now is an opinion about approach."
+  ],
+  "F7": [
+   "DROP",
+   "The design names the upper bound as an open point on purpose. The CI-install and `codex_cli_bin` rename points are speculative hardening, and a rename still fails loudly when `codex` isn't on PATH."
+  ],
+  "F8": [
+   "DROP",
+   "The current code already passes `base_instructions` (`agent.py:147`) and declares `supports_system_prompt=True` (`provider.py:26`). The design matches the code; only slice 128's table is out of date."
+  ],
+  "F9": [
+   "DROP",
+   "The design lists more dependencies than the plan entry, and the reviewer agrees slice 931 is complete, so this is bookkeeping. The plan entry itself calls for reversing the effort behavior (closes #171), and line 101 says so."
+  ],
+  "F10": [
+   "DROP",
+   "This is an opinion about how to inject the SDK client. Faking the SDK at the import boundary follows the existing Codex tests."
+  ],
+  "F11": [
+   "DROP",
+   "Checking the file for login state in doctor is a reasonable separate question, since `is_valid` also accepts `OPENAI_API_KEY`. The DRY point is minor, and the `CODEX_HOME` concern is speculative."
+  ],
+  "F12": [
+   "DROP",
+   "A CLI override of a config key is small, and the frontmatter (\"no planned slice consumes them\") doesn't contradict a list of possible future uses. The repeated sections are a style matter."
+  ]
+ },
+ "wall_seconds": 77.3,
+ "cost_usd": 0.9141477000000002,
+ "raw_output": "Checking plan entry 129 in the slice plan, then I'll write up the verdicts.\nF1: DROP \u2014 The design's line 89 already explains why an opt-in capability that only Codex implements doesn't unify auth, and the missing `openai-oauth` row in the auth table is an existing gap from slice 128, not this slice's doing.\nF2: KEEP \u2014 Line 82 says a hang is bounded by `codex.turn_timeout_s`, but the table (line 125) puts that timeout only around `thread.run`. A hang during `__aenter__`, `initialize` or `thread_start` therefore has no bound.\nF3: DROP \u2014 Line 138 and the tests at line 199 already cover login timeout, `success=False`, `account()` failure and logout. The rest asks for more detail on minor paths.\nF4: KEEP \u2014 Line 134 logs absent `usage` at DEBUG, which contradicts line 118's rule that every row in that table is logged at WARNING or above.\nF5: DROP \u2014 Status shows the same output whether the account is unknown or the lookup failed, and the CLI exit behavior is already stated (line 127). The rest is interface detail the implementer can settle.\nF6: DROP \u2014 The design settles this in the slice: step 0 runs a real check, and the outcome rules spell out the behavior and test for each result. Wanting the default decided now is an opinion about approach.\nF7: DROP \u2014 The design names the upper bound as an open point on purpose. The CI-install and `codex_cli_bin` rename points are speculative hardening, and a rename still fails loudly when `codex` isn't on PATH.\nF8: DROP \u2014 The current code already passes `base_instructions` (`agent.py:147`) and declares `supports_system_prompt=True` (`provider.py:26`). The design matches the code; only slice 128's table is out of date.\nF9: DROP \u2014 The design lists more dependencies than the plan entry, and the reviewer agrees slice 931 is complete, so this is bookkeeping. The plan entry itself calls for reversing the effort behavior (closes #171), and line 101 says so.\nF10: DROP \u2014 This is an opinion about how to inject the SDK client. Faking the SDK at the import boundary follows the existing Codex tests.\nF11: DROP \u2014 Checking the file for login state in doctor is a reasonable separate question, since `is_valid` also accepts `OPENAI_API_KEY`. The DRY point is minor, and the `CODEX_HOME` concern is speculative.\nF12: DROP \u2014 A CLI override of a config key is small, and the frontmatter (\"no planned slice consumes them\") doesn't contradict a list of possible future uses. The repeated sections are a style matter."
+}

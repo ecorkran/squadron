@@ -1,0 +1,63 @@
+{
+ "case": "squadron-306-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "sq review code` saves through `save_review_result`, which writes with `path.write_text` at persistence.py:302 and never calls `save_review_file`, so T12's guard misses the CLI path that criterion 7 names."
+  ],
+  "F2": [
+   "KEEP",
+   "Every overwrite archives to the same `archive/{original filename}` path, so a second overwrite replaces the first archived copy, which breaks criterion 7's \"nothing is silently destroyed.\""
+  ],
+  "F3": [
+   "KEEP",
+   "The design says the cf scanning check must come before Part D lands, but T13's `fix:` commit lands Part D before T14 runs, and T12's \"do not mark done\" prose cannot stop that commit."
+  ],
+  "F4": [
+   "KEEP",
+   "Both judge test files patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile`; once T5 moves that call into `review/addressed/judge.py`, the patch no longer reaches the real call, so T6's \"pass unchanged\" gate fails."
+  ],
+  "F5": [
+   "KEEP",
+   "Today `verification.py` imports `RoundDiff` from `pipeline/.../screens.py`, so T3 (and T5, T21) would make the review package import pipeline code, the review\u2194pipeline cycle the design's F002 rule forbids."
+  ],
+  "F6": [
+   "KEEP",
+   "Slice design lines 328\u2013330 require the review content to be printed to the terminal when the overwrite aborts, and T12 and T13 leave this out."
+  ],
+  "F7": [
+   "DROP",
+   "T11 tests both T9 and T10 right after them; merging the two tasks is a structural preference with no real effect."
+  ],
+  "F8": [
+   "DROP",
+   "Part D is in the PM-approved slice design's scope, so keeping it in 306 is a decided scope question, not a defect."
+  ],
+  "F9": [
+   "KEEP",
+   "Criterion 9 names an unreadable judge response, and T26 tests only a transport that raises; criterion 11's \"review discovery\" also has no test against a resolution artifact."
+  ],
+  "F10": [
+   "KEEP",
+   "Verdict` includes UNKNOWN, and T23 says nothing for an UNKNOWN or missing verdict with empty findings, so the code could fall through toward ADDRESSED, which contradicts the design's rule that inconsistent evidence is not a pass."
+  ]
+ },
+ "wall_seconds": 43.4,
+ "cost_usd": 1.1000429,
+ "raw_output": "F1: KEEP \u2014 `sq review code` saves through `save_review_result`, which writes with `path.write_text` at persistence.py:302 and never calls `save_review_file`, so T12's guard misses the CLI path that criterion 7 names.\nF2: KEEP \u2014 Every overwrite archives to the same `archive/{original filename}` path, so a second overwrite replaces the first archived copy, which breaks criterion 7's \"nothing is silently destroyed.\"\nF3: KEEP \u2014 The design says the cf scanning check must come before Part D lands, but T13's `fix:` commit lands Part D before T14 runs, and T12's \"do not mark done\" prose cannot stop that commit.\nF4: KEEP \u2014 Both judge test files patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile`; once T5 moves that call into `review/addressed/judge.py`, the patch no longer reaches the real call, so T6's \"pass unchanged\" gate fails.\nF5: KEEP \u2014 Today `verification.py` imports `RoundDiff` from `pipeline/.../screens.py`, so T3 (and T5, T21) would make the review package import pipeline code, the review\u2194pipeline cycle the design's F002 rule forbids.\nF6: KEEP \u2014 Slice design lines 328\u2013330 require the review content to be printed to the terminal when the overwrite aborts, and T12 and T13 leave this out.\nF7: DROP \u2014 T11 tests both T9 and T10 right after them; merging the two tasks is a structural preference with no real effect.\nF8: DROP \u2014 Part D is in the PM-approved slice design's scope, so keeping it in 306 is a decided scope question, not a defect.\nF9: KEEP \u2014 Criterion 9 names an unreadable judge response, and T26 tests only a transport that raises; criterion 11's \"review discovery\" also has no test against a resolution artifact.\nF10: KEEP \u2014 `Verdict` includes UNKNOWN, and T23 says nothing for an UNKNOWN or missing verdict with empty findings, so the code could fall through toward ADDRESSED, which contradicts the design's rule that inconsistent evidence is not a pass."
+}

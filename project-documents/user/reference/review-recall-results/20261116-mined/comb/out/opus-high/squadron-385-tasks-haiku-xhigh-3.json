@@ -1,0 +1,78 @@
+{
+ "case": "squadron-385-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The project rules in this worktree say \"a slice branch merges into the target when its implementation is done\", and 16.4 puts the merge after code review, so the step is allowed here."
+  ],
+  "F2": [
+   "KEEP",
+   "Task 5.1 (and D1) forbid degrading an unreachable `cf` to a default base, then in the next sentence send it to the host default; that is a self-contradiction and a silent fallback."
+  ],
+  "F3": [
+   "KEEP",
+   "Task 6.2 requires the two refusals to name different commands, but the parent's success criterion says the sha mismatch fails \"with the same command\"; the two cannot both be checked as written."
+  ],
+  "F4": [
+   "DROP",
+   "The handler logs with `logger.exception` and ends in a non-zero exit, which meets rule (a) in substance; calling it a \"process-boundary handler\" is a wording issue the design already approved."
+  ],
+  "F5": [
+   "KEEP",
+   "The technical criterion requires exit non-zero, an ERROR log and no writes, but Task 10.2 tests only at composer level where exit and writes can't be seen, and neither 13.2 nor 14.1 covers composition failure."
+  ],
+  "F6": [
+   "KEEP",
+   "D4 says prose is requested per section and the body is \"not one model response parsed into sections\", while D5 talks about the model dropping or reordering sections; Task 11.1 never says which applies, and the fake composer and D8 failure count depend on it."
+  ],
+  "F7": [
+   "KEEP",
+   "Running on the target branch gives an empty `base..head` that nothing refuses, and Task 10a.1's fallback to \"the first commit's subject\" then has no commit to read."
+  ],
+  "F8": [
+   "KEEP",
+   "Task 9.1 requires the review verdict in `PrFacts` as a copied input, but Task 8.1 reads only `reviewedSha`, so no task gathers the verdict (`resolution_evidence.py:136` shows it is the `verdict:` frontmatter key)."
+  ],
+  "F9": [
+   "DROP",
+   "Existing code already uses the first task file (`template_inputs.py:43`), and the order comes from `cf`'s match, so this is low value."
+  ],
+  "F10": [
+   "KEEP",
+   "The parent's Testing section requires a check that the body is bound once and shared, not a comparison of separately composed strings, but Task 13.2's case can pass by comparing outputs from a deterministic fake."
+  ],
+  "F11": [
+   "KEEP",
+   "Task 10a.2 tests only synthetic H1s, breaking the project rule that parser fixtures use real input, and real designs carry suffixes like \"(145)\" and backticks that the task does not say how to handle."
+  ],
+  "F12": [
+   "KEEP",
+   "Task 10.1 types `profile` as `str` \"as the CLI flags supply them\", but the flag is `str | None`; the review commands resolve it through `_resolve_profile` (flag \u2192 template \u2192 config), and the task never names that resolution, which invites a hard-coded default."
+  ],
+  "F13": [
+   "DROP",
+   "Squadron writes the deterministic block itself, so finding and stripping it is an implementation detail; this is a request for more detail."
+  ]
+ },
+ "wall_seconds": 65.2,
+ "cost_usd": 1.0560116,
+ "raw_output": "F1: DROP \u2014 The project rules in this worktree say \"a slice branch merges into the target when its implementation is done\", and 16.4 puts the merge after code review, so the step is allowed here.\nF2: KEEP \u2014 Task 5.1 (and D1) forbid degrading an unreachable `cf` to a default base, then in the next sentence send it to the host default; that is a self-contradiction and a silent fallback.\nF3: KEEP \u2014 Task 6.2 requires the two refusals to name different commands, but the parent's success criterion says the sha mismatch fails \"with the same command\"; the two cannot both be checked as written.\nF4: DROP \u2014 The handler logs with `logger.exception` and ends in a non-zero exit, which meets rule (a) in substance; calling it a \"process-boundary handler\" is a wording issue the design already approved.\nF5: KEEP \u2014 The technical criterion requires exit non-zero, an ERROR log and no writes, but Task 10.2 tests only at composer level where exit and writes can't be seen, and neither 13.2 nor 14.1 covers composition failure.\nF6: KEEP \u2014 D4 says prose is requested per section and the body is \"not one model response parsed into sections\", while D5 talks about the model dropping or reordering sections; Task 11.1 never says which applies, and the fake composer and D8 failure count depend on it.\nF7: KEEP \u2014 Running on the target branch gives an empty `base..head` that nothing refuses, and Task 10a.1's fallback to \"the first commit's subject\" then has no commit to read.\nF8: KEEP \u2014 Task 9.1 requires the review verdict in `PrFacts` as a copied input, but Task 8.1 reads only `reviewedSha`, so no task gathers the verdict (`resolution_evidence.py:136` shows it is the `verdict:` frontmatter key).\nF9: DROP \u2014 Existing code already uses the first task file (`template_inputs.py:43`), and the order comes from `cf`'s match, so this is low value.\nF10: KEEP \u2014 The parent's Testing section requires a check that the body is bound once and shared, not a comparison of separately composed strings, but Task 13.2's case can pass by comparing outputs from a deterministic fake.\nF11: KEEP \u2014 Task 10a.2 tests only synthetic H1s, breaking the project rule that parser fixtures use real input, and real designs carry suffixes like \"(145)\" and backticks that the task does not say how to handle.\nF12: KEEP \u2014 Task 10.1 types `profile` as `str` \"as the CLI flags supply them\", but the flag is `str | None`; the review commands resolve it through `_resolve_profile` (flag \u2192 template \u2192 config), and the task never names that resolution, which invites a hard-coded default.\nF13: DROP \u2014 Squadron writes the deterministic block itself, so finding and stripping it is an implementation detail; this is a request for more detail."
+}

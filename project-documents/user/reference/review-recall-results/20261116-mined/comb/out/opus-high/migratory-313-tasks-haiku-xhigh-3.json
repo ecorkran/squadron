@@ -1,0 +1,53 @@
+{
+ "case": "migratory-313-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The tree is a later snapshot that already includes slice 314's `SOFT` and the finished 313 code, so \"create\" tasks and the status mismatch are snapshot effects, not defects in the breakdown."
+  ],
+  "F2": [
+   "DROP",
+   "The finding is about a fallback in `simulation.py`, not about the breakdown, which correctly follows the slice and makes `world_bounds` required."
+  ],
+  "F3": [
+   "KEEP",
+   "Task 2.2 says `np.mod` always gives `[0, width)`, but a tiny negative value such as -1e-15 mod 100.0 returns exactly 100.0, which breaks criterion 7, and no task tests or handles it."
+  ],
+  "F4": [
+   "KEEP",
+   "The slice's claim that `yaml.dump` turns a `StrEnum` into a plain string is false (the code later had to add `_serialize_for_yaml`), the breakdown has no step for this, and Task 1.4 checks only the policy field when criterion 5 requires an equal `ServerConfig`."
+  ],
+  "F5": [
+   "DROP",
+   "This project's CLAUDE.md does not require plain `**Commit**:` markers, so writing them as checkbox tasks is a formatting preference."
+  ],
+  "F6": [
+   "DROP",
+   "Test count and task granularity are scope opinions, not defects."
+  ],
+  "F7": [
+   "DROP",
+   "The test builds `SimulationManager` with an explicit `dt`, so the implementer sets dt directly and the missing value is only a request for more detail."
+  ],
+  "F8": [
+   "KEEP",
+   "Step 8 lets the implementer leave `config/test.yaml` on any policy, which contradicts criterion 12 and Task 4.2 (`wrap`) and can leave a committed config changed."
+  ]
+ },
+ "wall_seconds": 47.1,
+ "cost_usd": 0.8955129,
+ "raw_output": "F1: DROP \u2014 The tree is a later snapshot that already includes slice 314's `SOFT` and the finished 313 code, so \"create\" tasks and the status mismatch are snapshot effects, not defects in the breakdown.\nF2: DROP \u2014 The finding is about a fallback in `simulation.py`, not about the breakdown, which correctly follows the slice and makes `world_bounds` required.\nF3: KEEP \u2014 Task 2.2 says `np.mod` always gives `[0, width)`, but a tiny negative value such as -1e-15 mod 100.0 returns exactly 100.0, which breaks criterion 7, and no task tests or handles it.\nF4: KEEP \u2014 The slice's claim that `yaml.dump` turns a `StrEnum` into a plain string is false (the code later had to add `_serialize_for_yaml`), the breakdown has no step for this, and Task 1.4 checks only the policy field when criterion 5 requires an equal `ServerConfig`.\nF5: DROP \u2014 This project's CLAUDE.md does not require plain `**Commit**:` markers, so writing them as checkbox tasks is a formatting preference.\nF6: DROP \u2014 Test count and task granularity are scope opinions, not defects.\nF7: DROP \u2014 The test builds `SimulationManager` with an explicit `dt`, so the implementer sets dt directly and the missing value is only a request for more detail.\nF8: KEEP \u2014 Step 8 lets the implementer leave `config/test.yaml` on any policy, which contradicts criterion 12 and Task 4.2 (`wrap`) and can leave a committed config changed."
+}

@@ -1,0 +1,68 @@
+{
+ "case": "context-forge-241-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The architecture (lines 118 and 124) and the design's own line 286 call `review`/`blocked` the stable recommendation strings runners route on, but TD-7 sets prose strings and leaves the exact values to implementation."
+  ],
+  "F2": [
+   "KEEP",
+   "The architecture (line 149) says the rationale must name the parse failure explicitly, but `parseFrontmatter` returns the same empty result for every error and the design never carries or names the reason."
+  ],
+  "F3": [
+   "DROP",
+   "Not implemented\" (line 25) and \"task file exists, not complete\" (line 138) describe the same predicate, and the in-flight enablement policy is a scope opinion, not a contradiction."
+  ],
+  "F4": [
+   "DROP",
+   "The design's declared parent, the slice plan, explicitly retires 244 and folds the pre-slice-plan gate into 241, and 241 is still \"a later slice within 240\" as the architecture says."
+  ],
+  "F5": [
+   "KEEP",
+   "detectDocuments` takes a slice index, and the no-active-slice path has no slice, so the design never says which index (for example, one derived from `fileArch`) the arch-boundary review lookup uses."
+  ],
+  "F6": [
+   "DROP",
+   "The slice plan records the reviewType removal, and the architecture's own config never had a per-transition enable key (its per-gate overrides only set reviewType/threshold), so nothing was removed there."
+  ],
+  "F7": [
+   "KEEP",
+   "The architecture (lines 46 and 100) and the slice plan (line 29) put the score read and the documented no-op enforcement path inside v1 rather than in its own slice, but the design neither reads score nor carries that path, and no slice owns it."
+  ],
+  "F8": [
+   "DROP",
+   "The slice plan explicitly lets the design choose to leave the `review_type` keys defined but unread, with 243 documenting them as inert, which is what TD-4 does."
+  ],
+  "F9": [
+   "KEEP",
+   "ConfigManager` validates values only on `set`, so a hand-edited invalid threshold, unknown-as or `review_enabled` value reaches `resolveGateConfig`, and the design does not say it fails explicitly as the architecture's fail-fast principle and the no-silent-fallback rule require."
+  ],
+  "F10": [
+   "DROP",
+   "MCP worktree scoping through the explicit `worktreeId` is existing surface behavior that `workflow_status`/`workflow_next` already share, so the gate inherits it the same way and a parity test is optional hardening."
+  ],
+  "F11": [
+   "DROP",
+   "The optional constructor parameter deliberately keeps existing call paths unchanged, the design already plans stub injection for tests, and the finding admits the call-site list is complete, so this is a design preference."
+  ]
+ },
+ "wall_seconds": 91.2,
+ "cost_usd": 1.2979775999999998,
+ "raw_output": "Checking existing `getNext` recommendation strings in the code to verify F1, then I'll finish the verdicts.\nF1: KEEP \u2014 The architecture (lines 118 and 124) and the design's own line 286 call `review`/`blocked` the stable recommendation strings runners route on, but TD-7 sets prose strings and leaves the exact values to implementation.\nF2: KEEP \u2014 The architecture (line 149) says the rationale must name the parse failure explicitly, but `parseFrontmatter` returns the same empty result for every error and the design never carries or names the reason.\nF3: DROP \u2014 \"Not implemented\" (line 25) and \"task file exists, not complete\" (line 138) describe the same predicate, and the in-flight enablement policy is a scope opinion, not a contradiction.\nF4: DROP \u2014 The design's declared parent, the slice plan, explicitly retires 244 and folds the pre-slice-plan gate into 241, and 241 is still \"a later slice within 240\" as the architecture says.\nF5: KEEP \u2014 `detectDocuments` takes a slice index, and the no-active-slice path has no slice, so the design never says which index (for example, one derived from `fileArch`) the arch-boundary review lookup uses.\nF6: DROP \u2014 The slice plan records the reviewType removal, and the architecture's own config never had a per-transition enable key (its per-gate overrides only set reviewType/threshold), so nothing was removed there.\nF7: KEEP \u2014 The architecture (lines 46 and 100) and the slice plan (line 29) put the score read and the documented no-op enforcement path inside v1 rather than in its own slice, but the design neither reads score nor carries that path, and no slice owns it.\nF8: DROP \u2014 The slice plan explicitly lets the design choose to leave the `review_type` keys defined but unread, with 243 documenting them as inert, which is what TD-4 does.\nF9: KEEP \u2014 `ConfigManager` validates values only on `set`, so a hand-edited invalid threshold, unknown-as or `review_enabled` value reaches `resolveGateConfig`, and the design does not say it fails explicitly as the architecture's fail-fast principle and the no-silent-fallback rule require.\nF10: DROP \u2014 MCP worktree scoping through the explicit `worktreeId` is existing surface behavior that `workflow_status`/`workflow_next` already share, so the gate inherits it the same way and a parity test is optional hardening.\nF11: DROP \u2014 The optional constructor parameter deliberately keeps existing call paths unchanged, the design already plans stub injection for tests, and the finding admits the call-site list is complete, so this is a design preference."
+}

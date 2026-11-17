@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-214-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This project's task-breakdown guide and rules don't require `**Commit**:` lines and say every task-file item gets a checkbox; the Phase 6 prompt also commits at the end of each task when no marker exists, so commit tasks still run."
+  ],
+  "F2": [
+   "KEEP",
+   "The project's git rules make the target the configured `git.integration_branch` (or `main` when empty), yet Task 0 forks from hard-coded `main` and treats a set integration branch, a normal configuration, as a reason to stop."
+  ],
+  "F3": [
+   "DROP",
+   "Task 3 already builds the readable check into preflight, and 3T tests the missing-file and directory cases; extra unreadable and 4T variants just ask for more tests on the same `handleError(err, 2)` path."
+  ],
+  "F4": [
+   "DROP",
+   "parseFrontmatter` never throws and returns `found: false` with empty data when frontmatter is missing or malformed, so the file falls into the specified `doctype` failure, and the existing no-`docType` test covers that path."
+  ],
+  "F5": [
+   "KEEP",
+   "Task 5 says to fix any unexplained parity difference in source and add a test, but its only commit is `docs: record slice 214 parity sweep results`, so a code fix would go in under the wrong commit type."
+  ]
+ },
+ "wall_seconds": 51.8,
+ "cost_usd": 0.9538499,
+ "raw_output": "Checks are done. I read both documents and the `parseFrontmatter` code, and compared them with this project's git rules and its task-breakdown guide.\n\nF1: DROP \u2014 This project's task-breakdown guide and rules don't require `**Commit**:` lines and say every task-file item gets a checkbox; the Phase 6 prompt also commits at the end of each task when no marker exists, so commit tasks still run.\nF2: KEEP \u2014 The project's git rules make the target the configured `git.integration_branch` (or `main` when empty), yet Task 0 forks from hard-coded `main` and treats a set integration branch, a normal configuration, as a reason to stop.\nF3: DROP \u2014 Task 3 already builds the readable check into preflight, and 3T tests the missing-file and directory cases; extra unreadable and 4T variants just ask for more tests on the same `handleError(err, 2)` path.\nF4: DROP \u2014 `parseFrontmatter` never throws and returns `found: false` with empty data when frontmatter is missing or malformed, so the file falls into the specified `doctype` failure, and the existing no-`docType` test covers that path.\nF5: KEEP \u2014 Task 5 says to fix any unexplained parity difference in source and add a test, but its only commit is `docs: record slice 214 parity sweep results`, so a code fix would go in under the wrong commit type."
+}

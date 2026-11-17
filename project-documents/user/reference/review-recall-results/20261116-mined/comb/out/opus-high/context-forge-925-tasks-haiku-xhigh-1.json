@@ -1,0 +1,53 @@
+{
+ "case": "context-forge-925-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "NETWORK_ERROR_PATTERNS` (gitExec.ts:20-30) has only `/connection timed out/i` and `/etimedout/i`. A message like \"git command timed out after N seconds\" matches neither, so the remediation is never appended and Task 14's assertion fails."
+  ],
+  "F2": [
+   "KEEP",
+   "In `get`, `resolvePhaseInput` at prompt.ts:114 already reads the prompt file through `getPhaseShorthands`, which has no try/catch. Placing `ensureGuideReady` at ~line 116 means `cf prompt get P1` on a fresh clone fails with ENOENT before auto-init runs."
+  ],
+  "F3": [
+   "DROP",
+   "This is the same defect as F2. `phaseShorthand.ts` is only reached from `prompt.ts`, so moving the `prompt.ts` call ahead of `resolvePhaseInput` covers it, and the task's grep instruction already surfaces the file."
+  ],
+  "F4": [
+   "KEEP",
+   "The `'manual'` grep misses the double-quoted messages in CloneStrategy.ts:34 and SubmoduleStrategy.ts:39, and the unquoted `--strategy manual` at SubmoduleStrategy.ts:45. Line 45 is also missing from the sweep list, so a user-facing message would keep recommending the deprecated name while the success check still passes."
+  ],
+  "F5": [
+   "DROP",
+   "This project's CLAUDE.md has no `**Commit**:` marker convention. Part 1 does run the CLI and MCP suites at Task 8 before moving on, so the intermediate Task 4 commit on the slice branch is a process preference, not a blocking defect."
+  ],
+  "F6": [
+   "KEEP",
+   "The data flow lists `'error' \u2192 throw` as a branch of the state machine, and the slice's technical criteria require `ensureCheckout()` tests \"for each branch\". Neither Task 12 nor Task 18 covers that throw."
+  ],
+  "F7": [
+   "DROP",
+   "The technical test criteria don't require CLI-level config-file tests. Task 6 already covers the config alias and the throwing-config paths in core, so this asks for extra tests beyond what the document requires."
+  ],
+  "F8": [
+   "DROP",
+   "The task deliberately leaves the return shape to the implementer. The alias lookup constant for the flag and MCP inputs works alongside a reported alias on the config path, so the task can be completed as written."
+  ]
+ },
+ "wall_seconds": 52.9,
+ "cost_usd": 0.9510452,
+ "raw_output": "F1: KEEP \u2014 `NETWORK_ERROR_PATTERNS` (gitExec.ts:20-30) has only `/connection timed out/i` and `/etimedout/i`. A message like \"git command timed out after N seconds\" matches neither, so the remediation is never appended and Task 14's assertion fails.\nF2: KEEP \u2014 In `get`, `resolvePhaseInput` at prompt.ts:114 already reads the prompt file through `getPhaseShorthands`, which has no try/catch. Placing `ensureGuideReady` at ~line 116 means `cf prompt get P1` on a fresh clone fails with ENOENT before auto-init runs.\nF3: DROP \u2014 This is the same defect as F2. `phaseShorthand.ts` is only reached from `prompt.ts`, so moving the `prompt.ts` call ahead of `resolvePhaseInput` covers it, and the task's grep instruction already surfaces the file.\nF4: KEEP \u2014 The `'manual'` grep misses the double-quoted messages in CloneStrategy.ts:34 and SubmoduleStrategy.ts:39, and the unquoted `--strategy manual` at SubmoduleStrategy.ts:45. Line 45 is also missing from the sweep list, so a user-facing message would keep recommending the deprecated name while the success check still passes.\nF5: DROP \u2014 This project's CLAUDE.md has no `**Commit**:` marker convention. Part 1 does run the CLI and MCP suites at Task 8 before moving on, so the intermediate Task 4 commit on the slice branch is a process preference, not a blocking defect.\nF6: KEEP \u2014 The data flow lists `'error' \u2192 throw` as a branch of the state machine, and the slice's technical criteria require `ensureCheckout()` tests \"for each branch\". Neither Task 12 nor Task 18 covers that throw.\nF7: DROP \u2014 The technical test criteria don't require CLI-level config-file tests. Task 6 already covers the config alias and the throwing-config paths in core, so this asks for extra tests beyond what the document requires.\nF8: DROP \u2014 The task deliberately leaves the return shape to the implementer. The alias lookup constant for the flag and MCP inputs works alongside a reported alias on the config path, so the task can be completed as written."
+}

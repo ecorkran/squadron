@@ -1,0 +1,53 @@
+{
+ "case": "context-forge-261-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The design's D2 says \"Tests assert the caps, not timings\", and the Python `tests/load/` rule doesn't apply to this TypeScript repo, so the task follows its spec."
+  ],
+  "F2": [
+   "DROP",
+   "This project's guide only says to look for commit lines, and its earlier task files (e.g. 170) use checkbox commit lines too; the \"never checkboxes\" convention and the task-checker ordering come from another repo's rules."
+  ],
+  "F3": [
+   "DROP",
+   "The design has `measureSourceVolume(root)` stop at the one threshold constant in `adoption/` and throw `AdoptionError`, so the import follows the design; changing the signature is an opinion about approach."
+  ],
+  "F4": [
+   "KEEP",
+   "Task 0 reads the target from `git.integration_branch`, but Task 15 hardcodes `main` as the baseline, against the git rule never to infer the target; `git worktree add` of a branch already checked out elsewhere also fails."
+  ],
+  "F5": [
+   "DROP",
+   "The design's Technical Requirements don't ask for MCP or CLI error tests; `contextTools.ts` already turns thrown errors into `errorResult`, and walkthrough step 4 checks the CLI exit code."
+  ],
+  "F6": [
+   "KEEP",
+   "The design requires `renderAdoptionFacts` tests for \"every outcome\", but 8T leaves out greenfield, already-planned and adoption-closed, even though Task 8's exhaustive switch must handle them."
+  ],
+  "F7": [
+   "DROP",
+   "Step 2 and D5, which the task file names as the spec, already fix `checkoutPath` as the root for every fact, so this asks for detail that is already settled."
+  ],
+  "F8": [
+   "KEEP",
+   "The design's Technical Requirements name \"D9's write failure (`AdoptionError`, state unchanged)\", and Task 9T's write-failure case doesn't assert that the state is unchanged."
+  ]
+ },
+ "wall_seconds": 54.0,
+ "cost_usd": 1.0625165,
+ "raw_output": "F1: DROP \u2014 The design's D2 says \"Tests assert the caps, not timings\", and the Python `tests/load/` rule doesn't apply to this TypeScript repo, so the task follows its spec.\nF2: DROP \u2014 This project's guide only says to look for commit lines, and its earlier task files (e.g. 170) use checkbox commit lines too; the \"never checkboxes\" convention and the task-checker ordering come from another repo's rules.\nF3: DROP \u2014 The design has `measureSourceVolume(root)` stop at the one threshold constant in `adoption/` and throw `AdoptionError`, so the import follows the design; changing the signature is an opinion about approach.\nF4: KEEP \u2014 Task 0 reads the target from `git.integration_branch`, but Task 15 hardcodes `main` as the baseline, against the git rule never to infer the target; `git worktree add` of a branch already checked out elsewhere also fails.\nF5: DROP \u2014 The design's Technical Requirements don't ask for MCP or CLI error tests; `contextTools.ts` already turns thrown errors into `errorResult`, and walkthrough step 4 checks the CLI exit code.\nF6: KEEP \u2014 The design requires `renderAdoptionFacts` tests for \"every outcome\", but 8T leaves out greenfield, already-planned and adoption-closed, even though Task 8's exhaustive switch must handle them.\nF7: DROP \u2014 Step 2 and D5, which the task file names as the spec, already fix `checkoutPath` as the root for every fact, so this asks for detail that is already settled.\nF8: KEEP \u2014 The design's Technical Requirements name \"D9's write failure (`AdoptionError`, state unchanged)\", and Task 9T's write-failure case doesn't assert that the state is unchanged."
+}

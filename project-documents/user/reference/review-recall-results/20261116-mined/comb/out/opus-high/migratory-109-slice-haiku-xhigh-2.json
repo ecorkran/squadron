@@ -1,0 +1,68 @@
+{
+ "case": "migratory-109-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "When agents cluster to near-n neighbors, a flat CSR/COO layout holds the same ~n\u00b2 entries, so the memory math doesn't single out padding; the design already names the trade-off and defers it, so this is an approach preference."
+  ],
+  "F2": [
+   "DROP",
+   "Wait, correction below."
+  ],
+  "F3": [
+   "DROP",
+   "Line 23 is about the force loops, and the Excluded section already says the query loop stays; asking for per-phase baselines is extra measurement, not a defect."
+  ],
+  "F4": [
+   "DROP",
+   "Ticks staying under the 50ms budget over 5+ minutes at the default config is a measurable check; adding a run at the target scale is a scope opinion."
+  ],
+  "F5": [
+   "DROP",
+   "109 doesn't depend on a batch query, and the architecture explicitly leaves the batch variant to a later slice design, so nothing in this document is blocked."
+  ],
+  "F6": [
+   "KEEP",
+   "103 is not started, and its task file specifies `FlightForce`/`PursuitForce` with `neighbor_lists`; 109 replaces that signature without saying which slice lands first or who migrates 103."
+  ],
+  "F7": [
+   "DROP",
+   "The architecture's heterogeneous-neighbor requirement is on the spatial query interface, which this slice leaves unchanged, and aggregates (108) are future work."
+  ],
+  "F8": [
+   "KEEP",
+   "Line 80's \"never dereferenced\" contradicts the gather at line 111, which reads index -1 (the last agent); in SeparationForce that can give a zero distance and a divide-by-zero before masking."
+  ],
+  "F9": [
+   "KEEP",
+   "The design sizes the padded width by a max over active agents, which raises on an empty subset; today's loop handles an empty subset fine, and the architecture's subset ticking allows it."
+  ],
+  "F10": [
+   "DROP",
+   "np.allclose` keeps its default rtol, so `atol=1e-12` is not at risk, and the integration test's N is detail for the task breakdown."
+  ],
+  "F11": [
+   "DROP",
+   "Keeping loop versions in tests as a reference to check against is a normal testing choice, and storing a mask next to `counts` is a design preference."
+  ]
+ },
+ "wall_seconds": 58.0,
+ "cost_usd": 0.9580632,
+ "raw_output": "F1: DROP \u2014 When agents cluster to near-n neighbors, a flat CSR/COO layout holds the same ~n\u00b2 entries, so the memory math doesn't single out padding; the design already names the trade-off and defers it, so this is an approach preference.\nF2: DROP \u2014 Wait, correction below.\nF2: KEEP \u2014 The weight-building comprehension at line 133 loops over agents inside `__call__`, which breaks the \"no per-agent loops\" rule at line 198, and the design's own grep at line 223 (`for.*eval_indices`) would match it.\nF3: DROP \u2014 Line 23 is about the force loops, and the Excluded section already says the query loop stays; asking for per-phase baselines is extra measurement, not a defect.\nF4: DROP \u2014 Ticks staying under the 50ms budget over 5+ minutes at the default config is a measurable check; adding a run at the target scale is a scope opinion.\nF5: DROP \u2014 109 doesn't depend on a batch query, and the architecture explicitly leaves the batch variant to a later slice design, so nothing in this document is blocked.\nF6: KEEP \u2014 103 is not started, and its task file specifies `FlightForce`/`PursuitForce` with `neighbor_lists`; 109 replaces that signature without saying which slice lands first or who migrates 103.\nF7: DROP \u2014 The architecture's heterogeneous-neighbor requirement is on the spatial query interface, which this slice leaves unchanged, and aggregates (108) are future work.\nF8: KEEP \u2014 Line 80's \"never dereferenced\" contradicts the gather at line 111, which reads index -1 (the last agent); in SeparationForce that can give a zero distance and a divide-by-zero before masking.\nF9: KEEP \u2014 The design sizes the padded width by a max over active agents, which raises on an empty subset; today's loop handles an empty subset fine, and the architecture's subset ticking allows it.\nF10: DROP \u2014 `np.allclose` keeps its default rtol, so `atol=1e-12` is not at risk, and the integration test's N is detail for the task breakdown.\nF11: DROP \u2014 Keeping loop versions in tests as a reference to check against is a normal testing choice, and storing a mask next to `counts` is a design preference."
+}

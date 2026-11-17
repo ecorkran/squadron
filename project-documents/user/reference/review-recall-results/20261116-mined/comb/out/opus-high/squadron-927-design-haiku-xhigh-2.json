@@ -1,0 +1,53 @@
+{
+ "case": "squadron-927-design",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The #92 recovery turn is already in the code (`review_client.py:248-271` sets `recovery_turn_used`, and `turn_capture.py` sends the second turn), so the design is right to build on it; the plan's unchecked 924 entry is just stale."
+  ],
+  "F2": [
+   "KEEP",
+   "Slice 904 says every finding carries `location:`, with `unverified` as the no-file token (parent lines 74-79), and the parser gives every parsed finding at least that; the hand-built finding with no location would be the only one in the artifact that breaks the contract."
+  ],
+  "F3": [
+   "DROP",
+   "D11 deliberately keeps the requested id and explains why: the Run Digest states it, and `unknown` would merge every Codex judge into one metrology identity; asking for an extra frontmatter flag is a design preference, not a defect."
+  ],
+  "F4": [
+   "KEEP",
+   "D4's `(failed_tool_calls or 0)` contradicts the design's own rule at line 216 (\"`is None` checks, never `or 0`, for counts\"), and if the failure count were missing the cap would not apply even though no read was confirmed."
+  ],
+  "F5": [
+   "DROP",
+   "The new keys are additive and context-forge does not have to read them to keep working; the 919 coordination note was about that slice's own decision, and asking for a coordination step is a process request."
+  ],
+  "F6": [
+   "DROP",
+   "D10 already records the one-time metrology identity change as a deliberate, accepted result; asking for an extra criterion or a migration bridge is a scope opinion."
+  ],
+  "F7": [
+   "KEEP",
+   "The `gemini` profile exists (`providers/base.py:27`, parent line 96) but is left out of the D9 risk-mitigation capture, and walkthrough step 6 runs `--model sonnet` for every profile, so it cannot capture ids for each profile as the mitigation requires."
+  ],
+  "F8": [
+   "DROP",
+   "The code reads every existing metadata key as a string literal (`turn_capture.py:97-112`), and the design follows that convention on purpose; changing it is style."
+  ]
+ },
+ "wall_seconds": 67.5,
+ "cost_usd": 1.2304139,
+ "raw_output": "Checking how the code sets the tool-call counts and metadata keys, then I'll give the verdicts.\nF1: DROP \u2014 The #92 recovery turn is already in the code (`review_client.py:248-271` sets `recovery_turn_used`, and `turn_capture.py` sends the second turn), so the design is right to build on it; the plan's unchecked 924 entry is just stale.\nF2: KEEP \u2014 Slice 904 says every finding carries `location:`, with `unverified` as the no-file token (parent lines 74-79), and the parser gives every parsed finding at least that; the hand-built finding with no location would be the only one in the artifact that breaks the contract.\nF3: DROP \u2014 D11 deliberately keeps the requested id and explains why: the Run Digest states it, and `unknown` would merge every Codex judge into one metrology identity; asking for an extra frontmatter flag is a design preference, not a defect.\nF4: KEEP \u2014 D4's `(failed_tool_calls or 0)` contradicts the design's own rule at line 216 (\"`is None` checks, never `or 0`, for counts\"), and if the failure count were missing the cap would not apply even though no read was confirmed.\nF5: DROP \u2014 The new keys are additive and context-forge does not have to read them to keep working; the 919 coordination note was about that slice's own decision, and asking for a coordination step is a process request.\nF6: DROP \u2014 D10 already records the one-time metrology identity change as a deliberate, accepted result; asking for an extra criterion or a migration bridge is a scope opinion.\nF7: KEEP \u2014 The `gemini` profile exists (`providers/base.py:27`, parent line 96) but is left out of the D9 risk-mitigation capture, and walkthrough step 6 runs `--model sonnet` for every profile, so it cannot capture ids for each profile as the mitigation requires.\nF8: DROP \u2014 The code reads every existing metadata key as a string literal (`turn_capture.py:97-112`), and the design follows that convention on purpose; changing it is style."
+}

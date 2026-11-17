@@ -1,0 +1,53 @@
+{
+ "case": "squadron-928-design",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "D10 sets both the method and the test for each row (a command is in if it fails on network or filesystem denial), so running the probe during implementation finishes a decided step rather than leaving scope open."
+  ],
+  "F2": [
+   "DROP",
+   "install-commands` already puts the same `analysis` files in `~/.claude/commands`, so this overlap exists on the Claude path; line 52 excludes it, and the current removal loop already skips missing files (`if path.exists()`)."
+  ],
+  "F3": [
+   "KEEP",
+   "the `-agents` and `-local` suffixes from D5 are new, so a Claude pack named `foo-agents` and `foo --ide codex` both produce `foo-agents.toml`, and line 52's \"pre-existing\" exclusion doesn't cover that."
+  ],
+  "F4": [
+   "DROP",
+   "this is a general hardening checklist; validation before writing is specified, and malformed receipts, missing files and containment checks are handled by existing code that moves over unchanged."
+  ],
+  "F5": [
+   "DROP",
+   "this is an opinion about scope; the design gives its reason for adding list and doctor (they hardcode the same root) and records the higher effort."
+  ],
+  "F6": [
+   "DROP",
+   "the Component table and D5 already state the rename to `receipt_suffix` and the new `receipt_name` signature, with the same names produced, so asking to restate it and add a glob test is low value."
+  ],
+  "F7": [
+   "KEEP",
+   "the API section says the pack format is \"documented in the skills section of README\", but README has no skills section, and neither the Component table nor the success criteria include writing it."
+  ],
+  "F8": [
+   "DROP",
+   "replaceable on upgrade\" means the user can swap the whole squadron-owned file for the documented version, which holds, and the drift test is optional hardening."
+  ]
+ },
+ "wall_seconds": 54.0,
+ "cost_usd": 1.0126264,
+ "raw_output": "I've checked every finding against the design, its parent plan, the 925 design and `install.py`. Here are the decisions:\n\nF1: DROP \u2014 D10 sets both the method and the test for each row (a command is in if it fails on network or filesystem denial), so running the probe during implementation finishes a decided step rather than leaving scope open.\nF2: DROP \u2014 `install-commands` already puts the same `analysis` files in `~/.claude/commands`, so this overlap exists on the Claude path; line 52 excludes it, and the current removal loop already skips missing files (`if path.exists()`).\nF3: KEEP \u2014 the `-agents` and `-local` suffixes from D5 are new, so a Claude pack named `foo-agents` and `foo --ide codex` both produce `foo-agents.toml`, and line 52's \"pre-existing\" exclusion doesn't cover that.\nF4: DROP \u2014 this is a general hardening checklist; validation before writing is specified, and malformed receipts, missing files and containment checks are handled by existing code that moves over unchanged.\nF5: DROP \u2014 this is an opinion about scope; the design gives its reason for adding list and doctor (they hardcode the same root) and records the higher effort.\nF6: DROP \u2014 the Component table and D5 already state the rename to `receipt_suffix` and the new `receipt_name` signature, with the same names produced, so asking to restate it and add a glob test is low value.\nF7: KEEP \u2014 the API section says the pack format is \"documented in the skills section of README\", but README has no skills section, and neither the Component table nor the success criteria include writing it.\nF8: DROP \u2014 \"replaceable on upgrade\" means the user can swap the whole squadron-owned file for the documented version, which holds, and the drift test is optional hardening."
+}

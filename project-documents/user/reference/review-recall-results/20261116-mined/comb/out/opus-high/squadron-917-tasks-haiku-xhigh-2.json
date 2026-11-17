@@ -1,0 +1,18 @@
+{
+ "case": "squadron-917-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This project's CLAUDE.md says \"A slice branch merges into the target when its implementation is done\", and its guides contain no Phase 7 or no-merge-in-task-file rule, so a close-out merge into `main` (the target, since no integration branch is configured) is allowed."
+  ]
+ },
+ "wall_seconds": 18.8,
+ "cost_usd": 0.6498868999999999,
+ "raw_output": "F1: DROP \u2014 This project's CLAUDE.md says \"A slice branch merges into the target when its implementation is done\", and its guides contain no Phase 7 or no-merge-in-task-file rule, so a close-out merge into `main` (the target, since no integration branch is configured) is allowed."
+}

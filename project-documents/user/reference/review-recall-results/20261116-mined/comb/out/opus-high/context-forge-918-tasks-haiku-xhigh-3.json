@@ -1,0 +1,48 @@
+{
+ "case": "context-forge-918-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 1,
+  "F2": 2,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Both rules compute `allComplete` from the same parser aggregate, and Task 4 fixes that aggregate; Tasks 5 and 12 already test it, so arch-rule cases would only repeat that coverage."
+  ],
+  "F2": [
+   "KEEP",
+   "Adding the `[~]` lines to the shared fixture breaks tests Task 5 doesn't update: `ArtifactIntrospector.test.ts:52` expects `totalSlices` of 5, `slicePlanParser.test.ts:10` expects 5 entries, and `slicePlanParser.test.ts:128` expects every entry to be explicit while the unindexed `[~]` entry is fallback. This conflicts with the design's requirement that existing fixture tests pass unchanged."
+  ],
+  "F3": [
+   "KEEP",
+   "Lines 122\u2013127 of `slice.ts` show that the try block either assigns `derivedStatus` or throws into the catch, which sets `'degraded'`. The initializer's value is never used, so Task 9's reason for the step is wrong and the change is dead code."
+  ],
+  "F4": [
+   "DROP",
+   "Task 9 follows the design's one-line change, and showing `degraded` for an unreadable task file or frontmatter is existing intended behavior; a `[~]` entry with a malformed doc is an edge case, not a defect."
+  ],
+  "F5": [
+   "KEEP",
+   "ProjectModelBuilder.ts:445` builds status for exactly the planned slices with no doc that this slice targets, and `buildModel` output reaches users through `cf arch` and the MCP introspection tool. Those entries would show `not-started` while `cf list slices` shows `deprecated`, and neither the design nor the tasks cover this."
+  ],
+  "F6": [
+   "DROP",
+   "How finely to split tasks is a matter of opinion; the tasks can be completed as written."
+  ],
+  "F7": [
+   "DROP",
+   "The commit-marker format is style; this project's CLAUDE.md asks for a checkbox on every item, and the conditional final commit is clear enough."
+  ]
+ },
+ "wall_seconds": 74.2,
+ "cost_usd": 1.0607016999999999,
+ "raw_output": "F1: DROP \u2014 Both rules compute `allComplete` from the same parser aggregate, and Task 4 fixes that aggregate; Tasks 5 and 12 already test it, so arch-rule cases would only repeat that coverage.\nF2: KEEP \u2014 Adding the `[~]` lines to the shared fixture breaks tests Task 5 doesn't update: `ArtifactIntrospector.test.ts:52` expects `totalSlices` of 5, `slicePlanParser.test.ts:10` expects 5 entries, and `slicePlanParser.test.ts:128` expects every entry to be explicit while the unindexed `[~]` entry is fallback. This conflicts with the design's requirement that existing fixture tests pass unchanged.\nF3: KEEP \u2014 Lines 122\u2013127 of `slice.ts` show that the try block either assigns `derivedStatus` or throws into the catch, which sets `'degraded'`. The initializer's value is never used, so Task 9's reason for the step is wrong and the change is dead code.\nF4: DROP \u2014 Task 9 follows the design's one-line change, and showing `degraded` for an unreadable task file or frontmatter is existing intended behavior; a `[~]` entry with a malformed doc is an edge case, not a defect.\nF5: KEEP \u2014 `ProjectModelBuilder.ts:445` builds status for exactly the planned slices with no doc that this slice targets, and `buildModel` output reaches users through `cf arch` and the MCP introspection tool. Those entries would show `not-started` while `cf list slices` shows `deprecated`, and neither the design nor the tasks cover this.\nF6: DROP \u2014 How finely to split tasks is a matter of opinion; the tasks can be completed as written.\nF7: DROP \u2014 The commit-marker format is style; this project's CLAUDE.md asks for a checkbox on every item, and the conditional final commit is clear enough."
+}

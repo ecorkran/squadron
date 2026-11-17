@@ -1,0 +1,93 @@
+{
+ "case": "squadron-320-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The doc requires a minimum-evidence floor and leaves loosening a gate to the operator, so it never promises any particular confidence bound; picking the floor's value is a legitimate slice-design deferral."
+  ],
+  "F2": [
+   "DROP",
+   "The doc already says sampling bias skews the agreement number and gives that choice to slice design; moving it into the architecture is a preference about approach."
+  ],
+  "F3": [
+   "DROP",
+   "Each sample attaches to a persisted result that already holds the judge score, so a threshold sweep is still possible; blinding and rater repeatability are design-level detail, and \"intrinsic ground truth\" (what judges are scored against) and \"the human\" (what judges are measured against) are different referents, not a conflict."
+  ],
+  "F4": [
+   "DROP",
+   "Judge templates already map one-to-one to artifact levels (e.g. `judge.slice-vs-arch`), and the calibration-to-threshold slice owns the recommendation path; the exact join to config keys is slice-design detail."
+  ],
+  "F5": [
+   "DROP",
+   "Nothing in the doc says the artifact level is inferred from a template or display name; the finding attacks a design the doc doesn't contain."
+  ],
+  "F6": [
+   "KEEP",
+   "The model-ID point is wrong (`ReviewResult.model` already stores the resolved ID, per slice 122), but the doc does contradict itself: it says 320 \"populates\" the `criteria` map, which only the judge prompt can fill, while Non-Goals rule out any change to the judging path."
+  ],
+  "F7": [
+   "KEEP",
+   "The doc says 300's multi-sample option \"exists,\" but 300-slices lists it as unchecked, deferred Future Work item (1), and the doc's own Current State calls it future work."
+  ],
+  "F8": [
+   "DROP",
+   "The doc only says the metrology must accept dispersion data from calibration runs, which existing `fan_out` and review templates can produce; asking for a runner slice or cost sizing is a scope request, and spend is pre-authorized."
+  ],
+  "F9": [
+   "DROP",
+   "Whether one shared reporting layer fits both oracles is a design opinion, not a defect."
+  ],
+  "F10": [
+   "DROP",
+   "How the harness invokes the audit (model, capture, timeout) belongs to the harness slice; the doc never claims the audit takes part in cross-model comparisons."
+  ],
+  "F11": [
+   "DROP",
+   "The doc already flags normalization and audit variance as concerns, and its findings-per-project count doesn't need cross-run finding identity; the rest asks for slice-level detail."
+  ],
+  "F12": [
+   "DROP",
+   "Scope explicitly includes the pre-emption prompt, and the Non-Goal is about the judging path, not dispatch prompts; the doc already presents the delta as observational and directional only."
+  ],
+  "F13": [
+   "DROP",
+   "This is a scope and proportionality opinion, not a contradiction or a gap against the doc's success criteria."
+  ],
+  "F14": [
+   "DROP",
+   "The doc already says cross-project aggregation is a new requirement that current persistence doesn't meet, and defers the store choice; demanding the store technology now is a preference about approach."
+  ],
+  "F15": [
+   "DROP",
+   "The frontmatter dependencies match the parent initiative plan entry exactly, 340 is complete and listed in Related Work, and the \"main checkout\" claims are about a file outside this worktree."
+  ],
+  "F16": [
+   "DROP",
+   "Enumerating failure modes for capture writes, audit runs and concurrent writes is slice and code-review detail, not an architecture-level gap."
+  ]
+ },
+ "wall_seconds": 77.9,
+ "cost_usd": 1.0634168,
+ "raw_output": "Checking the initiative plan entries for 340 and 320 before finishing the verdicts.\nF1: DROP \u2014 The doc requires a minimum-evidence floor and leaves loosening a gate to the operator, so it never promises any particular confidence bound; picking the floor's value is a legitimate slice-design deferral.\nF2: DROP \u2014 The doc already says sampling bias skews the agreement number and gives that choice to slice design; moving it into the architecture is a preference about approach.\nF3: DROP \u2014 Each sample attaches to a persisted result that already holds the judge score, so a threshold sweep is still possible; blinding and rater repeatability are design-level detail, and \"intrinsic ground truth\" (what judges are scored against) and \"the human\" (what judges are measured against) are different referents, not a conflict.\nF4: DROP \u2014 Judge templates already map one-to-one to artifact levels (e.g. `judge.slice-vs-arch`), and the calibration-to-threshold slice owns the recommendation path; the exact join to config keys is slice-design detail.\nF5: DROP \u2014 Nothing in the doc says the artifact level is inferred from a template or display name; the finding attacks a design the doc doesn't contain.\nF6: KEEP \u2014 The model-ID point is wrong (`ReviewResult.model` already stores the resolved ID, per slice 122), but the doc does contradict itself: it says 320 \"populates\" the `criteria` map, which only the judge prompt can fill, while Non-Goals rule out any change to the judging path.\nF7: KEEP \u2014 The doc says 300's multi-sample option \"exists,\" but 300-slices lists it as unchecked, deferred Future Work item (1), and the doc's own Current State calls it future work.\nF8: DROP \u2014 The doc only says the metrology must accept dispersion data from calibration runs, which existing `fan_out` and review templates can produce; asking for a runner slice or cost sizing is a scope request, and spend is pre-authorized.\nF9: DROP \u2014 Whether one shared reporting layer fits both oracles is a design opinion, not a defect.\nF10: DROP \u2014 How the harness invokes the audit (model, capture, timeout) belongs to the harness slice; the doc never claims the audit takes part in cross-model comparisons.\nF11: DROP \u2014 The doc already flags normalization and audit variance as concerns, and its findings-per-project count doesn't need cross-run finding identity; the rest asks for slice-level detail.\nF12: DROP \u2014 Scope explicitly includes the pre-emption prompt, and the Non-Goal is about the judging path, not dispatch prompts; the doc already presents the delta as observational and directional only.\nF13: DROP \u2014 This is a scope and proportionality opinion, not a contradiction or a gap against the doc's success criteria.\nF14: DROP \u2014 The doc already says cross-project aggregation is a new requirement that current persistence doesn't meet, and defers the store choice; demanding the store technology now is a preference about approach.\nF15: DROP \u2014 The frontmatter dependencies match the parent initiative plan entry exactly, 340 is complete and listed in Related Work, and the \"main checkout\" claims are about a file outside this worktree.\nF16: DROP \u2014 Enumerating failure modes for capture writes, audit runs and concurrent writes is slice and code-review detail, not an architecture-level gap."
+}

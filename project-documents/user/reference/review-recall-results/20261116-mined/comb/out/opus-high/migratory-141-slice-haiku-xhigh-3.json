@@ -1,0 +1,68 @@
+{
+ "case": "migratory-141-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Slice 118 is complete and `USE_JIT_KERNELS` already exists. Plan 142 depends on 141 and 118, not 144, and must compare against Numba, so putting the Numba runner in 144 leaves 142 with no runner and no owner for one."
+  ],
+  "F2": [
+   "KEEP",
+   "Plan entry 141 lists \"force totals per force\" in the required breakdown. The design leaves it out and defers it to 142, which forces a schema-v1 bump that the design itself treats as a compatibility event."
+  ],
+  "F3": [
+   "DROP",
+   "A whole-tick runner can still swap one force or a `QuadrantsSpatialQuery` behind the existing `BulkForce` and `SpatialQuery` interfaces with the rest held fixed. So the registry can express the 142 and 143 comparisons; the \"needs a component axis\" claim is overstated."
+  ],
+  "F4": [
+   "KEEP",
+   "A SHA-256 can only test equality. Slice 118 explicitly accepts bit-level differences under `allclose`, and plan 145 needs a numeric tolerance, so the stated plan for 142/144/145 to compare hashes against a NumPy golden cannot work."
+  ],
+  "F5": [
+   "KEEP",
+   "The document contradicts itself: Provides says 145 uses the bench's parity hash as its reference, while Open Questions names the trajectory tool as the parity oracle."
+  ],
+  "F6": [
+   "KEEP",
+   "tick_instrumented` has to copy the whole `tick()` body (about 90 lines: k-NN and radius paths, CSR assembly, density hook), not \"~5 lines per phase\". That breaks the project's no-duplication rule, and the design admits timing drift between the copies cannot be detected."
+  ],
+  "F7": [
+   "KEEP",
+   "No `flocking.cohesion_force` singleton exists. The existing `bench/workload.py` builds its own force and profile registries with hard-coded values copied from `default.yaml`, which contradicts both the stated mechanism and the \"does not duplicate the engine's force list\" claim."
+  ],
+  "F8": [
+   "KEEP",
+   "finalize` is guaranteed only when `setup` raises, not when warmup or measure raises. A failing `git rev-parse` and how the workload directory is found relative to the working directory are left unspecified, which undercuts the \"no silent fallbacks\" claim."
+  ],
+  "F9": [
+   "KEEP",
+   "Several contradictions are real and block implementation. The NumPy path is described as calling `tick()` directly and also as wrapping `tick_instrumented`. The hash is taken \"post-warmup\" in one place and \"after the measure phase\" in another. The Markdown scope differs between sections. And `engine.spatial.KDTreeQuery` is the wrong module path; the package is `migratory.spatial`."
+  ],
+  "F10": [
+   "DROP",
+   "The plan makes 141 NumPy-standalone at first, and plan 145 already owns the 250k-on-NVIDIA milestone. Leaving NVIDIA runs out of this slice is consistent with the parent, and the extra Linux x86 criterion is a scope addition."
+  ],
+  "F11": [
+   "DROP",
+   "These are scope-trimming opinions, and none of them is a defect against the success criteria."
+  ]
+ },
+ "wall_seconds": 52.4,
+ "cost_usd": 1.0391321,
+ "raw_output": "F1: KEEP \u2014 Slice 118 is complete and `USE_JIT_KERNELS` already exists. Plan 142 depends on 141 and 118, not 144, and must compare against Numba, so putting the Numba runner in 144 leaves 142 with no runner and no owner for one.\n\nF2: KEEP \u2014 Plan entry 141 lists \"force totals per force\" in the required breakdown. The design leaves it out and defers it to 142, which forces a schema-v1 bump that the design itself treats as a compatibility event.\n\nF3: DROP \u2014 A whole-tick runner can still swap one force or a `QuadrantsSpatialQuery` behind the existing `BulkForce` and `SpatialQuery` interfaces with the rest held fixed. So the registry can express the 142 and 143 comparisons; the \"needs a component axis\" claim is overstated.\n\nF4: KEEP \u2014 A SHA-256 can only test equality. Slice 118 explicitly accepts bit-level differences under `allclose`, and plan 145 needs a numeric tolerance, so the stated plan for 142/144/145 to compare hashes against a NumPy golden cannot work.\n\nF5: KEEP \u2014 The document contradicts itself: Provides says 145 uses the bench's parity hash as its reference, while Open Questions names the trajectory tool as the parity oracle.\n\nF6: KEEP \u2014 `tick_instrumented` has to copy the whole `tick()` body (about 90 lines: k-NN and radius paths, CSR assembly, density hook), not \"~5 lines per phase\". That breaks the project's no-duplication rule, and the design admits timing drift between the copies cannot be detected.\n\nF7: KEEP \u2014 No `flocking.cohesion_force` singleton exists. The existing `bench/workload.py` builds its own force and profile registries with hard-coded values copied from `default.yaml`, which contradicts both the stated mechanism and the \"does not duplicate the engine's force list\" claim.\n\nF8: KEEP \u2014 `finalize` is guaranteed only when `setup` raises, not when warmup or measure raises. A failing `git rev-parse` and how the workload directory is found relative to the working directory are left unspecified, which undercuts the \"no silent fallbacks\" claim.\n\nF9: KEEP \u2014 Several contradictions are real and block implementation. The NumPy path is described as calling `tick()` directly and also as wrapping `tick_instrumented`. The hash is taken \"post-warmup\" in one place and \"after the measure phase\" in another. The Markdown scope differs between sections. And `engine.spatial.KDTreeQuery` is the wrong module path; the package is `migratory.spatial`.\n\nF10: DROP \u2014 The plan makes 141 NumPy-standalone at first, and plan 145 already owns the 250k-on-NVIDIA milestone. Leaving NVIDIA runs out of this slice is consistent with the parent, and the extra Linux x86 criterion is a scope addition.\n\nF11: DROP \u2014 These are scope-trimming opinions, and none of them is a defect against the success criteria."
+}

@@ -1,0 +1,78 @@
+{
+ "case": "context-forge-260-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The code enforces all three rules the document describes. A marker on work done outside the process is deliberate misuse, and blocking that is hardening, not a design defect."
+  ],
+  "F2": [
+   "KEEP",
+   "planningArtifacts.ts` counts an architecture doc on its own as \"already planned\", so adoption interrupted after step 5's architecture write can't resume and the retroactive plan is never written. That contradicts \"no completion state is needed\"."
+  ],
+  "F3": [
+   "DROP",
+   "The opt-out is stored as config (`adoption.state declined`), and slice 269 settles its form. Reporting greenfield instead of planned for an opted-out repo has no practical effect, since both outcomes mean adoption doesn't apply."
+  ],
+  "F4": [
+   "DROP",
+   "Step 3 and its failure handling belong to squadron's `sq onboard`. A primitive that says plainly the doc is missing is an explicit signal, not a silent CF-only fallback."
+  ],
+  "F5": [
+   "DROP",
+   "The principle names the comprehension doc as the one point of contact. Passing the path as an argument, handling duplicate files and adding a contract version are approach preferences and slice-design detail."
+  ],
+  "F6": [
+   "DROP",
+   "Adoption is parked until `sq onboard` exists, so nobody runs the stale guide prompt between 268 and 272. Slice 272 already moves `MIN_GUIDE_VERSION` to the realigned guide release."
+  ],
+  "F7": [
+   "DROP",
+   "The concept row and step 5 are consistent: the agent drafts the concept under the adoption prompt and uses 363's output if it exists. \"CF writes\" means through cf-delivered prompts, matching \"facts in core, judgement in the prompt\"."
+  ],
+  "F8": [
+   "DROP",
+   "Rule files and docs are reported facts only. The outcome comes from code signals and from planning artifacts that `cf init` never creates, and reconciliation (266) covers the rule-merge conflicts."
+  ],
+  "F9": [
+   "DROP",
+   "This asks for a justification paragraph. The date cutoff keys on artifact dates, and retroactive entries have no artifacts, so the marker isn't a redundant mechanism."
+  ],
+  "F10": [
+   "DROP",
+   "Time budgets, the async model, git command scope and recorded threshold values are implementation detail an architecture document leaves to slice design."
+  ],
+  "F11": [
+   "DROP",
+   "Superseded contracts are clearly labelled \"for history\", Current State is a baseline, and `in_progress` is accurate because 268\u2013272 are still open."
+  ],
+  "F12": [
+   "DROP",
+   "This is an opinion about scope and surfaces, not a defect."
+  ],
+  "F13": [
+   "DROP",
+   "Adding a path-existence check on the derived architecture is a new feature request, not something the document's criteria require."
+  ]
+ },
+ "wall_seconds": 76.5,
+ "cost_usd": 1.1898209000000002,
+ "raw_output": "Checking how the detection outcome uses rule files, then I'll emit verdicts.\nF1: DROP \u2014 The code enforces all three rules the document describes. A marker on work done outside the process is deliberate misuse, and blocking that is hardening, not a design defect.\nF2: KEEP \u2014 `planningArtifacts.ts` counts an architecture doc on its own as \"already planned\", so adoption interrupted after step 5's architecture write can't resume and the retroactive plan is never written. That contradicts \"no completion state is needed\".\nF3: DROP \u2014 The opt-out is stored as config (`adoption.state declined`), and slice 269 settles its form. Reporting greenfield instead of planned for an opted-out repo has no practical effect, since both outcomes mean adoption doesn't apply.\nF4: DROP \u2014 Step 3 and its failure handling belong to squadron's `sq onboard`. A primitive that says plainly the doc is missing is an explicit signal, not a silent CF-only fallback.\nF5: DROP \u2014 The principle names the comprehension doc as the one point of contact. Passing the path as an argument, handling duplicate files and adding a contract version are approach preferences and slice-design detail.\nF6: DROP \u2014 Adoption is parked until `sq onboard` exists, so nobody runs the stale guide prompt between 268 and 272. Slice 272 already moves `MIN_GUIDE_VERSION` to the realigned guide release.\nF7: DROP \u2014 The concept row and step 5 are consistent: the agent drafts the concept under the adoption prompt and uses 363's output if it exists. \"CF writes\" means through cf-delivered prompts, matching \"facts in core, judgement in the prompt\".\nF8: DROP \u2014 Rule files and docs are reported facts only. The outcome comes from code signals and from planning artifacts that `cf init` never creates, and reconciliation (266) covers the rule-merge conflicts.\nF9: DROP \u2014 This asks for a justification paragraph. The date cutoff keys on artifact dates, and retroactive entries have no artifacts, so the marker isn't a redundant mechanism.\nF10: DROP \u2014 Time budgets, the async model, git command scope and recorded threshold values are implementation detail an architecture document leaves to slice design.\nF11: DROP \u2014 Superseded contracts are clearly labelled \"for history\", Current State is a baseline, and `in_progress` is accurate because 268\u2013272 are still open.\nF12: DROP \u2014 This is an opinion about scope and surfaces, not a defect.\nF13: DROP \u2014 Adding a path-existence check on the derived architecture is a new feature request, not something the document's criteria require."
+}

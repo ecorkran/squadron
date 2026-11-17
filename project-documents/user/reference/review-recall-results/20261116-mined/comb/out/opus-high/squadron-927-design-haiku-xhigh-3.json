@@ -1,0 +1,53 @@
+{
+ "case": "squadron-927-design",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "911 Part C's coordination note was about 911's own `revision_number` field, not a rule binding 927; 927's plan entry lists no dependencies, and the design already checked context-forge for readers."
+  ],
+  "F2": [
+   "DROP",
+   "The CLAUDE.md rule targets values scattered across many places; this is one new metadata key written by two providers and read in one spot. Line 217 follows the existing `stop_reason`/`tools_given` stamps, and a mismatched literal would fail SC8's stamping tests. This is a hardening preference, not a defect."
+  ],
+  "F3": [
+   "DROP",
+   "904's requirement applies to model output and the parser. `StructuredFinding.location` is `str | None` and persistence writes it only when set, so a squadron-built finding with no location matches the code."
+  ],
+  "F4": [
+   "DROP",
+   "The #92 recovery turn is already in the code (`review_client.py:248-271`, `recovery_turn_used`, `turn_capture.py`), so 927 does not depend on slice 924."
+  ],
+  "F5": [
+   "DROP",
+   "D9 already says the rule is exact and that no speculative forms go in. Walkthrough step 6 sits inside Success Criteria and is the pre-merge mitigation, and the Technical Requirements require tests built from the captured ids."
+  ],
+  "F6": [
+   "DROP",
+   "D10 states the metrology identity change outright and accepts it as the correct calibration identity. Asking for migration or sign-off is a disagreement with that decision, not a defect."
+  ],
+  "F7": [
+   "KEEP",
+   "D11 puts the requested id into `aiModel`, a field D10 defines as the answering model, with no frontmatter marker. That contradicts the design's own convention at line 216 (\"None \u2026 is never replaced by a plausible value\") and the project's no-silent-fallback rule, for the gates that read frontmatter."
+  ],
+  "F8": [
+   "DROP",
+   "This is an opinion about scope and length. Every Part is required by the plan entry, and how much detail to include is a style choice."
+  ]
+ },
+ "wall_seconds": 53.8,
+ "cost_usd": 1.0610188,
+ "raw_output": "F1: DROP \u2014 911 Part C's coordination note was about 911's own `revision_number` field, not a rule binding 927; 927's plan entry lists no dependencies, and the design already checked context-forge for readers.\nF2: DROP \u2014 The CLAUDE.md rule targets values scattered across many places; this is one new metadata key written by two providers and read in one spot. Line 217 follows the existing `stop_reason`/`tools_given` stamps, and a mismatched literal would fail SC8's stamping tests. This is a hardening preference, not a defect.\nF3: DROP \u2014 904's requirement applies to model output and the parser. `StructuredFinding.location` is `str | None` and persistence writes it only when set, so a squadron-built finding with no location matches the code.\nF4: DROP \u2014 The #92 recovery turn is already in the code (`review_client.py:248-271`, `recovery_turn_used`, `turn_capture.py`), so 927 does not depend on slice 924.\nF5: DROP \u2014 D9 already says the rule is exact and that no speculative forms go in. Walkthrough step 6 sits inside Success Criteria and is the pre-merge mitigation, and the Technical Requirements require tests built from the captured ids.\nF6: DROP \u2014 D10 states the metrology identity change outright and accepts it as the correct calibration identity. Asking for migration or sign-off is a disagreement with that decision, not a defect.\nF7: KEEP \u2014 D11 puts the requested id into `aiModel`, a field D10 defines as the answering model, with no frontmatter marker. That contradicts the design's own convention at line 216 (\"None \u2026 is never replaced by a plausible value\") and the project's no-silent-fallback rule, for the gates that read frontmatter.\nF8: DROP \u2014 This is an opinion about scope and length. Every Part is required by the plan entry, and how much detail to include is a style choice."
+}

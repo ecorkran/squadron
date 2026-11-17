@@ -1,0 +1,88 @@
+{
+ "case": "squadron-380-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Every save path stamps `reviewedSha` from HEAD of the working directory (`persistence.py:515` uses `\".\"`, `pipeline/actions/review.py:301` uses `cwd`), so a PR review run from the operator's checkout would record the wrong sha with no error, and the doc's \"apply unchanged\" does not address this."
+  ],
+  "F2": [
+   "DROP",
+   "The doc already commits to not fabricating slice fields for PRs and to degrading explicitly; which frontmatter keys a PR target supplies is slice-level detail."
+  ],
+  "F3": [
+   "DROP",
+   "The config key name and default for the data directory are slice-level detail; for an architecture document the stated intent (configured location, choice reported) is enough."
+  ],
+  "F4": [
+   "KEEP",
+   "The doc fetches only the head and records only a base ref, not a base sha, so it cannot reliably compute a merge-base range that matches the host or detect \"base moved since resolution\"."
+  ],
+  "F5": [
+   "KEEP",
+   "The rule that \"more than one host remote fails loudly\" makes the bare `sq review pr` form fail in the common origin/upstream fork layout, which works against the doc's goal of working in repositories squadron did not plan."
+  ],
+  "F6": [
+   "DROP",
+   "The parenthetical operation list is illustrative, and Technical Considerations already says squadron finds and updates its own prior comment; the adapter slice will define the exact operations."
+  ],
+  "F7": [
+   "KEEP",
+   "The doc claims failure modes are enumerated, but it leaves out hangs and timeouts on `gh` and `git fetch`, which the review-code failure-mode rule explicitly requires."
+  ],
+  "F8": [
+   "DROP",
+   "Whether the adapter is sync or async is an implementation detail for the slice design, not an architecture defect."
+  ],
+  "F9": [
+   "DROP",
+   "Deferring scratch-worktree lifecycle details to the slice is a legitimate architecture-level choice, and the doc says nothing about `--cwd` keeping its meaning, so the claimed conflict does not exist."
+  ],
+  "F10": [
+   "DROP",
+   "The full flag matrix belongs to the `sq review pr` slice, which already lists \"full parity with the existing review flags\" as its job."
+  ],
+  "F11": [
+   "DROP",
+   "This is about the wording of \"nothing else\" in the Overview, not a design defect."
+  ],
+  "F12": [
+   "DROP",
+   "The traceability goal binds the composition step and enforcing it is slice-level; the dry-run complaint is wrong, since the principles and the `sq pr create` slice both require a dry-run."
+  ],
+  "F13": [
+   "DROP",
+   "This is an opinion about how to cut the initiative's scope."
+  ],
+  "F14": [
+   "DROP",
+   "In the reviewed worktree `src/squadron/codehost/`, `src/squadron/pr/` and the 381\u2013386 slice documents do not exist, so the Current State matches the code it was written against."
+  ],
+  "F15": [
+   "DROP",
+   "The finding is speculation about `gh` field coverage, and `gh api graphql` also returns JSON, so \"JSON parsing per call\" still holds either way."
+  ]
+ },
+ "wall_seconds": 58.6,
+ "cost_usd": 0.9231257,
+ "raw_output": "F1: KEEP \u2014 Every save path stamps `reviewedSha` from HEAD of the working directory (`persistence.py:515` uses `\".\"`, `pipeline/actions/review.py:301` uses `cwd`), so a PR review run from the operator's checkout would record the wrong sha with no error, and the doc's \"apply unchanged\" does not address this.\nF2: DROP \u2014 The doc already commits to not fabricating slice fields for PRs and to degrading explicitly; which frontmatter keys a PR target supplies is slice-level detail.\nF3: DROP \u2014 The config key name and default for the data directory are slice-level detail; for an architecture document the stated intent (configured location, choice reported) is enough.\nF4: KEEP \u2014 The doc fetches only the head and records only a base ref, not a base sha, so it cannot reliably compute a merge-base range that matches the host or detect \"base moved since resolution\".\nF5: KEEP \u2014 The rule that \"more than one host remote fails loudly\" makes the bare `sq review pr` form fail in the common origin/upstream fork layout, which works against the doc's goal of working in repositories squadron did not plan.\nF6: DROP \u2014 The parenthetical operation list is illustrative, and Technical Considerations already says squadron finds and updates its own prior comment; the adapter slice will define the exact operations.\nF7: KEEP \u2014 The doc claims failure modes are enumerated, but it leaves out hangs and timeouts on `gh` and `git fetch`, which the review-code failure-mode rule explicitly requires.\nF8: DROP \u2014 Whether the adapter is sync or async is an implementation detail for the slice design, not an architecture defect.\nF9: DROP \u2014 Deferring scratch-worktree lifecycle details to the slice is a legitimate architecture-level choice, and the doc says nothing about `--cwd` keeping its meaning, so the claimed conflict does not exist.\nF10: DROP \u2014 The full flag matrix belongs to the `sq review pr` slice, which already lists \"full parity with the existing review flags\" as its job.\nF11: DROP \u2014 This is about the wording of \"nothing else\" in the Overview, not a design defect.\nF12: DROP \u2014 The traceability goal binds the composition step and enforcing it is slice-level; the dry-run complaint is wrong, since the principles and the `sq pr create` slice both require a dry-run.\nF13: DROP \u2014 This is an opinion about how to cut the initiative's scope.\nF14: DROP \u2014 In the reviewed worktree `src/squadron/codehost/`, `src/squadron/pr/` and the 381\u2013386 slice documents do not exist, so the Current State matches the code it was written against.\nF15: DROP \u2014 The finding is speculation about `gh` field coverage, and `gh api graphql` also returns JSON, so \"JSON parsing per call\" still holds either way."
+}

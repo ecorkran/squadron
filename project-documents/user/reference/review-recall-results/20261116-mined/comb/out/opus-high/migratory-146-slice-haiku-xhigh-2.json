@@ -1,0 +1,83 @@
+{
+ "case": "migratory-146-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The GPU result is never written back to `entity_manager.state`, so `sync_from_entity_manager()` re-uploads stale setup-time arrays and resets surviving agents; field sizing on spawn is also undefined."
+  ],
+  "F2": [
+   "KEEP",
+   "_select_arch()` returns `qd.cuda` on any Linux host without checking for a device, which contradicts A7, line 117 and the plan's \"warns and falls back\" promise for the default config."
+  ],
+  "F3": [
+   "KEEP",
+   "_apply_reflect` changes velocities in place but only positions are synced back, so the GPU integrates the pre-bounce velocity (the SOFT part is wrong because SOFT is a no-op in `apply_bounds_policy`, but the REFLECT defect is real)."
+  ],
+  "F4": [
+   "KEEP",
+   "setup_from_server()` makes the `migratory.gpu` substrate import `migratory_server` types, and line 296's edit to the bench backend contradicts line 40, line 301 and A5 (\"bench unchanged\")."
+  ],
+  "F5": [
+   "KEEP",
+   "export_positions`/`export_velocities` explicitly return f32 and `from_quadrants_fields` passes dtype through, so line 150's claim of a \"Quadrants upcast\" to f64 and A3's preserved-contract claim are false."
+  ],
+  "F6": [
+   "DROP",
+   "The plan's own 146 entry sets Metal as the macOS default, so the doc matches its parent; the A2 threshold request is about rigor, not a defect."
+  ],
+  "F7": [
+   "DROP",
+   "subdivision_factor` is already consumed by the existing fused kernel (slice 149), and line 386 recommends S=3 per deployment without contradicting the default of 1."
+  ],
+  "F8": [
+   "DROP",
+   "This asks for more failure-mode hardening and detail beyond what a design doc needs; the untested A7 warning is already covered by F2."
+  ],
+  "F9": [
+   "KEEP",
+   "The doc's own Open Note says a second `qd.init()` in one process is undefined behaviour, yet tests 5\u20138 each call setup in the same file with no isolation, and A3/A4 (all four policies over 100 ticks) have no tests."
+  ],
+  "F10": [
+   "KEEP",
+   "Removing the `compute:` block selects the default `quadrants` path, not CPU, so the verification step fails as written."
+  ],
+  "F11": [
+   "DROP",
+   "The plan assigns the TPS-miss model to slice 145, not 146; asking 146 to own it is a scope opinion."
+  ],
+  "F12": [
+   "DROP",
+   "These are proportionality and style preferences; the driver keeping its own downloaded array does not break the consumer lifetime rule."
+  ],
+  "F13": [
+   "DROP",
+   "Pseudo-code constant placement is an implementation-level style point the implementer handles under CLAUDE.md, not a design defect."
+  ],
+  "F14": [
+   "KEEP",
+   "build_forces` adds FlightForce, PursuitForce and WorldBoundsRepulsor (the only thing behind SOFT bounds), none of which the hard-wired fused kernel runs, so the GPU default silently drops them and A4's SOFT claim cannot hold."
+  ]
+ },
+ "wall_seconds": 52.5,
+ "cost_usd": 1.1682141,
+ "raw_output": "Findings F1\u2013F4 check out against the code. Now checking the force builder for F14, then I'll write the verdicts.\nF1: KEEP \u2014 The GPU result is never written back to `entity_manager.state`, so `sync_from_entity_manager()` re-uploads stale setup-time arrays and resets surviving agents; field sizing on spawn is also undefined.\nF2: KEEP \u2014 `_select_arch()` returns `qd.cuda` on any Linux host without checking for a device, which contradicts A7, line 117 and the plan's \"warns and falls back\" promise for the default config.\nF3: KEEP \u2014 `_apply_reflect` changes velocities in place but only positions are synced back, so the GPU integrates the pre-bounce velocity (the SOFT part is wrong because SOFT is a no-op in `apply_bounds_policy`, but the REFLECT defect is real).\nF4: KEEP \u2014 `setup_from_server()` makes the `migratory.gpu` substrate import `migratory_server` types, and line 296's edit to the bench backend contradicts line 40, line 301 and A5 (\"bench unchanged\").\nF5: KEEP \u2014 `export_positions`/`export_velocities` explicitly return f32 and `from_quadrants_fields` passes dtype through, so line 150's claim of a \"Quadrants upcast\" to f64 and A3's preserved-contract claim are false.\nF6: DROP \u2014 The plan's own 146 entry sets Metal as the macOS default, so the doc matches its parent; the A2 threshold request is about rigor, not a defect.\nF7: DROP \u2014 `subdivision_factor` is already consumed by the existing fused kernel (slice 149), and line 386 recommends S=3 per deployment without contradicting the default of 1.\nF8: DROP \u2014 This asks for more failure-mode hardening and detail beyond what a design doc needs; the untested A7 warning is already covered by F2.\nF9: KEEP \u2014 The doc's own Open Note says a second `qd.init()` in one process is undefined behaviour, yet tests 5\u20138 each call setup in the same file with no isolation, and A3/A4 (all four policies over 100 ticks) have no tests.\nF10: KEEP \u2014 Removing the `compute:` block selects the default `quadrants` path, not CPU, so the verification step fails as written.\nF11: DROP \u2014 The plan assigns the TPS-miss model to slice 145, not 146; asking 146 to own it is a scope opinion.\nF12: DROP \u2014 These are proportionality and style preferences; the driver keeping its own downloaded array does not break the consumer lifetime rule.\nF13: DROP \u2014 Pseudo-code constant placement is an implementation-level style point the implementer handles under CLAUDE.md, not a design defect.\nF14: KEEP \u2014 `build_forces` adds FlightForce, PursuitForce and WorldBoundsRepulsor (the only thing behind SOFT bounds), none of which the hard-wired fused kernel runs, so the GPU default silently drops them and A4's SOFT claim cannot hold."
+}

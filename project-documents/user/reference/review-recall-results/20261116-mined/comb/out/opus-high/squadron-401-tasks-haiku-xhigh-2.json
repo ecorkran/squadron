@@ -1,0 +1,48 @@
+{
+ "case": "squadron-401-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`, so Task 2's four-metric set breaks it, and Task 2 still claims the suite \"passes unchanged\"."
+  ],
+  "F2": [
+   "DROP",
+   "a rename means updating every reference, and the project-wide pyright gate on every commit would flag the `test_render.py`/`test_lengths.py` imports, so the task can be completed as written."
+  ],
+  "F3": [
+   "KEEP",
+   "the process guide only treats lines starting with `**Commit**:` as commit markers, so these checkbox commit lines aren't recognized and can't be checked off in the implement \u2192 task-checker \u2192 commit order."
+  ],
+  "F4": [
+   "KEEP",
+   "slice criterion 10 requires the other metrics to stay unchanged when the token ceiling trips, but Task 11 tests `measure_duplication` alone and Task 26 has no ceiling case, so no task covers it."
+  ],
+  "F5": [
+   "KEEP",
+   "FIXTURE_ROOT_TOKEN` stands for the repo root, but Task 18 says to replace the whole `<source>` path, which for `--cov=src/squadron` would drop the `src/squadron` segment and give a fixture whose path mapping doesn't match reality."
+  ],
+  "F6": [
+   "DROP",
+   "splitting Task 10 is a scope preference; the task as written is complete and testable."
+  ],
+  "F7": [
+   "DROP",
+   "parametrizing versus separate test functions is test style, not a defect."
+  ]
+ },
+ "wall_seconds": 49.0,
+ "cost_usd": 1.0866326000000002,
+ "raw_output": "F1: KEEP \u2014 `test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`, so Task 2's four-metric set breaks it, and Task 2 still claims the suite \"passes unchanged\".\nF2: DROP \u2014 a rename means updating every reference, and the project-wide pyright gate on every commit would flag the `test_render.py`/`test_lengths.py` imports, so the task can be completed as written.\nF3: KEEP \u2014 the process guide only treats lines starting with `**Commit**:` as commit markers, so these checkbox commit lines aren't recognized and can't be checked off in the implement \u2192 task-checker \u2192 commit order.\nF4: KEEP \u2014 slice criterion 10 requires the other metrics to stay unchanged when the token ceiling trips, but Task 11 tests `measure_duplication` alone and Task 26 has no ceiling case, so no task covers it.\nF5: KEEP \u2014 `FIXTURE_ROOT_TOKEN` stands for the repo root, but Task 18 says to replace the whole `<source>` path, which for `--cov=src/squadron` would drop the `src/squadron` segment and give a fixture whose path mapping doesn't match reality.\nF6: DROP \u2014 splitting Task 10 is a scope preference; the task as written is complete and testable.\nF7: DROP \u2014 parametrizing versus separate test functions is test style, not a defect."
+}

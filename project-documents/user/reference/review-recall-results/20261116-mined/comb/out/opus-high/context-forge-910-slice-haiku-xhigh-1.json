@@ -1,0 +1,43 @@
+{
+ "case": "context-forge-910-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Every swept site compares against a value that is identical by construction and checked by the compiler, and the doc already uses the existing suite as its regression guard; a per-file coverage baseline is extra process, not a missing requirement."
+  ],
+  "F2": [
+   "KEEP",
+   "Confirmed: without `-n`, `grep -o` prints no line numbers, so the `types.ts:[3-6]:` filter matches nothing; the out-of-scope `SliceStatus` `'complete'` at `types.ts:269` also stays, so the zero-match criterion can never pass, and it disagrees with the walkthrough's expected count."
+  ],
+  "F3": [
+   "KEEP",
+   "Confirmed: `types.ts` has 8 literals (4 `STATUS`, 3 `inferredStatus`, 1 `SliceStatus`), so \"5 of 8\" is wrong; the steps add up to 60, not ~65; and the walkthrough's \"SliceStatus.status (4)\" contradicts the single `'complete'` member."
+  ],
+  "F4": [
+   "DROP",
+   "Every `inferredStatus` consumer (`cli/slice.ts`, `WorkflowNavigator`, `ArtifactIntrospector`, the `types.ts:276/321` fields) already takes `NormalizedStatus`, so widening the type breaks nothing and step 1 needs no full monorepo build."
+  ],
+  "F5": [
+   "DROP",
+   "912 is already complete, and the frontmatter `dependencies`/`interfaces` mismatch is bookkeeping with no effect on whether the slice can be built."
+  ],
+  "F6": [
+   "DROP",
+   "This is an opinion on scope and wording, not a contradiction or missing requirement."
+  ]
+ },
+ "wall_seconds": 57.8,
+ "cost_usd": 0.8418333000000002,
+ "raw_output": "Checks done against the slice doc, the parent architecture doc and the `packages/` code:\n\nF1: DROP \u2014 Every swept site compares against a value that is identical by construction and checked by the compiler, and the doc already uses the existing suite as its regression guard; a per-file coverage baseline is extra process, not a missing requirement.\nF2: KEEP \u2014 Confirmed: without `-n`, `grep -o` prints no line numbers, so the `types.ts:[3-6]:` filter matches nothing; the out-of-scope `SliceStatus` `'complete'` at `types.ts:269` also stays, so the zero-match criterion can never pass, and it disagrees with the walkthrough's expected count.\nF3: KEEP \u2014 Confirmed: `types.ts` has 8 literals (4 `STATUS`, 3 `inferredStatus`, 1 `SliceStatus`), so \"5 of 8\" is wrong; the steps add up to 60, not ~65; and the walkthrough's \"SliceStatus.status (4)\" contradicts the single `'complete'` member.\nF4: DROP \u2014 Every `inferredStatus` consumer (`cli/slice.ts`, `WorkflowNavigator`, `ArtifactIntrospector`, the `types.ts:276/321` fields) already takes `NormalizedStatus`, so widening the type breaks nothing and step 1 needs no full monorepo build.\nF5: DROP \u2014 912 is already complete, and the frontmatter `dependencies`/`interfaces` mismatch is bookkeeping with no effect on whether the slice can be built.\nF6: DROP \u2014 This is an opinion on scope and wording, not a contradiction or missing requirement."
+}

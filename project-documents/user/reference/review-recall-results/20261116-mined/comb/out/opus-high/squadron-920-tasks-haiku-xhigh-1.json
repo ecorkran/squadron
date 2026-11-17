@@ -1,0 +1,63 @@
+{
+ "case": "squadron-920-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Task 3 builds `ClaudeSDKError(\"rate_limit_event: slow down\")`, which criterion 9 forbids, contradicts Task 3's own \"not fabricated exceptions\" line, and would match Task 10's grep in `test_agent.py`."
+  ],
+  "F2": [
+   "DROP",
+   "The retry re-reads the shared stream without re-sending the prompt, but that is how the pipeline already retries, the slice leaves it unchanged, and the failure is unreproduced guesswork."
+  ],
+  "F3": [
+   "KEEP",
+   "Task 6 line 61 says both \"continue without yielding\" and \"let it flow to translation\", and the design splits the same way (D4 vs D6 and the Data Flow diagram)."
+  ],
+  "F4": [
+   "DROP",
+   "The rewritten tests already cover query and client modes and throttle counts, Task 15 checks the WARNING, and a gate test for the substring path adds little beyond the `_is_throttle` unit test."
+  ],
+  "F5": [
+   "KEEP",
+   "review_client.py:263`, `summary_oneshot.py:139` and `dispatch.py:165` add every sdk_type outside their exclusion lists to the prose, so translated informational events would leak into review output and fail Task 14's own check; Task 8 covers only `sdk_session`."
+  ],
+  "F6": [
+   "KEEP",
+   "The commit points are unsafe: Task 6 drops the `MessageParseError` special case that `test_a_rejected_rate_limit_event_reaches_the_backoff` relies on, and Task 9 deletes the shim that `test_agent.py:701-760` imports, so both commits leave tests red until Task 10."
+  ],
+  "F7": [
+   "DROP",
+   "Merging tasks and the task count are opinions about granularity, not defects."
+  ],
+  "F8": [
+   "DROP",
+   "The project rules already tell the executor to write `BLOCKED:` when it cannot proceed, so the task file does not need to repeat it."
+  ],
+  "F9": [
+   "DROP",
+   "One dispatch path\" matches design walkthrough step 5 word for word, and the queued-remainder argument depends on F2, which is dropped."
+  ],
+  "F10": [
+   "DROP",
+   "Task 10 deletes every test that references the shim, and any leftover would fail at import in Task 13; also, adding `_errors` to the grep would wrongly flag `agent.py:21`'s allowed `MessageParseError` import."
+  ]
+ },
+ "wall_seconds": 79.1,
+ "cost_usd": 1.1955164999999996,
+ "raw_output": "Checking the installed SDK client against F2's claims, then I'll write up the verdicts.\nF1: KEEP \u2014 Task 3 builds `ClaudeSDKError(\"rate_limit_event: slow down\")`, which criterion 9 forbids, contradicts Task 3's own \"not fabricated exceptions\" line, and would match Task 10's grep in `test_agent.py`.\nF2: DROP \u2014 The retry re-reads the shared stream without re-sending the prompt, but that is how the pipeline already retries, the slice leaves it unchanged, and the failure is unreproduced guesswork.\nF3: KEEP \u2014 Task 6 line 61 says both \"continue without yielding\" and \"let it flow to translation\", and the design splits the same way (D4 vs D6 and the Data Flow diagram).\nF4: DROP \u2014 The rewritten tests already cover query and client modes and throttle counts, Task 15 checks the WARNING, and a gate test for the substring path adds little beyond the `_is_throttle` unit test.\nF5: KEEP \u2014 `review_client.py:263`, `summary_oneshot.py:139` and `dispatch.py:165` add every sdk_type outside their exclusion lists to the prose, so translated informational events would leak into review output and fail Task 14's own check; Task 8 covers only `sdk_session`.\nF6: KEEP \u2014 The commit points are unsafe: Task 6 drops the `MessageParseError` special case that `test_a_rejected_rate_limit_event_reaches_the_backoff` relies on, and Task 9 deletes the shim that `test_agent.py:701-760` imports, so both commits leave tests red until Task 10.\nF7: DROP \u2014 Merging tasks and the task count are opinions about granularity, not defects.\nF8: DROP \u2014 The project rules already tell the executor to write `BLOCKED:` when it cannot proceed, so the task file does not need to repeat it.\nF9: DROP \u2014 \"One dispatch path\" matches design walkthrough step 5 word for word, and the queued-remainder argument depends on F2, which is dropped.\nF10: DROP \u2014 Task 10 deletes every test that references the shim, and any leftover would fail at import in Task 13; also, adding `_errors` to the grep would wrongly flag `agent.py:21`'s allowed `MessageParseError` import."
+}

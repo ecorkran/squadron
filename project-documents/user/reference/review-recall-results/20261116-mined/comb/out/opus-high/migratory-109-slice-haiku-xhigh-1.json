@@ -1,0 +1,53 @@
+{
+ "case": "migratory-109-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Line 133's list comprehension is a per-agent Python loop, which breaks the \"no per-agent loops\" constraint on line 198, and the step-4 grep (`for.*eval_indices`) would match it."
+  ],
+  "F2": [
+   "DROP",
+   "The parent slice plan already names the force loops as the root cause, and the builder is not inside a `BulkForce`, so this is a request for profiling, not a contradiction."
+  ],
+  "F3": [
+   "DROP",
+   "The doc already admits padding wastes memory when neighbor counts vary and keeps CSR behind the same `NeighborData` interface; asking for added scale targets is an opinion about scope."
+  ],
+  "F4": [
+   "DROP",
+   "The architecture's heterogeneous-neighbor rule applies to the spatial query interface, which this slice explicitly leaves unchanged, and 108 is future work."
+  ],
+  "F5": [
+   "KEEP",
+   "The plan puts 103 before 109, and 103's design adds new `BulkForce`s built on `neighbor_lists` loops. 109 requires every implementation to be updated but lists only five forces and greps only flocking/herding, so 103's forces would be missed."
+  ],
+  "F6": [
+   "DROP",
+   "spatial.build` inside `tick()` is existing code (tick.py:39) that the slice only describes; moving it is outside this slice's scope."
+  ],
+  "F7": [
+   "KEEP",
+   "Line 80's \"never dereferenced\" is false: the gather on line 111 reads row \u22121, and in Separation a pad that aliases the agent gives a zero distance, so inf/NaN appear unless the mask is applied before the division. An empty active set also makes `max_neighbors` an empty reduction."
+  ],
+  "F8": [
+   "DROP",
+   "Keeping loop reference implementations in tests is a choice of test strategy, not a defect, and the rtol point is a minor tolerance nit."
+  ]
+ },
+ "wall_seconds": 52.6,
+ "cost_usd": 0.9704807,
+ "raw_output": "Checked the 103 slice design and the force code. Here are the verdicts:\n\nF1: KEEP \u2014 Line 133's list comprehension is a per-agent Python loop, which breaks the \"no per-agent loops\" constraint on line 198, and the step-4 grep (`for.*eval_indices`) would match it.\nF2: DROP \u2014 The parent slice plan already names the force loops as the root cause, and the builder is not inside a `BulkForce`, so this is a request for profiling, not a contradiction.\nF3: DROP \u2014 The doc already admits padding wastes memory when neighbor counts vary and keeps CSR behind the same `NeighborData` interface; asking for added scale targets is an opinion about scope.\nF4: DROP \u2014 The architecture's heterogeneous-neighbor rule applies to the spatial query interface, which this slice explicitly leaves unchanged, and 108 is future work.\nF5: KEEP \u2014 The plan puts 103 before 109, and 103's design adds new `BulkForce`s built on `neighbor_lists` loops. 109 requires every implementation to be updated but lists only five forces and greps only flocking/herding, so 103's forces would be missed.\nF6: DROP \u2014 `spatial.build` inside `tick()` is existing code (tick.py:39) that the slice only describes; moving it is outside this slice's scope.\nF7: KEEP \u2014 Line 80's \"never dereferenced\" is false: the gather on line 111 reads row \u22121, and in Separation a pad that aliases the agent gives a zero distance, so inf/NaN appear unless the mask is applied before the division. An empty active set also makes `max_neighbors` an empty reduction.\nF8: DROP \u2014 Keeping loop reference implementations in tests is a choice of test strategy, not a defect, and the rtol point is a minor tolerance nit."
+}

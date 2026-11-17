@@ -1,0 +1,58 @@
+{
+ "case": "squadron-403-design",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "_search_merge_commit`, `_find_slice_branch` and the `run_git` OSError path all return a bare `None` with no log, so a git refusal or missing git would come out as `NO_LANDING`. That contradicts the design's own line 327 and the `run_git` docstring, and the design has no way to reach its \"exit 1 on git error\" outcome."
+  ],
+  "F2": [
+   "DROP",
+   "the design states this as an accepted limit, matching 400's existing precedent, so asking for concurrent-write detection is hardening rather than a defect."
+  ],
+  "F3": [
+   "KEEP",
+   "the existing `_search_merge_commit` runs `git log \u2026 -1` and returns one hash, but D1 needs every landing, oldest first. A `first_parent` flag alone can't do that, and the line-346 cap on how much `git_utils` may grow doesn't hold."
+  ],
+  "F4": [
+   "KEEP",
+   "AdapterContext` is built directly in `tests/metrology/snapshot/builders.py` and `test_python_length.py`. A required field with no default breaks those calls, so \"the 400 tests pass unchanged\" (line 389) is false as written."
+  ],
+  "F5": [
+   "DROP",
+   "the same paragraph says 401 adds no tool-resolving code, so the conditional has nothing to act on. The hedge is harmless wording."
+  ],
+  "F6": [
+   "KEEP",
+   "at a clean HEAD the exported tree and the live source are identical, so the in-place-equals-export test can't catch pyright resolving through the editable install. The stated mitigation therefore doesn't detect the risk it names."
+  ],
+  "F7": [
+   "KEEP",
+   "D2 tells users to resolve brownfield slices from a checkout targeting another branch, but reads are keyed only by `ProjectId` with no `target_ref` filter. Landings from different targets therefore mix in reports that are labelled with a single target."
+  ],
+  "F8": [
+   "DROP",
+   "anything the repository holds can already be checked out and snapshotted in place, running its `eslint.config.*`. Export doesn't meaningfully widen the trust boundary."
+  ],
+  "F9": [
+   "DROP",
+   "this is an opinion about scope and length, not a defect."
+  ]
+ },
+ "wall_seconds": 44.8,
+ "cost_usd": 1.0328106,
+ "raw_output": "F1: KEEP \u2014 `_search_merge_commit`, `_find_slice_branch` and the `run_git` OSError path all return a bare `None` with no log, so a git refusal or missing git would come out as `NO_LANDING`. That contradicts the design's own line 327 and the `run_git` docstring, and the design has no way to reach its \"exit 1 on git error\" outcome.\nF2: DROP \u2014 the design states this as an accepted limit, matching 400's existing precedent, so asking for concurrent-write detection is hardening rather than a defect.\nF3: KEEP \u2014 the existing `_search_merge_commit` runs `git log \u2026 -1` and returns one hash, but D1 needs every landing, oldest first. A `first_parent` flag alone can't do that, and the line-346 cap on how much `git_utils` may grow doesn't hold.\nF4: KEEP \u2014 `AdapterContext` is built directly in `tests/metrology/snapshot/builders.py` and `test_python_length.py`. A required field with no default breaks those calls, so \"the 400 tests pass unchanged\" (line 389) is false as written.\nF5: DROP \u2014 the same paragraph says 401 adds no tool-resolving code, so the conditional has nothing to act on. The hedge is harmless wording.\nF6: KEEP \u2014 at a clean HEAD the exported tree and the live source are identical, so the in-place-equals-export test can't catch pyright resolving through the editable install. The stated mitigation therefore doesn't detect the risk it names.\nF7: KEEP \u2014 D2 tells users to resolve brownfield slices from a checkout targeting another branch, but reads are keyed only by `ProjectId` with no `target_ref` filter. Landings from different targets therefore mix in reports that are labelled with a single target.\nF8: DROP \u2014 anything the repository holds can already be checked out and snapshotted in place, running its `eslint.config.*`. Export doesn't meaningfully widen the trust boundary.\nF9: DROP \u2014 this is an opinion about scope and length, not a defect."
+}

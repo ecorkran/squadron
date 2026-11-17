@@ -1,0 +1,88 @@
+{
+ "case": "squadron-385-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 11,
+  "F11": 12,
+  "F12": 13,
+  "F13": 14,
+  "F14": 15,
+  "F15": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Task 5.1's bullet says \"do not degrade an unreachable `cf` to a default base\" and then does exactly that, silently and with nothing logged. That contradicts D1's own reason for the rule and CLAUDE.md's ban on silent fallbacks."
+  ],
+  "F2": [
+   "DROP",
+   "This repo's CLAUDE.md says a slice branch merges into the target when implementation is done; the cited ban on merge tasks is not in the project conventions."
+  ],
+  "F3": [
+   "DROP",
+   "The cited \"check off only verified items\" rule is not in this project's CLAUDE.md; marking dropped items for the visualizer is a convention choice."
+  ],
+  "F4": [
+   "DROP",
+   "The design already names `gather_inputs() \u2192 PrInputs (commits, slice, review)`, and Task 7 builds `gather_inputs`, so defining the type and the review half is evident to the implementer."
+  ],
+  "F5": [
+   "DROP",
+   "Getting the local head sha with `git rev-parse HEAD` is trivial wiring, not a task that cannot be completed."
+  ],
+  "F6": [
+   "DROP",
+   "11.1 (`compose_body(facts, \u2026)` requesting prose per section) and 10a.1 already cover prompt construction from the facts; this asks for more detail where the text is enough."
+  ],
+  "F7": [
+   "KEEP",
+   "The H1-name parser falls through to the model on input it does not match, so the project parsing rules require a test on real input, and 10a.2 has none. No task says where the H1 is read either."
+  ],
+  "F8": [
+   "DROP",
+   "Logging with `logger.exception` at ERROR and failing non-zero satisfies the exception rule's re-raise option whatever the handler is called; the label and exit mechanics are wording."
+  ],
+  "F9": [
+   "KEEP",
+   "13.2 compares dry-run output with a separate real run, which is exactly what the design's Testing section forbids. With a deterministic fake composer that test passes even without the single binding."
+  ],
+  "F10": [
+   "DROP",
+   "The live walkthrough (steps 1 and 4) covers these criteria; extra unit assertions are a request for more tests, not a missing requirement."
+  ],
+  "F11": [
+   "DROP",
+   "Order in the `git rev-list base..head` range is well defined enough for an implementer; this asks for detail where the text is enough."
+  ],
+  "F12": [
+   "KEEP",
+   "Review commands resolve `--profile` (default `None`) through `_resolve_profile` (flag \u2192 template \u2192 `default_review_profile` config \u2192 `sdk`). The tasks pass `profile: str` \"as the CLI flags supply them\" and name no resolution, which invites a hard-coded default."
+  ],
+  "F13": [
+   "DROP",
+   "D8 and 14.1 state the `CodeHostError` wrapping requirement plainly; whoever writes Task 14 will write or fix the code under test."
+  ],
+  "F14": [
+   "DROP",
+   "The degraded case logs a WARNING, so it is observable, and the no-input line follows D4's contract for \"no task input available.\""
+  ],
+  "F15": [
+   "DROP",
+   "Module split and size are an opinion about structure, not a defect."
+  ]
+ },
+ "wall_seconds": 71.7,
+ "cost_usd": 1.130411,
+ "raw_output": "F1: KEEP \u2014 Task 5.1's bullet says \"do not degrade an unreachable `cf` to a default base\" and then does exactly that, silently and with nothing logged. That contradicts D1's own reason for the rule and CLAUDE.md's ban on silent fallbacks.\nF2: DROP \u2014 This repo's CLAUDE.md says a slice branch merges into the target when implementation is done; the cited ban on merge tasks is not in the project conventions.\nF3: DROP \u2014 The cited \"check off only verified items\" rule is not in this project's CLAUDE.md; marking dropped items for the visualizer is a convention choice.\nF4: DROP \u2014 The design already names `gather_inputs() \u2192 PrInputs (commits, slice, review)`, and Task 7 builds `gather_inputs`, so defining the type and the review half is evident to the implementer.\nF5: DROP \u2014 Getting the local head sha with `git rev-parse HEAD` is trivial wiring, not a task that cannot be completed.\nF6: DROP \u2014 11.1 (`compose_body(facts, \u2026)` requesting prose per section) and 10a.1 already cover prompt construction from the facts; this asks for more detail where the text is enough.\nF7: KEEP \u2014 The H1-name parser falls through to the model on input it does not match, so the project parsing rules require a test on real input, and 10a.2 has none. No task says where the H1 is read either.\nF8: DROP \u2014 Logging with `logger.exception` at ERROR and failing non-zero satisfies the exception rule's re-raise option whatever the handler is called; the label and exit mechanics are wording.\nF9: KEEP \u2014 13.2 compares dry-run output with a separate real run, which is exactly what the design's Testing section forbids. With a deterministic fake composer that test passes even without the single binding.\nF10: DROP \u2014 The live walkthrough (steps 1 and 4) covers these criteria; extra unit assertions are a request for more tests, not a missing requirement.\nF11: DROP \u2014 Order in the `git rev-list base..head` range is well defined enough for an implementer; this asks for detail where the text is enough.\nF12: KEEP \u2014 Review commands resolve `--profile` (default `None`) through `_resolve_profile` (flag \u2192 template \u2192 `default_review_profile` config \u2192 `sdk`). The tasks pass `profile: str` \"as the CLI flags supply them\" and name no resolution, which invites a hard-coded default.\nF13: DROP \u2014 D8 and 14.1 state the `CodeHostError` wrapping requirement plainly; whoever writes Task 14 will write or fix the code under test.\nF14: DROP \u2014 The degraded case logs a WARNING, so it is observable, and the no-input line follows D4's contract for \"no task input available.\"\nF15: DROP \u2014 Module split and size are an opinion about structure, not a defect."
+}

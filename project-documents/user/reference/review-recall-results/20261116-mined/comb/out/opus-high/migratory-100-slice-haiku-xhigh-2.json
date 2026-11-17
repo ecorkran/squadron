@@ -1,0 +1,68 @@
+{
+ "case": "migratory-100-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The tick calls `query_radius` once per active agent (line 88) and passes ragged `list[NDArray]`/`list[BehavioralProfile]` to `BulkForce`, which breaks the slice's own rule against per-agent loops (line 247) and the architecture's \"no callbacks into Python during the hot loop\" (:99)."
+  ],
+  "F2": [
+   "KEEP",
+   "Line 39 says the tick will \"return updated state\" and the architecture says it \"Returns the updated state array\", but line 91 mutates in place and the signature returns `None`, so the document contradicts itself and its parent."
+  ],
+  "F3": [
+   "DROP",
+   "The architecture explicitly allows a naive first implementation (:45), and the slice already names 105 as the optimization slice, so restating the NFR is extra detail, not a defect."
+  ],
+  "F4": [
+   "KEEP",
+   "Line 152 (\"add force to velocity for all\") conflicts with lines 90 and 215 (active agents only); under the line-152 reading, inactive agents with nonzero velocity would move, which violates criterion 241."
+  ],
+  "F5": [
+   "DROP",
+   "BulkForce` receives `active_indices` with neighbor lists aligned to it, so it can exclude self, contrary to the claim; and no placeholder force in this slice divides by distance."
+  ],
+  "F6": [
+   "DROP",
+   "This is hardening against caller misuse (duplicate indices, bad `dt`), not a defect, and the slice's criteria don't require it."
+  ],
+  "F7": [
+   "KEEP",
+   "tick()` accepts only `list[BulkForce]`, yet line 152 says it \"prefers the bulk variant when available\" and criterion 248 requires exercising both the `Force` and `BulkForce` paths, which no tick path can do."
+  ],
+  "F8": [
+   "DROP",
+   "Neither the slice plan entry for 100 nor 101\u2013105 requires environment input; it belongs to future slices that wait on the Environment Layer initiative, so this is a scope opinion."
+  ],
+  "F9": [
+   "KEEP",
+   "The architecture (:95) says the engine must provide the float conversion path at the serialization boundary, but the slice hands that to the world server (lines 49 and 100), and no slice schedules it."
+  ],
+  "F10": [
+   "DROP",
+   "An unused `accelerations` array, the missing `np` import and the `forces=[...]` placeholder in an illustrative snippet are low-value polish, and the task breakdown can define the method signatures."
+  ],
+  "F11": [
+   "KEEP",
+   "Under semi-implicit Euler, position after n ticks is a\u00b7dt\u00b2\u00b7n(n+1)/2, not exactly proportional to t\u00b2, so verification step 4 as written describes a check that would fail."
+  ]
+ },
+ "wall_seconds": 46.4,
+ "cost_usd": 0.824938,
+ "raw_output": "F1: KEEP \u2014 The tick calls `query_radius` once per active agent (line 88) and passes ragged `list[NDArray]`/`list[BehavioralProfile]` to `BulkForce`, which breaks the slice's own rule against per-agent loops (line 247) and the architecture's \"no callbacks into Python during the hot loop\" (:99).\nF2: KEEP \u2014 Line 39 says the tick will \"return updated state\" and the architecture says it \"Returns the updated state array\", but line 91 mutates in place and the signature returns `None`, so the document contradicts itself and its parent.\nF3: DROP \u2014 The architecture explicitly allows a naive first implementation (:45), and the slice already names 105 as the optimization slice, so restating the NFR is extra detail, not a defect.\nF4: KEEP \u2014 Line 152 (\"add force to velocity for all\") conflicts with lines 90 and 215 (active agents only); under the line-152 reading, inactive agents with nonzero velocity would move, which violates criterion 241.\nF5: DROP \u2014 `BulkForce` receives `active_indices` with neighbor lists aligned to it, so it can exclude self, contrary to the claim; and no placeholder force in this slice divides by distance.\nF6: DROP \u2014 This is hardening against caller misuse (duplicate indices, bad `dt`), not a defect, and the slice's criteria don't require it.\nF7: KEEP \u2014 `tick()` accepts only `list[BulkForce]`, yet line 152 says it \"prefers the bulk variant when available\" and criterion 248 requires exercising both the `Force` and `BulkForce` paths, which no tick path can do.\nF8: DROP \u2014 Neither the slice plan entry for 100 nor 101\u2013105 requires environment input; it belongs to future slices that wait on the Environment Layer initiative, so this is a scope opinion.\nF9: KEEP \u2014 The architecture (:95) says the engine must provide the float conversion path at the serialization boundary, but the slice hands that to the world server (lines 49 and 100), and no slice schedules it.\nF10: DROP \u2014 An unused `accelerations` array, the missing `np` import and the `forces=[...]` placeholder in an illustrative snippet are low-value polish, and the task breakdown can define the method signatures.\nF11: KEEP \u2014 Under semi-implicit Euler, position after n ticks is a\u00b7dt\u00b2\u00b7n(n+1)/2, not exactly proportional to t\u00b2, so verification step 4 as written describes a check that would fail."
+}

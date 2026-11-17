@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-915-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Line 89 says delete removes the key from the file its scope maps to, which is the personal file for `git.integration_branch`, so the `unset --project` remedy at line 146 and step 9 deletes the personal value and leaves the stale shared copy in place."
+  ],
+  "F2": [
+   "KEEP",
+   "Only `cf init` writes the ignore line, so in any existing project `migrate-personal` or a personal `set` creates `.context-forge.local.toml` with no ignore entry and the leak comes back; the success criteria only cover fresh projects."
+  ],
+  "F3": [
+   "DROP",
+   "Data Flow sets the rule per key and is consistent with the precedence summary, and `list()` in `ConfigManager.ts:206` just calls `get()` for each key, so its merge and `source` already follow `get()`."
+  ],
+  "F4": [
+   "DROP",
+   "The design does not say how the per-key failure is caught, so the implementer can still follow the exception rule, and a reported `failed:` summary line is observable; asking for more tests and named exception types is extra detail, not a defect."
+  ],
+  "F5": [
+   "DROP",
+   "The parent says each developer and worktree needs its own value, so a new worktree starting with no personal value is the intended behavior, not a gap."
+  ]
+ },
+ "wall_seconds": 40.9,
+ "cost_usd": 0.8474443999999999,
+ "raw_output": "F1: KEEP \u2014 Line 89 says delete removes the key from the file its scope maps to, which is the personal file for `git.integration_branch`, so the `unset --project` remedy at line 146 and step 9 deletes the personal value and leaves the stale shared copy in place.\nF2: KEEP \u2014 Only `cf init` writes the ignore line, so in any existing project `migrate-personal` or a personal `set` creates `.context-forge.local.toml` with no ignore entry and the leak comes back; the success criteria only cover fresh projects.\nF3: DROP \u2014 Data Flow sets the rule per key and is consistent with the precedence summary, and `list()` in `ConfigManager.ts:206` just calls `get()` for each key, so its merge and `source` already follow `get()`.\nF4: DROP \u2014 The design does not say how the per-key failure is caught, so the implementer can still follow the exception rule, and a reported `failed:` summary line is observable; asking for more tests and named exception types is extra detail, not a defect.\nF5: DROP \u2014 The parent says each developer and worktree needs its own value, so a new worktree starting with no personal value is the intended behavior, not a gap."
+}

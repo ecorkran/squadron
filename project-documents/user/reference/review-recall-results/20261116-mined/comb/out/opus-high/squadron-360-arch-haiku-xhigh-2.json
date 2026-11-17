@@ -1,0 +1,88 @@
+{
+ "case": "squadron-360-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Main's `file-naming-conventions.md` calls 940-949 the \"former\" analysis range and prefers the initiative's base index, but the document still claims a reserved 940-949 range with overflow and says no convention change is needed."
+  ],
+  "F2": [
+   "DROP",
+   "onboard (slice 440) does not exist in this snapshot, and main's `commands/sq/onboard.md` calls `/sq:analysis understand`, the skill this document defines, so it reuses the skill rather than duplicating the flow."
+  ],
+  "F3": [
+   "KEEP",
+   "The document tracks `meta.json` and warns whenever `gitCommitHash` differs from HEAD, but committing the graph moves HEAD past that hash, so the warning fires on every committed graph whether or not code changed."
+  ],
+  "F4": [
+   "DROP",
+   "The Phase 5/6 tour label is a minor mislabel, `autoUpdate` is a real config key written by `--auto-update`, and the rest asks for more schema detail."
+  ],
+  "F5": [
+   "KEEP",
+   "The document's own contract table says upstream keeps `intermediate/scan-result.json`, yet the only ignore rule covers `.trash-*/` and the file is not on the tracked list, so it shows up untracked against the \"leave the working tree clean\" goal."
+  ],
+  "F6": [
+   "DROP",
+   "Extraction method, metrics, size budget and test plan are slice-design detail, and the document never proposes a non-markdown extractor that the installer would fail to copy."
+  ],
+  "F7": [
+   "DROP",
+   "A collision needs an overview or comprehension run to write into the same repo during an audit run's window, which is hardening against a case unlikely to arise."
+  ],
+  "F8": [
+   "KEEP",
+   "The translation rules say \"Emphasis is a generation parameter\" (238-239), while the resolved decision says an emphasis parameter is added only if real use shows the need (330-331), which is a direct internal contradiction."
+  ],
+  "F9": [
+   "KEEP",
+   "The markdown file is the client artifact (PDF and slides are downstream, not squadron's job), yet it must carry `docType` frontmatter that the translation rules say must never appear, and no strip or export step is defined."
+  ],
+  "F10": [
+   "DROP",
+   "A step-by-step flow, gap-recording format and re-run policy for Capability 2 are detail requests that belong in slice design."
+  ],
+  "F11": [
+   "DROP",
+   "Whether to use `project.description` is a slice-design detail; the \"never fabricate intent\" goal already covers it."
+  ],
+  "F12": [
+   "DROP",
+   "A full failure-mode table is a request for more detail at the architecture level, not a contradiction or missing success criterion."
+  ],
+  "F13": [
+   "DROP",
+   "The dispatcher OCP point is opinion, and the Codex twin rule does not exist in this snapshot (there is no `commands/agents/`)."
+  ],
+  "F14": [
+   "DROP",
+   "Splitting or cutting deliverables is an opinion about scope."
+  ],
+  "F15": [
+   "DROP",
+   "Input, not a dependency\" means squadron reads the output without depending on the plugin's engine, which is consistent with stopping when the graph is absent; the other two tensions are minor wording."
+  ]
+ },
+ "wall_seconds": 77.2,
+ "cost_usd": 1.1778494000000002,
+ "raw_output": "I'm checking the remaining findings against main's onboard, audit, and installer code before I give the verdicts.\nF1: KEEP \u2014 Main's `file-naming-conventions.md` calls 940-949 the \"former\" analysis range and prefers the initiative's base index, but the document still claims a reserved 940-949 range with overflow and says no convention change is needed.\nF2: DROP \u2014 onboard (slice 440) does not exist in this snapshot, and main's `commands/sq/onboard.md` calls `/sq:analysis understand`, the skill this document defines, so it reuses the skill rather than duplicating the flow.\nF3: KEEP \u2014 The document tracks `meta.json` and warns whenever `gitCommitHash` differs from HEAD, but committing the graph moves HEAD past that hash, so the warning fires on every committed graph whether or not code changed.\nF4: DROP \u2014 The Phase 5/6 tour label is a minor mislabel, `autoUpdate` is a real config key written by `--auto-update`, and the rest asks for more schema detail.\nF5: KEEP \u2014 The document's own contract table says upstream keeps `intermediate/scan-result.json`, yet the only ignore rule covers `.trash-*/` and the file is not on the tracked list, so it shows up untracked against the \"leave the working tree clean\" goal.\nF6: DROP \u2014 Extraction method, metrics, size budget and test plan are slice-design detail, and the document never proposes a non-markdown extractor that the installer would fail to copy.\nF7: DROP \u2014 A collision needs an overview or comprehension run to write into the same repo during an audit run's window, which is hardening against a case unlikely to arise.\nF8: KEEP \u2014 The translation rules say \"Emphasis is a generation parameter\" (238-239), while the resolved decision says an emphasis parameter is added only if real use shows the need (330-331), which is a direct internal contradiction.\nF9: KEEP \u2014 The markdown file is the client artifact (PDF and slides are downstream, not squadron's job), yet it must carry `docType` frontmatter that the translation rules say must never appear, and no strip or export step is defined.\nF10: DROP \u2014 A step-by-step flow, gap-recording format and re-run policy for Capability 2 are detail requests that belong in slice design.\nF11: DROP \u2014 Whether to use `project.description` is a slice-design detail; the \"never fabricate intent\" goal already covers it.\nF12: DROP \u2014 A full failure-mode table is a request for more detail at the architecture level, not a contradiction or missing success criterion.\nF13: DROP \u2014 The dispatcher OCP point is opinion, and the Codex twin rule does not exist in this snapshot (there is no `commands/agents/`).\nF14: DROP \u2014 Splitting or cutting deliverables is an opinion about scope.\nF15: DROP \u2014 \"Input, not a dependency\" means squadron reads the output without depending on the plugin's engine, which is consistent with stopping when the graph is absent; the other two tensions are minor wording."
+}

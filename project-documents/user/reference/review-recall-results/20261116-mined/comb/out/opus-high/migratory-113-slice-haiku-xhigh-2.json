@@ -1,0 +1,78 @@
+{
+ "case": "migratory-113-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In slice 112's tick, `filtered_counts` is reassigned to the capped counts. So `record_density(filtered_counts)` reads capped counts, which contradicts the \"pre-cap\" claim. With `test.yaml`'s `max_neighbors=1`, that would push the dispatcher to grid when agents are clustered."
+  ],
+  "F2": [
+   "KEEP",
+   "The hash grid returns each agent's neighbors grouped by cell rather than in ascending index order, so the floating-point `reduceat` sums can differ from brute force. That makes the \"bit-exact position equality\" test in step 5 unreliable, and slice 105 documents no floating-point caveat."
+  ],
+  "F3": [
+   "DROP",
+   "The architecture says the caller owns the spatial index and passes it in, so dispatcher state stored there is allowed. The determinism risk is already covered by F2."
+  ],
+  "F4": [
+   "DROP",
+   "The `hasattr` hook is a design choice the doc considers and justifies. The real defect here (which counts get recorded) is captured by F1."
+  ],
+  "F5": [
+   "KEEP",
+   "By the doc's own formula, uniform spread over the whole world gives roughly 88\u2013132 mean neighbors with `test.yaml`'s radii. That is far above `t+h`=12, so the dispatcher would never pick grid during the expansion phase the slice exists to capture."
+  ],
+  "F6": [
+   "KEEP",
+   "If `h >= t`, the brute\u2192grid switch can never fire and nothing reports an error. Walkthrough step 4's sweep at threshold 2 with the default band 2.0 hits exactly this case."
+  ],
+  "F7": [
+   "KEEP",
+   "Zero active agents is valid input (slices 110 and 112 handle it explicitly), but `counts.sum()/n_active` divides by zero and the doc gives no rule for that case."
+  ],
+  "F8": [
+   "KEEP",
+   "The dispatcher signature hard-codes `hysteresis_band=0.0` and `initial_backend=\"brute\"`. That contradicts the doc's own statement that defaults live in the config layer, and it breaks the project rule on centralized defaults and comparison values."
+  ],
+  "F9": [
+   "KEEP",
+   "Line 301 and the risk section say an operator can set `initial_backend: grid`, but `SpatialConfig` has no such field and the wiring hard-codes brute."
+  ],
+  "F10": [
+   "DROP",
+   "Changing YAML without touching code is a reasonable reading of the plan's \"tweak live while experimenting\". The excluded item is automatic threshold learning, not operator tuning."
+  ],
+  "F11": [
+   "DROP",
+   "This only asks for an NFR to be restated. The slice does not claim to change the scaling ceiling."
+  ],
+  "F12": [
+   "DROP",
+   "The doc says pinning can be done by env var or fixture, and its testing strategy specifies a parametrized fixture. The `/tmp` scratch files are a minor process detail."
+  ],
+  "F13": [
+   "DROP",
+   "Document length and scope are a matter of style."
+  ]
+ },
+ "wall_seconds": 61.7,
+ "cost_usd": 1.0463829999999998,
+ "raw_output": "Checking the test config's query radius to confirm the threshold arithmetic in F5.\nF1: KEEP \u2014 In slice 112's tick, `filtered_counts` is reassigned to the capped counts. So `record_density(filtered_counts)` reads capped counts, which contradicts the \"pre-cap\" claim. With `test.yaml`'s `max_neighbors=1`, that would push the dispatcher to grid when agents are clustered.\nF2: KEEP \u2014 The hash grid returns each agent's neighbors grouped by cell rather than in ascending index order, so the floating-point `reduceat` sums can differ from brute force. That makes the \"bit-exact position equality\" test in step 5 unreliable, and slice 105 documents no floating-point caveat.\nF3: DROP \u2014 The architecture says the caller owns the spatial index and passes it in, so dispatcher state stored there is allowed. The determinism risk is already covered by F2.\nF4: DROP \u2014 The `hasattr` hook is a design choice the doc considers and justifies. The real defect here (which counts get recorded) is captured by F1.\nF5: KEEP \u2014 By the doc's own formula, uniform spread over the whole world gives roughly 88\u2013132 mean neighbors with `test.yaml`'s radii. That is far above `t+h`=12, so the dispatcher would never pick grid during the expansion phase the slice exists to capture.\nF6: KEEP \u2014 If `h >= t`, the brute\u2192grid switch can never fire and nothing reports an error. Walkthrough step 4's sweep at threshold 2 with the default band 2.0 hits exactly this case.\nF7: KEEP \u2014 Zero active agents is valid input (slices 110 and 112 handle it explicitly), but `counts.sum()/n_active` divides by zero and the doc gives no rule for that case.\nF8: KEEP \u2014 The dispatcher signature hard-codes `hysteresis_band=0.0` and `initial_backend=\"brute\"`. That contradicts the doc's own statement that defaults live in the config layer, and it breaks the project rule on centralized defaults and comparison values.\nF9: KEEP \u2014 Line 301 and the risk section say an operator can set `initial_backend: grid`, but `SpatialConfig` has no such field and the wiring hard-codes brute.\nF10: DROP \u2014 Changing YAML without touching code is a reasonable reading of the plan's \"tweak live while experimenting\". The excluded item is automatic threshold learning, not operator tuning.\nF11: DROP \u2014 This only asks for an NFR to be restated. The slice does not claim to change the scaling ceiling.\nF12: DROP \u2014 The doc says pinning can be done by env var or fixture, and its testing strategy specifies a parametrized fixture. The `/tmp` scratch files are a minor process detail.\nF13: DROP \u2014 Document length and scope are a matter of style."
+}

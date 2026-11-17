@@ -1,0 +1,108 @@
+{
+ "case": "migratory-140-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17,
+  "F19": 18
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "protocol.py` already sends binary float64 frames of 9 + 32\u00b7n bytes with a compression field, so the doc's \"uncompressed JSON, 24 bytes/agent\" baseline and the bandwidth numbers built on it are wrong."
+  ],
+  "F2": [
+   "KEEP",
+   "engine/tick.py:14-21` returns `None` and changes state in place, which contradicts the doc's \"tick() returns NumPy arrays\", and the \"central decision\" is left as three options behind an undefined abstraction."
+  ],
+  "F3": [
+   "KEEP",
+   "tick.py` passes host NumPy arrays through `SpatialQuery` and `BulkForce`, so a full GPU tick \"behind existing interfaces\" contradicts the interfaces as they stand."
+  ],
+  "F4": [
+   "KEEP",
+   "300-arch allows up to 5% STATE_UPDATE drops, and accumulated int16 deltas desync on any dropped frame; the doc has no keyframe or resync design."
+  ],
+  "F5": [
+   "KEEP",
+   "300-arch line 51 requires p99 inter-arrival under 1.5\u00d7 the 60 Hz tick budget, and a 30 Hz stream gives 2.0\u00d7, with no NFR amendment."
+  ],
+  "F6": [
+   "DROP",
+   "the doc labels the phase breakdown as the N=2492 synthetic bench, and 57 TPS at 3,500 falls in the journal's 79\u219243 range; this is evidentiary nitpicking, not a defect."
+  ],
+  "F7": [
+   "KEEP",
+   "the doc says the hash grid failed from \"bookkeeping overhead\", but the Entry 4 addendum calls that the wrong summary and Entry 8 blames candidate explosion in dense cells, which a GPU does not remove and which is exactly the demo's regime."
+  ],
+  "F8": [
+   "DROP",
+   "it rests on extrapolation and argues about tier technique choices, which is scope and approach opinion."
+  ],
+  "F9": [
+   "DROP",
+   "per-phase budget tables are slice-level detail beyond what an architecture doc needs."
+  ],
+  "F10": [
+   "DROP",
+   "skin margins, atomics and equivalence metrics are slice-design detail, and the doc already flags stagger as an intended behavioral change."
+  ],
+  "F11": [
+   "DROP",
+   "Numba as the porting template does not conflict with NumPy as the oracle, and backend coexistence is a deliberate approach choice, not duplication by mistake."
+  ],
+  "F12": [
+   "DROP",
+   "Numba nogil and where encoding work runs are implementation detail for the slice designs."
+  ],
+  "F13": [
+   "DROP",
+   "the demo tier relies on dedicated transport or server-side render, not culling alone, so this is mostly opinion about culling's value."
+  ],
+  "F14": [
+   "KEEP",
+   "SNAPSHOT is 25 + 36\u00b7n bytes and 300-arch requires p99 delivery under 100 ms with zero drops; at 250k\u20132M agents the doc neither addresses this nor amends the NFR."
+  ],
+  "F15": [
+   "DROP",
+   "this is a generic request for a failure-mode section, and its specific cases repeat F4 and F13."
+  ],
+  "F16": [
+   "DROP",
+   "the wire slices use the existing in-place AgentState arrays, and the GPU track is owned by 140 itself, so neither the dependency nor the ownership conflict exists."
+  ],
+  "F17": [
+   "DROP",
+   "a viewer compatibility and versioning plan is slice-level detail, and the binary-wire premise is already covered by F1."
+  ],
+  "F18": [
+   "DROP",
+   "the risk-level rating and decision gates are judgment calls."
+  ],
+  "F19": [
+   "DROP",
+   "the proposed cuts are opinions about scope."
+  ]
+ },
+ "wall_seconds": 57.1,
+ "cost_usd": 1.0436077000000001,
+ "raw_output": "I've checked each finding against the doc, the code, the 300-arch NFRs and the performance journal. Results:\n\nF1: KEEP \u2014 `protocol.py` already sends binary float64 frames of 9 + 32\u00b7n bytes with a compression field, so the doc's \"uncompressed JSON, 24 bytes/agent\" baseline and the bandwidth numbers built on it are wrong.\nF2: KEEP \u2014 `engine/tick.py:14-21` returns `None` and changes state in place, which contradicts the doc's \"tick() returns NumPy arrays\", and the \"central decision\" is left as three options behind an undefined abstraction.\nF3: KEEP \u2014 `tick.py` passes host NumPy arrays through `SpatialQuery` and `BulkForce`, so a full GPU tick \"behind existing interfaces\" contradicts the interfaces as they stand.\nF4: KEEP \u2014 300-arch allows up to 5% STATE_UPDATE drops, and accumulated int16 deltas desync on any dropped frame; the doc has no keyframe or resync design.\nF5: KEEP \u2014 300-arch line 51 requires p99 inter-arrival under 1.5\u00d7 the 60 Hz tick budget, and a 30 Hz stream gives 2.0\u00d7, with no NFR amendment.\nF6: DROP \u2014 the doc labels the phase breakdown as the N=2492 synthetic bench, and 57 TPS at 3,500 falls in the journal's 79\u219243 range; this is evidentiary nitpicking, not a defect.\nF7: KEEP \u2014 the doc says the hash grid failed from \"bookkeeping overhead\", but the Entry 4 addendum calls that the wrong summary and Entry 8 blames candidate explosion in dense cells, which a GPU does not remove and which is exactly the demo's regime.\nF8: DROP \u2014 it rests on extrapolation and argues about tier technique choices, which is scope and approach opinion.\nF9: DROP \u2014 per-phase budget tables are slice-level detail beyond what an architecture doc needs.\nF10: DROP \u2014 skin margins, atomics and equivalence metrics are slice-design detail, and the doc already flags stagger as an intended behavioral change.\nF11: DROP \u2014 Numba as the porting template does not conflict with NumPy as the oracle, and backend coexistence is a deliberate approach choice, not duplication by mistake.\nF12: DROP \u2014 Numba nogil and where encoding work runs are implementation detail for the slice designs.\nF13: DROP \u2014 the demo tier relies on dedicated transport or server-side render, not culling alone, so this is mostly opinion about culling's value.\nF14: KEEP \u2014 SNAPSHOT is 25 + 36\u00b7n bytes and 300-arch requires p99 delivery under 100 ms with zero drops; at 250k\u20132M agents the doc neither addresses this nor amends the NFR.\nF15: DROP \u2014 this is a generic request for a failure-mode section, and its specific cases repeat F4 and F13.\nF16: DROP \u2014 the wire slices use the existing in-place AgentState arrays, and the GPU track is owned by 140 itself, so neither the dependency nor the ownership conflict exists.\nF17: DROP \u2014 a viewer compatibility and versioning plan is slice-level detail, and the binary-wire premise is already covered by F1.\nF18: DROP \u2014 the risk-level rating and decision gates are judgment calls.\nF19: DROP \u2014 the proposed cuts are opinions about scope."
+}

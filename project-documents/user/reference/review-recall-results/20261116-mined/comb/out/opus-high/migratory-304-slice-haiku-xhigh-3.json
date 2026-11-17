@@ -1,0 +1,73 @@
+{
+ "case": "migratory-304-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The normative `step()` at lines 272\u2013288 returns early before `post_tick()` when there are no entities, which contradicts line 291, line 408 and the correct sketch at lines 176\u2013191."
+  ],
+  "F2": [
+   "KEEP",
+   "The parent plan's \"Handle post-tick environment writes\" and \"pass to `engine.tick()`\" are neither delivered nor scoped out; `post_tick()` is called with no arguments, so line 196's \"agent-originated writes\" have no data path."
+  ],
+  "F3": [
+   "DROP",
+   "The parent plan's 304 entry never assigns environment-aware forces to this slice; whether initiative 100 tracks them is a planning-scope question, not a defect in this design."
+  ],
+  "F4": [
+   "DROP",
+   "The design excludes grid resolution and layer selection on purpose and says why (no grids until layers exist), so this is a scope opinion."
+  ],
+  "F5": [
+   "KEEP",
+   "The plan sends \"terrain summary in snapshots\" from 305 to 304, but line 47 defers it to unnamed \"future work\", so the plan item now has no owner."
+  ],
+  "F6": [
+   "DROP",
+   "Passing the seasonal parameter through for 308 is a reasonable interface choice; the \"mid-season\" label and the repeated literal are wording and style."
+  ],
+  "F7": [
+   "KEEP",
+   "Line 220 says the environment is always present with no `None` checks, yet the constructor accepts `None` and `step()` silently skips the lifecycle; line 410 also contradicts lines 354 and 407."
+  ],
+  "F8": [
+   "KEEP",
+   "The hard-coded `seed=42` default used when config omits it contradicts 300-arch line 47 (\"explicit configuration, not hard-coded defaults\") and the no-silent-fallback rule."
+  ],
+  "F9": [
+   "DROP",
+   "This asks for an NFR restatement for two calls that do nothing while no layers exist; it adds detail, not a fix."
+  ],
+  "F10": [
+   "DROP",
+   "With `seasonal_parameter` fixed at 0.0 and no layers, `pre_tick`/`post_tick` cannot raise in this slice, so this hardens against a case that cannot arise."
+  ],
+  "F11": [
+   "DROP",
+   "Shared with entity manager\" is a minor wording issue, and the out-of-bounds risk belongs to future forces, not to this slice."
+  ],
+  "F12": [
+   "DROP",
+   "Cutting illustrative or repeated text is a style and scope preference; the duplicate `step()` is already covered by F1."
+  ]
+ },
+ "wall_seconds": 52.3,
+ "cost_usd": 1.0191246,
+ "raw_output": "I've checked each finding against the 304 slice, the 300 slice plan, 500-arch, 300-arch, and the 303, 500 and 100 slice docs.\n\nF1: KEEP \u2014 The normative `step()` at lines 272\u2013288 returns early before `post_tick()` when there are no entities, which contradicts line 291, line 408 and the correct sketch at lines 176\u2013191.\nF2: KEEP \u2014 The parent plan's \"Handle post-tick environment writes\" and \"pass to `engine.tick()`\" are neither delivered nor scoped out; `post_tick()` is called with no arguments, so line 196's \"agent-originated writes\" have no data path.\nF3: DROP \u2014 The parent plan's 304 entry never assigns environment-aware forces to this slice; whether initiative 100 tracks them is a planning-scope question, not a defect in this design.\nF4: DROP \u2014 The design excludes grid resolution and layer selection on purpose and says why (no grids until layers exist), so this is a scope opinion.\nF5: KEEP \u2014 The plan sends \"terrain summary in snapshots\" from 305 to 304, but line 47 defers it to unnamed \"future work\", so the plan item now has no owner.\nF6: DROP \u2014 Passing the seasonal parameter through for 308 is a reasonable interface choice; the \"mid-season\" label and the repeated literal are wording and style.\nF7: KEEP \u2014 Line 220 says the environment is always present with no `None` checks, yet the constructor accepts `None` and `step()` silently skips the lifecycle; line 410 also contradicts lines 354 and 407.\nF8: KEEP \u2014 The hard-coded `seed=42` default used when config omits it contradicts 300-arch line 47 (\"explicit configuration, not hard-coded defaults\") and the no-silent-fallback rule.\nF9: DROP \u2014 This asks for an NFR restatement for two calls that do nothing while no layers exist; it adds detail, not a fix.\nF10: DROP \u2014 With `seasonal_parameter` fixed at 0.0 and no layers, `pre_tick`/`post_tick` cannot raise in this slice, so this hardens against a case that cannot arise.\nF11: DROP \u2014 \"Shared with entity manager\" is a minor wording issue, and the out-of-bounds risk belongs to future forces, not to this slice.\nF12: DROP \u2014 Cutting illustrative or repeated text is a style and scope preference; the duplicate `step()` is already covered by F1."
+}

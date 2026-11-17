@@ -1,0 +1,53 @@
+{
+ "case": "squadron-385-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This worktree's CLAUDE.md says \"A slice branch merges into the target when its implementation is done\" and has no rule against writing a merge as a task; 16.4 also puts code review before the merge."
+  ],
+  "F2": [
+   "KEEP",
+   "Task 5.1 says \"Do not degrade an unreachable `cf` to a default base\" and in the next sentence sends it to the host default, so a set integration branch silently retargets to `main` when `cf` is down; this breaks the no-silent-fallback rule and D1's own \"retargeting a PR is a write\" reasoning."
+  ],
+  "F3": [
+   "KEEP",
+   "resolve_slice_info` returns `task_files` as a list, slice 382 has three task files, and reading only the first silently drops items from \"how it was verified\" and \"known gaps\"."
+  ],
+  "F4": [
+   "KEEP",
+   "384-tasks.post-findings-to-the-pr.md` has zero unchecked items today, and this file will have none after 16.4, so a live-file test that requires both groups to be non-empty fails on the very files it names."
+  ],
+  "F5": [
+   "DROP",
+   "Task 13.1 follows the design's data flow, which already includes the current-branch read and the local-vs-remote sha comparison; naming the helper for the local sha is extra detail an implementer can supply without guessing."
+  ],
+  "F6": [
+   "KEEP",
+   "PrFacts must carry the verdict and assembly may only copy from inputs, but Task 8.1 reads only `reviewedSha` and no task gathers the `verdict:` frontmatter field that persistence writes."
+  ],
+  "F7": [
+   "DROP",
+   "D2 deliberately adds a separate current-branch helper in `git_utils`, and the import boundary (`review/` must not import `codehost/`) is why the two can't share one implementation."
+  ],
+  "F8": [
+   "KEEP",
+   "The first functional success criterion requires each fact under its named heading, but 11.2 and 9.2 only check that sections exist and fields are populated, so a body with items under the wrong headings would pass every listed test."
+  ]
+ },
+ "wall_seconds": 46.0,
+ "cost_usd": 1.051769,
+ "raw_output": "F1: DROP \u2014 This worktree's CLAUDE.md says \"A slice branch merges into the target when its implementation is done\" and has no rule against writing a merge as a task; 16.4 also puts code review before the merge.\nF2: KEEP \u2014 Task 5.1 says \"Do not degrade an unreachable `cf` to a default base\" and in the next sentence sends it to the host default, so a set integration branch silently retargets to `main` when `cf` is down; this breaks the no-silent-fallback rule and D1's own \"retargeting a PR is a write\" reasoning.\nF3: KEEP \u2014 `resolve_slice_info` returns `task_files` as a list, slice 382 has three task files, and reading only the first silently drops items from \"how it was verified\" and \"known gaps\".\nF4: KEEP \u2014 `384-tasks.post-findings-to-the-pr.md` has zero unchecked items today, and this file will have none after 16.4, so a live-file test that requires both groups to be non-empty fails on the very files it names.\nF5: DROP \u2014 Task 13.1 follows the design's data flow, which already includes the current-branch read and the local-vs-remote sha comparison; naming the helper for the local sha is extra detail an implementer can supply without guessing.\nF6: KEEP \u2014 PrFacts must carry the verdict and assembly may only copy from inputs, but Task 8.1 reads only `reviewedSha` and no task gathers the `verdict:` frontmatter field that persistence writes.\nF7: DROP \u2014 D2 deliberately adds a separate current-branch helper in `git_utils`, and the import boundary (`review/` must not import `codehost/`) is why the two can't share one implementation.\nF8: KEEP \u2014 The first functional success criterion requires each fact under its named heading, but 11.2 and 9.2 only check that sections exist and fields are populated, so a body with items under the wrong headings would pass every listed test."
+}

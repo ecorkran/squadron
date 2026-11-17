@@ -1,0 +1,88 @@
+{
+ "case": "context-forge-260-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The checker errors on any retroactive entry with a design or task file, or indexed after new work, which bounds the gate as stated; the remaining case is deliberate, contrived misuse."
+  ],
+  "F2": [
+   "KEEP",
+   "Step 5 writes the architecture before the existing-state plan, and an architecture alone counts as \"already planned\", so an adoption interrupted between the two writes gets misclassified with no resume path (the `adoptionCompletion.ts` point is pre-rework code slated for removal, but the partial-adoption hole is real)."
+  ],
+  "F3": [
+   "KEEP",
+   "Row (c)'s \"CF writes the architecture doc on both paths\" contradicts the amendment's single squadron path, and the concept row names two alternative writers with no rule for choosing one now that the probe is gone."
+  ],
+  "F4": [
+   "DROP",
+   "Reading the comprehension doc's filename, `docType` and provenance is the stated single point of contact, not a contradiction; match rules and versioning are slice-design detail."
+  ],
+  "F5": [
+   "DROP",
+   "The JSON schema and versioning of the slice 271 report are slice-design detail, not an architecture defect."
+  ],
+  "F6": [
+   "DROP",
+   "Deferring numeric thresholds to slice design is appropriate at architecture level, and the doc already names the misfire cases to guard against."
+  ],
+  "F7": [
+   "DROP",
+   "The doc treats false greenfield as the cheap error, so a one-way opt-out is consistent; the storage key is slice-design detail."
+  ],
+  "F8": [
+   "DROP",
+   "REVIEW-GATING intentionally keeps the arch gate for the derived architecture, gating is off by default and only recommends, and the fix proposed is a scope opinion."
+  ],
+  "F9": [
+   "DROP",
+   "A generic request for a failure table; adoption only adds files, so reversal is removing them, and per-I/O failure handling belongs in slice design."
+  ],
+  "F10": [
+   "DROP",
+   "The silent-fallback sentence sits inside the explicitly superseded \"Original\" contract; the live text says the prompt gets the comprehension path filled in."
+  ],
+  "F11": [
+   "DROP",
+   "The doc deliberately states that cf entry points have no brownfield path and that squadron owns its surfaces; this is a scope choice, not a gap."
+  ],
+  "F12": [
+   "DROP",
+   "The \"relative order\" sentence is about the index scheme; `layers[]` is something 364 supplies, not something cf's numbering depends on."
+  ],
+  "F13": [
+   "DROP",
+   "Each superseded passage is explicitly labeled (the \"original plan, all shipped\" list, the \"superseded 20261025\" bullet, the 20261025 note on release coupling), so the current rule can be told apart."
+  ],
+  "F14": [
+   "DROP",
+   "Scope and approach opinion; the effective-date cutoff compares an artifact's `dateCreated`, which plan entries do not carry."
+  ],
+  "F15": [
+   "DROP",
+   "history.ts` runs `rev-list -- .` under the project root with a 5-second timeout, its comment says it is folder-scoped and never decides the outcome, so the claimed false brownfield cannot come from history."
+  ]
+ },
+ "wall_seconds": 59.6,
+ "cost_usd": 0.9942363000000001,
+ "raw_output": "F1: DROP \u2014 The checker errors on any retroactive entry with a design or task file, or indexed after new work, which bounds the gate as stated; the remaining case is deliberate, contrived misuse.\nF2: KEEP \u2014 Step 5 writes the architecture before the existing-state plan, and an architecture alone counts as \"already planned\", so an adoption interrupted between the two writes gets misclassified with no resume path (the `adoptionCompletion.ts` point is pre-rework code slated for removal, but the partial-adoption hole is real).\nF3: KEEP \u2014 Row (c)'s \"CF writes the architecture doc on both paths\" contradicts the amendment's single squadron path, and the concept row names two alternative writers with no rule for choosing one now that the probe is gone.\nF4: DROP \u2014 Reading the comprehension doc's filename, `docType` and provenance is the stated single point of contact, not a contradiction; match rules and versioning are slice-design detail.\nF5: DROP \u2014 The JSON schema and versioning of the slice 271 report are slice-design detail, not an architecture defect.\nF6: DROP \u2014 Deferring numeric thresholds to slice design is appropriate at architecture level, and the doc already names the misfire cases to guard against.\nF7: DROP \u2014 The doc treats false greenfield as the cheap error, so a one-way opt-out is consistent; the storage key is slice-design detail.\nF8: DROP \u2014 REVIEW-GATING intentionally keeps the arch gate for the derived architecture, gating is off by default and only recommends, and the fix proposed is a scope opinion.\nF9: DROP \u2014 A generic request for a failure table; adoption only adds files, so reversal is removing them, and per-I/O failure handling belongs in slice design.\nF10: DROP \u2014 The silent-fallback sentence sits inside the explicitly superseded \"Original\" contract; the live text says the prompt gets the comprehension path filled in.\nF11: DROP \u2014 The doc deliberately states that cf entry points have no brownfield path and that squadron owns its surfaces; this is a scope choice, not a gap.\nF12: DROP \u2014 The \"relative order\" sentence is about the index scheme; `layers[]` is something 364 supplies, not something cf's numbering depends on.\nF13: DROP \u2014 Each superseded passage is explicitly labeled (the \"original plan, all shipped\" list, the \"superseded 20261025\" bullet, the 20261025 note on release coupling), so the current rule can be told apart.\nF14: DROP \u2014 Scope and approach opinion; the effective-date cutoff compares an artifact's `dateCreated`, which plan entries do not carry.\nF15: DROP \u2014 `history.ts` runs `rev-list -- .` under the project root with a 5-second timeout, its comment says it is folder-scoped and never decides the outcome, so the claimed false brownfield cannot come from history."
+}

@@ -1,0 +1,58 @@
+{
+ "case": "squadron-920-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Task 6 tells the implementer both to keep informational events from the caller and to let them reach translation, which cannot both hold since `_skip_unparseable` only reaches translation by yielding (`agent.py:155-156`); D4 and D6 conflict the same way."
+  ],
+  "F2": [
+   "KEEP",
+   "once Task 4 adds a `rate_limit_event` system message, `review_client.py:263`, `summary_oneshot.py:139`, `audit.py:557` and `actions/dispatch.py:165` all append it to output text, but Task 8 only fixes `sdk_session.dispatch` and only checks that one path."
+  ],
+  "F3": [
+   "KEEP",
+   "after Task 6, the `MessageParseError` rejected test (`test_agent.py:666-681`) gets skipped instead of backing off, and after Task 9 the shim tests fail on import; neither is fixed until Task 10, so the commits for Tasks 6 and 9 leave the suite failing."
+  ],
+  "F4": [
+   "KEEP",
+   "Task 3 puts `ClaudeSDKError(\"rate_limit_event: slow down\")` in `test_agent.py`, which makes Task 10's grep check for that construction fail."
+  ],
+  "F5": [
+   "KEEP",
+   "Task 10 moves all four substring-path loop tests (`test_agent.py:526,562,612,639`) onto `RateLimitEvent`, so criterion 7's \"still triggers backoff\" is left with only the `_is_throttle` predicate test."
+  ],
+  "F6": [
+   "DROP",
+   "client mode does get a rejected-event test (`test_budget_resets_when_work_comes_through` uses `client_agent` and Task 10 rewrites it), and Task 15's forced observation covers the WARNING."
+  ],
+  "F7": [
+   "DROP",
+   "D4 deliberately accepts restarting a live stream and defers stream-lifecycle changes, so asking for `aclose()` is speculative hardening outside the design's scope."
+  ],
+  "F8": [
+   "DROP",
+   "this applies a general rule to a slice that only changes how an exception is classified; deciding whether it applies is a scope call, not a defect in the breakdown."
+  ],
+  "F9": [
+   "DROP",
+   "how finely the tasks are split is a matter of taste, and the real cost (failing intermediate commits) is already covered by F3."
+  ]
+ },
+ "wall_seconds": 66.1,
+ "cost_usd": 1.1547424,
+ "raw_output": "F1: KEEP \u2014 Task 6 tells the implementer both to keep informational events from the caller and to let them reach translation, which cannot both hold since `_skip_unparseable` only reaches translation by yielding (`agent.py:155-156`); D4 and D6 conflict the same way.\n\nF2: KEEP \u2014 once Task 4 adds a `rate_limit_event` system message, `review_client.py:263`, `summary_oneshot.py:139`, `audit.py:557` and `actions/dispatch.py:165` all append it to output text, but Task 8 only fixes `sdk_session.dispatch` and only checks that one path.\n\nF3: KEEP \u2014 after Task 6, the `MessageParseError` rejected test (`test_agent.py:666-681`) gets skipped instead of backing off, and after Task 9 the shim tests fail on import; neither is fixed until Task 10, so the commits for Tasks 6 and 9 leave the suite failing.\n\nF4: KEEP \u2014 Task 3 puts `ClaudeSDKError(\"rate_limit_event: slow down\")` in `test_agent.py`, which makes Task 10's grep check for that construction fail.\n\nF5: KEEP \u2014 Task 10 moves all four substring-path loop tests (`test_agent.py:526,562,612,639`) onto `RateLimitEvent`, so criterion 7's \"still triggers backoff\" is left with only the `_is_throttle` predicate test.\n\nF6: DROP \u2014 client mode does get a rejected-event test (`test_budget_resets_when_work_comes_through` uses `client_agent` and Task 10 rewrites it), and Task 15's forced observation covers the WARNING.\n\nF7: DROP \u2014 D4 deliberately accepts restarting a live stream and defers stream-lifecycle changes, so asking for `aclose()` is speculative hardening outside the design's scope.\n\nF8: DROP \u2014 this applies a general rule to a slice that only changes how an exception is classified; deciding whether it applies is a scope call, not a defect in the breakdown.\n\nF9: DROP \u2014 how finely the tasks are split is a matter of taste, and the real cost (failing intermediate commits) is already covered by F3."
+}

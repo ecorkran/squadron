@@ -1,0 +1,43 @@
+{
+ "case": "squadron-197-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This is a section heading for the catch-up merge feature the slice builds; it does not tell the agent to merge."
+  ],
+  "F2": [
+   "DROP",
+   "Describes what `enter_slice_branch` should do when a branch is behind (fast-forward to the target); it is not a Phase 7 merge of the slice into the target."
+  ],
+  "F3": [
+   "DROP",
+   "Describes code behavior that merges the target into the slice branch; it is not the agent merging the slice into its target."
+  ],
+  "F4": [
+   "DROP",
+   "Describes how the feature's code should handle a merge conflict; no Phase 7 merge is scheduled."
+  ],
+  "F5": [
+   "DROP",
+   "This is a test assertion about the merge commit the code creates in a temp repo, not a merge step."
+  ],
+  "F6": [
+   "DROP",
+   "This is a commit marker for tests (`test: cover catch-up merge\u2026`); only the message mentions merging."
+  ]
+ },
+ "wall_seconds": 16.6,
+ "cost_usd": 0.4798252,
+ "raw_output": "F1: DROP \u2014 This is a section heading for the catch-up merge feature the slice builds; it does not tell the agent to merge.\nF2: DROP \u2014 Describes what `enter_slice_branch` should do when a branch is behind (fast-forward to the target); it is not a Phase 7 merge of the slice into the target.\nF3: DROP \u2014 Describes code behavior that merges the target into the slice branch; it is not the agent merging the slice into its target.\nF4: DROP \u2014 Describes how the feature's code should handle a merge conflict; no Phase 7 merge is scheduled.\nF5: DROP \u2014 This is a test assertion about the merge commit the code creates in a temp repo, not a merge step.\nF6: DROP \u2014 This is a commit marker for tests (`test: cover catch-up merge\u2026`); only the message mentions merging."
+}

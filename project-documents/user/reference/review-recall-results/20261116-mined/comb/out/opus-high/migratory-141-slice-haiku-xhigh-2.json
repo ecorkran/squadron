@@ -1,0 +1,83 @@
+{
+ "case": "migratory-141-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Plan 140 entry 2 asks for \"force totals per force\", but the slice keeps a single `force_total_ns` and pushes per-force timing to 142 without recording that it departs from the parent plan."
+  ],
+  "F2": [
+   "DROP",
+   "Transfer and launch phases and GPU synchronization belong to the GPU backends in 142/145, and the versioned schema can add `transfer_ns` later, so this is hardening for a backend this slice does not build."
+  ],
+  "F3": [
+   "KEEP",
+   "A SHA-256 digest has no distance, so \"interpret it within the documented tolerance band\" and 145 using the hash as its parity reference cannot work; hashing full arrays also ignores the contract's `count` rule."
+  ],
+  "F4": [
+   "KEEP",
+   "The data flow runs `finalize()` (defined as releasing GPU memory) before `parity.hash(result)`, which breaks the 140 contract's rule that `TickResult` is valid only until the next tick for any GPU backend that follows this protocol."
+  ],
+  "F5": [
+   "KEEP",
+   "Plan 140 makes 144 the Quadrants force-kernel slice and Numba is slice 118, yet the slice and an acceptance criterion assign the `numba` registration to 144; plan 100 also lists 118 as both complete and not_started."
+  ],
+  "F6": [
+   "KEEP",
+   "tick_instrumented` must copy the whole tick body in `engine/tick.py` (both query paths, CSR assembly, force loop, integrate, density record), not \"~5 lines per phase\", so the doc understates a duplication that the project's DRY rule forbids."
+  ],
+  "F7": [
+   "KEEP",
+   "The code shows a sixth `BulkForce` (`PropulsionForce`) that `default.yaml` enables, no module-level force singletons, and no `flocker`/`leader` presets; that makes the five-force list, the name resolution and the \"roughly the live default\" claim wrong."
+  ],
+  "F8": [
+   "DROP",
+   "A single-name registry still lets 143 add one file under a combined backend name; preferring parameter axes is a design opinion, not a defect."
+  ],
+  "F9": [
+   "DROP",
+   "Plan 141 says Quadrants slots in as it becomes available, and a CUDA run needs a Quadrants backend first, so leaving CUDA runs to later slices matches the parent; naming an owner is a scope opinion."
+  ],
+  "F10": [
+   "DROP",
+   "The harness is a measuring tool with gating explicitly out of scope; restating TPS targets is a request for extra content, not a defect."
+  ],
+  "F11": [
+   "DROP",
+   "Mostly hardening checklist items (interrupts, write failures, unknown keys); load failures already exit non-zero, and none of these makes the design unworkable."
+  ],
+  "F12": [
+   "KEEP",
+   "Scope lists density and a formation seed as workload fields, and plan 140 requires density, but the schema has neither, so the slice contradicts itself and its parent."
+  ],
+  "F13": [
+   "KEEP",
+   "The output definitions conflict: Markdown is \"across all backends in `bench/results/`\" yet runs are stateless and per-run, the Markdown path is missing from the naming rule, and `tps_observed`/`wall_seconds` are undefined in a schema declared stable."
+  ],
+  "F14": [
+   "DROP",
+   "Proportionality trims (CLI flags, sortable wording, open questions, dependency prose) are scope and style opinions."
+  ]
+ },
+ "wall_seconds": 71.1,
+ "cost_usd": 1.3553240000000002,
+ "raw_output": "I'm checking the engine code and default config to verify each finding.\nF1: KEEP \u2014 Plan 140 entry 2 asks for \"force totals per force\", but the slice keeps a single `force_total_ns` and pushes per-force timing to 142 without recording that it departs from the parent plan.\nF2: DROP \u2014 Transfer and launch phases and GPU synchronization belong to the GPU backends in 142/145, and the versioned schema can add `transfer_ns` later, so this is hardening for a backend this slice does not build.\nF3: KEEP \u2014 A SHA-256 digest has no distance, so \"interpret it within the documented tolerance band\" and 145 using the hash as its parity reference cannot work; hashing full arrays also ignores the contract's `count` rule.\nF4: KEEP \u2014 The data flow runs `finalize()` (defined as releasing GPU memory) before `parity.hash(result)`, which breaks the 140 contract's rule that `TickResult` is valid only until the next tick for any GPU backend that follows this protocol.\nF5: KEEP \u2014 Plan 140 makes 144 the Quadrants force-kernel slice and Numba is slice 118, yet the slice and an acceptance criterion assign the `numba` registration to 144; plan 100 also lists 118 as both complete and not_started.\nF6: KEEP \u2014 `tick_instrumented` must copy the whole tick body in `engine/tick.py` (both query paths, CSR assembly, force loop, integrate, density record), not \"~5 lines per phase\", so the doc understates a duplication that the project's DRY rule forbids.\nF7: KEEP \u2014 The code shows a sixth `BulkForce` (`PropulsionForce`) that `default.yaml` enables, no module-level force singletons, and no `flocker`/`leader` presets; that makes the five-force list, the name resolution and the \"roughly the live default\" claim wrong.\nF8: DROP \u2014 A single-name registry still lets 143 add one file under a combined backend name; preferring parameter axes is a design opinion, not a defect.\nF9: DROP \u2014 Plan 141 says Quadrants slots in as it becomes available, and a CUDA run needs a Quadrants backend first, so leaving CUDA runs to later slices matches the parent; naming an owner is a scope opinion.\nF10: DROP \u2014 The harness is a measuring tool with gating explicitly out of scope; restating TPS targets is a request for extra content, not a defect.\nF11: DROP \u2014 Mostly hardening checklist items (interrupts, write failures, unknown keys); load failures already exit non-zero, and none of these makes the design unworkable.\nF12: KEEP \u2014 Scope lists density and a formation seed as workload fields, and plan 140 requires density, but the schema has neither, so the slice contradicts itself and its parent.\nF13: KEEP \u2014 The output definitions conflict: Markdown is \"across all backends in `bench/results/`\" yet runs are stateless and per-run, the Markdown path is missing from the naming rule, and `tps_observed`/`wall_seconds` are undefined in a schema declared stable.\nF14: DROP \u2014 Proportionality trims (CLI flags, sortable wording, open questions, dependency prose) are scope and style opinions."
+}

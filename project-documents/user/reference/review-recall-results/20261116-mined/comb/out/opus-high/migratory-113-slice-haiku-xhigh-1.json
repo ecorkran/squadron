@@ -1,0 +1,73 @@
+{
+ "case": "migratory-113-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Step 5 runs both backends and demands bit-exact positions against brute-only, but grid rows come back in a different order and the grid computes distance differently from brute's default identity form, so a correct dispatcher can still fail, and lines 352 and 408 would blame the dispatcher."
+  ],
+  "F2": [
+   "KEEP",
+   "Lines 210 and 211 describe the same uniform spread and reach opposite results (\u2248132 neighbors vs <10), and the journal's grid-winning point (mean \u224815.7) sits above the default's switch-to-grid trigger of 8, so the default never picks grid where the Value section says it should."
+  ],
+  "F3": [
+   "KEEP",
+   "If hysteresis_band \u2265 threshold, `m < t \u2212 h` can never be true, validation does not catch it, and grid selection is silently disabled."
+  ],
+  "F4": [
+   "DROP",
+   "The server never passes an active subset and tick returns early when there are no agents, so an empty set only arises through direct API calls, and the doc's `float(sum)/len` form raises an error rather than silently freezing the backend."
+  ],
+  "F5": [
+   "KEEP",
+   "Lines 301 and 400 say operators can choose `initial_backend: grid`, but SpatialConfig has no such field and `_build_spatial` hard-codes `\"brute\"`, so the doc contradicts itself."
+  ],
+  "F6": [
+   "DROP",
+   "This is wording: the plan's \"tweak live while experimenting\" is reasonably met by YAML config, and the doc explicitly excludes runtime tuning."
+  ],
+  "F7": [
+   "KEEP",
+   "The body depends on slice 105, but the frontmatter does not list it, and server.py today only has `BruteForceQuery()` with no cell-size code, so the derivation does not \"move from server.py\" and has to be written new."
+  ],
+  "F8": [
+   "KEEP",
+   "In tick.py `apply_neighbor_cap` reassigns `filtered_counts`, so the step-8 call `record_density(filtered_counts)` gets capped counts, against the doc's central pre-cap claim; with test.yaml's `max_neighbors=1` the mean is \u22641 and dispatch always picks grid."
+  ],
+  "F9": [
+   "KEEP",
+   "Backend names are raw strings repeated across validation, wiring and the constructor, and the constructor carries its own `hysteresis_band = 0.0` default while config uses 2.0, against the project's single-definition and config-only-default rules and the doc's own line 136."
+  ],
+  "F10": [
+   "DROP",
+   "With an empty profile list no agents can exist, so the cell-size fallback has no effect on behavior; this is low-value hardening."
+  ],
+  "F11": [
+   "DROP",
+   "Match or exceed\" and \"\u2265 brute average\" can still be checked under a TPS cap, and how the backend is pinned or where the harness lives are verification details, not defects."
+  ],
+  "F12": [
+   "DROP",
+   "This is an opinion about scope; the real items in it are already covered by F5, F8 and F9."
+  ]
+ },
+ "wall_seconds": 72.3,
+ "cost_usd": 1.1035612,
+ "raw_output": "I'm checking the remaining findings against the hash grid code, the perf journal and slice 105.\nF1: KEEP \u2014 Step 5 runs both backends and demands bit-exact positions against brute-only, but grid rows come back in a different order and the grid computes distance differently from brute's default identity form, so a correct dispatcher can still fail, and lines 352 and 408 would blame the dispatcher.\nF2: KEEP \u2014 Lines 210 and 211 describe the same uniform spread and reach opposite results (\u2248132 neighbors vs <10), and the journal's grid-winning point (mean \u224815.7) sits above the default's switch-to-grid trigger of 8, so the default never picks grid where the Value section says it should.\nF3: KEEP \u2014 If hysteresis_band \u2265 threshold, `m < t \u2212 h` can never be true, validation does not catch it, and grid selection is silently disabled.\nF4: DROP \u2014 The server never passes an active subset and tick returns early when there are no agents, so an empty set only arises through direct API calls, and the doc's `float(sum)/len` form raises an error rather than silently freezing the backend.\nF5: KEEP \u2014 Lines 301 and 400 say operators can choose `initial_backend: grid`, but SpatialConfig has no such field and `_build_spatial` hard-codes `\"brute\"`, so the doc contradicts itself.\nF6: DROP \u2014 This is wording: the plan's \"tweak live while experimenting\" is reasonably met by YAML config, and the doc explicitly excludes runtime tuning.\nF7: KEEP \u2014 The body depends on slice 105, but the frontmatter does not list it, and server.py today only has `BruteForceQuery()` with no cell-size code, so the derivation does not \"move from server.py\" and has to be written new.\nF8: KEEP \u2014 In tick.py `apply_neighbor_cap` reassigns `filtered_counts`, so the step-8 call `record_density(filtered_counts)` gets capped counts, against the doc's central pre-cap claim; with test.yaml's `max_neighbors=1` the mean is \u22641 and dispatch always picks grid.\nF9: KEEP \u2014 Backend names are raw strings repeated across validation, wiring and the constructor, and the constructor carries its own `hysteresis_band = 0.0` default while config uses 2.0, against the project's single-definition and config-only-default rules and the doc's own line 136.\nF10: DROP \u2014 With an empty profile list no agents can exist, so the cell-size fallback has no effect on behavior; this is low-value hardening.\nF11: DROP \u2014 \"Match or exceed\" and \"\u2265 brute average\" can still be checked under a TPS cap, and how the backend is pinned or where the harness lives are verification details, not defects.\nF12: DROP \u2014 This is an opinion about scope; the real items in it are already covered by F5, F8 and F9."
+}

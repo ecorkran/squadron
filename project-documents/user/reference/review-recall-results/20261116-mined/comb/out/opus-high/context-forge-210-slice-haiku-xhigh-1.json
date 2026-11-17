@@ -1,0 +1,63 @@
+{
+ "case": "context-forge-210-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The design says the `isManagedClaudeMd` pattern is \"replicated\" and adds a second helper, so the marker literal and the 20-line check would exist twice, which breaks the project's define-once and DRY rules."
+  ],
+  "F2": [
+   "DROP",
+   "The \"add a propagation block per target\" approach is what the parent architecture prescribes, and flat copying works because the script writes one flat file per rule, so this is a design preference."
+  ],
+  "F3": [
+   "DROP",
+   "Line 83 explicitly sends rules without `paths` to `copilot-instructions.md`, so there is no real contradiction, and the parent's \"both forms\" means read `paths` and emit `applyTo`, not two input formats."
+  ],
+  "F4": [
+   "KEEP",
+   "The parent lists the prompt frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`) and requires generated prompt files, but the design never says how skill fields or tool names carry over."
+  ],
+  "F5": [
+   "KEEP",
+   "The compile, `paths`\u2192`applyTo` translation and prompt generation have no named tests, although the parent's success criteria require correct translation and the generated file set."
+  ],
+  "F6": [
+   "DROP",
+   "These are general hardening requests about behavior the existing claude path already shares (no timeout, silent filter, partial copy), not defects this design introduces."
+  ],
+  "F7": [
+   "DROP",
+   "Copy-only propagation without cleanup is the existing, accepted behavior of the claude path, and adding a stale-file cleanup rule widens the scope."
+  ],
+  "F8": [
+   "DROP",
+   "Line 99 already reads as \"prompt or skip the prompt, then back up\", a `.bak` per file is implied, and the remaining points repeat the existing claude contract that the design deliberately keeps."
+  ],
+  "F9": [
+   "DROP",
+   "The finding is speculative (the reviewer could not check the script), and a version or capability probe is extra hardening, not a defect in the design."
+  ],
+  "F10": [
+   "KEEP",
+   "The parent's success criterion requires the slice design to reference `project-documents/user/tool-guides/copilot-vscode/setup-ide.md`, and the design never cites it."
+  ]
+ },
+ "wall_seconds": 43.9,
+ "cost_usd": 0.839135,
+ "raw_output": "F1: KEEP \u2014 The design says the `isManagedClaudeMd` pattern is \"replicated\" and adds a second helper, so the marker literal and the 20-line check would exist twice, which breaks the project's define-once and DRY rules.\nF2: DROP \u2014 The \"add a propagation block per target\" approach is what the parent architecture prescribes, and flat copying works because the script writes one flat file per rule, so this is a design preference.\nF3: DROP \u2014 Line 83 explicitly sends rules without `paths` to `copilot-instructions.md`, so there is no real contradiction, and the parent's \"both forms\" means read `paths` and emit `applyTo`, not two input formats.\nF4: KEEP \u2014 The parent lists the prompt frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`) and requires generated prompt files, but the design never says how skill fields or tool names carry over.\nF5: KEEP \u2014 The compile, `paths`\u2192`applyTo` translation and prompt generation have no named tests, although the parent's success criteria require correct translation and the generated file set.\nF6: DROP \u2014 These are general hardening requests about behavior the existing claude path already shares (no timeout, silent filter, partial copy), not defects this design introduces.\nF7: DROP \u2014 Copy-only propagation without cleanup is the existing, accepted behavior of the claude path, and adding a stale-file cleanup rule widens the scope.\nF8: DROP \u2014 Line 99 already reads as \"prompt or skip the prompt, then back up\", a `.bak` per file is implied, and the remaining points repeat the existing claude contract that the design deliberately keeps.\nF9: DROP \u2014 The finding is speculative (the reviewer could not check the script), and a version or capability probe is extra hardening, not a defect in the design.\nF10: KEEP \u2014 The parent's success criterion requires the slice design to reference `project-documents/user/tool-guides/copilot-vscode/setup-ide.md`, and the design never cites it."
+}

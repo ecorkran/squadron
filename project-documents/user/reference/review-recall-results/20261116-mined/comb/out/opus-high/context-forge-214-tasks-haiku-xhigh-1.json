@@ -1,0 +1,43 @@
+{
+ "case": "context-forge-214-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Task 3's preflight checks readability and Task 3T tests every error case the design's Technical Requirements ask for; a permission-denied test is extra coverage, not a missing requirement."
+  ],
+  "F2": [
+   "DROP",
+   "Task 2T line 68 already makes `missingHeadings` return several entries in template order, and printing one line per entry is a plain loop."
+  ],
+  "F3": [
+   "DROP",
+   "Preflight confirms each file is a readable regular file before `parseFrontmatter` runs, so a swallowed read error only happens in a race, and the design chose `parseFrontmatter` on purpose."
+  ],
+  "F4": [
+   "DROP",
+   "This project's rules don't require `**Commit**:` lines or ban box-only commits, and the explicit commit tasks still give clear commit points."
+  ],
+  "F5": [
+   "DROP",
+   "A commit-type label that only matters if the parity sweep turns up a bug is a wording issue, not a defect."
+  ],
+  "F6": [
+   "DROP",
+   "The reviewer admits this is unverified; `.gitignore` doesn't exclude the guide or the slice designs, and existing tests already read the guide path."
+  ]
+ },
+ "wall_seconds": 46.8,
+ "cost_usd": 0.9464815,
+ "raw_output": "I checked each finding against the task file, the slice design, `frontmatterParser.ts`, `ci.yml`, `.gitignore` and the guide's task-breakdown rules. None of the six needs fixing before the task file is used.\n\nF1: DROP \u2014 Task 3's preflight checks readability and Task 3T tests every error case the design's Technical Requirements ask for; a permission-denied test is extra coverage, not a missing requirement.\nF2: DROP \u2014 Task 2T line 68 already makes `missingHeadings` return several entries in template order, and printing one line per entry is a plain loop.\nF3: DROP \u2014 Preflight confirms each file is a readable regular file before `parseFrontmatter` runs, so a swallowed read error only happens in a race, and the design chose `parseFrontmatter` on purpose.\nF4: DROP \u2014 This project's rules don't require `**Commit**:` lines or ban box-only commits, and the explicit commit tasks still give clear commit points.\nF5: DROP \u2014 A commit-type label that only matters if the parity sweep turns up a bug is a wording issue, not a defect.\nF6: DROP \u2014 The reviewer admits this is unverified; `.gitignore` doesn't exclude the guide or the slice designs, and existing tests already read the guide path."
+}

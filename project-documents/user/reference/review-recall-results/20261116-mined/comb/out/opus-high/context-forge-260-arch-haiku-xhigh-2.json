@@ -1,0 +1,98 @@
+{
+ "case": "context-forge-260-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Detection treats any architecture doc as \"already planned\", so an adoption run that stops after writing the architecture is never resumed, and the doc's \"no completion state is needed\" ignores this partial-write case."
+  ],
+  "F2": [
+   "DROP",
+   "A bypass needs new work done with no design or task file at all, which already breaks the process; the checker's structural rules are the design's deliberate bound."
+  ],
+  "F3": [
+   "DROP",
+   "How shipped `adoption.state` values migrate is detail for slice 269 (\"collapse adoption state\"), not a gap in the architecture."
+  ],
+  "F4": [
+   "DROP",
+   "The doc accepts false greenfield as the cheaper error, and the opt-out protects against the costly false-brownfield case, so this is a design trade-off, not a contradiction."
+  ],
+  "F5": [
+   "DROP",
+   "The doc leaves signals and thresholds to slice design, and slice 261 set them, so this is a request for detail the architecture doesn't need."
+  ],
+  "F6": [
+   "DROP",
+   "This is about import layering in code, not a defect in the architecture document, and the threshold is still written in one place."
+  ],
+  "F7": [
+   "DROP",
+   "The detection walk only runs when no planning artifacts exist, and it already fails loudly with a named remedy (the opt-out), so asking for a cost budget is hardening detail for slice design."
+  ],
+  "F8": [
+   "DROP",
+   "The table and the flow agree: the agent uses the guide's prompt (one of the two named writers), and cf fills in the comprehension path in both places; naming the `docType` and multiple-match rule is slice-level detail."
+  ],
+  "F9": [
+   "DROP",
+   "A backticked token is a structured marker like a checkbox, not prose read for meaning, and the derived mark (`provenance: derived`) is defined in shipped code."
+  ],
+  "F10": [
+   "DROP",
+   "The doc deliberately leaves the absolute index scheme to slice design under a stated relative-order rule, which resolved an earlier review finding."
+  ],
+  "F11": [
+   "DROP",
+   "The core detection function already shipped (slice 261), and the `cf next` line belongs naturally to slice 270, so nothing is missing an owner."
+  ],
+  "F12": [
+   "DROP",
+   "This is an opinion about scope, not a defect."
+  ],
+  "F13": [
+   "DROP",
+   "cf init`, which onboarding runs, prints the existing-codebase line, and naming the exact opt-out command is slice-level detail."
+  ],
+  "F14": [
+   "DROP",
+   "Versioning a contract that hasn't been designed yet is hardening for slice 271, not a defect in the doc."
+  ],
+  "F15": [
+   "DROP",
+   "The old contracts are clearly labeled \"superseded\" and \"for history\", so this is a style preference."
+  ],
+  "F16": [
+   "KEEP",
+   "The doc gives v0.22.2 as the guide floor, but the shipped release requires v0.22.6 for the conventions-reconciliation prompt and docs mapping, so the doc contradicts the code."
+  ],
+  "F17": [
+   "DROP",
+   "Current State conventionally describes the starting baseline, and Anticipated Slices clearly marks 260\u2013267 shipped, 268\u2013272 as the rework and 273\u2013274 parked."
+  ]
+ },
+ "wall_seconds": 76.1,
+ "cost_usd": 1.087091,
+ "raw_output": "Checking the retroactive rules and parser code now, which F2 and F9 depend on.\nF1: KEEP \u2014 Detection treats any architecture doc as \"already planned\", so an adoption run that stops after writing the architecture is never resumed, and the doc's \"no completion state is needed\" ignores this partial-write case.\nF2: DROP \u2014 A bypass needs new work done with no design or task file at all, which already breaks the process; the checker's structural rules are the design's deliberate bound.\nF3: DROP \u2014 How shipped `adoption.state` values migrate is detail for slice 269 (\"collapse adoption state\"), not a gap in the architecture.\nF4: DROP \u2014 The doc accepts false greenfield as the cheaper error, and the opt-out protects against the costly false-brownfield case, so this is a design trade-off, not a contradiction.\nF5: DROP \u2014 The doc leaves signals and thresholds to slice design, and slice 261 set them, so this is a request for detail the architecture doesn't need.\nF6: DROP \u2014 This is about import layering in code, not a defect in the architecture document, and the threshold is still written in one place.\nF7: DROP \u2014 The detection walk only runs when no planning artifacts exist, and it already fails loudly with a named remedy (the opt-out), so asking for a cost budget is hardening detail for slice design.\nF8: DROP \u2014 The table and the flow agree: the agent uses the guide's prompt (one of the two named writers), and cf fills in the comprehension path in both places; naming the `docType` and multiple-match rule is slice-level detail.\nF9: DROP \u2014 A backticked token is a structured marker like a checkbox, not prose read for meaning, and the derived mark (`provenance: derived`) is defined in shipped code.\nF10: DROP \u2014 The doc deliberately leaves the absolute index scheme to slice design under a stated relative-order rule, which resolved an earlier review finding.\nF11: DROP \u2014 The core detection function already shipped (slice 261), and the `cf next` line belongs naturally to slice 270, so nothing is missing an owner.\nF12: DROP \u2014 This is an opinion about scope, not a defect.\nF13: DROP \u2014 `cf init`, which onboarding runs, prints the existing-codebase line, and naming the exact opt-out command is slice-level detail.\nF14: DROP \u2014 Versioning a contract that hasn't been designed yet is hardening for slice 271, not a defect in the doc.\nF15: DROP \u2014 The old contracts are clearly labeled \"superseded\" and \"for history\", so this is a style preference.\nF16: KEEP \u2014 The doc gives v0.22.2 as the guide floor, but the shipped release requires v0.22.6 for the conventions-reconciliation prompt and docs mapping, so the doc contradicts the code.\nF17: DROP \u2014 Current State conventionally describes the starting baseline, and Anticipated Slices clearly marks 260\u2013267 shipped, 268\u2013272 as the rework and 273\u2013274 parked."
+}

@@ -1,0 +1,73 @@
+{
+ "case": "squadron-403-design",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "At a clean HEAD the export and live trees are identical, so the in-place-equals-export test cannot detect pyright reading the live editable install, and no check of what pyright read is specified."
+  ],
+  "F2": [
+   "DROP",
+   "Concurrent writes are explicitly marked unsupported, the same as 400, so asking for detection or locking is hardening outside the slice's scope."
+  ],
+  "F3": [
+   "KEEP",
+   "Row 164 falls through on a `None` from git and logs only INFO, which contradicts the `run_git` contract, line 275's \"exits 1 on a git error\", and helpers that return `None` for both failure and no match."
+  ],
+  "F4": [
+   "KEEP",
+   "Line 114 runs the fast-forward path only when no merge landing is found, so a fast-forward landing followed by a merge landing loses the fast-forward one, against D1's every-landing rule."
+  ],
+  "F5": [
+   "KEEP",
+   "_search_merge_commit` returns one newest commit (`-1`), but D1 needs every landing oldest first, and line 346 forbids `git_utils` growing beyond the rename, the pattern function and `first_parent`."
+  ],
+  "F6": [
+   "DROP",
+   "Line 130 already states the export runs with no clean check, and criterion 4 is verified by the `.git` listing test, so this only asks for more detail."
+  ],
+  "F7": [
+   "KEEP",
+   "Line 99 says the report modules do no git work, yet `history` orders by first-parent history and the `cat-file -e` check needs git, with no port or owning module named."
+  ],
+  "F8": [
+   "KEEP",
+   "402's contract puts records with `commit_sha is None` at project level only, but 403's D9 and Integration Points test only `slice_index`."
+  ],
+  "F9": [
+   "KEEP",
+   "The single per-project record holds landings from several targets, and the doc never says whether reports filter on `target_ref` or where reviews go when a landing's `after_sha` is off the current target's first-parent line."
+  ],
+  "F10": [
+   "KEEP",
+   "The store's scan skips an unreadable record with a WARNING, so a corrupt `slice_ranges` file reads as absent and the next write wipes the stored landings, breaking \"stored landings never change\"."
+  ],
+  "F11": [
+   "DROP",
+   "With no review floor anywhere, D8 marks every review figure `no floor measured`, which reports the floor state honestly, and asking for an owner is a scope opinion."
+  ],
+  "F12": [
+   "DROP",
+   "These are style and scope trims, not defects."
+  ]
+ },
+ "wall_seconds": 63.2,
+ "cost_usd": 1.1506440000000002,
+ "raw_output": "F1: KEEP \u2014 At a clean HEAD the export and live trees are identical, so the in-place-equals-export test cannot detect pyright reading the live editable install, and no check of what pyright read is specified.\nF2: DROP \u2014 Concurrent writes are explicitly marked unsupported, the same as 400, so asking for detection or locking is hardening outside the slice's scope.\nF3: KEEP \u2014 Row 164 falls through on a `None` from git and logs only INFO, which contradicts the `run_git` contract, line 275's \"exits 1 on a git error\", and helpers that return `None` for both failure and no match.\nF4: KEEP \u2014 Line 114 runs the fast-forward path only when no merge landing is found, so a fast-forward landing followed by a merge landing loses the fast-forward one, against D1's every-landing rule.\nF5: KEEP \u2014 `_search_merge_commit` returns one newest commit (`-1`), but D1 needs every landing oldest first, and line 346 forbids `git_utils` growing beyond the rename, the pattern function and `first_parent`.\nF6: DROP \u2014 Line 130 already states the export runs with no clean check, and criterion 4 is verified by the `.git` listing test, so this only asks for more detail.\nF7: KEEP \u2014 Line 99 says the report modules do no git work, yet `history` orders by first-parent history and the `cat-file -e` check needs git, with no port or owning module named.\nF8: KEEP \u2014 402's contract puts records with `commit_sha is None` at project level only, but 403's D9 and Integration Points test only `slice_index`.\nF9: KEEP \u2014 The single per-project record holds landings from several targets, and the doc never says whether reports filter on `target_ref` or where reviews go when a landing's `after_sha` is off the current target's first-parent line.\nF10: KEEP \u2014 The store's scan skips an unreadable record with a WARNING, so a corrupt `slice_ranges` file reads as absent and the next write wipes the stored landings, breaking \"stored landings never change\".\nF11: DROP \u2014 With no review floor anywhere, D8 marks every review figure `no floor measured`, which reports the floor state honestly, and asking for an owner is a scope opinion.\nF12: DROP \u2014 These are style and scope trims, not defects."
+}

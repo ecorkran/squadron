@@ -1,0 +1,83 @@
+{
+ "case": "context-forge-240-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "matchFiles` sorts filenames, so the \"last filename\" rule picks by slug rather than by date, and a re-review with an earlier-sorting slug can never clear a FAIL."
+  ],
+  "F2": [
+   "KEEP",
+   "parseFrontmatter` returns `{found:false}` on every failure and flattens nested keys with last-wins, so it can't name the parse failure as the doc requires, and a nested `verdict`/`status` can overwrite the top-level value."
+  ],
+  "F3": [
+   "KEEP",
+   "the doc says \"four slice-level transitions,\" but the config lists three slice-level transitions plus `pre-slice-plan`, and only `pre-advance` has an insertion point and statuses."
+  ],
+  "F4": [
+   "KEEP",
+   "validateValue` runs only in `set()` and `get()` casts raw TOML without checking it, so hand-edited values bypass the \"fail-fast via `validate`\" principle the doc relies on."
+  ],
+  "F5": [
+   "KEEP",
+   "review_unknown_as` is shown as `\"fail\"`, `\"concern\"` and a \"pending\" behavior, while the threshold uses `\"concerns\"`, and no allowed-value set is ever defined."
+  ],
+  "F6": [
+   "DROP",
+   "the named status values are exposed through `SliceStatus` in `getStatus`, so the design goal can be met; the rest is design preference."
+  ],
+  "F7": [
+   "DROP",
+   "the doc already says read and parse failures map to UNKNOWN with an explicit rationale, so the broad catch is an implementation concern, not a doc defect."
+  ],
+  "F8": [
+   "DROP",
+   "the navigator already receives `projectPath` and can build its own config reader, so no per-surface work is forced; the injection style is an implementation choice."
+  ],
+  "F9": [
+   "KEEP",
+   "180 defines CWD\u2192project resolution and places configuration at the shared project level; it introduces no worktree-scoped config resolution chain."
+  ],
+  "F10": [
+   "DROP",
+   "asking for a shared filename parser is a refactoring preference; the new rule simply mirrors the detector's existing prefix matching."
+  ],
+  "F11": [
+   "DROP",
+   "numeric enforcement is explicitly deferred, so who owns the future threshold is scope opinion, not a v1 defect."
+  ],
+  "F12": [
+   "DROP",
+   "warning on freshly completed or historical slices without a review is the opt-in signal the rule is meant to give; grandfathering is a policy preference."
+  ],
+  "F13": [
+   "DROP",
+   "this is an opinion about scope and complexity, not a defect."
+  ],
+  "F14": [
+   "DROP",
+   "note 001 itself lists UNKNOWN/missing handling as a decision the architecture must make, and calls the key names tentative."
+  ]
+ },
+ "wall_seconds": 67.2,
+ "cost_usd": 1.1414641000000003,
+ "raw_output": "I've checked F1, F4, F7, and the core parts of F2 against the code. Next I'm reading note 001, the 180 architecture doc, and ConsistencyChecker to settle the rest.\nF1: KEEP \u2014 `matchFiles` sorts filenames, so the \"last filename\" rule picks by slug rather than by date, and a re-review with an earlier-sorting slug can never clear a FAIL.\nF2: KEEP \u2014 `parseFrontmatter` returns `{found:false}` on every failure and flattens nested keys with last-wins, so it can't name the parse failure as the doc requires, and a nested `verdict`/`status` can overwrite the top-level value.\nF3: KEEP \u2014 the doc says \"four slice-level transitions,\" but the config lists three slice-level transitions plus `pre-slice-plan`, and only `pre-advance` has an insertion point and statuses.\nF4: KEEP \u2014 `validateValue` runs only in `set()` and `get()` casts raw TOML without checking it, so hand-edited values bypass the \"fail-fast via `validate`\" principle the doc relies on.\nF5: KEEP \u2014 `review_unknown_as` is shown as `\"fail\"`, `\"concern\"` and a \"pending\" behavior, while the threshold uses `\"concerns\"`, and no allowed-value set is ever defined.\nF6: DROP \u2014 the named status values are exposed through `SliceStatus` in `getStatus`, so the design goal can be met; the rest is design preference.\nF7: DROP \u2014 the doc already says read and parse failures map to UNKNOWN with an explicit rationale, so the broad catch is an implementation concern, not a doc defect.\nF8: DROP \u2014 the navigator already receives `projectPath` and can build its own config reader, so no per-surface work is forced; the injection style is an implementation choice.\nF9: KEEP \u2014 180 defines CWD\u2192project resolution and places configuration at the shared project level; it introduces no worktree-scoped config resolution chain.\nF10: DROP \u2014 asking for a shared filename parser is a refactoring preference; the new rule simply mirrors the detector's existing prefix matching.\nF11: DROP \u2014 numeric enforcement is explicitly deferred, so who owns the future threshold is scope opinion, not a v1 defect.\nF12: DROP \u2014 warning on freshly completed or historical slices without a review is the opt-in signal the rule is meant to give; grandfathering is a policy preference.\nF13: DROP \u2014 this is an opinion about scope and complexity, not a defect.\nF14: DROP \u2014 note 001 itself lists UNKNOWN/missing handling as a decision the architecture must make, and calls the key names tentative."
+}

@@ -1,0 +1,68 @@
+{
+ "case": "migratory-152-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "With `max_neighbors <= 0`, the k_nearest branch falls into eviction at `heap_idx[0] = -1`, and `max_neighbors > max_k_heap` pushes past the heap; slice 150's uncapped path and over-cap warning are both dropped."
+  ],
+  "F2": [
+   "KEEP",
+   "The plan entry sets k_nearest within 20% of k_first and no regression on k_first; the doc gates against radius_only and removes k_first, so the plan's gate cannot be measured."
+  ],
+  "F3": [
+   "DROP",
+   "This is a scope opinion (cut or defer radius_only, shorten the framing), not a defect."
+  ],
+  "F4": [
+   "KEEP",
+   "Lines 67/199 remove k_first outright, line 433 keeps it parsed with a deprecation warning until the final commit, and the commit sequence never removes it, so commits 2\u20133 are ambiguous once the kernel branch is gone."
+  ],
+  "F5": [
+   "DROP",
+   "Three to two\" matches the doc's own count, which treats the uncapped sub-branch as a mode (line 273), and the k_first removal and default flip are stated elsewhere, so this is wording."
+  ],
+  "F6": [
+   "DROP",
+   "Calling 200k \"Tier 3\" is a loose label; the 200k gate comes from the plan entry and no task changes."
+  ],
+  "F7": [
+   "KEEP",
+   "Line 81 says slice 150 is shipped on main, but 150's frontmatter says `in_progress` and the plan leaves it unchecked, so the prerequisite's status conflicts."
+  ],
+  "F8": [
+   "KEEP",
+   "Architecture Design Goal 1 requires every optimization to be verifiable against NumPy, yet radius_only ships as a user-facing mode with no parity check, and slice 150's uncapped parity step is gone."
+  ],
+  "F9": [
+   "KEEP",
+   "The 213.9 TPS baseline was measured on Mac/Metal, but criterion 3 uses it as a hard stop for a run done on the dev box (CUDA per step 3), with no hardware named."
+  ],
+  "F10": [
+   "DROP",
+   "This applies a general principle and asks for extra measurements the slice's success criteria don't require."
+  ],
+  "F11": [
+   "DROP",
+   "The coherent fields are allocated in `_allocate_fields()` next to the originals, so they resize with them; any resize gap on a count change belongs to slice 146, not this slice."
+  ]
+ },
+ "wall_seconds": 69.8,
+ "cost_usd": 1.2676652000000004,
+ "raw_output": "F1: KEEP \u2014 With `max_neighbors <= 0`, the k_nearest branch falls into eviction at `heap_idx[0] = -1`, and `max_neighbors > max_k_heap` pushes past the heap; slice 150's uncapped path and over-cap warning are both dropped.\nF2: KEEP \u2014 The plan entry sets k_nearest within 20% of k_first and no regression on k_first; the doc gates against radius_only and removes k_first, so the plan's gate cannot be measured.\nF3: DROP \u2014 This is a scope opinion (cut or defer radius_only, shorten the framing), not a defect.\nF4: KEEP \u2014 Lines 67/199 remove k_first outright, line 433 keeps it parsed with a deprecation warning until the final commit, and the commit sequence never removes it, so commits 2\u20133 are ambiguous once the kernel branch is gone.\nF5: DROP \u2014 \"Three to two\" matches the doc's own count, which treats the uncapped sub-branch as a mode (line 273), and the k_first removal and default flip are stated elsewhere, so this is wording.\nF6: DROP \u2014 Calling 200k \"Tier 3\" is a loose label; the 200k gate comes from the plan entry and no task changes.\nF7: KEEP \u2014 Line 81 says slice 150 is shipped on main, but 150's frontmatter says `in_progress` and the plan leaves it unchecked, so the prerequisite's status conflicts.\nF8: KEEP \u2014 Architecture Design Goal 1 requires every optimization to be verifiable against NumPy, yet radius_only ships as a user-facing mode with no parity check, and slice 150's uncapped parity step is gone.\nF9: KEEP \u2014 The 213.9 TPS baseline was measured on Mac/Metal, but criterion 3 uses it as a hard stop for a run done on the dev box (CUDA per step 3), with no hardware named.\nF10: DROP \u2014 This applies a general principle and asks for extra measurements the slice's success criteria don't require.\nF11: DROP \u2014 The coherent fields are allocated in `_allocate_fields()` next to the originals, so they resize with them; any resize gap on a count change belongs to slice 146, not this slice."
+}

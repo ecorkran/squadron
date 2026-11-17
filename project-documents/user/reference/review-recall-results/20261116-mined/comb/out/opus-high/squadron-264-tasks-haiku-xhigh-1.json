@@ -1,0 +1,48 @@
+{
+ "case": "squadron-264-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The CLAUDE.md that governs this worktree says \"A slice branch merges into the target when its implementation is done\", so the merge in Task 9.4 is allowed there. The merge ban is only in the root squadron file."
+  ],
+  "F2": [
+   "DROP",
+   "The slice design in this checkout never mentions `BaseExceptionGroup` or F001. Its failure-mode table lists `McpError` itself, so Task 4.3 matches the design."
+  ],
+  "F3": [
+   "KEEP",
+   "The design says every failure-mode row has a test asserting its WARNING, but 5.4 covers only timeout, server isError and spawn failure. Nothing drives the `McpError`/closed-stream path: an unknown tool name normally comes back as an `isError` result, not an exception."
+  ],
+  "F4": [
+   "KEEP",
+   "SC2 requires results mapped per the Result mapping rules, yet the fake server's tools return at most one text block. No test checks the `\\n` join or how non-text blocks are noted."
+  ],
+  "F5": [
+   "DROP",
+   "The design in this checkout has no 180 s probe budget and no \"skip hides the breakage\" text. The finding asks for detail its parent document doesn't call for."
+  ],
+  "F6": [
+   "DROP",
+   "Task 9.2 already runs `uv run ruff check .` before close-out, and the design lines cited don't exist. The worktree CLAUDE.md sets no implement \u2192 task-checker \u2192 commit order."
+  ],
+  "F7": [
+   "DROP",
+   "How tasks are split up is a matter of style; the order is already correct."
+  ]
+ },
+ "wall_seconds": 28.5,
+ "cost_usd": 0.7558605,
+ "raw_output": "F1: DROP \u2014 The CLAUDE.md that governs this worktree says \"A slice branch merges into the target when its implementation is done\", so the merge in Task 9.4 is allowed there. The merge ban is only in the root squadron file.\nF2: DROP \u2014 The slice design in this checkout never mentions `BaseExceptionGroup` or F001. Its failure-mode table lists `McpError` itself, so Task 4.3 matches the design.\nF3: KEEP \u2014 The design says every failure-mode row has a test asserting its WARNING, but 5.4 covers only timeout, server isError and spawn failure. Nothing drives the `McpError`/closed-stream path: an unknown tool name normally comes back as an `isError` result, not an exception.\nF4: KEEP \u2014 SC2 requires results mapped per the Result mapping rules, yet the fake server's tools return at most one text block. No test checks the `\\n` join or how non-text blocks are noted.\nF5: DROP \u2014 The design in this checkout has no 180 s probe budget and no \"skip hides the breakage\" text. The finding asks for detail its parent document doesn't call for.\nF6: DROP \u2014 Task 9.2 already runs `uv run ruff check .` before close-out, and the design lines cited don't exist. The worktree CLAUDE.md sets no implement \u2192 task-checker \u2192 commit order.\nF7: DROP \u2014 How tasks are split up is a matter of style; the order is already correct."
+}

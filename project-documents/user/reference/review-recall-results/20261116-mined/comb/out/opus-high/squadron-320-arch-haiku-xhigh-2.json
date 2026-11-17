@@ -1,0 +1,83 @@
+{
+ "case": "squadron-320-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The document says \"300's multi-sample option\" exists, but its own Current State and Related Work, and 300-slices, list it as unbuilt Future Work 1, and `src/squadron` has no multi-sample code, so opportunistic dispersion data has no producer."
+  ],
+  "F2": [
+   "KEEP",
+   "140-arch never mentions `fan_out`; 180-slices says it moved to 180 (slice 182), and the parent plan says 320 is independent of 180, so this attribution and the implied dependency are wrong."
+  ],
+  "F3": [
+   "KEEP",
+   "criteria` is not reserved: `parsers.py` fills it from judge output and `persistence.py:150-153` writes it, so \"320 populates\" it contradicts the code and the read-only principle in the same paragraph."
+  ],
+  "F4": [
+   "DROP",
+   "Annotating does not by itself change 300's write semantics, and the document deliberately leaves sidecar versus extension of storage to slice design (line 87)."
+  ],
+  "F5": [
+   "DROP",
+   "The main claim is wrong: `persistence.py:139` writes `aiModel` into frontmatter and `reviewType` is there too, and the document leaves the granularity of identity to slice design on purpose."
+  ],
+  "F6": [
+   "DROP",
+   "The document openly defers the store decision to slice design, and the cited dependents 400/420 come from another checkout's plan; this worktree's plan has none."
+  ],
+  "F7": [
+   "DROP",
+   "These are slice-level details (label vocabulary, blind capture, sampling frame) that the architecture already marks as slice decisions; this is a request for more detail."
+  ],
+  "F8": [
+   "DROP",
+   "The document names runner and normalization as open problems for the harness slice; asking for them to be chosen now is a request for more detail."
+  ],
+  "F9": [
+   "DROP",
+   "Enumerating failure modes for I/O paths that are not yet designed is slice-design or code-review work, not a defect in this architecture document."
+  ],
+  "F10": [
+   "DROP",
+   "The pre-emption prompt is explicitly in 320's Scope, and the non-goal covers the judging path, not dispatch, so nothing contradicts."
+  ],
+  "F11": [
+   "DROP",
+   "The document already requires reporting n, treating the result as observational, and not overclaiming; a minimum detectable effect is slice-level detail."
+  ],
+  "F12": [
+   "DROP",
+   "The document makes calibration advisory, with the operator changing thresholds and no automatic mutation, keys measurements by configuration, and leaves the floor value to the slice, so nothing here is a defect."
+  ],
+  "F13": [
+   "DROP",
+   "The shared envelope is reasonably left to the data-layer slice; this is a request for design detail, not a contradiction."
+  ],
+  "F14": [
+   "KEEP",
+   "The body relies on 340's analysis pack, and the parent plan calls 320 a consumer of it, yet `dependencies: [100, 140, 300]` leaves 340 out."
+  ]
+ },
+ "wall_seconds": 55.0,
+ "cost_usd": 0.9364365,
+ "raw_output": "I've checked each finding against the document, the parent initiative plan, the 140, 180, 300 and 340 docs, and the review and judge source code. Three findings depend on that code or plan: F2 is reinforced by the plan's statement that 320 is independent of 180. F5 rests on a wrong claim, because the model is stored in frontmatter. F6 cites a plan that isn't in this worktree.\n\nF1: KEEP \u2014 The document says \"300's multi-sample option\" exists, but its own Current State and Related Work, and 300-slices, list it as unbuilt Future Work 1, and `src/squadron` has no multi-sample code, so opportunistic dispersion data has no producer.\nF2: KEEP \u2014 140-arch never mentions `fan_out`; 180-slices says it moved to 180 (slice 182), and the parent plan says 320 is independent of 180, so this attribution and the implied dependency are wrong.\nF3: KEEP \u2014 `criteria` is not reserved: `parsers.py` fills it from judge output and `persistence.py:150-153` writes it, so \"320 populates\" it contradicts the code and the read-only principle in the same paragraph.\nF4: DROP \u2014 Annotating does not by itself change 300's write semantics, and the document deliberately leaves sidecar versus extension of storage to slice design (line 87).\nF5: DROP \u2014 The main claim is wrong: `persistence.py:139` writes `aiModel` into frontmatter and `reviewType` is there too, and the document leaves the granularity of identity to slice design on purpose.\nF6: DROP \u2014 The document openly defers the store decision to slice design, and the cited dependents 400/420 come from another checkout's plan; this worktree's plan has none.\nF7: DROP \u2014 These are slice-level details (label vocabulary, blind capture, sampling frame) that the architecture already marks as slice decisions; this is a request for more detail.\nF8: DROP \u2014 The document names runner and normalization as open problems for the harness slice; asking for them to be chosen now is a request for more detail.\nF9: DROP \u2014 Enumerating failure modes for I/O paths that are not yet designed is slice-design or code-review work, not a defect in this architecture document.\nF10: DROP \u2014 The pre-emption prompt is explicitly in 320's Scope, and the non-goal covers the judging path, not dispatch, so nothing contradicts.\nF11: DROP \u2014 The document already requires reporting n, treating the result as observational, and not overclaiming; a minimum detectable effect is slice-level detail.\nF12: DROP \u2014 The document makes calibration advisory, with the operator changing thresholds and no automatic mutation, keys measurements by configuration, and leaves the floor value to the slice, so nothing here is a defect.\nF13: DROP \u2014 The shared envelope is reasonably left to the data-layer slice; this is a request for design detail, not a contradiction.\nF14: KEEP \u2014 The body relies on 340's analysis pack, and the parent plan calls 320 a consumer of it, yet `dependencies: [100, 140, 300]` leaves 340 out."
+}

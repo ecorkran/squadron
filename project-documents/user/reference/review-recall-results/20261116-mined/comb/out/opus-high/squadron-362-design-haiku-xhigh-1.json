@@ -1,0 +1,53 @@
+{
+ "case": "squadron-362-design",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Section 6 resolves function and class edge endpoints to their owning file's layer but never says how. That conflicts with the architecture's \"function- and class-level nodes are not read\" (360-arch:109-110) and with the design's own SC 9."
+  ],
+  "F2": [
+   "KEEP",
+   "Line 216 counts only `imports` and `depends_on`, then lines 219-220 count `calls` edges as inter-layer signals, so the set of counted edge types contradicts itself in a required section."
+  ],
+  "F3": [
+   "KEEP",
+   "The design's own example closing observation (\"seams where squadron meets an external SDK\") cannot be derived from complexity tiers and paths, so it fails the test the design sets and contradicts its trace-to-named-field rule."
+  ],
+  "F4": [
+   "KEEP",
+   "The parent plan makes `tour[]` ordering the signal for which components matter and says 363 reuses this mapping, but row 5 leaves out `tour[].nodeIds`, so neither 362 nor 363 can name the tour's components."
+  ],
+  "F5": [
+   "KEEP",
+   "Line 151 promises an explicit allow-list, then line 155 gives an exclusion filter. That filter swaps the architecture's closed nine-type definition (360-arch:108-110) for an open set without amending the architecture."
+  ],
+  "F6": [
+   "DROP",
+   "Row 7 already gives a defined outcome (a gap marker naming the unreadable file). Listing absent, malformed and empty cases separately, each with its own walkthrough step, is extra hardening detail, not a missing requirement."
+  ],
+  "F7": [
+   "DROP",
+   "The deferral is recorded in `361-tasks.graph-contract-and-provenance.md:72-75` (F011/F012 forwarded to 362), so the premise is false, and the rest is a scope opinion."
+  ],
+  "F8": [
+   "DROP",
+   "Document length, repeated measured figures and a section heading's wording are style concerns, not defects."
+  ]
+ },
+ "wall_seconds": 45.9,
+ "cost_usd": 0.9794814999999999,
+ "raw_output": "F1: KEEP \u2014 Section 6 resolves function and class edge endpoints to their owning file's layer but never says how. That conflicts with the architecture's \"function- and class-level nodes are not read\" (360-arch:109-110) and with the design's own SC 9.\nF2: KEEP \u2014 Line 216 counts only `imports` and `depends_on`, then lines 219-220 count `calls` edges as inter-layer signals, so the set of counted edge types contradicts itself in a required section.\nF3: KEEP \u2014 The design's own example closing observation (\"seams where squadron meets an external SDK\") cannot be derived from complexity tiers and paths, so it fails the test the design sets and contradicts its trace-to-named-field rule.\nF4: KEEP \u2014 The parent plan makes `tour[]` ordering the signal for which components matter and says 363 reuses this mapping, but row 5 leaves out `tour[].nodeIds`, so neither 362 nor 363 can name the tour's components.\nF5: KEEP \u2014 Line 151 promises an explicit allow-list, then line 155 gives an exclusion filter. That filter swaps the architecture's closed nine-type definition (360-arch:108-110) for an open set without amending the architecture.\nF6: DROP \u2014 Row 7 already gives a defined outcome (a gap marker naming the unreadable file). Listing absent, malformed and empty cases separately, each with its own walkthrough step, is extra hardening detail, not a missing requirement.\nF7: DROP \u2014 The deferral is recorded in `361-tasks.graph-contract-and-provenance.md:72-75` (F011/F012 forwarded to 362), so the premise is false, and the rest is a scope opinion.\nF8: DROP \u2014 Document length, repeated measured figures and a section heading's wording are style concerns, not defects."
+}

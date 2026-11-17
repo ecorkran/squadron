@@ -1,0 +1,113 @@
+{
+ "case": "migratory-140-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17,
+  "F19": 18,
+  "F20": 19
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The document calls the tick contract the \"single shared interface\" but never defines it, and choosing per platform among options that include (b), which it admits leaks the substrate into the server, contradicts its own Design Goal 4."
+  ],
+  "F2": [
+   "KEEP",
+   "Clients rebuild positions by adding up deltas, but 300-arch allows up to 5% of STATE_UPDATE messages to be dropped, and there is no keyframe or resync for drops, new connections or re-entry into view, so client positions silently go wrong."
+  ],
+  "F3": [
+   "KEEP",
+   "A 30 Hz stream on a 60 Hz sim gives about 33 ms between updates, which breaks 300-arch's must-hold limit of p99 STATE_UPDATE inter-arrival under 1.5 \u00d7 tick budget (25 ms), and the document doesn't address this."
+  ],
+  "F4": [
+   "DROP",
+   "The document says plainly that the budget comes from the N=2,492 synthetic bench, and the journal itself calls force \"roughly equal\" to spatial, so the claimed contradictions are weak; what remains is a request to re-profile."
+  ],
+  "F5": [
+   "KEEP",
+   "Line 42 says staggered updates (119) come before Numba (118), but the slice list and its numbering put Numba first, so the document contradicts itself."
+  ],
+  "F6": [
+   "DROP",
+   "Entry 4 itself blames the grid's bookkeeping and dispatch overhead, so the document's summary is defensible; asking for kNN semantics and BVH alternatives is slice-design detail."
+  ],
+  "F7": [
+   "DROP",
+   "The staleness criterion and validation metric for staggered updates are slice-119 design detail, not an architecture defect."
+  ],
+  "F8": [
+   "KEEP",
+   "Design Goal 1 says every optimization must be checkable against NumPy, but the document admits slice 119 changes trajectories, and it never defines the engine precision 100-arch requires even though Metal has no 64-bit float."
+  ],
+  "F9": [
+   "DROP",
+   "Device residency and copy costs are speculative performance concerns. Array-in/array-out interfaces can stay as they are with copies, and the unified-memory remark is already hedged with \"may\"."
+  ],
+  "F10": [
+   "DROP",
+   "Numba's `nogil` flag, thread ownership and GIL behavior are implementation details for the slice designs, not contradictions in the architecture."
+  ],
+  "F11": [
+   "KEEP",
+   "Two factual errors: the wire is called uncompressed JSON but sized at 24 binary bytes per agent, and int16 deltas give 2\u00d7 compression over float32, not \"~32\u00d7\"."
+  ],
+  "F12": [
+   "DROP",
+   "How well frustum culling works in Tier 5 is a guess about a far-future tier, and the 300-arch culling conflict is already raised in F13."
+  ],
+  "F13": [
+   "KEEP",
+   "The document says it doesn't change 100-arch's interfaces yet ignores 100-arch's requirements for partial-subset ticks and mixed neighbor types, and its tier limits (GPU at 50k) conflict with 300-arch's (single CPU up to 50k, GPU from 500k)."
+  ],
+  "F14": [
+   "DROP",
+   "The Numba \"fallback\" is a project-level plan for if Quadrants doesn't work out, not a silent runtime fallback, and the failure-mode tables are a code-review rule, not an architecture-document requirement."
+  ],
+  "F15": [
+   "DROP",
+   "Asking for a derivation of the CPU ceiling is a request for more analysis, not a defect."
+  ],
+  "F16": [
+   "DROP",
+   "Version pinning, optional extras and re-checking the risk rating are opinions about scope or detail, and nothing in the document contradicts the code."
+  ],
+  "F17": [
+   "DROP",
+   "The render path is offered only as an alternative in a far-future tier, and slice and owner assignment for Tiers 4\u20135 and biome shading is a scope opinion."
+  ],
+  "F18": [
+   "DROP",
+   "When to retire the NumPy and Numba versions is an opinion about scope and process; having backends coexist during migration is a deliberate design choice."
+  ],
+  "F19": [
+   "DROP",
+   "This is a general opinion that the design is too big, with a list of cuts, not a specific defect."
+  ],
+  "F20": [
+   "DROP",
+   "Line 18 says which initiative owns each track, and leaving anticipated slices unnumbered in an architecture document is normal; the slice plan assigns the numbers."
+  ]
+ },
+ "wall_seconds": 80.1,
+ "cost_usd": 1.1215961,
+ "raw_output": "Checking Entry 4 of the performance journal to verify F6, then I'll write the verdicts.\nF1: KEEP \u2014 The document calls the tick contract the \"single shared interface\" but never defines it, and choosing per platform among options that include (b), which it admits leaks the substrate into the server, contradicts its own Design Goal 4.\nF2: KEEP \u2014 Clients rebuild positions by adding up deltas, but 300-arch allows up to 5% of STATE_UPDATE messages to be dropped, and there is no keyframe or resync for drops, new connections or re-entry into view, so client positions silently go wrong.\nF3: KEEP \u2014 A 30 Hz stream on a 60 Hz sim gives about 33 ms between updates, which breaks 300-arch's must-hold limit of p99 STATE_UPDATE inter-arrival under 1.5 \u00d7 tick budget (25 ms), and the document doesn't address this.\nF4: DROP \u2014 The document says plainly that the budget comes from the N=2,492 synthetic bench, and the journal itself calls force \"roughly equal\" to spatial, so the claimed contradictions are weak; what remains is a request to re-profile.\nF5: KEEP \u2014 Line 42 says staggered updates (119) come before Numba (118), but the slice list and its numbering put Numba first, so the document contradicts itself.\nF6: DROP \u2014 Entry 4 itself blames the grid's bookkeeping and dispatch overhead, so the document's summary is defensible; asking for kNN semantics and BVH alternatives is slice-design detail.\nF7: DROP \u2014 The staleness criterion and validation metric for staggered updates are slice-119 design detail, not an architecture defect.\nF8: KEEP \u2014 Design Goal 1 says every optimization must be checkable against NumPy, but the document admits slice 119 changes trajectories, and it never defines the engine precision 100-arch requires even though Metal has no 64-bit float.\nF9: DROP \u2014 Device residency and copy costs are speculative performance concerns. Array-in/array-out interfaces can stay as they are with copies, and the unified-memory remark is already hedged with \"may\".\nF10: DROP \u2014 Numba's `nogil` flag, thread ownership and GIL behavior are implementation details for the slice designs, not contradictions in the architecture.\nF11: KEEP \u2014 Two factual errors: the wire is called uncompressed JSON but sized at 24 binary bytes per agent, and int16 deltas give 2\u00d7 compression over float32, not \"~32\u00d7\".\nF12: DROP \u2014 How well frustum culling works in Tier 5 is a guess about a far-future tier, and the 300-arch culling conflict is already raised in F13.\nF13: KEEP \u2014 The document says it doesn't change 100-arch's interfaces yet ignores 100-arch's requirements for partial-subset ticks and mixed neighbor types, and its tier limits (GPU at 50k) conflict with 300-arch's (single CPU up to 50k, GPU from 500k).\nF14: DROP \u2014 The Numba \"fallback\" is a project-level plan for if Quadrants doesn't work out, not a silent runtime fallback, and the failure-mode tables are a code-review rule, not an architecture-document requirement.\nF15: DROP \u2014 Asking for a derivation of the CPU ceiling is a request for more analysis, not a defect.\nF16: DROP \u2014 Version pinning, optional extras and re-checking the risk rating are opinions about scope or detail, and nothing in the document contradicts the code.\nF17: DROP \u2014 The render path is offered only as an alternative in a far-future tier, and slice and owner assignment for Tiers 4\u20135 and biome shading is a scope opinion.\nF18: DROP \u2014 When to retire the NumPy and Numba versions is an opinion about scope and process; having backends coexist during migration is a deliberate design choice.\nF19: DROP \u2014 This is a general opinion that the design is too big, with a list of cuts, not a specific defect.\nF20: DROP \u2014 Line 18 says which initiative owns each track, and leaving anticipated slices unnumbered in an architecture document is normal; the slice plan assigns the numbers."
+}

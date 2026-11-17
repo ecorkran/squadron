@@ -1,0 +1,108 @@
+{
+ "case": "squadron-400-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17,
+  "F19": 18
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The plan's 440 entry still says the baseline is \"offered by CF at handoff through the probe\", and item 14 is `[ ]`; there is no 20261025 re-scope in the plan."
+  ],
+  "F2": [
+   "KEEP",
+   "Pyright's type-error count depends on which dependencies are installed, and the identity list (project, commit, language, tool versions, rule set, exclusions) has no environment field, so the \"same value on the same commit\" goal and the \"everything that would make two snapshots incomparable\" claim are false as written."
+  ],
+  "F3": [
+   "DROP",
+   "The document states the \"doesn't modify the repository\" rule. How to check out a past commit without breaking it is an implementation detail for a slice, not a contradiction."
+  ],
+  "F4": [
+   "DROP",
+   "The store gives every record its own generated ID (`store.py`), so dirty or re-measured snapshots of one commit can sit side by side; the replace-or-append policy is slice-level detail."
+  ],
+  "F5": [
+   "DROP",
+   "The document names the security cost and deliberately leaves it to a slice; moving the decision into the architecture is a scope preference."
+  ],
+  "F6": [
+   "DROP",
+   "Timeouts and time budgets are hardening detail; the document already says a failed snapshot is visible and recorded as absent, never swallowed."
+  ],
+  "F7": [
+   "DROP",
+   "Line 95 makes on-demand CLI capture the default, and line 71 says any commit can be measured, so per-slice before/after still has an owner if automatic capture is declined."
+  ],
+  "F8": [
+   "KEEP",
+   "Comparing the fork-point snapshot to the merge-commit snapshot on a shared target counts every other merge, fix and sync that landed in between, which contradicts line 93's claim that unattributed commits roll up at project level only."
+  ],
+  "F9": [
+   "DROP",
+   "The document already says the adapter contract must define each metric well enough that adapters agree; the full definitions belong to the keystone slice."
+  ],
+  "F10": [
+   "DROP",
+   "An architecture doc doesn't have to name tools; it raises tool choice as a consideration and requires tool identity and version on each metric."
+  ],
+  "F11": [
+   "DROP",
+   "The model's raw string is kept beside the category (line 73), which separates \"no category given\" from \"out-of-vocabulary category\"; the rest is a request to survey the review corpus first."
+  ],
+  "F12": [
+   "KEEP",
+   "Lines 33 and 75 promise that review signals carry their own noise floor, but nothing in the document or in 323's method measures one for review findings, so the promise can't be met as written."
+  ],
+  "F13": [
+   "DROP",
+   "The document's absent-not-zero principle already covers this, and ingest record identity and re-ingest policy are slice-level detail."
+  ],
+  "F14": [
+   "DROP",
+   "Line 53 says that with no declared limits the snapshot reports distributions, so the keystone proof can run; the nested copy of the repo is a local test-harness directory that project exclusions would handle."
+  ],
+  "F15": [
+   "DROP",
+   "Writing `metrology.project_id` to `.squadron.toml` touches squadron's own config, not the project's config or code, and 320 already fails explicitly with a message saying how to fix it."
+  ],
+  "F16": [
+   "DROP",
+   "This criticises the existing 320 envelope and store; the document follows the established 322/323/177 pattern, and the rest is a hardening preference."
+  ],
+  "F17": [
+   "DROP",
+   "Judge templates are separate files (`judge-*.yaml`) from `code.yaml`, so changing the review templates doesn't change any judge's template hash."
+  ],
+  "F18": [
+   "DROP",
+   "Which existing report code to reuse is an implementation and scope opinion, not a defect."
+  ],
+  "F19": [
+   "DROP",
+   "Calling the scope overweight is an opinion; the reviewer admits these mechanisms sit inside the plan's four capabilities."
+  ]
+ },
+ "wall_seconds": 68.0,
+ "cost_usd": 1.0185477,
+ "raw_output": "Checking the metrology store code to confirm how records are keyed, then I'll give the verdicts.\nF1: DROP \u2014 The plan's 440 entry still says the baseline is \"offered by CF at handoff through the probe\", and item 14 is `[ ]`; there is no 20261025 re-scope in the plan.\nF2: KEEP \u2014 Pyright's type-error count depends on which dependencies are installed, and the identity list (project, commit, language, tool versions, rule set, exclusions) has no environment field, so the \"same value on the same commit\" goal and the \"everything that would make two snapshots incomparable\" claim are false as written.\nF3: DROP \u2014 The document states the \"doesn't modify the repository\" rule. How to check out a past commit without breaking it is an implementation detail for a slice, not a contradiction.\nF4: DROP \u2014 The store gives every record its own generated ID (`store.py`), so dirty or re-measured snapshots of one commit can sit side by side; the replace-or-append policy is slice-level detail.\nF5: DROP \u2014 The document names the security cost and deliberately leaves it to a slice; moving the decision into the architecture is a scope preference.\nF6: DROP \u2014 Timeouts and time budgets are hardening detail; the document already says a failed snapshot is visible and recorded as absent, never swallowed.\nF7: DROP \u2014 Line 95 makes on-demand CLI capture the default, and line 71 says any commit can be measured, so per-slice before/after still has an owner if automatic capture is declined.\nF8: KEEP \u2014 Comparing the fork-point snapshot to the merge-commit snapshot on a shared target counts every other merge, fix and sync that landed in between, which contradicts line 93's claim that unattributed commits roll up at project level only.\nF9: DROP \u2014 The document already says the adapter contract must define each metric well enough that adapters agree; the full definitions belong to the keystone slice.\nF10: DROP \u2014 An architecture doc doesn't have to name tools; it raises tool choice as a consideration and requires tool identity and version on each metric.\nF11: DROP \u2014 The model's raw string is kept beside the category (line 73), which separates \"no category given\" from \"out-of-vocabulary category\"; the rest is a request to survey the review corpus first.\nF12: KEEP \u2014 Lines 33 and 75 promise that review signals carry their own noise floor, but nothing in the document or in 323's method measures one for review findings, so the promise can't be met as written.\nF13: DROP \u2014 The document's absent-not-zero principle already covers this, and ingest record identity and re-ingest policy are slice-level detail.\nF14: DROP \u2014 Line 53 says that with no declared limits the snapshot reports distributions, so the keystone proof can run; the nested copy of the repo is a local test-harness directory that project exclusions would handle.\nF15: DROP \u2014 Writing `metrology.project_id` to `.squadron.toml` touches squadron's own config, not the project's config or code, and 320 already fails explicitly with a message saying how to fix it.\nF16: DROP \u2014 This criticises the existing 320 envelope and store; the document follows the established 322/323/177 pattern, and the rest is a hardening preference.\nF17: DROP \u2014 Judge templates are separate files (`judge-*.yaml`) from `code.yaml`, so changing the review templates doesn't change any judge's template hash.\nF18: DROP \u2014 Which existing report code to reuse is an implementation and scope opinion, not a defect.\nF19: DROP \u2014 Calling the scope overweight is an opinion; the reviewer admits these mechanisms sit inside the plan's four capabilities."
+}

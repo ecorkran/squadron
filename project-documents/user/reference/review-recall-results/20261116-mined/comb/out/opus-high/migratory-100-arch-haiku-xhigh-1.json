@@ -1,0 +1,113 @@
+{
+ "case": "migratory-100-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17,
+  "F19": 18,
+  "F20": 19
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The spatial hash is already planned as slice 105, which the plan says can move earlier when agent counts require it; the rest is an opinion about sequencing, not a defect in this document."
+  ],
+  "F2": [
+   "KEEP",
+   "The per-agent `query_radius` loop and ragged `neighbor_lists` contradict the arch's \"no Python-level per-agent\" hot-loop rule (lines 33, 99), and slice 101 openly settles on a Python loop over agents because of this contract."
+  ],
+  "F3": [
+   "DROP",
+   "This is speculation about the state slices 102\u2013107 will need (leaders and home centers could be profile parameters); those slices' own designs can settle it."
+  ],
+  "F4": [
+   "KEEP",
+   "The arch says the tick \"returns the updated state\" and is stateless (lines 68\u201370), but slice 100 mutates in place and returns `None`; line 81 puts register/remove on the engine, which contradicts 300-arch line 70."
+  ],
+  "F5": [
+   "DROP",
+   "The caller can make a separate tick call per rate group with a scaled `dt`, so the signature does not rule out variable-rate ticking; the claim it targets is in slice 100, not this document."
+  ],
+  "F6": [
+   "DROP",
+   "The initiative plan defers multi-resolution to 620 on purpose, so there is no owner missing that this document has to fix."
+  ],
+  "F7": [
+   "DROP",
+   "The environment interface is deferred to the Environment Layer and slice 304; asking for it to be specified now is a request for more detail on future work."
+  ],
+  "F8": [
+   "DROP",
+   "Line 77 has swarm agents only respond to reinforced paths, and the environment layer could reinforce trails from agent positions, so \"cannot be produced\" is not shown."
+  ],
+  "F9": [
+   "DROP",
+   "The determinism goal is coherent as written; how slice 105 checks for identical output (for example, canonical neighbor order) belongs in 105's design, and cross-host distribution is deferred."
+  ],
+  "F10": [
+   "DROP",
+   "This asks for failure-mode hardening across force implementations; the arch specifies no such code, and the coincident-agent division belongs to slice 101's design."
+  ],
+  "F11": [
+   "DROP",
+   "300-arch line 78 already covers how the tick loop coexists with asyncio, and this document gives tick timing to the world server."
+  ],
+  "F12": [
+   "DROP",
+   "Line 99 is a forward-looking statement about staying compatible with a GPU path; the scratch-buffer and SciPy evaluation requests are about approach and detail."
+  ],
+  "F13": [
+   "KEEP",
+   "Line 95 says the engine should provide the float32 conversion path, while slice 100 (lines 49, 100) assigns that conversion to the world server, so the document contradicts the built design on who owns it."
+  ],
+  "F14": [
+   "DROP",
+   "Line 91 already acknowledges profile-to-profile interaction rules as open; required profile fields are the project's deliberate fail-explicit choice."
+  ],
+  "F15": [
+   "DROP",
+   "Line 97 is hedged (\"may need\"), and aggregation is explicitly future work (slice 108), so this is speculative."
+  ],
+  "F16": [
+   "DROP",
+   "Momentum along travel corridors\" can come from the herd itself without environment data, so a hidden dependency on initiative 500 is not shown."
+  ],
+  "F17": [
+   "KEEP",
+   "The design goals and envisioned archetypes include swarm and migration, but the Anticipated Slices list leaves both out without marking them deferred, unlike the slice plan (106, 107)."
+  ],
+  "F18": [
+   "KEEP",
+   "No engine exists\" is stale now that slices 100, 101 and 303 are complete, the open questions are decided in slice 100, and the anticipated slices contradict the slice plan (separate spatial-abstraction slice; aggregation listed as planned rather than future)."
+  ],
+  "F19": [
+   "KEEP",
+   "Line 122 links `200-arch.world-server-foundation.md`, which does not exist; the actual file is `300-arch.worldserver-foundation.md`."
+  ],
+  "F20": [
+   "DROP",
+   "This is an opinion about the document's scope and weight, not a defect."
+  ]
+ },
+ "wall_seconds": 114.3,
+ "cost_usd": 1.2623642999999998,
+ "raw_output": "F1: DROP \u2014 The spatial hash is already planned as slice 105, which the plan says can move earlier when agent counts require it; the rest is an opinion about sequencing, not a defect in this document.\nF2: KEEP \u2014 The per-agent `query_radius` loop and ragged `neighbor_lists` contradict the arch's \"no Python-level per-agent\" hot-loop rule (lines 33, 99), and slice 101 openly settles on a Python loop over agents because of this contract.\nF3: DROP \u2014 This is speculation about the state slices 102\u2013107 will need (leaders and home centers could be profile parameters); those slices' own designs can settle it.\nF4: KEEP \u2014 The arch says the tick \"returns the updated state\" and is stateless (lines 68\u201370), but slice 100 mutates in place and returns `None`; line 81 puts register/remove on the engine, which contradicts 300-arch line 70.\nF5: DROP \u2014 The caller can make a separate tick call per rate group with a scaled `dt`, so the signature does not rule out variable-rate ticking; the claim it targets is in slice 100, not this document.\nF6: DROP \u2014 The initiative plan defers multi-resolution to 620 on purpose, so there is no owner missing that this document has to fix.\nF7: DROP \u2014 The environment interface is deferred to the Environment Layer and slice 304; asking for it to be specified now is a request for more detail on future work.\nF8: DROP \u2014 Line 77 has swarm agents only respond to reinforced paths, and the environment layer could reinforce trails from agent positions, so \"cannot be produced\" is not shown.\nF9: DROP \u2014 The determinism goal is coherent as written; how slice 105 checks for identical output (for example, canonical neighbor order) belongs in 105's design, and cross-host distribution is deferred.\nF10: DROP \u2014 This asks for failure-mode hardening across force implementations; the arch specifies no such code, and the coincident-agent division belongs to slice 101's design.\nF11: DROP \u2014 300-arch line 78 already covers how the tick loop coexists with asyncio, and this document gives tick timing to the world server.\nF12: DROP \u2014 Line 99 is a forward-looking statement about staying compatible with a GPU path; the scratch-buffer and SciPy evaluation requests are about approach and detail.\nF13: KEEP \u2014 Line 95 says the engine should provide the float32 conversion path, while slice 100 (lines 49, 100) assigns that conversion to the world server, so the document contradicts the built design on who owns it.\nF14: DROP \u2014 Line 91 already acknowledges profile-to-profile interaction rules as open; required profile fields are the project's deliberate fail-explicit choice.\nF15: DROP \u2014 Line 97 is hedged (\"may need\"), and aggregation is explicitly future work (slice 108), so this is speculative.\nF16: DROP \u2014 \"Momentum along travel corridors\" can come from the herd itself without environment data, so a hidden dependency on initiative 500 is not shown.\nF17: KEEP \u2014 The design goals and envisioned archetypes include swarm and migration, but the Anticipated Slices list leaves both out without marking them deferred, unlike the slice plan (106, 107).\nF18: KEEP \u2014 \"No engine exists\" is stale now that slices 100, 101 and 303 are complete, the open questions are decided in slice 100, and the anticipated slices contradict the slice plan (separate spatial-abstraction slice; aggregation listed as planned rather than future).\nF19: KEEP \u2014 Line 122 links `200-arch.world-server-foundation.md`, which does not exist; the actual file is `300-arch.worldserver-foundation.md`.\nF20: DROP \u2014 This is an opinion about the document's scope and weight, not a defect."
+}

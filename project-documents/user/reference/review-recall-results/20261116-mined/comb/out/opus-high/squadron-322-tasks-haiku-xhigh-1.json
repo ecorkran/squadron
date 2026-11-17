@@ -1,0 +1,68 @@
+{
+ "case": "squadron-322-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "No 320 function lists judge results by config (the only globs are `resolve_target` and the store scan), and the store-only fallback can never return an offer, so the non-empty-offers guarantee cannot be met."
+  ],
+  "F2": [
+   "KEEP",
+   "The numbered precedence returns INSUFFICIENT_EVIDENCE at step 1 before TIGHTEN at step 4, which contradicts the task's own requirement (and T8's test) that a below-floor, low-match-rate cell returns TIGHTEN."
+  ],
+  "F3": [
+   "KEEP",
+   "The design's success criterion requires the runtime-drawn-model limitation in output, including `--json`, but T9's note covers only the template+model pairing and T10 never checks for it."
+  ],
+  "F4": [
+   "KEEP",
+   "The Coverage Check says T8 exercises the malformed-judge row, but T8 has no such test, and `resolve_thresholds` calls `float()`, which raises on a non-numeric value instead of falling back."
+  ],
+  "F5": [
+   "DROP",
+   "The lapse must be distinguishable and T14 tests whatever signal T13 produces, so the task can be completed as written; pinning the return type and rounding rule is a request for more detail."
+  ],
+  "F6": [
+   "DROP",
+   "The governing CLAUDE.md says to commit at least once per task, so per-task markers comply; the marker form is style."
+  ],
+  "F7": [
+   "DROP",
+   "The worktree CLAUDE.md that governs this document has no fix-path rule, so the commit type is a naming choice, not a defect."
+  ],
+  "F8": [
+   "KEEP",
+   "ConfigKey` needs a `default`, and neither the task nor the design gives values for the graduate/tighten/residual rates, so T5/T6 make the implementer invent policy numbers that T6 then asserts as \"correct.\""
+  ],
+  "F9": [
+   "DROP",
+   "list_samples` already filters on `record_type`, and an optional field doesn't break existing records, so the extra test only hardens a case that already works."
+  ],
+  "F10": [
+   "DROP",
+   "Task size and the helper extraction are scope opinions, and the design already allows store changes for the new record type."
+  ],
+  "F11": [
+   "DROP",
+   "Splitting T15 by command is a granularity preference, not a defect."
+  ]
+ },
+ "wall_seconds": 32.4,
+ "cost_usd": 1.0150000000000001,
+ "raw_output": "F1: KEEP \u2014 No 320 function lists judge results by config (the only globs are `resolve_target` and the store scan), and the store-only fallback can never return an offer, so the non-empty-offers guarantee cannot be met.\nF2: KEEP \u2014 The numbered precedence returns INSUFFICIENT_EVIDENCE at step 1 before TIGHTEN at step 4, which contradicts the task's own requirement (and T8's test) that a below-floor, low-match-rate cell returns TIGHTEN.\nF3: KEEP \u2014 The design's success criterion requires the runtime-drawn-model limitation in output, including `--json`, but T9's note covers only the template+model pairing and T10 never checks for it.\nF4: KEEP \u2014 The Coverage Check says T8 exercises the malformed-judge row, but T8 has no such test, and `resolve_thresholds` calls `float()`, which raises on a non-numeric value instead of falling back.\nF5: DROP \u2014 The lapse must be distinguishable and T14 tests whatever signal T13 produces, so the task can be completed as written; pinning the return type and rounding rule is a request for more detail.\nF6: DROP \u2014 The governing CLAUDE.md says to commit at least once per task, so per-task markers comply; the marker form is style.\nF7: DROP \u2014 The worktree CLAUDE.md that governs this document has no fix-path rule, so the commit type is a naming choice, not a defect.\nF8: KEEP \u2014 `ConfigKey` needs a `default`, and neither the task nor the design gives values for the graduate/tighten/residual rates, so T5/T6 make the implementer invent policy numbers that T6 then asserts as \"correct.\"\nF9: DROP \u2014 `list_samples` already filters on `record_type`, and an optional field doesn't break existing records, so the extra test only hardens a case that already works.\nF10: DROP \u2014 Task size and the helper extraction are scope opinions, and the design already allows store changes for the new record type.\nF11: DROP \u2014 Splitting T15 by command is a granularity preference, not a defect."
+}

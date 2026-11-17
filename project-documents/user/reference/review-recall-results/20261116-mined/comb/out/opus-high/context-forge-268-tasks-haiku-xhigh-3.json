@@ -1,0 +1,38 @@
+{
+ "case": "context-forge-268-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "pipeline-integration.test.ts:184` checks for the `Comprehension:` line that 3.1 removes, and `adoptionBuild.integration.test.ts:102` checks for `### Adoption Facts`, which 3.2 removes, so the full core test run at 3.2a fails."
+  ],
+  "F2": [
+   "KEEP",
+   "adoptionBuild.integration.test.ts` is missing from 3.3's list and is only deleted in 4.1, so its brownfield cases (lines 120, 221, 235) fail at 3.7's `pnpm -r test`."
+  ],
+  "F3": [
+   "DROP",
+   "the project rules say to commit at least once per task and to put every item in a checkbox, so a commit written as a checkbox item is a style choice, not a defect."
+  ],
+  "F4": [
+   "DROP",
+   "after 3.6, cli and mcp-server no longer import any symbol that 4.1\u20134.4 delete, the 3.7 build already has the pure pipeline that 5.1 tests, and 6.1 rebuilds everything, so the stale build hides no failure."
+  ],
+  "F5": [
+   "KEEP",
+   "Interfaces Required lists only detection and outcome modules, not `AdoptionError` or `readAdoptionState`, so the audit's \"confirm\" step cannot come back clean for symbols line 39 says to keep."
+  ]
+ },
+ "wall_seconds": 43.1,
+ "cost_usd": 1.0608208,
+ "raw_output": "F1: KEEP \u2014 `pipeline-integration.test.ts:184` checks for the `Comprehension:` line that 3.1 removes, and `adoptionBuild.integration.test.ts:102` checks for `### Adoption Facts`, which 3.2 removes, so the full core test run at 3.2a fails.\nF2: KEEP \u2014 `adoptionBuild.integration.test.ts` is missing from 3.3's list and is only deleted in 4.1, so its brownfield cases (lines 120, 221, 235) fail at 3.7's `pnpm -r test`.\nF3: DROP \u2014 the project rules say to commit at least once per task and to put every item in a checkbox, so a commit written as a checkbox item is a style choice, not a defect.\nF4: DROP \u2014 after 3.6, cli and mcp-server no longer import any symbol that 4.1\u20134.4 delete, the 3.7 build already has the pure pipeline that 5.1 tests, and 6.1 rebuilds everything, so the stale build hides no failure.\nF5: KEEP \u2014 Interfaces Required lists only detection and outcome modules, not `AdoptionError` or `readAdoptionState`, so the audit's \"confirm\" step cannot come back clean for symbols line 39 says to keep."
+}

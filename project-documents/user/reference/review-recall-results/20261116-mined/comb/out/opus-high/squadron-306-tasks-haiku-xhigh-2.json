@@ -1,0 +1,88 @@
+{
+ "case": "squadron-306-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "sq review code` saves through `save_review_result` (cli/commands/review.py:746), which calls `path.write_text` directly and never calls `save_review_file`, so T12's guard misses the path criterion 7 is about."
+  ],
+  "F2": [
+   "KEEP",
+   "Archiving to `archive/{original filename}` means a second re-run replaces the first archived copy, which breaks criterion 7's \"nothing is silently destroyed\", and T13 never tests two overwrites."
+  ],
+  "F3": [
+   "KEEP",
+   "The design requires the cf archive check to come before Part D lands, but T13's commit lands Part D before T14 runs; the note only stops T12 from being checked off."
+  ],
+  "F4": [
+   "KEEP",
+   "verification.py` imports `RoundDiff` from `pipeline/.../screens.py` (line 17), and `judge.py` does too (line 21), so after the move to `review/addressed/` the import runs review\u2192pipeline, and T3 calls it the opposite direction, recreating the cycle F002 was meant to remove."
+  ],
+  "F5": [
+   "KEEP",
+   "Criterion 9 names an unreadable judge response, which takes the separate `is_parse_failure` branch (judge.py:146), but T26 only tests a transport that raises."
+  ],
+  "F6": [
+   "DROP",
+   "The architecture's cap is the existing injection cap (`review.max_total_injection_bytes`), and T25 already tells the implementer to reuse it and flag the PM if 305 lacks enforcement, so the task can be completed as written."
+  ],
+  "F7": [
+   "DROP",
+   "An empty base would make the later `git diff` fail and land in T21's git-failure UNKNOWN path anyway, and the two T19 statements agree that the caller handles validation."
+  ],
+  "F8": [
+   "KEEP",
+   "Criterion 1 requires the stamp from both the CLI and pipeline paths, but T11 lets only one be tested, and the pipeline action also calls `format_review_markdown` directly at review.py:265."
+  ],
+  "F9": [
+   "KEEP",
+   "Criterion 10 covers \"failed or unverifiable\" copies, but T13 tests only the unwritable-directory failure and never the read-back mismatch branch T12 requires."
+  ],
+  "F10": [
+   "KEEP",
+   "Criterion 11 names \"review discovery\" beside `discover_judge_results`, but T32 tests only the latter and never the `{index}-review.*` glob (capture.py:97) or `locate_review`'s glob."
+  ],
+  "F11": [
+   "DROP",
+   "T1 explicitly lists the test files whose imports change, and the design says \"import-path updates; 305's tests must pass unchanged\", so a reader would not mistake import edits for rewriting."
+  ],
+  "F12": [
+   "DROP",
+   "This project's CLAUDE.md has no `**Commit**:` marker rule (it says commit at least once per task), and the T24 `fix:` prefix is a minor wording point."
+  ],
+  "F13": [
+   "KEEP",
+   "T36 points to `tests/cli/commands/test_review.py`, which does not exist, and the obvious name for a new resolve test, `tests/cli/test_review_resolve.py`, is already taken by unrelated tests."
+  ],
+  "F14": [
+   "KEEP",
+   "The design requires the shared `yaml.safe_dump` helper extracted from `evidence.py`, but T29 allows leaving a duplicate copy, which contradicts the design and the DRY rule."
+  ],
+  "F15": [
+   "DROP",
+   "How many tasks the breakdown has is a scope opinion, not a defect."
+  ]
+ },
+ "wall_seconds": 81.6,
+ "cost_usd": 1.2378287000000001,
+ "raw_output": "Checking the remaining code refs (capture.py glob, test file names, `_yaml_safe`) before writing the verdicts.\nF1: KEEP \u2014 `sq review code` saves through `save_review_result` (cli/commands/review.py:746), which calls `path.write_text` directly and never calls `save_review_file`, so T12's guard misses the path criterion 7 is about.\nF2: KEEP \u2014 Archiving to `archive/{original filename}` means a second re-run replaces the first archived copy, which breaks criterion 7's \"nothing is silently destroyed\", and T13 never tests two overwrites.\nF3: KEEP \u2014 The design requires the cf archive check to come before Part D lands, but T13's commit lands Part D before T14 runs; the note only stops T12 from being checked off.\nF4: KEEP \u2014 `verification.py` imports `RoundDiff` from `pipeline/.../screens.py` (line 17), and `judge.py` does too (line 21), so after the move to `review/addressed/` the import runs review\u2192pipeline, and T3 calls it the opposite direction, recreating the cycle F002 was meant to remove.\nF5: KEEP \u2014 Criterion 9 names an unreadable judge response, which takes the separate `is_parse_failure` branch (judge.py:146), but T26 only tests a transport that raises.\nF6: DROP \u2014 The architecture's cap is the existing injection cap (`review.max_total_injection_bytes`), and T25 already tells the implementer to reuse it and flag the PM if 305 lacks enforcement, so the task can be completed as written.\nF7: DROP \u2014 An empty base would make the later `git diff` fail and land in T21's git-failure UNKNOWN path anyway, and the two T19 statements agree that the caller handles validation.\nF8: KEEP \u2014 Criterion 1 requires the stamp from both the CLI and pipeline paths, but T11 lets only one be tested, and the pipeline action also calls `format_review_markdown` directly at review.py:265.\nF9: KEEP \u2014 Criterion 10 covers \"failed or unverifiable\" copies, but T13 tests only the unwritable-directory failure and never the read-back mismatch branch T12 requires.\nF10: KEEP \u2014 Criterion 11 names \"review discovery\" beside `discover_judge_results`, but T32 tests only the latter and never the `{index}-review.*` glob (capture.py:97) or `locate_review`'s glob.\nF11: DROP \u2014 T1 explicitly lists the test files whose imports change, and the design says \"import-path updates; 305's tests must pass unchanged\", so a reader would not mistake import edits for rewriting.\nF12: DROP \u2014 This project's CLAUDE.md has no `**Commit**:` marker rule (it says commit at least once per task), and the T24 `fix:` prefix is a minor wording point.\nF13: KEEP \u2014 T36 points to `tests/cli/commands/test_review.py`, which does not exist, and the obvious name for a new resolve test, `tests/cli/test_review_resolve.py`, is already taken by unrelated tests.\nF14: KEEP \u2014 The design requires the shared `yaml.safe_dump` helper extracted from `evidence.py`, but T29 allows leaving a duplicate copy, which contradicts the design and the DRY rule.\nF15: DROP \u2014 How many tasks the breakdown has is a scope opinion, not a defect."
+}

@@ -1,0 +1,68 @@
+{
+ "case": "context-forge-918-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "PLAN_UNINDEXED_RE` needs `**Name**` after the checkbox, so the bare `Feature Epsilon` example would still be dropped and Task 5's unindexed checks and 7/5 totals would fail."
+  ],
+  "F2": [
+   "KEEP",
+   "Task 1 changes the shared fixture and Task 5 edits the existing totals, which contradicts SC7, and `ArtifactIntrospector.test.ts:52` asserts `totalSlices` is 5 with no task updating it, so the full test suite would fail."
+  ],
+  "F3": [
+   "KEEP",
+   "SC6 names `arch-status-vs-plans` but Task 12 tests only `plan-status-vs-entries`, so half of that success criterion is never verified."
+  ],
+  "F4": [
+   "DROP",
+   "Task 5 already tests the parser's `completedSlices` arithmetic, so a Task 12 test that sets the counts directly still gives full coverage together with it."
+  ],
+  "F5": [
+   "KEEP",
+   "resolveEntryStatusSafe` (WorkflowNavigator.ts:736) has the same narrow `Pick` and passes it to `resolveEntryStatus` at line 740, so widening only line 694 breaks the build, and the \"only caller passes a full SlicePlanEntry\" note is wrong."
+  ],
+  "F6": [
+   "KEEP",
+   "every path through the try/catch sets `derivedStatus` (slice.ts:122/126), so the claim that the initializer is used when `detectDocuments` throws is false, and the bullet edits dead code outside the design."
+  ],
+  "F7": [
+   "KEEP",
+   "the `degraded` branch runs before `deriveEntryStatus`, so a `[~]` entry with a bad task file or unrecognized frontmatter status shows as degraded and can be marked next, which breaks SC4 and Decision 4's \"regardless of stale task file/frontmatter\"."
+  ],
+  "F8": [
+   "KEEP",
+   "introspectionTools.ts:118-120 recounts `completedSlices` from `isChecked` alone after the worktree filter, so the design's \"computed once, in the parser\" is false and no task covers this site."
+  ],
+  "F9": [
+   "DROP",
+   "the temporary state between commits on the slice branch doesn't affect the merged result; the ordering complaint is a preference."
+  ],
+  "F10": [
+   "DROP",
+   "this project's CLAUDE.md asks for a commit at least once per task and doesn't require a `**Commit**:` format; the checkbox items still mark the commit points clearly."
+  ],
+  "F11": [
+   "DROP",
+   "renderEntryStatus` already handles Deprecated and isn't changed, and Task 13's manual walkthrough checks the display, so this asks for an extra test the plan doesn't need."
+  ]
+ },
+ "wall_seconds": 64.6,
+ "cost_usd": 1.0722105999999998,
+ "raw_output": "F1: KEEP \u2014 `PLAN_UNINDEXED_RE` needs `**Name**` after the checkbox, so the bare `Feature Epsilon` example would still be dropped and Task 5's unindexed checks and 7/5 totals would fail.\nF2: KEEP \u2014 Task 1 changes the shared fixture and Task 5 edits the existing totals, which contradicts SC7, and `ArtifactIntrospector.test.ts:52` asserts `totalSlices` is 5 with no task updating it, so the full test suite would fail.\nF3: KEEP \u2014 SC6 names `arch-status-vs-plans` but Task 12 tests only `plan-status-vs-entries`, so half of that success criterion is never verified.\nF4: DROP \u2014 Task 5 already tests the parser's `completedSlices` arithmetic, so a Task 12 test that sets the counts directly still gives full coverage together with it.\nF5: KEEP \u2014 `resolveEntryStatusSafe` (WorkflowNavigator.ts:736) has the same narrow `Pick` and passes it to `resolveEntryStatus` at line 740, so widening only line 694 breaks the build, and the \"only caller passes a full SlicePlanEntry\" note is wrong.\nF6: KEEP \u2014 every path through the try/catch sets `derivedStatus` (slice.ts:122/126), so the claim that the initializer is used when `detectDocuments` throws is false, and the bullet edits dead code outside the design.\nF7: KEEP \u2014 the `degraded` branch runs before `deriveEntryStatus`, so a `[~]` entry with a bad task file or unrecognized frontmatter status shows as degraded and can be marked next, which breaks SC4 and Decision 4's \"regardless of stale task file/frontmatter\".\nF8: KEEP \u2014 introspectionTools.ts:118-120 recounts `completedSlices` from `isChecked` alone after the worktree filter, so the design's \"computed once, in the parser\" is false and no task covers this site.\nF9: DROP \u2014 the temporary state between commits on the slice branch doesn't affect the merged result; the ordering complaint is a preference.\nF10: DROP \u2014 this project's CLAUDE.md asks for a commit at least once per task and doesn't require a `**Commit**:` format; the checkbox items still mark the commit points clearly.\nF11: DROP \u2014 `renderEntryStatus` already handles Deprecated and isn't changed, and Task 13's manual walkthrough checks the display, so this asks for an extra test the plan doesn't need."
+}

@@ -1,0 +1,43 @@
+{
+ "case": "context-forge-268-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "D6 deliberately fixes two cases, and at Phase 0 the resolver returns `selected: false` for an already-planned project, so a third golden would only exercise the same no-op path the greenfield Phase 0 case already covers."
+  ],
+  "F2": [
+   "DROP",
+   "D5 deliberately treats `createContextPipeline` as the shared path, and walkthrough 6.3 runs the real binary and checks the `.context-forge.toml` hash, so this is a test-approach preference, not a defect."
+  ],
+  "F3": [
+   "DROP",
+   "the injected write happens between the before and after snapshots, the same window where a production write would happen, so the check does show the assertion catches state writes."
+  ],
+  "F4": [
+   "DROP",
+   "the `**Commit**:` marker rule is in squadron's CLAUDE.md; this project's CLAUDE.md and AGENTS.md only say \"commit at least once per task\", which the file's commit steps satisfy."
+  ],
+  "F5": [
+   "DROP",
+   "squadronProbe.ts` never uses the `SquadronProbe` type (only `contracts.ts` imports `ProbeOutcome` from the probe), and every other use of the type is removed in 3.3, 3.6 or 4.1, before 4.2."
+  ],
+  "F6": [
+   "DROP",
+   "build.ts` does still pass the second argument, so the note's first sentence is slightly off, but its next sentence (\"cli passes once 3.5 is done\") and 3.5's own typecheck criterion make the expected state clear."
+  ]
+ },
+ "wall_seconds": 63.9,
+ "cost_usd": 1.1059987,
+ "raw_output": "F1: DROP \u2014 D6 deliberately fixes two cases, and at Phase 0 the resolver returns `selected: false` for an already-planned project, so a third golden would only exercise the same no-op path the greenfield Phase 0 case already covers.\nF2: DROP \u2014 D5 deliberately treats `createContextPipeline` as the shared path, and walkthrough 6.3 runs the real binary and checks the `.context-forge.toml` hash, so this is a test-approach preference, not a defect.\nF3: DROP \u2014 the injected write happens between the before and after snapshots, the same window where a production write would happen, so the check does show the assertion catches state writes.\nF4: DROP \u2014 the `**Commit**:` marker rule is in squadron's CLAUDE.md; this project's CLAUDE.md and AGENTS.md only say \"commit at least once per task\", which the file's commit steps satisfy.\nF5: DROP \u2014 `squadronProbe.ts` never uses the `SquadronProbe` type (only `contracts.ts` imports `ProbeOutcome` from the probe), and every other use of the type is removed in 3.3, 3.6 or 4.1, before 4.2.\nF6: DROP \u2014 `build.ts` does still pass the second argument, so the note's first sentence is slightly off, but its next sentence (\"cli passes once 3.5 is done\") and 3.5's own typecheck criterion make the expected state clear."
+}

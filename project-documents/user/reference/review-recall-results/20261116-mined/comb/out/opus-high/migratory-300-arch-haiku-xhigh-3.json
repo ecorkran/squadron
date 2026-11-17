@@ -1,0 +1,123 @@
+{
+ "case": "migratory-300-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15,
+  "F17": 16,
+  "F18": 17,
+  "F19": 18,
+  "F20": 19,
+  "F21": 20,
+  "F22": 21
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The overrun policy is already decided (\"warn on overrun, continue at best effort\"), the slow-client choice belongs to slice 305, and the failure-mode rule cited is squadron's, not this project's."
+  ],
+  "F2": [
+   "DROP",
+   "With the tick running synchronously on the loop, all readers already run between ticks; how arrays are buffered is a slice-design detail, not a contradiction in the architecture."
+  ],
+  "F3": [
+   "DROP",
+   "The scaling tiers are an explicitly rough future profile and the document says v1 is single-process CPU; asking for benchmarks or a parallelism model is a request for more detail."
+  ],
+  "F4": [
+   "DROP",
+   "100-slices already says (105) can be pulled earlier if agent counts demand it, and the default config spawns 100 entities, so nothing breaks."
+  ],
+  "F5": [
+   "DROP",
+   "The architecture addresses the trade-off and names an upgrade path; the stricter executor rule is in squadron's python.md, not the worktree's, so it does not govern this project."
+  ],
+  "F6": [
+   "KEEP",
+   "The Anticipated Slices entry \"Terrain generation, resource placement\" contradicts line 41 (\"does not \u2026 generate terrain\") and the slice plan's assignment of terrain, biomes, resources and seasons to initiative 500."
+  ],
+  "F7": [
+   "DROP",
+   "The child slice plan adds detail like post-tick writes; an architecture-level tick outline leaving these out is not a defect."
+  ],
+  "F8": [
+   "DROP",
+   "The slice plan normally supersedes an architecture's anticipated slices; missing cross-links and orchestrator names are low value."
+  ],
+  "F9": [
+   "KEEP",
+   "001-concept.migratory.md` does not exist (the concept is `000-concept.migratory.md`), so both the dependsOn entry and the Related Work link are broken."
+  ],
+  "F10": [
+   "KEEP",
+   "The \"persist state on shutdown\" principle conflicts with the slice plan, which defers state persistence to Future Work, and no slice delivers it."
+  ],
+  "F11": [
+   "DROP",
+   "Slice 100 already fixes dimensionality (2D, with a `DIMS` constant); the memory and egress numbers are rough estimates whose conclusions hold."
+  ],
+  "F12": [
+   "DROP",
+   "Line 90's replay model logs the initial state plus non-deterministic inputs, so spawn RNG seeding is not needed, and the engine is specified as deterministic."
+  ],
+  "F13": [
+   "DROP",
+   "Full snapshots for v1 and per-client culling for a later scale slice (309) do not contradict each other; \"frustum\" is a wording point."
+  ],
+  "F14": [
+   "DROP",
+   "Protocol framing details belong to slice 306; the architecture only sketches the framing."
+  ],
+  "F15": [
+   "DROP",
+   "Entity ID and slot policy is implementation detail for slice 302 (already complete), not an architecture defect."
+  ],
+  "F16": [
+   "DROP",
+   "Config validation was built in slice 300, and any missing pydantic dependency is a code issue, not a problem with this document."
+  ],
+  "F17": [
+   "DROP",
+   "Choosing WebSocket and logging libraries is slice-level work (305/300); the architecture does not need to name them."
+  ],
+  "F18": [
+   "DROP",
+   "It targets `config/default.yaml`, not the document, and the v1 stream is read-only; admin-command auth is future work."
+  ],
+  "F19": [
+   "DROP",
+   "Asking for a component table is a request for more detail where the architecture already names the components."
+  ],
+  "F20": [
+   "DROP",
+   "This is a scope opinion; the document already says v1 is single-process, full-resolution, CPU-only, which matches the plan deferring multi-resolution."
+  ],
+  "F21": [
+   "DROP",
+   "The stated decision is a constraint, already met by the engine's subset-evaluable tick and the plan's note that 302 array layouts must not preclude aggregation."
+  ],
+  "F22": [
+   "DROP",
+   "The load-test rule appears only in squadron's python.md, not this project's, and performance acceptance criteria belong to slice designs."
+  ]
+ },
+ "wall_seconds": 53.4,
+ "cost_usd": 0.9498183000000001,
+ "raw_output": "F1: DROP \u2014 The overrun policy is already decided (\"warn on overrun, continue at best effort\"), the slow-client choice belongs to slice 305, and the failure-mode rule cited is squadron's, not this project's.\nF2: DROP \u2014 With the tick running synchronously on the loop, all readers already run between ticks; how arrays are buffered is a slice-design detail, not a contradiction in the architecture.\nF3: DROP \u2014 The scaling tiers are an explicitly rough future profile and the document says v1 is single-process CPU; asking for benchmarks or a parallelism model is a request for more detail.\nF4: DROP \u2014 100-slices already says (105) can be pulled earlier if agent counts demand it, and the default config spawns 100 entities, so nothing breaks.\nF5: DROP \u2014 The architecture addresses the trade-off and names an upgrade path; the stricter executor rule is in squadron's python.md, not the worktree's, so it does not govern this project.\nF6: KEEP \u2014 The Anticipated Slices entry \"Terrain generation, resource placement\" contradicts line 41 (\"does not \u2026 generate terrain\") and the slice plan's assignment of terrain, biomes, resources and seasons to initiative 500.\nF7: DROP \u2014 The child slice plan adds detail like post-tick writes; an architecture-level tick outline leaving these out is not a defect.\nF8: DROP \u2014 The slice plan normally supersedes an architecture's anticipated slices; missing cross-links and orchestrator names are low value.\nF9: KEEP \u2014 `001-concept.migratory.md` does not exist (the concept is `000-concept.migratory.md`), so both the dependsOn entry and the Related Work link are broken.\nF10: KEEP \u2014 The \"persist state on shutdown\" principle conflicts with the slice plan, which defers state persistence to Future Work, and no slice delivers it.\nF11: DROP \u2014 Slice 100 already fixes dimensionality (2D, with a `DIMS` constant); the memory and egress numbers are rough estimates whose conclusions hold.\nF12: DROP \u2014 Line 90's replay model logs the initial state plus non-deterministic inputs, so spawn RNG seeding is not needed, and the engine is specified as deterministic.\nF13: DROP \u2014 Full snapshots for v1 and per-client culling for a later scale slice (309) do not contradict each other; \"frustum\" is a wording point.\nF14: DROP \u2014 Protocol framing details belong to slice 306; the architecture only sketches the framing.\nF15: DROP \u2014 Entity ID and slot policy is implementation detail for slice 302 (already complete), not an architecture defect.\nF16: DROP \u2014 Config validation was built in slice 300, and any missing pydantic dependency is a code issue, not a problem with this document.\nF17: DROP \u2014 Choosing WebSocket and logging libraries is slice-level work (305/300); the architecture does not need to name them.\nF18: DROP \u2014 It targets `config/default.yaml`, not the document, and the v1 stream is read-only; admin-command auth is future work.\nF19: DROP \u2014 Asking for a component table is a request for more detail where the architecture already names the components.\nF20: DROP \u2014 This is a scope opinion; the document already says v1 is single-process, full-resolution, CPU-only, which matches the plan deferring multi-resolution.\nF21: DROP \u2014 The stated decision is a constraint, already met by the engine's subset-evaluable tick and the plan's note that 302 array layouts must not preclude aggregation.\nF22: DROP \u2014 The load-test rule appears only in squadron's python.md, not this project's, and performance acceptance criteria belong to slice designs."
+}

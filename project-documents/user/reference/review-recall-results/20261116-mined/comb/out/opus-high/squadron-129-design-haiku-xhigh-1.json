@@ -1,0 +1,68 @@
+{
+ "case": "squadron-129-design",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Line 82 says a hang is already bounded by `codex.turn_timeout_s`, but that timeout wraps only `thread.run`; `__aenter__`, `initialize` and `thread_start` run before it with no bound, so the document contradicts itself."
+  ],
+  "F2": [
+   "KEEP",
+   "The table's preface says every row is logged at WARNING or above, but the \"usage absent\" row logs at DEBUG, which contradicts it and the 931 D12 precedent of one WARNING per call."
+  ],
+  "F3": [
+   "KEEP",
+   "sq auth logout` and the runtime start before `login_chatgpt()` both spawn the runtime but have no timeout key, failure row or test, so these new I/O paths have no hang or failure handling."
+  ],
+  "F4": [
+   "DROP",
+   "The row describes existing `shutdown()` code that already carries a justification comment and `noqa`; the slice does not change it, so this is not a design defect."
+  ],
+  "F5": [
+   "DROP",
+   "The current code already passes `config.instructions` as `base_instructions` and sets `supports_system_prompt=True` on the provider, so there is no conflict to resolve."
+  ],
+  "F6": [
+   "DROP",
+   "The code registers `openai-oauth` (`ProviderType.OPENAI_OAUTH`, `loader.py`, `models.toml`), so the name the design uses is the one in force."
+  ],
+  "F7": [
+   "DROP",
+   "pyproject.toml` has `name = \"squadron-ai\"`, so `pip install 'squadron-ai[codex]'` is already correct."
+  ],
+  "F8": [
+   "DROP",
+   "The design already lists 931 in its frontmatter and Prerequisites, and D5 says it drops the 931 WARNING and flips `applies_effort`; listing the affected tests is extra detail, not a defect."
+  ],
+  "F9": [
+   "DROP",
+   "D9 says doctor uses the shared `CodexRuntime` resolver and explains why, and the success criteria already include tests for each doctor row state."
+  ],
+  "F10": [
+   "DROP",
+   "This is an opinion about scope and framing; the Protocols and the `--timeout` flag are internally consistent and break nothing."
+  ],
+  "F11": [
+   "DROP",
+   "The Authentication Patterns table was already missing an `openai-oauth` row before this slice; that is a pre-existing gap in the architecture doc, not a defect in this design."
+  ]
+ },
+ "wall_seconds": 51.9,
+ "cost_usd": 1.0006645,
+ "raw_output": "F1: KEEP \u2014 Line 82 says a hang is already bounded by `codex.turn_timeout_s`, but that timeout wraps only `thread.run`; `__aenter__`, `initialize` and `thread_start` run before it with no bound, so the document contradicts itself.\nF2: KEEP \u2014 The table's preface says every row is logged at WARNING or above, but the \"usage absent\" row logs at DEBUG, which contradicts it and the 931 D12 precedent of one WARNING per call.\nF3: KEEP \u2014 `sq auth logout` and the runtime start before `login_chatgpt()` both spawn the runtime but have no timeout key, failure row or test, so these new I/O paths have no hang or failure handling.\nF4: DROP \u2014 The row describes existing `shutdown()` code that already carries a justification comment and `noqa`; the slice does not change it, so this is not a design defect.\nF5: DROP \u2014 The current code already passes `config.instructions` as `base_instructions` and sets `supports_system_prompt=True` on the provider, so there is no conflict to resolve.\nF6: DROP \u2014 The code registers `openai-oauth` (`ProviderType.OPENAI_OAUTH`, `loader.py`, `models.toml`), so the name the design uses is the one in force.\nF7: DROP \u2014 `pyproject.toml` has `name = \"squadron-ai\"`, so `pip install 'squadron-ai[codex]'` is already correct.\nF8: DROP \u2014 The design already lists 931 in its frontmatter and Prerequisites, and D5 says it drops the 931 WARNING and flips `applies_effort`; listing the affected tests is extra detail, not a defect.\nF9: DROP \u2014 D9 says doctor uses the shared `CodexRuntime` resolver and explains why, and the success criteria already include tests for each doctor row state.\nF10: DROP \u2014 This is an opinion about scope and framing; the Protocols and the `--timeout` flag are internally consistent and break nothing.\nF11: DROP \u2014 The Authentication Patterns table was already missing an `openai-oauth` row before this slice; that is a pre-existing gap in the architecture doc, not a defect in this design."
+}

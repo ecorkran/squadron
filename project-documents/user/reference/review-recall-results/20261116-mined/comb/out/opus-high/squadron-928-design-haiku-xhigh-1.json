@@ -1,0 +1,53 @@
+{
+ "case": "squadron-928-design",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This is a scope opinion. The plan entry fixes all of #125, which names `list` and doctor, and the entry's own design note (line 457) already records the slice and its revised effort."
+  ],
+  "F2": [
+   "DROP",
+   "The receipt-authority rule on line 176 is about what squadron owns and removes, not about display status. The Claude status check is the same kind of name-based heuristic, so a possible false \"Installed\" is a low-value hardening point."
+  ],
+  "F3": [
+   "DROP",
+   "The Claude writers also `copy2` over existing files with no guard. The `sq-review` example is exactly the squadron-skill-name collision that line 52 explicitly excludes."
+  ],
+  "F4": [
+   "KEEP",
+   "D5's new suffix scheme gives two user packs the same receipt name (Claude pack `x-agents` and Codex pack `x` both become `x-agents.toml`). One receipt then overwrites the other and orphans its files, and the receipt-name tests don't cover this."
+  ],
+  "F5": [
+   "DROP",
+   "The Component Structure table already lists each change to 925's surface, and the generated names really are unchanged in meaning, so this asks for wording only."
+  ],
+  "F6": [
+   "DROP",
+   "Validation runs before any write, and receipt-last writing and skip-if-missing removal are existing behaviour moved unchanged. Asking for rollback or incremental receipts is hardening beyond the slice."
+  ],
+  "F7": [
+   "DROP",
+   "The \"yes\" rows are the provisional list and the probe procedure is stated. `doctor_checks.py:1` declares \"no network, no subprocesses\", so `sq doctor` does not belong in the probe table."
+  ],
+  "F8": [
+   "DROP",
+   "Nested-directory pruning comes from `uninstall_commands`, which already removes nested agents skill dirs, so its tests move with it. Criterion 1 installs the real bundled `analysis` skills, and the rest repeats F3, F4 and F6."
+  ]
+ },
+ "wall_seconds": 55.7,
+ "cost_usd": 1.0732059999999999,
+ "raw_output": "F1: DROP \u2014 This is a scope opinion. The plan entry fixes all of #125, which names `list` and doctor, and the entry's own design note (line 457) already records the slice and its revised effort.\nF2: DROP \u2014 The receipt-authority rule on line 176 is about what squadron owns and removes, not about display status. The Claude status check is the same kind of name-based heuristic, so a possible false \"Installed\" is a low-value hardening point.\nF3: DROP \u2014 The Claude writers also `copy2` over existing files with no guard. The `sq-review` example is exactly the squadron-skill-name collision that line 52 explicitly excludes.\nF4: KEEP \u2014 D5's new suffix scheme gives two user packs the same receipt name (Claude pack `x-agents` and Codex pack `x` both become `x-agents.toml`). One receipt then overwrites the other and orphans its files, and the receipt-name tests don't cover this.\nF5: DROP \u2014 The Component Structure table already lists each change to 925's surface, and the generated names really are unchanged in meaning, so this asks for wording only.\nF6: DROP \u2014 Validation runs before any write, and receipt-last writing and skip-if-missing removal are existing behaviour moved unchanged. Asking for rollback or incremental receipts is hardening beyond the slice.\nF7: DROP \u2014 The \"yes\" rows are the provisional list and the probe procedure is stated. `doctor_checks.py:1` declares \"no network, no subprocesses\", so `sq doctor` does not belong in the probe table.\nF8: DROP \u2014 Nested-directory pruning comes from `uninstall_commands`, which already removes nested agents skill dirs, so its tests move with it. Criterion 1 installs the real bundled `analysis` skills, and the rest repeats F3, F4 and F6."
+}

@@ -1,0 +1,78 @@
+{
+ "case": "migratory-152-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The AFTER snippet's k_nearest branch has no `max_neighbors <= 0` path, so with `max_neighbors: 0` it goes into eviction with `heap_dsq[0]=INF` and reads `heap_idx[0]=-1`, which slice 150 (lines 126, 207) explicitly supports today."
+  ],
+  "F2": [
+   "KEEP",
+   "Plan entry 152 sets the gate against k-first, requires no k-first regression and includes FRNN; the slice replaces the baseline, removes k_first and defers FRNN without updating the plan."
+  ],
+  "F3": [
+   "DROP",
+   "This is mainly an opinion about scope and asks for a PM decision; the actual conflict with the plan is already covered by F2."
+  ],
+  "F4": [
+   "DROP",
+   "These are design opinions (DRY, an extra prune for radius_only, a parity exemption) rather than defects; the real uncapped-path bug is covered by F1."
+  ],
+  "F5": [
+   "KEEP",
+   "With the outer loop in original order, lanes in a warp read from different cell ranges, so the \"coalesced across warp threads\" claim is wrong, and the alternative is rejected by comparing 4 scattered writes to ~1400 scattered reads as \"just as bad\"."
+  ],
+  "F6": [
+   "KEEP",
+   "The slice calls 200k \"the architecture's Tier 3 target\", but the architecture (arch:74, arch:90) and the plan define Tier 3 as 250k."
+  ],
+  "F7": [
+   "KEEP",
+   "The default flip makes k_nearest the production mode at every N, but the only gate is relative at 200k, with no check against the architecture's 60 TPS at 50k Tier 2 target."
+  ],
+  "F8": [
+   "KEEP",
+   "The doc says no file outside the GPU path changes, yet it edits `config.py` and `workload.py` and adds a workload; it also says three modes collapse to two, when slice 150 has two modes and this slice still has two."
+  ],
+  "F9": [
+   "DROP",
+   "The coherent fields are allocated in `_allocate_fields()` alongside the originals, so they follow whatever lifecycle slice 146 gives the originals; the misdescription of 146 adds no new defect."
+  ],
+  "F10": [
+   "DROP",
+   "This mostly asks for more profiling detail; the reindex runs inside `build_spatial_hash`, so its cost already falls in the spatial-build phase, and the misread sanity gate is covered by F11."
+  ],
+  "F11": [
+   "KEEP",
+   "radius_only accumulates every candidate in radius (~160 per agent) while k_first stops after \u226432, so \"strictly less work\" is false; and 213.9 TPS is a Mac/Metal figure (149:164) used in a slice-stop gate where the architecture makes performance gates CUDA-only."
+  ],
+  "F12": [
+   "KEEP",
+   "Scope and Technical Decisions remove k_first now with a ConfigurationError, while Mitigation keeps it parsed with a deprecation warning until the final commit; the two plans contradict each other."
+  ],
+  "F13": [
+   "KEEP",
+   "The slice says slice 150 shipped on main, but slice 150 is `status: in_progress`, its TPS criterion is unmet (~88% regression), and plan entry 150 is unchecked."
+  ]
+ },
+ "wall_seconds": 70.2,
+ "cost_usd": 1.1996672000000002,
+ "raw_output": "F1: KEEP \u2014 The AFTER snippet's k_nearest branch has no `max_neighbors <= 0` path, so with `max_neighbors: 0` it goes into eviction with `heap_dsq[0]=INF` and reads `heap_idx[0]=-1`, which slice 150 (lines 126, 207) explicitly supports today.\nF2: KEEP \u2014 Plan entry 152 sets the gate against k-first, requires no k-first regression and includes FRNN; the slice replaces the baseline, removes k_first and defers FRNN without updating the plan.\nF3: DROP \u2014 This is mainly an opinion about scope and asks for a PM decision; the actual conflict with the plan is already covered by F2.\nF4: DROP \u2014 These are design opinions (DRY, an extra prune for radius_only, a parity exemption) rather than defects; the real uncapped-path bug is covered by F1.\nF5: KEEP \u2014 With the outer loop in original order, lanes in a warp read from different cell ranges, so the \"coalesced across warp threads\" claim is wrong, and the alternative is rejected by comparing 4 scattered writes to ~1400 scattered reads as \"just as bad\".\nF6: KEEP \u2014 The slice calls 200k \"the architecture's Tier 3 target\", but the architecture (arch:74, arch:90) and the plan define Tier 3 as 250k.\nF7: KEEP \u2014 The default flip makes k_nearest the production mode at every N, but the only gate is relative at 200k, with no check against the architecture's 60 TPS at 50k Tier 2 target.\nF8: KEEP \u2014 The doc says no file outside the GPU path changes, yet it edits `config.py` and `workload.py` and adds a workload; it also says three modes collapse to two, when slice 150 has two modes and this slice still has two.\nF9: DROP \u2014 The coherent fields are allocated in `_allocate_fields()` alongside the originals, so they follow whatever lifecycle slice 146 gives the originals; the misdescription of 146 adds no new defect.\nF10: DROP \u2014 This mostly asks for more profiling detail; the reindex runs inside `build_spatial_hash`, so its cost already falls in the spatial-build phase, and the misread sanity gate is covered by F11.\nF11: KEEP \u2014 radius_only accumulates every candidate in radius (~160 per agent) while k_first stops after \u226432, so \"strictly less work\" is false; and 213.9 TPS is a Mac/Metal figure (149:164) used in a slice-stop gate where the architecture makes performance gates CUDA-only.\nF12: KEEP \u2014 Scope and Technical Decisions remove k_first now with a ConfigurationError, while Mitigation keeps it parsed with a deprecation warning until the final commit; the two plans contradict each other.\nF13: KEEP \u2014 The slice says slice 150 shipped on main, but slice 150 is `status: in_progress`, its TPS criterion is unmet (~88% regression), and plan entry 150 is unchecked."
+}

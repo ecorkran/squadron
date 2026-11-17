@@ -1,0 +1,88 @@
+{
+ "case": "squadron-400-arch",
+ "reviewer": "haiku-xhigh",
+ "run": "3",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The doc already lets one record hold several rule sets and languages, and whether a rerun overwrites or appends is detail for the keystone slice."
+  ],
+  "F2": [
+   "KEEP",
+   "Pyright's error count depends on which packages resolve, so \"same commit + same tool versions \u21d2 same value\" is false for type counts, and the snapshot identity doesn't record the environment."
+  ],
+  "F3": [
+   "DROP",
+   "The doc says a project \"can be measured at any commit,\" so on-demand snapshots of the fork and merge commits already give the per-slice before and after."
+  ],
+  "F4": [
+   "DROP",
+   "The doc states the constraint that the repo is never modified and explicitly leaves the export mechanism and the coverage install-or-read choice to slices, so this asks for slice detail."
+  ],
+  "F5": [
+   "DROP",
+   "The doc already defines failure handling (absent with a reason, visible, never fails the pipeline step), and a per-path timeout table is slice-level detail."
+  ],
+  "F6": [
+   "DROP",
+   "How findings are keyed and whether ingest is idempotent are design details for the ingest slice, not architecture defects."
+  ],
+  "F7": [
+   "DROP",
+   "Non-Goals already treats a poor vocabulary fit as \"a finding to report,\" `other` is the stated fallback, and the cited `ReviewCategory` code doesn't exist in this tree."
+  ],
+  "F8": [
+   "KEEP",
+   "The doc says review signals carry a noise floor and reports show LLM sources against one, but only the audit floor is ever measured, and no slice produces a review floor."
+  ],
+  "F9": [
+   "DROP",
+   "The doc already requires read-side-mapped findings to be marked and kept apart from write-time ones, which covers the template-change boundary."
+  ],
+  "F10": [
+   "DROP",
+   "Writing the adapter contract out is the keystone slice's stated job, so this asks for slice-level detail."
+  ],
+  "F11": [
+   "DROP",
+   "A model validator is code hardening for the envelope, not a defect in the document, and the cited 20-field count doesn't match this tree's 6 payloads."
+  ],
+  "F12": [
+   "DROP",
+   "How rollups handle partially absent values is detail for the reports slice, and the absent-is-not-zero principle already rules out the dangerous case."
+  ],
+  "F13": [
+   "DROP",
+   "The quoted \"Squadron calls CF, never the reverse\" isn't in the initiative plan, and the plan's entry 16 says CF offers the baseline through the probe, which matches the doc."
+  ],
+  "F14": [
+   "DROP",
+   "In this tree `models.py` has exactly the six record types the doc lists, and the cited snapshot, review-ingest and category files don't exist, so Current State is accurate."
+  ],
+  "F15": [
+   "DROP",
+   "Initiative entry 14 itself requires all four capabilities, including over-time trend and review normalization, and automatic fork/merge capture isn't in the doc's scope."
+  ]
+ },
+ "wall_seconds": 55.2,
+ "cost_usd": 0.9952355000000002,
+ "raw_output": "Checking the initiative plan entries for 400/420/440 before I decide on F13 and F15.\nF1: DROP \u2014 The doc already lets one record hold several rule sets and languages, and whether a rerun overwrites or appends is detail for the keystone slice.\nF2: KEEP \u2014 Pyright's error count depends on which packages resolve, so \"same commit + same tool versions \u21d2 same value\" is false for type counts, and the snapshot identity doesn't record the environment.\nF3: DROP \u2014 The doc says a project \"can be measured at any commit,\" so on-demand snapshots of the fork and merge commits already give the per-slice before and after.\nF4: DROP \u2014 The doc states the constraint that the repo is never modified and explicitly leaves the export mechanism and the coverage install-or-read choice to slices, so this asks for slice detail.\nF5: DROP \u2014 The doc already defines failure handling (absent with a reason, visible, never fails the pipeline step), and a per-path timeout table is slice-level detail.\nF6: DROP \u2014 How findings are keyed and whether ingest is idempotent are design details for the ingest slice, not architecture defects.\nF7: DROP \u2014 Non-Goals already treats a poor vocabulary fit as \"a finding to report,\" `other` is the stated fallback, and the cited `ReviewCategory` code doesn't exist in this tree.\nF8: KEEP \u2014 The doc says review signals carry a noise floor and reports show LLM sources against one, but only the audit floor is ever measured, and no slice produces a review floor.\nF9: DROP \u2014 The doc already requires read-side-mapped findings to be marked and kept apart from write-time ones, which covers the template-change boundary.\nF10: DROP \u2014 Writing the adapter contract out is the keystone slice's stated job, so this asks for slice-level detail.\nF11: DROP \u2014 A model validator is code hardening for the envelope, not a defect in the document, and the cited 20-field count doesn't match this tree's 6 payloads.\nF12: DROP \u2014 How rollups handle partially absent values is detail for the reports slice, and the absent-is-not-zero principle already rules out the dangerous case.\nF13: DROP \u2014 The quoted \"Squadron calls CF, never the reverse\" isn't in the initiative plan, and the plan's entry 16 says CF offers the baseline through the probe, which matches the doc.\nF14: DROP \u2014 In this tree `models.py` has exactly the six record types the doc lists, and the cited snapshot, review-ingest and category files don't exist, so Current State is accurate.\nF15: DROP \u2014 Initiative entry 14 itself requires all four capabilities, including over-time trend and review normalization, and automatic fork/merge capture isn't in the doc's scope."
+}

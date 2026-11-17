@@ -1,0 +1,53 @@
+{
+ "case": "migratory-313-tasks",
+ "reviewer": "haiku-xhigh",
+ "run": "2",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The slice is marked complete and the code is what this plan produced (SOFT came later, and the slice defers it). A finished plan describing files as new is a historical record, not a defect."
+  ],
+  "F2": [
+   "DROP",
+   "status: complete` is accurate because the code is implemented. Unticked boxes are bookkeeping, and the suggested fix (reset status so Task 5.3 sets it later) would invite redoing finished work."
+  ],
+  "F3": [
+   "DROP",
+   "The slice itself specifies resolving a missing key to OPEN. The \"literal tuple\" alternative is offered next to the correct `sorted(...)` form, so this is an opinion about approach, not a defect."
+  ],
+  "F4": [
+   "KEEP",
+   "np.mod(-1e-17, 100.0)` rounds to exactly `100.0`, which breaks criterion 7's half-open `[0, width)` that Task 2.2 promises. No listed test covers this case."
+  ],
+  "F5": [
+   "KEEP",
+   "Step 8 leaves the policy in `test.yaml` up to whoever runs it, but slice criterion 12 fixes it at `wrap`. Following the step as written can ship a config that fails the criterion."
+  ],
+  "F6": [
+   "KEEP",
+   "Criterion 5 requires that reloading gives an equal `ServerConfig`, but Task 1.4 (and the existing test at `tests/test_config.py:219`) checks only `policy`."
+  ],
+  "F7": [
+   "DROP",
+   "Checkbox formatting is a style issue. This project's CLAUDE.md has no `**Commit**:` marker convention, so the commit-marker complaint does not apply here."
+  ],
+  "F8": [
+   "DROP",
+   "Merging tasks and trimming checkboxes is an opinion about scope and size, not a defect."
+  ]
+ },
+ "wall_seconds": 52.1,
+ "cost_usd": 0.9470792,
+ "raw_output": "F1: DROP \u2014 The slice is marked complete and the code is what this plan produced (SOFT came later, and the slice defers it). A finished plan describing files as new is a historical record, not a defect.\nF2: DROP \u2014 `status: complete` is accurate because the code is implemented. Unticked boxes are bookkeeping, and the suggested fix (reset status so Task 5.3 sets it later) would invite redoing finished work.\nF3: DROP \u2014 The slice itself specifies resolving a missing key to OPEN. The \"literal tuple\" alternative is offered next to the correct `sorted(...)` form, so this is an opinion about approach, not a defect.\nF4: KEEP \u2014 `np.mod(-1e-17, 100.0)` rounds to exactly `100.0`, which breaks criterion 7's half-open `[0, width)` that Task 2.2 promises. No listed test covers this case.\nF5: KEEP \u2014 Step 8 leaves the policy in `test.yaml` up to whoever runs it, but slice criterion 12 fixes it at `wrap`. Following the step as written can ship a config that fails the criterion.\nF6: KEEP \u2014 Criterion 5 requires that reloading gives an equal `ServerConfig`, but Task 1.4 (and the existing test at `tests/test_config.py:219`) checks only `policy`.\nF7: DROP \u2014 Checkbox formatting is a style issue. This project's CLAUDE.md has no `**Commit**:` marker convention, so the commit-marker complaint does not apply here.\nF8: DROP \u2014 Merging tasks and trimming checkboxes is an opinion about scope and size, not a defect."
+}

@@ -1,0 +1,83 @@
+{
+ "case": "migratory-100-slice",
+ "reviewer": "haiku-xhigh",
+ "run": "1",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 1,
+  "F2": 2,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 8,
+  "F9": 9,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12,
+  "F13": 13,
+  "F14": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The doc contradicts itself: Technical Scope (:39) says tick \"return[s] updated state\", but the signature returns `None` and mutates in place (:91, :187), and the architecture says \"Returns the updated state array\" (arch :68)."
+  ],
+  "F2": [
+   "DROP",
+   "The architecture allows a naive first implementation (arch :45), and the slice already hands optimized spatial indexing to slice 105 (:46, :310), so restating the NFR adds nothing."
+  ],
+  "F3": [
+   "KEEP",
+   "Calling `query_radius` once per agent and passing `list[NDArray]`/`list[BehavioralProfile]` makes a Python per-agent loop in the hot path, against :247 and the bulk array-in/array-out rule in arch :99; how the per-agent `max_speed` gets gathered is also never said."
+  ],
+  "F4": [
+   "KEEP",
+   "152 says integration adds force to velocity \"for all\", but :215 and :241 update only active indices; applying :152 would move inactive agents through their existing velocity."
+  ],
+  "F5": [
+   "KEEP",
+   "248 requires placeholder forces to exercise the `Force` path, but `tick()` accepts only `list[BulkForce]` with no adapter, and \"prefers the bulk variant when available\" (:152) doesn't fit that signature."
+  ],
+  "F6": [
+   "KEEP",
+   "accelerations` is listed in scope and state (:35, :96) but is missing from the data-flow inputs (:86), the plan and the architecture, and nothing reads or writes it, so an implementer would build a dead array with no defined meaning."
+  ],
+  "F7": [
+   "DROP",
+   "Checking caller-supplied indices and `dt` is hardening and a request for more detail; the doc has no silent-fallback value that breaks the fail-explicitly rule."
+  ],
+  "F8": [
+   "DROP",
+   "The `create` signature, initial values and remove semantics are details the implementer can decide, and the determinism test would catch nondeterministic initialization anyway."
+  ],
+  "F9": [
+   "DROP",
+   "tick()` always calls `build()` before querying (:87), so query-before-build cannot happen in the defined flow; this is hardening."
+  ],
+  "F10": [
+   "DROP",
+   "Environment input belongs to future slices that depend on the Environment Layer (plan 106/107), and leaving it out of the foundation slice is a scope choice, not a contradiction."
+  ],
+  "F11": [
+   "KEEP",
+   "The architecture assigns the float32 conversion path to the engine (arch :95), but the slice reassigns it to the world server (:49, :100) without recording that change."
+  ],
+  "F12": [
+   "DROP",
+   "The architecture itself defines state as arrays passed in and out of the engine (arch :39, :70), and slices 101\u2013104 are inside the engine, so exposing the arrays doesn't break a consumer boundary."
+  ],
+  "F13": [
+   "DROP",
+   "The missing frontmatter entries are minor metadata, and aggregate support is slice 108's job to design; it doesn't make this slice wrong."
+  ],
+  "F14": [
+   "KEEP",
+   "The walkthrough can't run as written: `np` is never imported, `forces=[...]` names no forces, agent positions for the agent-50 check aren't given, and semi-implicit Euler doesn't produce exact t\u00b2 displacement."
+  ]
+ },
+ "wall_seconds": 58.0,
+ "cost_usd": 0.8211313999999998,
+ "raw_output": "F1: KEEP \u2014 The doc contradicts itself: Technical Scope (:39) says tick \"return[s] updated state\", but the signature returns `None` and mutates in place (:91, :187), and the architecture says \"Returns the updated state array\" (arch :68).\nF2: DROP \u2014 The architecture allows a naive first implementation (arch :45), and the slice already hands optimized spatial indexing to slice 105 (:46, :310), so restating the NFR adds nothing.\nF3: KEEP \u2014 Calling `query_radius` once per agent and passing `list[NDArray]`/`list[BehavioralProfile]` makes a Python per-agent loop in the hot path, against :247 and the bulk array-in/array-out rule in arch :99; how the per-agent `max_speed` gets gathered is also never said.\nF4: KEEP \u2014 :152 says integration adds force to velocity \"for all\", but :215 and :241 update only active indices; applying :152 would move inactive agents through their existing velocity.\nF5: KEEP \u2014 :248 requires placeholder forces to exercise the `Force` path, but `tick()` accepts only `list[BulkForce]` with no adapter, and \"prefers the bulk variant when available\" (:152) doesn't fit that signature.\nF6: KEEP \u2014 `accelerations` is listed in scope and state (:35, :96) but is missing from the data-flow inputs (:86), the plan and the architecture, and nothing reads or writes it, so an implementer would build a dead array with no defined meaning.\nF7: DROP \u2014 Checking caller-supplied indices and `dt` is hardening and a request for more detail; the doc has no silent-fallback value that breaks the fail-explicitly rule.\nF8: DROP \u2014 The `create` signature, initial values and remove semantics are details the implementer can decide, and the determinism test would catch nondeterministic initialization anyway.\nF9: DROP \u2014 `tick()` always calls `build()` before querying (:87), so query-before-build cannot happen in the defined flow; this is hardening.\nF10: DROP \u2014 Environment input belongs to future slices that depend on the Environment Layer (plan 106/107), and leaving it out of the foundation slice is a scope choice, not a contradiction.\nF11: KEEP \u2014 The architecture assigns the float32 conversion path to the engine (arch :95), but the slice reassigns it to the world server (:49, :100) without recording that change.\nF12: DROP \u2014 The architecture itself defines state as arrays passed in and out of the engine (arch :39, :70), and slices 101\u2013104 are inside the engine, so exposing the arrays doesn't break a consumer boundary.\nF13: DROP \u2014 The missing frontmatter entries are minor metadata, and aggregate support is slice 108's job to design; it doesn't make this slice wrong.\nF14: KEEP \u2014 The walkthrough can't run as written: `np` is never imported, `forces=[...]` names no forces, agent positions for the agent-50 check aren't given, and semi-implicit Euler doesn't produce exact t\u00b2 displacement."
+}
