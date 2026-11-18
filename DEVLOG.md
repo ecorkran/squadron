@@ -13,6 +13,10 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261117
 
+### Release 0.24.33
+
+- **Contents:** the 0.24.32 changes. 0.24.32's CI failed on 8 setup errors in `test_slice_pipeline_end_to_end.py`: its module-scoped `world` fixture ran before the function-scoped hermetic git config and had no git identity on the runner. The fixture now pins `GIT_CONFIG_GLOBAL` itself.
+
 ### Release 0.24.32
 
 - **Contents:** benchmark slice cases (`sq benchmark slice-cases build`, slice-case `run`, pairwise `judge`, report tables); pipeline defaults from the review benchmark (haiku-xhigh review, fable-medium designs, opus-high architecture/tasks); alias set trimmed to a default plus one effort variant, with hy4, hy4-flash, minimax31-flash and terra added; review recall RESULTS sections 16–20; fixes #335 (grade review sees toml/yaml edits) and #330 (Codex fix step can write).
