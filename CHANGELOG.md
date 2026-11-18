@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.34] - 20261118
+
 ### Added
 - `sq benchmark recall` measures which code-review setup finds real escaped bugs: load case files (`cases add`), import the hand-run results (`import`), run reviewer and comb recipes with a cost bound and caps (`run`), decide undecided hits (`label`), and compare recipes with recall ranges and paired intervals (`report`).
 - `sol-r` alias: sol through OpenRouter, billed per call, for when the ChatGPT plan's Codex credits run out.

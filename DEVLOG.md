@@ -13,6 +13,10 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261118
 
+### Release 0.24.34
+
+- **Contents:** slice 430 `sq benchmark recall` (real-bug code-review recall: case files, hand-run import, recipe runs with cost bound and caps, labels, report), plus the gate-review fixes on it (non-finite cost limits refused, empty combs neither capped nor charged, UNKNOWN-verdict reviews recorded as config failures); `sol-r` alias (sol through OpenRouter); `/sq:monitor` no longer saves a session summary for paused or failed runs. Issues filed: #370, #371.
+
 
 **p6: devlog-4**
 - branch-0:branch-0: PASS

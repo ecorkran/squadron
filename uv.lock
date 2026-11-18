@@ -1060,7 +1060,7 @@ wheels = [
 
 [[package]]
 name = "squadron-ai"
-version = "0.24.33"
+version = "0.24.34"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
