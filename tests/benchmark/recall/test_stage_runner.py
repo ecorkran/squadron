@@ -25,6 +25,7 @@ from squadron.metrology.recall_run_models import (
     StageKind,
     StageOutcome,
 )
+from squadron.review.models import Verdict
 from tests.benchmark.recall.scoring_support import StubResolver, make_case
 from tests.benchmark.recall.stage_support import (
     StubLeakChecker,
@@ -146,6 +147,19 @@ def test_review_output_unparseable_is_config_failure(
     assert _warned(caplog, "config_failure", "no parseable result")
 
 
+def test_review_with_unknown_verdict_is_config_failure_keeping_usage(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The review parser's degraded shape (UNKNOWN, no findings) is not a clean zero-finding review."""
+    document = {**review_document([]), "verdict": Verdict.UNKNOWN.value}
+    runner = writing_runner(lambda call: write_json(output_arg(call.argv), document))
+    with caplog.at_level(logging.WARNING):
+        entry = _run(tmp_path, _review_stage(), runner)
+    assert entry.outcome is StageOutcome.CONFIG_FAILURE and entry.findings == ()
+    assert entry.usage.cost_usd == 0.01 and entry.raw_ref is not None
+    assert _warned(caplog, "review rev", "config_failure", "UNKNOWN")
+
+
 def _comb_setup(tmp_path: Path) -> tuple[PendingStage, RecallRun]:
     """A stored live review with two CONCERNs and a NOTE, and the pending comb stage."""
     review_stage, comb_stage = pending_for(CASE, WITH_COMB)
@@ -215,6 +229,7 @@ def test_comb_with_empty_input_makes_no_call(tmp_path: Path) -> None:
     runner = _comb_runner("unused")
     entry = _run(tmp_path, comb_stage, runner, run)
     assert entry.outcome is StageOutcome.OK and entry.decisions == {} and runner.calls == []
+    assert entry.usage.cost_usd == 0.0  # no call, so a known zero, not "not recorded"
 
 
 def test_failed_and_no_call_entries_keep_their_identity_and_are_scored(tmp_path: Path) -> None:

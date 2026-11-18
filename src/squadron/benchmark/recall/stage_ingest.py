@@ -39,12 +39,14 @@ from squadron.metrology.recall_run_models import (
     StageUsage,
 )
 from squadron.pipeline.usage_capture import effort_sent_by_profile
+from squadron.review.models import Verdict
 
 _logger = logging.getLogger(__name__)
 _FINDINGS = TypeAdapter(list[RecallFinding])
 STDERR_TAIL_CHARS = 500
 UNPARSEABLE = "output file holds no parseable result"
 NO_DECISION_LINE = "comb output holds no parseable decision line"
+UNKNOWN_VERDICT = f"review verdict {Verdict.UNKNOWN.value}: the review could not be parsed"
 
 
 @dataclass(frozen=True)
@@ -72,8 +74,14 @@ def failure_entry(
 
 
 def empty_comb_entry(stage: PendingStage, context: IngestContext) -> StageEntry:
-    """A comb whose input is empty: nothing to decide, so no call is made."""
-    return _entry(stage, context, outcome=StageOutcome.OK, leak=RecallLeakVerdict.CONFINED)
+    """A comb whose input is empty: nothing to decide, so no call is made and it costs $0."""
+    return _entry(
+        stage,
+        context,
+        outcome=StageOutcome.OK,
+        leak=RecallLeakVerdict.CONFINED,
+        usage=StageUsage(cost_usd=0.0),
+    )
 
 
 def read_comb_input(path: Path) -> list[RecallFinding]:
@@ -108,6 +116,11 @@ def ingest_output(
         return entry.model_copy(update={"raw_ref": raw_ref})
     if parts is None:
         entry = failure_entry(stage, StageOutcome.CONFIG_FAILURE, NO_DECISION_LINE, context, leak)
+        return entry.model_copy(update=call)
+    if stage.kind is StageKind.REVIEW and document.get("verdict") == Verdict.UNKNOWN.value:
+        # The review parser's degraded result: no findings because none could be read, not
+        # because the reviewer found none. Scored as zero recall it would corrupt the report.
+        entry = failure_entry(stage, StageOutcome.CONFIG_FAILURE, UNKNOWN_VERDICT, context, leak)
         return entry.model_copy(update=call)
     return _entry(stage, context, outcome=StageOutcome.OK, leak=leak, **call, **parts)
 
