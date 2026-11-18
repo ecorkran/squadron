@@ -135,14 +135,15 @@ def test_keep_leaves_the_sandbox_in_place(repo: StatsRepo, start_sha: str, root:
     assert ("project", "rm", f"replay-{_REPLAY_ID}", "--yes") not in runner.cf_calls()
 
 
-def test_a_start_point_declaring_submodules_is_refused(repo: StatsRepo, root: Path) -> None:
+def test_a_start_point_declaring_submodules_opens_with_them_unfilled(
+    repo: StatsRepo, root: Path
+) -> None:
     repo.commit("add module", {".gitmodules": '[submodule "x"]\n\tpath = x\n\turl = ../x\n'}, _T2)
     sha = repo.git("rev-parse", "HEAD")
 
-    with pytest.raises(SandboxError, match=r"\.gitmodules"):
-        with _sandbox(repo, sha, root, HybridRunner()):
-            pytest.fail("the sandbox should not have opened")
-    assert _gone(root)
+    with _sandbox(repo, sha, root, HybridRunner()) as sandbox:
+        assert (sandbox.path / ".gitmodules").is_file()
+        assert not (sandbox.path / "x").exists()
 
 
 def test_an_empty_gitmodules_file_is_not_a_submodule(repo: StatsRepo, root: Path) -> None:

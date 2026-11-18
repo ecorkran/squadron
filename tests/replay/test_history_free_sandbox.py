@@ -34,16 +34,13 @@ def root(tmp_path: Path) -> Path:
     return tmp_path / "root"
 
 
-def _sandbox(
-    repo: StatsRepo, sha: str, root: Path, *, allow_unfilled_submodules: bool = False
-) -> HistoryFreeSandbox:
+def _sandbox(repo: StatsRepo, sha: str, root: Path) -> HistoryFreeSandbox:
     return HistoryFreeSandbox(
         start_sha=sha,
         sandbox_id=_ID,
         repo_root=repo.root,
         runner=SubprocessRunner(),
         root=root,
-        allow_unfilled_submodules=allow_unfilled_submodules,
     )
 
 
@@ -70,21 +67,13 @@ def test_one_commit_at_start_sha_and_no_later_history(
     assert _gone(root)
 
 
-def test_submodule_start_point_is_refused_and_cleaned(repo: StatsRepo, root: Path) -> None:
-    repo.commit("add module", {".gitmodules": '[submodule "x"]\n\tpath = x\n\turl = ../x\n'}, _T2)
-    with pytest.raises(SandboxError, match="submodules"):
-        with _sandbox(repo, repo.git("rev-parse", "HEAD"), root):
-            pytest.fail("must not enter")
-    assert _gone(root)
-
-
-def test_submodule_start_point_builds_unfilled_when_allowed(
+def test_submodule_start_point_builds_with_submodules_unfilled(
     repo: StatsRepo, root: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     repo.commit("add module", {".gitmodules": '[submodule "x"]\n\tpath = x\n\turl = ../x\n'}, _T2)
     head = repo.git("rev-parse", "HEAD")
     with caplog.at_level("INFO"):
-        with _sandbox(repo, head, root, allow_unfilled_submodules=True) as sandbox:
+        with _sandbox(repo, head, root) as sandbox:
             assert _git(sandbox.path, "rev-parse", "HEAD") == head
             assert (sandbox.path / ".gitmodules").is_file()
     assert "left unfilled" in caplog.text

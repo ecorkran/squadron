@@ -79,12 +79,8 @@ class HistoryFreeSandbox:
         repo_root: Path,
         runner: ProcessRunner,
         root: Path,
-        allow_unfilled_submodules: bool = False,
     ) -> None:
         self._start_sha = start_sha
-        # A replay runs the project's code, so a missing submodule changes behavior and is
-        # refused. A recall review only reads the tree, so it may leave submodules empty.
-        self._allow_unfilled_submodules = allow_unfilled_submodules
         self._sandbox_id = sandbox_id
         # Absolute: the fetch runs under `git -C <sandbox>`, where a relative path would
         # name the sandbox itself.
@@ -159,19 +155,15 @@ class HistoryFreeSandbox:
             "git", "-C", sandbox, "fetch", "-q", "--depth", "1", str(self._repo_root), self._start_sha
         )
         self.checked("git", "-C", sandbox, "checkout", "-q", "--detach", "FETCH_HEAD")
-        if not self._declares_submodules():
-            return
-        if self._allow_unfilled_submodules:
+        if self._declares_submodules():
+            # Submodules are never fetched: the only one squadron's projects have had is
+            # ai-project-guide, which holds guides, not code. A code submodule left empty
+            # shows up as a failing install or import, not as a silent pass.
             _logger.info(
                 "sandbox %s: submodules declared at %s are left unfilled",
                 self._sandbox_id,
                 self._start_sha,
             )
-            return
-        raise SandboxError(
-            f"start commit {self._start_sha} declares submodules in {GITMODULES}; "
-            "submodule replay is not supported"
-        )
 
     def _declares_submodules(self) -> bool:
         """Whether ``.gitmodules`` has a submodule entry; squadron tracks an empty one."""
