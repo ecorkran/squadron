@@ -1,0 +1,21 @@
+name: squadron-932
+kind: code
+repo: ~/source/repos/manta/squadron
+host_repo: ecorkran/squadron
+distribution: squadron-ai
+base: "262d0ba064dcc6fa09efb5908eecc1447fd0582b"
+head: "d89cc060d2fe3033ed479d7e4eb69aadc779bd97"
+status: checked
+hand_run_id: "932"
+bugs:
+- id: B1
+  description: The dispatch ended once the result was in and the background-agent ledger was empty, but
+    a completion notice arriving mid-turn cleared the agent from the ledger before the follow-up turn
+    it triggers, so the dispatch returned early and lost a design artifact. `sdk_session.py SDKExecutionSession._collect_turns`,
+    `sdk_turns.py BackgroundLedger`.
+  proof:
+  - "5e384226a4442d6e003a067194ada5bc766c5960"
+  original_review: missed
+notes: '27 commits, 62 files, ~143k code chars. Review: 932 (pipeline SDK session), PASS, sonnet-5-5.
+  Fix tracked as issue #239. The review''s notes about an unrelated TimeoutError and a failed disconnect()
+  are not hits. Excluded: 4df2035f (new recovery capability).'

@@ -1,0 +1,20 @@
+name: context-forge-9006d54c
+kind: code
+repo: ~/source/repos/manta/context-forge
+host_repo: ecorkran/context-forge
+distribution: context-forge
+base: "acbe4590a344698ebd67788772d761c9996a2d00"
+head: "291dabe40105c2fa894674815d5d75c96912e2f1"
+status: checked
+hand_run_id: "cf9006d5"
+bugs:
+- id: B1
+  description: dryRunInstall removed the sandbox with an unguarded fs.rmSync in finally, so a failed removal
+    threw and replaced the install's own error. `packages/cli/src/ideInstall/dryRun.ts dryRunInstall (finally
+    block)`.
+  proof:
+  - "9006d54c5f1d35dd81b034541eb016bb97dcd2ca"
+  original_review: reported
+notes: 'Batch 2 (20261113). Base is the parent of 527d3ba78c. 12 commits, 58 files. cf9006d5-N1 (found
+  in grading, not a case bug): the same fix commit also added a path-containment check to the manifest
+  prune, without which a worktree lost its guard.'

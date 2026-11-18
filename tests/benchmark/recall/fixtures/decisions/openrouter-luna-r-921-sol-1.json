@@ -1,0 +1,18 @@
+{
+  "source": "user/reference/review-recall-results/20261113-comb/out/luna-r/921-sol-1.json",
+  "finding_ids": [
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5"
+  ],
+  "expected": {
+    "F1": "KEEP",
+    "F2": "KEEP",
+    "F3": "KEEP",
+    "F4": "KEEP",
+    "F5": "KEEP"
+  },
+  "raw_output": "F1: KEEP \u2014 The blocking `run()` waits for `mt-run` to finish before polling the journal, so the cutover cannot stop the unbounded pass at the completion marker.\nF2: KEEP \u2014 The sudoers grant runs an installer from the operator\u2019s writable checkout as root, allowing that operator to execute modified code with root privileges.\nF3: KEEP \u2014 The `mt-*` argument wildcard can match whitespace and additional unit arguments, permitting operations on unrelated services.\nF4: KEEP \u2014 The truncated-day index is not passed to the trailing phase, and the seed gate/frontier can also exclude truncated days from repair.\nF5: KEEP \u2014 Repair output and streamed subprocess output bypass the log, leaving the saved cutover report without its acceptance evidence.\nF1: KEEP \u2014 The blocking `run()` waits for `mt-run` to finish before polling the journal, so the cutover cannot stop the unbounded pass at the completion marker.\nF2: KEEP \u2014 The sudoers grant runs an installer from the operator\u2019s writable checkout as root, allowing modified code to execute with root privileges.\nF3: KEEP \u2014 The `mt-*` argument wildcard can match whitespace and additional unit arguments, permitting operations on unrelated services.\nF4: KEEP \u2014 The truncated-day index is not passed to the trailing phase, and the seed gate/frontier can exclude truncated days from repair.\nF5: KEEP \u2014 Repair output and streamed subprocess output bypass the log, leaving the saved cutover report without acceptance evidence."
+}

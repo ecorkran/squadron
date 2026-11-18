@@ -1,0 +1,18 @@
+# Person grade overrides for the imported grading passes (slice 430 D10).
+# Source: review-recall-results/RESULTS.md section 12. Each entry sets `grade` on every
+# finding that is a member of, or matched to, `issue` in any grading pass of `case`.
+# Imported as labeler person:results-section-12.
+- case: trading-data-921
+  issue: 921-I9
+  grade: REAL
+  reason: >-
+    Section 12, decided REAL: the freshness probe compares the refresh's finish time with
+    the newest bar's created_at, so a bar written during a refresh can read as fresh. The
+    original MINOR grade was left in the data; this adjudication overrides it.
+- case: squadron-197
+  issue: 197-I14
+  grade: MINOR
+  reason: >-
+    Section 12, decided MINOR: plain `sq run --resume` after a halted batch is not a
+    supported recovery; item resume is. The state problem is real but only shows on a path
+    nobody should use.

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq benchmark recall` measures which code-review setup finds real escaped bugs: load case files (`cases add`), import the hand-run results (`import`), run reviewer and comb recipes with a cost bound and caps (`run`), decide undecided hits (`label`), and compare recipes with recall ranges and paired intervals (`report`).
+
 ## [0.24.33] - 20261117
 
 - First published release of the 0.24.32 changes below; 0.24.32 was tagged but never reached PyPI.

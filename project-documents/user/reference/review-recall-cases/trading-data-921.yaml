@@ -1,0 +1,33 @@
+name: trading-data-921
+kind: code
+repo: ~/source/repos/manta/trading-data
+host_repo: manta-digital/trading-data
+distribution: manta-trading-data
+base: "eaf1ab4e5913465369ad916785cce5974eaab08c"
+head: "9b54f27bdc6b62bca9890bc5006bbac73f2ea6bc"
+status: checked
+hand_run_id: "921"
+bugs:
+- id: B1
+  description: A session with no bar inside it after a long publication delay was always judged partial;
+    the gap row stayed open and was re-requested every walk, burning quota and never converging. `minute_sessions.judge_chunk_by_sessions`,
+    `minute.py _do_minute_symbol`.
+  proof:
+  - "dc39188154174bc69469d1190e8d5ab24e58edbc"
+  original_review: missed
+- id: B2
+  description: The seed's truncated-day scan started at the 7-day floor, and the seed deletes unknown
+    rows in its window, so truncated sessions older than 7 days were erased instead of fetched. `minute.py
+    run_minute_cycle`.
+  proof:
+  - "b1c7f3b7c2b19e5f06c2830d19d9f8fe193c04b8"
+  original_review: missed
+- id: B3
+  description: The cutover started the firing with a blocking command, so its "trailing phase complete"
+    stop could never act and the cutover sat for 2 hours. `cutover_common.fire_unit_until`.
+  proof:
+  - "f94c9e58da5d9a78db206a7f5edfab26e97cda08"
+  original_review: missed
+notes: '5 commits, 24 files. Review: 921, CONCERNS, z-ai/glm-5.3; it praised the per-session judging.
+  Excluded: 41d66d8e (defective predicate predates base), 33974743 and 660160ff (spec change, and code
+  predating base).'

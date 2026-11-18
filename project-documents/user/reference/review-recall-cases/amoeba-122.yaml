@@ -1,0 +1,25 @@
+name: amoeba-122
+kind: code
+repo: ~/source/repos/manta/amoeba
+host_repo: ecorkran/amoeba
+distribution: amoeba
+base: "f8097604697cfefb5fb7313d29648a1c6c22b221"
+head: "e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793"
+status: checked
+hand_run_id: "a122"
+bugs:
+- id: B1
+  description: '`build_argv` emitted `sq run P4 --run-id X -p slice=N`; squadron rejects it ("requires
+    a ''slice'' argument"), so every dispatched run failed. `runner/launch.py build_argv`.'
+  proof:
+  - "a62043f7b058c9f65a40816f2e3e8499e39e9ad1"
+  original_review: missed
+- id: B2
+  description: The tick's unexpected-fault path returned `(COMPLETE, True)`, reporting work, so the host
+    loop skipped its idle wait and a persistent fault spun at full speed. `runner/tenant.py RunnerTenant._tick_project`.
+  proof:
+  - "43ba517fcb5e754d2f0071cfd76a3ceb68f7856a"
+  original_review: missed
+notes: '51 files, ~174k code chars. Review: 122, CONCERNS, deepseek/deepseek-v4.1-flash. Controls (reported
+  by the review, not bugs here): malformed issued_at aborting the whole tick (0514c62, F003); fault on
+  a node blocked on a non-human kind dropped (66ee3c4, F002). Excluded: 5d0ea2e (code predates base).'

@@ -1,0 +1,20 @@
+name: trading-ui-103
+kind: code
+repo: ~/source/repos/manta/trading-ui
+host_repo: manta-digital/trading-ui
+distribution: '@manta-trading/ui'
+base: "a4f9b6cf446929d056689df48082a701467d74e7"
+head: "d56c493f769d429a40f9e8052eba04ad6254e8c2"
+status: checked
+hand_run_id: "u103"
+bugs:
+- id: B1
+  description: The range effect gates on `seriesCountRef.current === 0` but its dependencies are `[mount.ready,
+    chart, range]`, so a series added after the range settles never triggers `setVisibleRange`. `src/chart/use-chart-provider.ts`.
+  proof:
+  - "f0ebfb4107abb59c7c95562e3743d185a9b4bf2c"
+  original_review: missed
+notes: '22 files. Review: 103, CONCERNS, deepseek/deepseek-v4-flash-0731. Low confidence: B1 is latent;
+  slice 103 never adds series, so a strict "observable at head" reading would exclude it. Control (not
+  a bug here): the hook never re-mounting when the container ref resolves late (e4632c1, F001). Excluded:
+  eb74ef8 (fixes a flaw in f0ebfb4, code not in range).'

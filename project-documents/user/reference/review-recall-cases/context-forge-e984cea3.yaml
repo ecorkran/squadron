@@ -1,0 +1,18 @@
+name: context-forge-e984cea3
+kind: code
+repo: ~/source/repos/manta/context-forge
+host_repo: ecorkran/context-forge
+distribution: context-forge
+base: "1702358b5364fd8f6c485e2f6d63d2bbaea1c638"
+head: "3d1268e86aeaab225fe123ae6ffcc7bdd9e0b181"
+status: checked
+hand_run_id: "cfe984ce"
+bugs:
+- id: B1
+  description: documentHeadingKeys flips inFence on any line starting with ``` and ignores ~~~, indented
+    and longer fences, so a required heading that appears only inside an example block counts as present.
+    `packages/core/src/schema/sliceDesignValidator.ts documentHeadingKeys`.
+  proof:
+  - "e984cea3cf690973c354d108d55c6b2094b9c7c5"
+  original_review: reported
+notes: Batch 2 (20261113). Base is the parent of 2e9355acd2. 4 commits, 15 files.

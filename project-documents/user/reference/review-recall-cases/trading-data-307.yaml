@@ -1,0 +1,25 @@
+name: trading-data-307
+kind: code
+repo: ~/source/repos/manta/trading-data
+host_repo: manta-digital/trading-data
+distribution: manta-trading-data
+base: "dcfb86f1183b2c8ff87bb4309563930fbccd4bb0"
+head: "b5c3d781963789cef917771538a0b51a10bab29b"
+status: verified
+hand_run_id: "307"
+bugs:
+- id: B1
+  description: The purchase script judged the whole `pass --estimate-only --json` payload as the plan
+    summary; the plan is nested under `phases[purchase].summary`, so the first key lookup raised `KeyError`.
+    `scripts/cutover_304_checks.py` (`judge_estimate`).
+  proof:
+  - "a7c5e36f2cff126061506912e916b9bf22d222cf"
+  original_review: missed
+- id: B2
+  description: The judge required verdict `allowed`, but `--estimate-only` reports `estimate_only` whenever
+    there is something to buy, so the buy step was unreachable.
+  proof:
+  - "a7c5e36f2cff126061506912e916b9bf22d222cf"
+  original_review: missed
+notes: 'Reviews: project-documents/user/reviews/archive/307-review.code.futures-history-acquisition*.md.
+  Diff is 97,780 chars, just below review.large_diff_chars.'

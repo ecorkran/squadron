@@ -1,0 +1,19 @@
+name: squadron-175
+kind: code
+repo: ~/source/repos/manta/squadron
+host_repo: ecorkran/squadron
+distribution: squadron-ai
+base: "3812c815b377eadfd7741ab1734c350c73789e2b"
+head: "1cbd6be4317f37498b07a31cd9cb64562fdb9d0a"
+status: checked
+hand_run_id: "175"
+bugs:
+- id: B1
+  description: '`ResultMessage.total_cost_usd` is the CLI session''s running total but was recorded as
+    the step''s cost, so later steps included earlier spend (one summary showed $5.35 instead of about
+    $0.61). `sdk_turns.py DispatchTurns.fold_result`, `providers/sdk/agent.py _fold_result`, `usage.py`.'
+  proof:
+  - "0a850c0ae587710a32fc8445e6b66ef92e27c389"
+  original_review: missed
+notes: '16 commits, 93 files, ~222k code chars. Review: 175 (usage and cost tracking), CONCERNS, sonnet-5-5.
+  Excluded: 29850399 and fed05c66 (the reviewed code said it sent no effort; the fixes add that).'

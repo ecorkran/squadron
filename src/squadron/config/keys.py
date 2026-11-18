@@ -40,6 +40,9 @@ REVIEW_FLOOR_RUNS_MINIMUM = 2
 # unset (None) until configured; `judge` refuses naming it. The limit is read through
 # get_positive_int_config.
 BENCHMARK_JUDGE_MODEL_KEY = "benchmark.judge_model"
+# Slice 430 D1, D7: the bound on recall's local-repo git calls (read through
+# get_positive_int_config).
+BENCHMARK_RECALL_FETCH_TIMEOUT_KEY = "benchmark.recall_fetch_timeout_s"
 BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY = "benchmark.judge_max_prompt_chars"
 METROLOGY_JUDGE_TIMEOUT_KEY = "metrology.judge_timeout_s"
 # Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
@@ -624,6 +627,17 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         description=(
             "Wall-clock cap in seconds, a positive number, on one grading review "
             "call. No default: grading refuses until it is set."
+        ),
+    ),
+    BENCHMARK_RECALL_FETCH_TIMEOUT_KEY: ConfigKey(
+        name=BENCHMARK_RECALL_FETCH_TIMEOUT_KEY,
+        type_=int,
+        default=120,
+        description=(
+            "Wall-clock cap in seconds on each local-repo git call of sq benchmark "
+            "recall: the git show that derives bug locations at cases add, and the "
+            "rev-list, fetch and rev-parse that give the review sandbox its ancestry "
+            "back to base. Independent of the sandbox's own fixed bound."
         ),
     ),
     BENCHMARK_REVIEW_FLOOR_RUNS_KEY: ConfigKey(

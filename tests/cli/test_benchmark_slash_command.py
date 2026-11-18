@@ -27,7 +27,21 @@ def _flags(name: str) -> set[str]:
     }
 
 
-@pytest.mark.parametrize("name", ["grade", "report", "judge", "slice-cases build"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "grade",
+        "report",
+        "judge",
+        "slice-cases build",
+        "recall cases add",
+        "recall cases list",
+        "recall import",
+        "recall run",
+        "recall label",
+        "recall report",
+    ],
+)
 def test_every_option_of_the_typer_command_is_listed(name: str) -> None:
     text = COMMAND_FILE.read_text(encoding="utf-8")
     signature = next(part for part in text.split("`") if part.startswith(f"{name} "))

@@ -1,0 +1,4 @@
+name: haiku-sol-opus
+reviewers: [haiku-xhigh, sol]
+pool: false
+combs: [opus-high]

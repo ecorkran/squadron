@@ -1,0 +1,18 @@
+name: trading-engine-ccae5e35
+kind: code
+repo: ~/source/repos/manta/trading-engine
+host_repo: manta-digital/trading-engine
+distribution: manta-trading-engine
+base: "21829cf5742a5639fca72d992802642d2f636e70"
+head: "1b665d05e38ef8d40dfee2732ba2aec9b1bbbd05"
+status: checked
+hand_run_id: "teccae5e"
+bugs:
+- id: B1
+  description: Market construction with a non-iterable session_calendars, unhashable adjustment_bases
+    or unhashable source_bar_stamping raised a raw TypeError instead of InvalidMarketError. `src/manta_trading_engine/core_model/markets.py
+    Market.__post_init__, _normalize_calendars, _normalize_bases`.
+  proof:
+  - "ccae5e3527ad9879385ee1329c5008b9b892235a"
+  original_review: reported
+notes: Batch 2 (20261113). Base is the parent of 45472f7e1d. 7 commits, 16 files.
