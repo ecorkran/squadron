@@ -92,6 +92,13 @@ def test_resolve_cheap_openrouter_builtins(alias: str, model_id: str) -> None:
     assert resolve_model_alias(alias) == (model_id, "openrouter")
 
 
+def test_sol_r_ships_as_openrouter_fallback_for_sol() -> None:
+    """sol-r reaches the same model as sol through OpenRouter, priced the same."""
+    builtins = load_builtin_aliases()
+    assert resolve_model_alias("sol-r") == ("openai/gpt-6.1-sol", "openrouter")
+    assert builtins["sol-r"].get("pricing") == builtins["sol"].get("pricing")
+
+
 # ---------------------------------------------------------------------------
 # User alias overrides
 # ---------------------------------------------------------------------------
