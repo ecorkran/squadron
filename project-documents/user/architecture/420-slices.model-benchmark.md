@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 420-arch.model-benchmark.md
 project: squadron
 dateCreated: 20261104
-dateUpdated: 20261115
+dateUpdated: 20261118
 status: not_started
 ---
 
@@ -154,7 +154,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
 
 PM decision after 426. The replay stack (421–426) stays as built and gets no further work: each data point costs dollars and hours, and few cases qualify. These slices measure with what is cheap and already recorded. Two rules apply to all of them. No task runs against squadron's own history or needs hours; live checks use small fixture projects. Every measured run prints its cost bound first and stops at a cap.
 
-11. [ ] **(430) Real-Bug Review Recall** — The hand-run code-review benchmark (`user/reference/review-recall-runbook.md`, results in `user/reference/review-recall-results/`) as a command. A case is a real merged diff (repo, base, head) with the bugs a later fix commit or issue proved real. A reviewer config is a recipe: one or more reviewers run in parallel (fan-out), an optional pool to pick from at random, and zero or more comb stages that mark each finding KEEP or DROP. Each stage's output is stored once per case and run, and a recipe is scored from stored outputs wherever no new call is needed (a union for fan-out, the member mean for a pool, stored comb decisions). Reviewers run as they are used, with tools, in 421's history-free sandbox at `head`, so the later fix cannot be read. The report gives known-bug recall, finding counts, graded-real share and cost per recipe, with the number of cases and runs.
+11. [x] **(430) Real-Bug Review Recall** — The hand-run code-review benchmark (`user/reference/review-recall-runbook.md`, results in `user/reference/review-recall-results/`) as a command. A case is a real merged diff (repo, base, head) with the bugs a later fix commit or issue proved real. A reviewer config is a recipe: one or more reviewers run in parallel (fan-out), an optional pool to pick from at random, and zero or more comb stages that mark each finding KEEP or DROP. Each stage's output is stored once per case and run, and a recipe is scored from stored outputs wherever no new call is needed (a union for fan-out, the member mean for a pool, stored comb decisions). Reviewers run as they are used, with tools, in 421's history-free sandbox at `head`, so the later fix cannot be read. The report gives known-bug recall, finding counts, graded-real share and cost per recipe, with the number of cases and runs.
    - **Value:** User-facing. Answers "which code review setup, and is a replacement better or worse" with a repeatable command. The recipe that wins becomes the pipeline review step's configuration.
    - **Success Criteria:**
      - The existing cases and their known bugs load as stored cases. A new case is added as a record, not as code.

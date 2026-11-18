@@ -1,0 +1,19 @@
+name: trading-data-227
+kind: code
+repo: ~/source/repos/manta/trading-data
+host_repo: manta-digital/trading-data
+distribution: manta-trading-data
+base: "11168d5b2ae7805e15a63888eb85ca26b1fdc811"
+head: "85fee397cbbe12ca5b74bb38fb77cf1165b5ba1c"
+status: checked
+hand_run_id: "227"
+bugs:
+- id: B1
+  description: '`rclone backend lifecycle ... 2>&1` merged stderr into the JSON, so under sudo rclone''s
+    "config file not found" notice broke the `jq` parse and failed cutover step 2. `deploy/lib/b2_lifecycle.sh`.'
+  proof:
+  - "0ccf9b00f9f7d4f5bbebc015b984752410e7281e"
+  original_review: missed
+notes: '7 commits, 18 files, ~102k code chars. Review: the copy under reviews/archive/ whose reviewedSha
+  equals head, CONCERNS, claude-opus-5-5. B1 is specific to the sudo environment. Excluded: ef2213b7 and
+  d14f8a60 (both present in base).'

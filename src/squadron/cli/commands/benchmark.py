@@ -26,6 +26,7 @@ from squadron.cli.commands.benchmark_common import stderr_exit
 from squadron.cli.commands.benchmark_fix_cases import fix_cases_app, yield_command
 from squadron.cli.commands.benchmark_grade import grade_command, report_command
 from squadron.cli.commands.benchmark_judge import judge_command
+from squadron.cli.commands.benchmark_recall import recall_app
 from squadron.cli.commands.benchmark_replay_show import replay_show_command
 from squadron.cli.commands.benchmark_run import run_command
 from squadron.cli.commands.benchmark_sandbox import sandbox_command
@@ -44,6 +45,7 @@ benchmark_app = typer.Typer(
 benchmark_app.command("sandbox")(sandbox_command)
 benchmark_app.add_typer(fix_cases_app, name="fix-cases")
 benchmark_app.add_typer(slice_cases_app, name="slice-cases")
+benchmark_app.add_typer(recall_app, name="recall")
 benchmark_app.command("yield")(yield_command)
 benchmark_app.command("run")(run_command)
 benchmark_app.command("grade")(grade_command)

@@ -1,0 +1,19 @@
+name: trading-data-225
+kind: code
+repo: ~/source/repos/manta/trading-data
+host_repo: manta-digital/trading-data
+distribution: manta-trading-data
+base: "09106ab48bda1b7397cfefa0145928a82e3056ac"
+head: "f328230d409b21ef1c9d8f8d96db21a478169076"
+status: checked
+hand_run_id: "225"
+bugs:
+- id: B1
+  description: '`raw_counts` counted `tick_trade` rows for all products over overlapping session windows
+    with no filter on the product''s instruments, inflating coverage counts when several products are
+    loaded. `status_reads.raw_counts`.'
+  proof:
+  - "459ac7bdedae7c9c69456f38a8694e5f410a6128"
+  original_review: missed
+notes: '9 commits, 25 files. Review: 225, CONCERNS, deepseek/deepseek-v4.1-flash. Excluded: 8a9c47ec (head
+  matched the slice''s own spec; the fix followed a later spec).'

@@ -36,6 +36,9 @@ NON_EXCLUDING_TEMPLATES = {
     "code.yaml": "reads the tree broadly by design",
     # 918 non-goal: this is 305's prior-findings injection path; findings arrive as input.
     "judge-findings-addressed.yaml": "receives findings as an input, not by discovery",
+    # Slice 430 D6: the recall comb reads the case sandbox to verify each finding, like
+    # code.yaml; its prompt is the hand-run comb.yaml, copied unchanged, so no comment there.
+    "comb.yaml": "reads the case tree to verify findings, like code.yaml",
 }
 
 #: A path deny-list cannot constrain a subprocess, so this tool defeats any exclusion.

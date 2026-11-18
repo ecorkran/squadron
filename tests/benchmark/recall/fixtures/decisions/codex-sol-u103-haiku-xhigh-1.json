@@ -1,0 +1,28 @@
+{
+  "source": "user/reference/review-recall-results/20261113-comb/out/sol/u103-haiku-xhigh-1.json",
+  "finding_ids": [
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10"
+  ],
+  "expected": {
+    "F1": "KEEP",
+    "F2": "DROP",
+    "F3": "DROP",
+    "F4": "DROP",
+    "F5": "DROP",
+    "F6": "DROP",
+    "F7": "DROP",
+    "F8": "DROP",
+    "F9": "DROP",
+    "F10": "DROP"
+  },
+  "raw_output": "F1: KEEP \u2014 Adding a populated series updates only a ref, so the current context range is never applied until another dependency changes.\nF2: DROP \u2014 Pre-ready calls are intentionally guarded, with readiness exposed and undefined results documented.\nF3: DROP \u2014 The stylesheet defines and loads all referenced tokens; no reachable missing-token failure is demonstrated.\nF4: DROP \u2014 Size and declaration-order concerns show no actual runtime defect.\nF5: DROP \u2014 Narrower lint suppression is preventive maintenance, not a demonstrated behavior fix.\nF6: DROP \u2014 The explicitly deferred indicator effect causes no incorrect behavior.\nF7: DROP \u2014 The test is vacuous, but the callbacks are already inert and no functional defect is concealed.\nF8: DROP \u2014 Duplicated test helpers are a maintainability issue, not a behavioral defect.\nF9: DROP \u2014 Stronger spy typing would prevent hypothetical contract drift, but no current mismatch is identified.\nF10: DROP \u2014 The initial observer delivery corrects the box measurement before paint; no meaningful rendering defect is demonstrated.\nF1: KEEP \u2014 Adding a populated series updates only a ref, leaving the current context range unapplied until another effect dependency changes.\nF2: DROP \u2014 Pre-ready calls are intentionally guarded, with readiness exposed and undefined results documented.\nF3: DROP \u2014 All referenced tokens are defined and loaded; no reachable missing-token failure is demonstrated.\nF4: DROP \u2014 File size and declaration ordering do not establish a runtime defect.\nF5: DROP \u2014 Narrower lint suppression is preventive maintenance, not a demonstrated behavior fix.\nF6: DROP \u2014 The explicitly deferred indicator effect causes no incorrect behavior.\nF7: DROP \u2014 The test is vacuous, but the callbacks are already inert and no functional defect is demonstrated.\nF8: DROP \u2014 Duplicated test helpers are a maintainability concern, not a behavioral defect.\nF9: DROP \u2014 Stronger spy typing would prevent hypothetical contract drift, but no current mismatch is identified.\nF10: DROP \u2014 The observer corrects the initial measurement mismatch, with no meaningful rendering defect demonstrated."
+}

@@ -1,0 +1,19 @@
+name: context-forge-5e840ccb
+kind: code
+repo: ~/source/repos/manta/context-forge
+host_repo: ecorkran/context-forge
+distribution: context-forge
+base: "42648a33aba9b08f6168488d7f475a5955d6d090"
+head: "f8657488c9ba11423f1f548e42599caae26fd3d5"
+status: checked
+hand_run_id: "cf5e840c"
+bugs:
+- id: B1
+  description: createAdoptionResolver persisted adoption.state=in_progress before gathering the adoption
+    facts, so a facts probe failure (e.g. non-ENOENT error from presentPaths/recognizeCi) left in_progress
+    written for a build that produced no brownfield prompt. `packages/core/src/adoption/adoptionResolver.ts
+    createAdoptionResolver`.
+  proof:
+  - "5e840ccb8bda39c1f197159597cda282f1a1e718"
+  original_review: reported
+notes: Batch 2 (20261113). Base is the parent of 4d64f150f7. 5 commits, 25 files.

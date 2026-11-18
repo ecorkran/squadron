@@ -5,8 +5,8 @@ project: squadron
 archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
-dateUpdated: 20261115
-status: in_progress
+dateUpdated: 20261118
+status: complete
 ---
 
 # Architecture: Pipeline Foundation

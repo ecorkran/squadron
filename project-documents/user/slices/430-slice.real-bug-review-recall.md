@@ -7,7 +7,7 @@ dependencies: [420, 421, 424, 425, 402]
 interfaces: [432, 433]
 dateCreated: 20261115
 dateUpdated: 20261118
-status: in_progress
+status: complete
 ---
 
 # Slice Design: real-bug-review-recall
@@ -18,7 +18,7 @@ The hand-run code-review benchmark (`user/reference/review-recall-runbook.md`, r
 
 The hand-run data holds:
 - 17 cases and 21 known bugs.
-- 723 review outputs, with 3,822 findings between them. The count is `find <dir> -maxdepth 1 -name '*.json'` over `20261112-grid1/` (27), `20261112-grid2/` (210) and `20261113-grid3/` (486). The `judge/` and `precision/` subfolders are not review outputs.
+- 696 distinct review outputs, with 3,619 findings between them. `find <dir> -maxdepth 1 -name '*.json'` over `20261112-grid1/` (27), `20261112-grid2/` (210) and `20261113-grid3/` (486) gives 723 files, but all 27 grid1 files are byte-identical copies of same-named grid2 files, so the import skips them (D10). The `judge/` and `precision/` subfolders are not review outputs.
 - 480 comb outputs.
 - Four agent grading passes.
 
@@ -103,10 +103,15 @@ New package `src/squadron/benchmark/recall/`, kept apart from the replay modules
 | `hit_rule.py` | Location gate and label resolution (D3) |
 | `decisions.py` | Lenient parser for `<finding-id>: <WORD> — reason` lines |
 | `run_plan.py` | Missing stages for (recipe, case set, runs), auth preflight, bound and refusal checks |
-| `scoring.py` | Recipe outputs per (case, run): entry selection, comb chains, fan-out and pool composition; defines the `StageIdentityResolver` protocol. Pure: no I/O |
+| `scoring_select.py` | Entry selection: the `StageIdentityResolver` protocol, `ImportOnlyResolver`, matching reviews and comb chains. Pure |
+| `scoring.py` | Recipe outputs per (case, run): comb chains, fan-out and pool composition, rows per stage identity. Pure: no I/O |
+| `scoring_pair.py` | One (case, run) scored: bug hits in both bounds, matched nothing, grades. Pure |
 | `scoring_metrics.py` | Per-row metrics, recall bounds, real share. Pure |
 | `scoring_paired.py` | Paired intervals per recipe pair (D12). Pure |
-| `report_render.py` | Table rendering (text and JSON) |
+| `report_build.py` | Reads the store and assembles the report data |
+| `report_render.py` | Text rendering |
+| `report_json.py` | The `--json` document (the schema 433 reads) |
+| `label_precedence.py` | One effective label and grade per finding (D3 precedence) |
 | `hand_run_import.py` | Reads the hand-run folders and writes run and label records |
 
 Record payloads live beside the other metrology payloads, because `MetrologyRecord` (`metrology/models.py`) imports every payload from `metrology/*_models.py` and never imports `benchmark/`:
@@ -215,6 +220,7 @@ Status: decided
   - **Two-stage combs.** A stage-two comb sees only the findings stage one kept. A finding stage one left `UNDECIDED` is not sent to stage two. It stays undecided in the chain's output, so it is dropped in the lower bound and kept in the upper bound.
   - **Paired intervals** (D12) use only cases with nothing undecided in either recipe, and print how many cases were left out for that reason.
   - `label` lists every undecided hit candidate.
+- **Scored findings (found while implementing, 20261118).** Only CONCERN and FAIL findings are scored and sent to a comb (`SCORED_SEVERITIES` in `scoring.py`). That is the set the hand-run comb (`comb.py`), the grading passes (`prep.py`) and the RESULTS.md tables used: the report example's 7.8 findings/run for haiku-xhigh is its CONCERN/FAIL count (all findings would be 14.7). NOTE and PASS findings are stored but not scored.
 - **Matched nothing.** A kept finding matched nothing when it is decided for every bug of its case (by the gate or by a label) and none of those decisions is `HIT` or `ADJACENT`. A finding that is undecided for any bug is counted only as undecided. It uses the lower-bound kept set.
 - **Content key** is sha256 of the normalized (location, title, description), with whitespace collapsed. A label attaches to finding content, not to a stage, so a comb (which passes findings through by id) inherits the label, and an identical finding in a repeat run needs no second label.
 - **Precedence:** person over import passes. Among `person` labelers, the record with the newest `updated` wins (PM-approved 20261116); there is no disagreement listing.
@@ -264,9 +270,11 @@ Status: decided
 - The source checkout named by each case holds the later fix. Review tools under the `sdk` and Codex profiles are not confined to the working directory, so the sandbox alone does not keep the fix out of reach. Squadron's own `read_file`, `list_files` and `grep` (used by OpenAI-compatible profiles) already refuse paths outside the working directory (`tools/builtin/_shared.py`).
 - **Auth preflight.** Before the bound prints, `run` calls `run_auth_check` for the distinct profiles behind the recipe's aliases, with `benchmark.auth_probe_timeout_s` and the `resolve_sq_path()` path. A profile that does not answer `yes` refuses the run (exit 1), naming the profile. No stage is recorded.
 - **Each call runs as a subprocess** with cwd = the sandbox and the environment of a 421 `ScrubbedEnvironment`: a redirected home, the alias profile's credentials only, and no user config, store or memory. The scrubbed `PATH` does not hold `sq`, so every command uses the absolute path from `resolve_sq_path()`, resolved once per command, as 421's auth check and slice runner do.
-  - Review: the case kind's review command (D14). For `code` it is `<sq> review code --diff <base> --model <alias> --no-save --output file --output-path <out>`. This is the production command, unchanged, so the benchmark measures what users run.
+  - Review: the case kind's review command (D14). For `code` it is `<sq> review code --diff <base> --model <alias> --no-save --output file --output-path <out> --cwd .`. This is the production command, unchanged, so the benchmark measures what users run. `--cwd .` (added 20261118, walkthrough step 5) keeps a `cwd` key in the seeded user config from pointing the review outside the sandbox.
   - Comb: the hidden `<sq> benchmark recall _stage --template comb --input <file> --output <file>` (in the same style as `_auth-probe`). It calls `run_review_with_profile` with the template, `allowed_tools: [read_file, list_files, grep]`, and the findings rendered as `F1..Fn` (the `comb.py render` format).
+  - `_stage` also takes `--model <alias>` and `--diff <base>` (found while implementing, 20261118): the call needs the alias, and the prompt's changed-file list is `git diff --name-only <base> HEAD` in the sandbox, as `comb.py` built it. The input file holds only the parent's kept CONCERN/FAIL findings (D3 scored findings).
   - `<out>` is a deterministic path under the benchmark root, `recall-out/<record id>/<stage key>.json` (D8).
+  - **Effort sent for live entries** (found while implementing, 20261118). `sq review code` and `_stage` write `ReviewResult.to_dict()`, whose `effort` field is the effort actually sent: `review_client` writes it only when the provider applies effort (slice 931 D4). Neither writes an `effort_sent` key, so a live entry's `effort_sent` is read from `effort`. The live resolver predicts the same value with `effort_sent_by_profile(profile, configured effort)` (`pipeline/usage_capture.py`), so stored live entries match their recipe stage. Imported entries keep `effort_sent: null` (D10).
 - **Leak rules** come from 424's `build_leak_rules`, unchanged, with these inputs:
   - `tree`, `home`, `output_dir`: the sandbox tree, the call's scrubbed home and its output directory. These are the only roots a call may use.
   - `real_home`: the user's home. It covers the store and the user's config and memory.
@@ -349,7 +357,7 @@ Status: decided
 ### D10 — Import maps the hand-run files and names the source of every field
 Status: decided
 - `import <results-dir> --set <name>` reads:
-  - review outputs: the `*.json` files directly under `20261112-grid1/`, `20261112-grid2/` and `20261113-grid3/` (`<case>-<config>-<run>.json`)
+  - review outputs: the `*.json` files directly under `20261112-grid1/`, `20261112-grid2/` and `20261113-grid3/` (`<case>-<config>-<run>.json`). A file whose content (sha256 of the bytes) matches a file already read is skipped and listed as a duplicate. This drops all 27 grid1 files, which are copies of grid2 files, leaving 696 (PM decision 20261118).
   - comb outputs: `20261113-comb/out/<comb>/<case>-<reviewer>-<run>.json`. The two-stage `luna-r+opus-high` folder becomes the chain luna-r then opus-high.
   - grading passes: `*/precision/*-graded*.json`
 - **Case mapping** is by each case file's `hand_run_id`. A file whose case id has no case record is reported and skipped, never guessed.
@@ -361,7 +369,7 @@ Status: decided
   | model, profile, max_output_tokens | the output's `model`, `profile` and `max_output_tokens` fields |
   | effort configured | the output's `effort` field |
   | template_hash | `unknown:<template_name>@<squadron_version>`, from the output's two fields. The outputs record no hash, and `template_content_hash` hashes today's template, so it is not used |
-  | tool_use | `unknown`: the outputs record the tools given, not the alias flag |
+  | tool_use | the output's `tools_given`: non-empty is `true`, empty is `false`. It records what the call was actually offered, which is the fact identity needs. It also separates `sonnet` from `sonnet_notools` (tools suppressed for the run), which otherwise share every field (PM decision 20261118) |
   | effort_sent | `null`: the outputs' `effort` is the alias's value, which the 420 slice forbids as a stand-in |
 
 - **Imported comb config.**
@@ -392,6 +400,13 @@ Status: decided
   - Members of other issues in the same case get `MISS` for every bug of that case. The grader had sorted them as distinct issues.
   - The cf5e840c partial hit is imported as `HIT`, as RESULTS.md section 13 records the PM decision.
 - **Overrides.** The section 12 adjudications that overrode grades in the data (921-I9 REAL, 197-I14 MINOR) are applied as person labels from a small committed overrides file, `user/reference/review-recall-overrides.yaml` (outside the cases folder, so `cases add <dir>` never reads it), so the decision is recorded, not hidden. Each entry is `{case, issue, grade, reason}` and is written as one `RecallLabels` per case with labeler `person:results-section-12`.
+- **Found while implementing the import (20261118):**
+  - Codex outputs record `tools_given: null` (squadron does not list Codex's own tools). That is not recorded, so `tool_use` is the `unknown` marker, not `false`.
+  - A two-stage comb file whose stage one kept nothing holds no `F` refs and no call was made. It imports as `ok` with no decisions (4 files), not as a config failure.
+  - Members of an issue whose `known` is `Bn` get `HIT` for Bn and `MISS` for the case's other bugs: the grader sorted them into Bn's issue.
+  - Imported entries take `created` (and pass labels `updated`) from the folder's date, and the override record takes the newest pass date of its case, so a second import builds identical records.
+  - `raw_ref` is the sha256 of the whole output file, which is what goes in the sidecar.
+  - The committed passes have no grade or hit conflicts; the conflict path is tested on a synthetic pass.
 - Every imported entry has `leak: not_scanned` (D6).
 - Not imported: `20261112-311/` (markdown experiments on one case) and `20261115-design/` (432's).
 - The import is idempotent. Run record and label record ids are deterministic, and a second import changes nothing.
@@ -474,9 +489,9 @@ Four sibling payloads on `MetrologyRecord` (`schema_version` stays 1, no migrati
 | `recall_case` | `RealBugCase` (D1) | `rbcase-<sha12 of content>` | one per case (17) |
 | `recall_case_set` | `RecallCaseSet(name, version, case_ids, created)` | `rbset-<name>-v<version>` | one per set version |
 | `recall_run` | `RecallRun` (D4) | `rbrun-<sha12 of (case_id, run_index)>` | one per case run (51 from the import) |
-| `recall_labels` | `RecallLabels(case_id, labeler, hits: {content_key: {bug_id: HitVerdict}}, grades: {content_key: FindingGrade}, updated, notes)` | `rblabels-<case_id>-<labeler>` | one per case and labeler: each import pass that graded the case, and the person |
+| `recall_labels` | `RecallLabels(case_id, labeler, hits: {content_key: {bug_id: HitVerdict}}, grades: {content_key: FindingGrade}, updated, notes)` | `rblabels-<case_id>-<labeler, path-safe>-<sha8 of labeler>` | one per case and labeler: each import pass that graded the case, and the person |
 
-- Per-finding label files are rejected. The import alone covers 3,822 findings, and hit labels are per finding and bug, which would mean thousands of files read on every store query.
+- Per-finding label files are rejected. The import alone covers 3,619 findings, and hit labels are per finding and bug, which would mean thousands of files read on every store query.
 - Case, case-set and import label records are written once. Run records and person label records are rewritten in place with `write_record` when they change. The newest write wins, and nothing is deleted.
 - Raw review and comb output goes in the `REVIEWS` sidecar, referenced by sha256.
 
@@ -505,7 +520,7 @@ Four sibling payloads on `MetrologyRecord` (`schema_version` stays 1, no migrati
   - Every `extra_locations` entry has a reason.
   - A failing file refuses the whole command, and nothing is written.
   - Adding an 18th case is a new YAML file and one command, with no code change.
-- `import` loads the 723 review outputs, the 480 comb outputs and the four grading passes into 51 run records, with no new calls. A second import changes nothing. The import summary lists unknown-field counts, grade conflicts between passes and any skipped files or refs.
+- `import` loads the 696 distinct review outputs (27 duplicate grid1 files skipped), the 480 comb outputs and the four grading passes into 51 run records, with no new calls. A second import changes nothing. The import summary lists unknown-field counts, grade conflicts between passes and any skipped files or refs.
 - On the imported records, `report` for single-reviewer recipes haiku-xhigh, sol, sonnet-high and sonnet over `real-bugs-original`, runs 1..3, reproduces RESULTS.md section 1:
   - bug-hits 16, 12, 7 and 4 of 42 (13, 9, 4 and 1 of 39 over `real-bugs-original-no-u103`)
   - runs with a hit 14, 12, 7 and 4 of 30
@@ -543,62 +558,85 @@ Four sibling payloads on `MetrologyRecord` (`schema_version` stays 1, no migrati
 
 ### Verification Walkthrough
 
-All commands are new in this slice. Run from the squadron checkout.
+Run from the squadron checkout. Verified 20261118 on the real store (steps 1–6; step 7 is the PM's).
+
+**Caveats found while verifying:**
+- Until a release carries `sq benchmark recall`, run every command as `uv run sq ...` from the checkout. The installed tool (`~/.local/bin/sq`, 0.24.33) has no `recall` group. Inside `uv run`, `resolve_sq_path()` finds the checkout's `.venv/bin/sq`, so the scrubbed subprocesses run this code too.
+- Recipe files are `project-documents/user/reference/review-recall-recipes/<name>.yaml` (below, `$P`).
+- Every command also prints `Skipping unreadable metrology record: .../snapshot-*.json` for three existing snapshot records in the store. They are not recall's.
+- In zsh, expand a space-separated file list with `${=files}`; a plain `$files` is one argument.
+
+```bash
+P=project-documents/user/reference/review-recall-recipes
+```
 
 1. **Load cases.**
    ```bash
-   sq benchmark recall cases add project-documents/user/reference/review-recall-cases/ --set real-bugs
-   sq benchmark recall cases list --set real-bugs
+   uv run sq benchmark recall cases add project-documents/user/reference/review-recall-cases/ --set real-bugs
+   uv run sq benchmark recall cases list --set real-bugs
    ```
-   Expect 17 cases, 21 bugs, each bug's derived file list and any `extra_locations` with reasons, and set `real-bugs v1`. Running `cases add` again with the same files leaves the set at v1. Repeat with the file lists for the other three sets (`real-bugs-original`, `real-bugs-original-no-u103`, `real-bugs-nonsquadron`); `cases list` shows 10, 9 and 14 cases.
+   Output: `17 cases (17 new); set real-bugs v1 with 17 cases`, then `Cases: 17, bugs: 21`, each bug's derived file list, and `repo=present` per case. A second `cases add` prints `17 cases (0 new); set real-bugs v1 with 17 cases`. Add the other three sets from `review-recall-sets.md`:
+   ```bash
+   for set in real-bugs-original real-bugs-original-no-u103 real-bugs-nonsquadron; do
+     files=$(uv run python -c "from tests.benchmark.recall.committed import parse_sets, SETS_FILE, CASES_DIR; print(' '.join(str(CASES_DIR/m) for m in parse_sets(SETS_FILE.read_text())['$set']))")
+     uv run sq benchmark recall cases add ${=files} --set $set
+   done
+   ```
+   Output: `10 cases (0 new); set real-bugs-original v1 with 10 cases`, then 9 and 14. `cases list` shows the four sets at v1.
 
 2. **Import the hand-run results.**
    ```bash
-   sq benchmark recall import project-documents/user/reference/review-recall-results/ --set real-bugs --dry-run
-   sq benchmark recall import project-documents/user/reference/review-recall-results/ --set real-bugs
+   uv run sq benchmark recall import project-documents/user/reference/review-recall-results/ --set real-bugs --dry-run
+   uv run sq benchmark recall import project-documents/user/reference/review-recall-results/ --set real-bugs
    ```
-   Expect 723 review entries and 480 comb entries in 51 run records. Expect label records per grading pass, unknown-field counts, a list of grade conflicts between passes, and a list of anything skipped and why. A second import reports no changes.
+   Output: `Review entries: 696`, `Comb entries: 480`, `Run records: 51`, `Label records: 56`, `Unknown fields: max_output_tokens 480, model 480, profile 480, template_hash 696, tool_use 633`, `Duplicates skipped: 27` (each grid1 file listed), `Label conflicts (later pass wins): 0`, `Skipped files and refs: 0`. The real run ends `Written: 51 run records, 56 label records`; a second import prints `No changes.` Exit 0.
 
-3. **Reproduce the hand-run tables.** Use the committed one-line recipe files under `user/reference/review-recall-recipes/`.
+3. **Reproduce the hand-run tables.**
    ```bash
-   sq benchmark recall report --set real-bugs-original --runs 3 \
-     --recipe recipes/haiku-xhigh.yaml --recipe recipes/sol.yaml \
-     --recipe recipes/sonnet-high.yaml --recipe recipes/sonnet.yaml
-   sq benchmark recall report --set real-bugs-original-no-u103 --runs 3 --recipe recipes/haiku-xhigh.yaml
+   uv run sq benchmark recall report --set real-bugs-original --runs 3 \
+     --recipe $P/haiku-xhigh.yaml --recipe $P/sol.yaml --recipe $P/sonnet-high.yaml --recipe $P/sonnet.yaml
+   uv run sq benchmark recall report --set real-bugs-original-no-u103 --runs 3 --recipe $P/haiku-xhigh.yaml
    ```
-   Compare with RESULTS.md section 1: bug-hits 16, 12, 7 and 4 of 42; runs with a hit 14, 12, 7 and 4 of 30; 13 of 39 for haiku-xhigh without u103. Every row shows its entries as not scanned, and the paired lines show which differences are distinguishable on 10 cases.
+   Rows (Bug-hits, Recall, Runs with a hit): haiku-xhigh `16/42 | 38%` … `14/30`, sol `12/42` … `12/30`, sonnet-high `7/42` … `7/30`, sonnet `4/42` … `4/30`, each `30 not scanned`; without u103 haiku-xhigh `13/39`. These match RESULTS.md section 1. haiku-xhigh's row also matches the report example (7.8 findings/run, real share 24% over 235 graded, $0.62). Paired lines: haiku-xhigh − sol `not distinguishable`; haiku-xhigh ahead of sonnet-high and sonnet. The footer counts `Entries from another set version: 120`, because the import recorded its entries under `real-bugs@v1`, and this report is over `real-bugs-original`.
 
 4. **Score a compound recipe with no calls.**
    ```bash
-   sq benchmark recall report --set real-bugs-original --runs 1 \
-     --recipe recipes/haiku-sol-opus.yaml --recipe recipes/haiku-sol-pool.yaml
+   uv run sq benchmark recall report --set real-bugs-original --runs 1 \
+     --recipe $P/haiku-sol-opus.yaml --recipe $P/haiku-sol-pool.yaml
    ```
-   Expect rows with no "Left out" entries, and a cost column that is the sum of stored entry costs.
+   Output: haiku-sol-opus `8/14 | 57% | 8/14` with cost `$1.33` (the sum of its stored review and comb costs), haiku-sol-pool `5.5/14` (the mean of the haiku-xhigh and sol rows; its cost is also the members' mean, the expected cost of one pick), and `Left out (incomplete stages): none.`
 
-5. **Preflight, bound, cap, resume and leak scan on a fixture.** The test fixture `tests/benchmark/recall/fixtures/bug_repo/` is built by its own script: a small repo with a base, a buggy head and a later fix commit, and a case file for it.
+5. **Preflight, bound, cap, resume and leak scan on a fixture.**
    ```bash
-   sq benchmark recall cases add tests/benchmark/recall/fixtures/bug_repo/case.yaml --set fixture
-   sq benchmark recall run --set fixture --recipe recipes/luna.yaml --runs 2 --max-cost 0.05 --call-cost 0.01
+   uv run python tests/benchmark/recall/fixtures/bug_repo/build.py
+   uv run sq benchmark recall cases add tests/benchmark/recall/fixtures/bug_repo/case.yaml --set fixture
+   uv run sq benchmark recall run --set fixture --recipe $P/luna.yaml --runs 2 --max-cost 0.05 --call-cost 0.01 --max-plan-calls 2
    ```
-   Expect the auth check line, then the bound line with its overshoot term, then two review entries with a leak verdict each, then exit 0. Rerun: "0 stages to run". Run with `--runs 4 --max-cost 0.000001`: the bound prints, the cap stops it, and the exit code is 2. The sandbox under `~/.config/squadron/benchmark/` has been removed.
+   Correction: `luna` is a Codex alias, so its calls are plan-billed (D9) and `run` refuses without `--max-plan-calls` (`Error: 2 plan-billed calls are pending: set --max-plan-calls`). Output: `auth openai-oauth (luna): yes`, `2 stages to run`, `review luna (openai-oauth): 2 calls plan-billed`, `bound: no priced calls, capped at $0.05`, `plan-billed calls: 2, cap 2`, `stored 2 entries; complete`, exit 0. Both entries are `ok` with leak `no_leak_detected` (Codex transcript scanned).
+   - Rerun with the same options: `0 stages to run`, exit 0.
+   - Cap: plan-billed calls count $0 toward `--max-cost`, so the plan-call cap is the one that stops `luna`. `run ... --runs 4 --max-cost 0.000001 --max-plan-calls 1` prints the bound, makes one call, then `recall plan-call cap reached: 1 of 1`, `cap reached: plan-billed call cap 1 reached; 1 stages left`, `left: fixture-bug-repo run 4 review luna`, exit 2.
+   - The overshoot term needs a priced call. A one-line recipe `reviewers: [luna-r]` (OpenRouter) with `--runs 1 --max-cost 0.05 --call-cost 0.01` prints `bound: 1 priced calls $0.01 + one call of overshoot $0.01 → at most $0.02 (from --call-cost), capped at $0.05`. Its entry's leak verdict is `confined` (jailed builtins, no scan).
+   - `~/.config/squadron/benchmark/recall-sandboxes/` and `recall-homes/` are empty after each run.
+   - Found here and fixed: `sq review code` resolved its cwd from the user's `config.toml` `cwd` key, which the scrubbed home is seeded with, and failed with `git could not be run in './project-documents/user'` (two `harness_failure` entries). The code kind's review command now passes `--cwd .` (the call's cwd is the sandbox). `run ... --retry-harness` reran both and moved the failures to `superseded`.
 
 6. **Label.**
    ```bash
-   sq benchmark recall label --set fixture
-   sq benchmark recall label --set fixture --hit <content-key> B1 HIT --by <name>
-   sq benchmark recall report --set fixture --recipe recipes/luna.yaml
+   uv run sq benchmark recall label --set fixture
+   uv run sq benchmark recall label --set fixture --recipe $P/luna.yaml --runs 2
+   uv run sq benchmark recall label --set fixture --hit <content-key> B1 HIT --by <name>
+   uv run sq benchmark recall report --set fixture --recipe $P/luna.yaml --runs 2
    ```
-   The first command lists the undecided candidates. After labelling, the undecided count drops to 0 and recall prints as one number. Real share shows the live entries as ungraded.
+   The first command lists the undecided candidates (`4 undecided candidates`: every stored live finding cites `src/bug_repo/clamp.py:5`), each with the bug, its files, the content key, severity, location, title, description and `affects:`. With `--recipe` it lists the two in luna runs 1–2. Before labelling, the report row is `| luna | 1 | 2 | 0–2/2 | 0–100% | ... | 2 | ...`. After `--hit ... B1 HIT` for both keys (`recorded HIT for <key> B1 as person:<name>`) it is `| luna | 1 | 2 | 2/2 | 100% | 1/1 | 2/2 | 0 | 0 | 1.0 | 0 | ungraded | $0.00 alias_pricing | 2 no leak detected |`. Real share shows the live entries as ungraded.
 
 7. **First live recipe (D11), run by the PM after the slice.**
    ```bash
-   sq benchmark recall run --set real-bugs-nonsquadron --runs 1 \
-     --recipe recipes/haiku-sol-luna-opus.yaml --max-cost 25 --max-plan-calls 14
-   sq benchmark recall label --set real-bugs-nonsquadron --recipe recipes/haiku-sol-luna-opus.yaml
-   sq benchmark recall report --set real-bugs-nonsquadron --recipe recipes/haiku-sol-luna-opus.yaml \
-     --recipe recipes/haiku-xhigh.yaml --recipe recipes/sol.yaml
+   uv run sq benchmark recall run --set real-bugs-nonsquadron --runs 1 \
+     --recipe $P/haiku-sol-luna-opus.yaml --max-cost 25 --max-plan-calls 14 --call-cost <USD per call>
+   uv run sq benchmark recall label --set real-bugs-nonsquadron --recipe $P/haiku-sol-luna-opus.yaml
+   uv run sq benchmark recall report --set real-bugs-nonsquadron --recipe $P/haiku-sol-luna-opus.yaml \
+     --recipe $P/haiku-xhigh.yaml --recipe $P/sol.yaml
    ```
-   Imported haiku-xhigh and sol reviews have a different stage identity from live ones (unknown fields, `effort_sent` not recorded, not scanned), so the recipe runs its reviews live. The bound covers those reviews and the comb calls, and the 14 sol reviews are plan-billed. The run takes over an hour serially. A person labels the undecided candidates, and the report section is appended to RESULTS.md.
+   Correction: `--call-cost` is required. Per-call figures come only from live entries, and imported entries never share a live `config_key`, so nothing is observed yet. The bound covers 84 stages: 28 reviews and 56 combs. The 14 sol reviews are plan-billed, so `plan-billed calls: 14, cap 14` (checked by `tests/cli/test_benchmark_recall_run.py`). Imported haiku-xhigh and sol reviews have a different stage identity from live ones (unknown fields, `effort_sent` not recorded, not scanned), so the recipe runs its reviews live. The run takes over an hour serially. A person labels the undecided candidates, and the report section is appended to RESULTS.md.
 
 ## Risk Assessment
 

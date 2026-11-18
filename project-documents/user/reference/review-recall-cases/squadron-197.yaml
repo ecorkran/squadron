@@ -1,0 +1,22 @@
+name: squadron-197
+kind: code
+repo: ~/source/repos/manta/squadron
+host_repo: ecorkran/squadron
+distribution: squadron-ai
+base: "e0dc580dc806b526ab6fa57ccc2d381ca9b7eece"
+head: "90a40dbf40289fd46b99e999c957a6e9295545be"
+status: checked
+hand_run_id: "197"
+bugs:
+- id: B1
+  description: A slice merged into the target with unchecked task boxes still read as open in cf, so batch
+    selection reselected it and item resume flagged its dependents; both read cf status only. `sources.py
+    _cf_slices_ready_to_implement`, `item_resume.py _open_dependencies`, `_select_item`.
+  proof:
+  - "af50b93762a7a5ce3c0c76cbcd8897bcd55dfbb5"
+  - "366250ba1fcecf0d036659b2e702719d2226f0fa"
+  original_review: missed
+notes: '23 commits, 50 files, ~182k code chars. Review: the copy under reviews/archive/ with that reviewedSha,
+  CONCERNS, sonnet-5-5. B1''s two fix commits (issue #188) count as one bug. Borderline: it could also
+  be read as a new "trust git" behavior. Excluded: e602d4e5, 6ffa6fab, 610f0bfa, 593483ef (new gates and
+  options).'

@@ -1,0 +1,18 @@
+name: trading-engine-6078e2bc
+kind: code
+repo: ~/source/repos/manta/trading-engine
+host_repo: manta-digital/trading-engine
+distribution: manta-trading-engine
+base: "967ca41b39d820baa3a212547b5b39cf61282b2b"
+head: "6211cf1c165107b9c60f5b477dd9a7191d9f7141"
+status: checked
+hand_run_id: "te6078e2"
+bugs:
+- id: B1
+  description: as_real converted any Integral to float without an exactness check, so distinct REAL parameters
+    above 2**53 (e.g. 2**53 and 2**53+1) bound to the same value and shared a run key. `src/manta_trading_engine/core_model/value_checks.py
+    as_real`.
+  proof:
+  - "6078e2bc5847904b7c33d7b76017d7ed7da4a979"
+  original_review: reported
+notes: Batch 2 (20261113). Base is the parent of 7dd4748d05. 13 commits, 20 files.

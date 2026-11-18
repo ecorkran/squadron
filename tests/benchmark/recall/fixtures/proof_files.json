@@ -1,0 +1,168 @@
+{
+  "0a850c0ae587710a32fc8445e6b66ef92e27c389": [
+    "CHANGELOG.md",
+    "src/squadron/pipeline/sdk_session.py",
+    "src/squadron/pipeline/sdk_turns.py",
+    "src/squadron/providers/sdk/agent.py",
+    "src/squadron/providers/sdk/usage.py",
+    "tests/pipeline/test_sdk_session.py",
+    "tests/providers/sdk/test_agent.py",
+    "tests/providers/sdk/test_usage.py"
+  ],
+  "0ccf9b00f9f7d4f5bbebc015b984752410e7281e": [
+    "deploy/lib/b2_lifecycle.sh",
+    "test/unit/test_setup_backup.py"
+  ],
+  "366250ba1fcecf0d036659b2e702719d2226f0fa": [
+    "src/squadron/pipeline/item_resume.py",
+    "tests/pipeline/test_item_resume_source.py"
+  ],
+  "43ba517fcb5e754d2f0071cfd76a3ceb68f7856a": [
+    "docs/process-contract.md",
+    "project-documents/user/slices/990-slice.standing-fixes.md",
+    "project-documents/user/tasks/990-tasks.standing-fixes.md",
+    "src/amoeba/cli/main.py",
+    "src/amoeba/process/log_limit.py",
+    "src/amoeba/runner/tenant.py",
+    "tests/cli/test_feed.py",
+    "tests/cli_harness.py",
+    "tests/conftest.py",
+    "tests/contract/launched.py",
+    "tests/detection_e2e_harness.py",
+    "tests/host_harness.py",
+    "tests/live_harness.py",
+    "tests/load/load_harness.py",
+    "tests/process/test_log_limit.py",
+    "tests/process_containment.py",
+    "tests/runner/crash_entry.py",
+    "tests/runner/test_tenant_fault_pacing.py",
+    "tests/test_instance_lock.py",
+    "tests/test_process_containment.py",
+    "tests/test_read_only_open.py",
+    "tests/test_sq_stub_run.py"
+  ],
+  "459ac7bdedae7c9c69456f38a8694e5f410a6128": [
+    "project-documents/user/slices/232-slice.universe-expansion-gc.md",
+    "src/manta_trading/data/tick/status_reads.py",
+    "src/manta_trading/data/tick/tick_coverage.py",
+    "test/integration/data/test_tick_status_cli.py",
+    "test/integration/data/test_tick_status_reads.py"
+  ],
+  "5e384226a4442d6e003a067194ada5bc766c5960": [
+    "src/squadron/pipeline/sdk_session.py",
+    "src/squadron/pipeline/sdk_turns.py",
+    "tests/pipeline/conftest.py",
+    "tests/pipeline/test_sdk_session.py",
+    "tests/pipeline/test_sdk_session_state.py"
+  ],
+  "5e840ccb8bda39c1f197159597cda282f1a1e718": [
+    "packages/core/src/adoption/adoptionResolver.ts",
+    "packages/core/tests/adoption/adoptionResolver.test.ts"
+  ],
+  "6078e2bc5847904b7c33d7b76017d7ed7da4a979": [
+    "src/manta_trading_engine/core_model/value_checks.py",
+    "tests/core_model/test_confidence.py",
+    "tests/core_model/test_declarations.py",
+    "tests/core_model/test_import_boundary.py",
+    "tests/core_model/test_labels.py",
+    "tests/core_model/test_signals.py",
+    "tests/core_model/test_value_checks.py"
+  ],
+  "9006d54c5f1d35dd81b034541eb016bb97dcd2ca": [
+    "packages/cli/src/ideInstall/dryRun.ts",
+    "packages/cli/src/ideInstall/manifest.ts",
+    "packages/cli/tests/ideInstall/harness.ts",
+    "packages/cli/tests/ideInstall/manifest.test.ts"
+  ],
+  "a62043f7b058c9f65a40816f2e3e8499e39e9ad1": [
+    "CHANGELOG.md",
+    "docs/process-contract.md",
+    "src/amoeba/runner/dispatch/params.py",
+    "src/amoeba/runner/launch.py",
+    "tests/runner/dispatch/test_tick_dispatch.py",
+    "tests/runner/test_launch.py",
+    "tests/sq_stub.py"
+  ],
+  "a7c5e36f2cff126061506912e916b9bf22d222cf": [
+    "scripts/cutover_304_checks.py",
+    "scripts/cutover_304_evidence.py",
+    "scripts/cutover_304_first_purchase.py",
+    "scripts/purchase_accounting.py",
+    "test/unit/scripts/fixtures/pass_estimate_only.json",
+    "test/unit/scripts/test_cutover_304_checks.py",
+    "test/unit/scripts/test_cutover_304_first_purchase.py",
+    "test/unit/scripts/test_purchase_accounting.py"
+  ],
+  "af50b93762a7a5ce3c0c76cbcd8897bcd55dfbb5": [
+    "src/squadron/pipeline/sources.py",
+    "tests/pipeline/test_executor.py",
+    "tests/pipeline/test_sources.py"
+  ],
+  "afd8f74a31d3ce7bcdbc88eb93affb7c8ae938a1": [
+    "packages/cli/src/output/fixReport.ts",
+    "packages/core/src/introspection/routedFixes.ts",
+    "packages/core/src/introspection/types.ts",
+    "packages/core/tests/introspection/routedFixes.test.ts"
+  ],
+  "b1c7f3b7c2b19e5f06c2830d19d9f8fe193c04b8": [
+    "src/manta_trading/constants.py",
+    "src/manta_trading/data/acquisition/daemon/minute.py"
+  ],
+  "ccae5e3527ad9879385ee1329c5008b9b892235a": [
+    "src/manta_trading_engine/core_model/instruments.py",
+    "src/manta_trading_engine/core_model/markets.py",
+    "src/manta_trading_engine/core_model/validation.py",
+    "tests/core_model/test_import_boundary.py",
+    "tests/core_model/test_markets.py"
+  ],
+  "dc39188154174bc69469d1190e8d5ab24e58edbc": [
+    "scripts/repair_921_minute_sessions.py",
+    "src/manta_trading/constants.py",
+    "src/manta_trading/data/acquisition/daemon/minute.py",
+    "src/manta_trading/data/acquisition/daemon/minute_sessions.py",
+    "src/manta_trading/data/gaps/minute_coverage.py",
+    "src/manta_trading/data/gaps/repair_921.py",
+    "src/manta_trading/data/gaps/update_data_gaps.py",
+    "test/integration/test_repair_921_live.py",
+    "test/unit/data/acquisition/daemon/test_minute.py",
+    "test/unit/data/acquisition/daemon/test_minute_sessions.py",
+    "test/unit/data/gaps/test_minute_coverage.py",
+    "test/unit/data/gaps/test_update_data_gaps.py",
+    "test/unit/test_cutover_921.py",
+    "test/unit/test_repair_921.py"
+  ],
+  "e9597a5eb2fe72144214c61656648b5b7524ecfe": [
+    "packages/cli/src/commands/validate.ts",
+    "packages/cli/tests/commands/validate-worktree-scope.test.ts",
+    "project-documents/user/tasks/926-tasks.worktree-scoped-validate-check-attribution-and-scope-reporting.md"
+  ],
+  "e984cea3cf690973c354d108d55c6b2094b9c7c5": [
+    "packages/core/src/introspection/parsers/frontmatterParser.ts",
+    "packages/core/src/node.ts",
+    "packages/core/src/schema/sliceDesignFiles.ts",
+    "packages/core/src/schema/sliceDesignValidator.ts",
+    "packages/core/tests/schema/sliceDesignFiles.test.ts",
+    "packages/core/tests/schema/sliceDesignValidator.test.ts",
+    "project-documents/user/slices/214-slice.native-slice-design-validation.md"
+  ],
+  "ec8be8641871637992126347b5cf554443b9be26": [
+    "docs/api/agents.md",
+    "docs/api/openapi.json",
+    "docs/api/reference.md",
+    "src/manta_trading/api_server/routes/kalshi_timeseries.py",
+    "src/manta_trading/api_server/routes/windows.py",
+    "src/manta_trading/data/kalshi/serve_timeseries.py",
+    "test/integration/test_kalshi_serving.py",
+    "test/unit/api_server/test_kalshi_timeseries.py"
+  ],
+  "f0ebfb4107abb59c7c95562e3743d185a9b4bf2c": [
+    "src/chart/use-chart-provider.ts",
+    "src/test/use-chart-provider.range-seam.test.tsx",
+    "src/test/use-chart-provider.translation.test.tsx"
+  ],
+  "f94c9e58da5d9a78db206a7f5edfab26e97cda08": [
+    "deploy/sudoers.d/manta-ops",
+    "scripts/cutover_common.py",
+    "test/unit/test_cutover_921.py"
+  ]
+}

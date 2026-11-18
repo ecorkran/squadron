@@ -1,0 +1,19 @@
+name: trading-data-188
+kind: code
+repo: ~/source/repos/manta/trading-data
+host_repo: manta-digital/trading-data
+distribution: manta-trading-data
+base: "0c6060f80be38524eb02585c44a481a9b6cdf453"
+head: "3e29c2afc500d786b26ee925efd0eb9269e18d52"
+status: checked
+hand_run_id: "188"
+bugs:
+- id: B1
+  description: The candle route filtered `end_period_ts` with inclusive bounds, so a whole-day query `start=D&end=D`
+    dropped the day's last candle and gave it to the next day. `serve_timeseries._candle_window`, `windows.resolve_window`.
+  proof:
+  - "ec8be8641871637992126347b5cf554443b9be26"
+  original_review: missed
+notes: '6 commits, 29 files, ~105k code chars. Review: 188, CONCERNS, claude-sonnet-5. B1 is moderate:
+  the docs said "inclusive" before the fix, so some would call it a contract change. Excluded: b8e2685b
+  (trades moved to half-open for consistency).'

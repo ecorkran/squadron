@@ -1,0 +1,5 @@
+# D11: the first live recipe; the PM runs it on real-bugs-nonsquadron (walkthrough step 7).
+name: haiku-sol-luna-opus
+reviewers: [haiku-xhigh, sol]
+pool: false
+combs: [luna-r, opus-high]

@@ -1,0 +1,18 @@
+name: context-forge-e9597a5e
+kind: code
+repo: ~/source/repos/manta/context-forge
+host_repo: ecorkran/context-forge
+distribution: context-forge
+base: "a662ad0989a4de0ecca4dde5ac1e1017fb4608b1"
+head: "1976437730e2a0f79ba450f59a4b8386a95c91f9"
+status: checked
+hand_run_id: "cfe9597a"
+bugs:
+- id: B1
+  description: '`cf validate frontmatter` run from a registered worktree validated the project root instead
+    of the worktree, so explicit paths failed containment, were silently dropped, and the command reported
+    a clean pass having checked nothing. `packages/cli/src/commands/validate.ts validateFrontmatterAction`.'
+  proof:
+  - "e9597a5eb2fe72144214c61656648b5b7524ecfe"
+  original_review: missed
+notes: Batch 2 (20261113). Base is the parent of a7286db992. 4 commits, 13 files.

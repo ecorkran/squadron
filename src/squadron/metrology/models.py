@@ -29,6 +29,9 @@ from squadron.metrology.grade_records import (
 from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
+from squadron.metrology.recall_case_models import RealBugCase, RecallCaseSet
+from squadron.metrology.recall_label_models import RecallLabels
+from squadron.metrology.recall_run_models import RecallRun
 from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
 from squadron.metrology.review_models import CodeReviewRecord
 from squadron.metrology.slice_case_models import DiffJudgment, OverSizeCase, SliceQualification
@@ -73,6 +76,12 @@ RECORD_TYPE_SAMPLE_SIZE_ESTIMATE = "sample_size_estimate"
 RECORD_TYPE_SLICE_QUALIFICATION = "slice_qualification"
 RECORD_TYPE_DIFF_JUDGMENT = "diff_judgment"
 RECORD_TYPE_OVER_SIZE_CASE = "over_size_case"
+#: Written by 430's reviewer recall: one record per case, case-set version, (case, run)
+#: and (case, labeler).
+RECORD_TYPE_RECALL_CASE = "recall_case"
+RECORD_TYPE_RECALL_CASE_SET = "recall_case_set"
+RECORD_TYPE_RECALL_RUN = "recall_run"
+RECORD_TYPE_RECALL_LABELS = "recall_labels"
 
 
 class JudgeResultRef(BaseModel):
@@ -262,8 +271,9 @@ class MetrologyRecord(BaseModel):
     422 writes ``"fix_qualification"``; 424 writes ``"benchmark_run"`` and
     ``"implementation_replay"``; 425 writes ``"reference_grade"``,
     ``"implementation_grade"`` and ``"sample_size_estimate"``; 426 writes
-    ``"slice_qualification"``, ``"diff_judgment"`` and ``"over_size_case"``. Each addition is an
-    optional sibling field, so the envelope shape stays backward compatible and
+    ``"slice_qualification"``, ``"diff_judgment"`` and ``"over_size_case"``; 430 writes
+    ``"recall_case"``, ``"recall_case_set"``, ``"recall_run"`` and ``"recall_labels"``. Each addition
+    is an optional sibling field, so the envelope shape stays backward compatible and
     ``schema_version`` does not move — no store migration is needed.
     """
 
@@ -289,3 +299,7 @@ class MetrologyRecord(BaseModel):
     slice_qualification: SliceQualification | None = None
     diff_judgment: DiffJudgment | None = None
     over_size_case: OverSizeCase | None = None
+    recall_case: RealBugCase | None = None
+    recall_case_set: RecallCaseSet | None = None
+    recall_run: RecallRun | None = None
+    recall_labels: RecallLabels | None = None

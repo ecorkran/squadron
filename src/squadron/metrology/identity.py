@@ -14,7 +14,7 @@ import logging
 import re
 import subprocess
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from squadron.config.manager import get_config
 from squadron.core.subprocess_text import TEXT_DECODING
@@ -26,6 +26,10 @@ from squadron.metrology.models import (
     ProjectId,
     ProjectIdSource,
 )
+
+if TYPE_CHECKING:
+    # Type only: the review subsystem stays out of the metrology core at import time.
+    from squadron.review.templates import ReviewTemplate
 
 _logger = logging.getLogger(__name__)
 
@@ -306,6 +310,11 @@ def template_content_hash(template_name: str) -> str | None:
     template = get_template(template_name)
     if template is None:
         return None
+    return template_behavior_hash(template)
+
+
+def template_behavior_hash(template: ReviewTemplate) -> str:
+    """The ``template_content_hash`` of one loaded template (no registry lookup)."""
     behavior = {
         "name": template.name,
         "description": template.description,

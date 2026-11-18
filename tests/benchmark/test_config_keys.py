@@ -11,6 +11,7 @@ from squadron.config.keys import (
     BENCHMARK_INSTALL_TIMEOUT_KEY,
     BENCHMARK_PLANNED_SAMPLES_KEY,
     BENCHMARK_QUALIFICATION_REPEATS_KEY,
+    BENCHMARK_RECALL_FETCH_TIMEOUT_KEY,
     BENCHMARK_SUITE_TIMEOUT_KEY,
     BENCHMARK_TARGET_PASS_RATE_DIFFERENCE_KEY,
     CONFIG_KEYS,
@@ -86,3 +87,11 @@ def test_target_difference_out_of_range_is_rejected(
     set_config(key, value)
     with pytest.raises(ValueError, match=key):
         get_open_unit_interval_config(key)
+
+
+def test_recall_fetch_timeout_default(patch_config_paths: dict[str, Path]) -> None:
+    key = CONFIG_KEYS[BENCHMARK_RECALL_FETCH_TIMEOUT_KEY]
+    assert key.name == "benchmark.recall_fetch_timeout_s"
+    assert key.type_ is int
+    assert key.default == 120
+    assert get_positive_int_config(BENCHMARK_RECALL_FETCH_TIMEOUT_KEY) == 120

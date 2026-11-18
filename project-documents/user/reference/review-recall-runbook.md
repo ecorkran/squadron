@@ -57,7 +57,18 @@ Squadron's own history is a source too: issues closed by `fix:` commits where th
 
 ## Running a reviewer on a case
 
-Use a scratch worktree so nothing in the real checkouts moves.
+Use `sq benchmark recall` (slice 430). Cases are YAML files under `review-recall-cases/`, case sets are listed in `review-recall-sets.md`, and a reviewer config is a recipe file under `review-recall-recipes/`:
+
+```bash
+sq benchmark recall cases add project-documents/user/reference/review-recall-cases/ --set real-bugs
+sq benchmark recall run --set real-bugs-nonsquadron --runs 3 \
+   --recipe project-documents/user/reference/review-recall-recipes/sol.yaml \
+   --max-cost 5 --call-cost 0.10 --max-plan-calls 42
+```
+
+`run` takes the recall lock, checks every profile with the auth probe, prints its cost bound, then calls each missing stage one at a time in a sandbox holding the case's head and its ancestry back to base, as a scrubbed subprocess whose transcript is leak-scanned. It stops at `--max-cost` or `--max-plan-calls` with exit 2, and a rerun resumes where it stopped. Stored stages are reused by every recipe that includes them. `sq benchmark recall import` loaded the hand-run results below as records.
+
+**Fallback: the hand-run method**, for outside tools and one-off experiments. Use a scratch worktree so nothing in the real checkouts moves.
 
 ```bash
 git -C <repo> fetch origin
@@ -77,7 +88,9 @@ git -C <repo> worktree remove --force <scratch>/<case>
 
 ## Scoring
 
-Per run, by a person (no model grades this):
+`sq benchmark recall report --set NAME --recipe FILE ... [--runs N] [--json]` scores stored entries: recall with a file-level location gate plus stored hit labels, recall as a low–high range while anything is undecided, matched nothing, graded-real share from the imported grading passes, cost, leak-scan counts and paired intervals between rows. `sq benchmark recall label --set NAME` lists the undecided hit candidates, and `label --set NAME --hit FINDING_KEY BUG HIT|ADJACENT|MISS --by NAME` records a person's decision. No model grades hits.
+
+The hand-run rule, which the command implements, per run, by a person:
 - **Hit**: a finding that names the bug's file and symbol (or the same defect in the same function) and says what is wrong. An adjacent defect in the same function is not a hit; record it separately as "adjacent".
 - **Precision**: label every other CONCERN or FAIL finding `real`, `style`, or `wrong`.
 
