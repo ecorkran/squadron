@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from squadron.metrology.grade_models import GraderIdentity
+from squadron.metrology.grade_models import GRADER_VERSION, GraderIdentity
 from squadron.metrology.grade_store import (
     estimate_id,
     implementation_grade_id,
@@ -43,7 +43,7 @@ def test_ids_are_deterministic() -> None:
     "other",
     [
         make_identity(reviewer=make_reviewer(model="another-model")),
-        make_identity(grader_version=2),
+        make_identity(grader_version=GRADER_VERSION + 1),
     ],
     ids=["new reviewer", "bumped grader version"],
 )
