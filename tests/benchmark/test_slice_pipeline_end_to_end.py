@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -54,9 +55,14 @@ def cf_project_names() -> list[str]:
 
 
 @pytest.fixture(scope="module")
-def world(tmp_path_factory: pytest.TempPathFactory) -> SliceWorld:
+def world(tmp_path_factory: pytest.TempPathFactory, hermetic_git_config: Path) -> SliceWorld:
     before = cf_project_names()
-    built = replay_world(tmp_path_factory.mktemp("slice-pipeline"))
+    # Module scope runs before the function-scoped hermetic_environment, so the git
+    # identity has to be pinned here or the fixture borrows the host's (none on CI).
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("GIT_CONFIG_GLOBAL", str(hermetic_git_config))
+        patch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+        built = replay_world(tmp_path_factory.mktemp("slice-pipeline"))
     assert cf_project_names() == before, "the replays changed the real cf registry"
     return built
 
