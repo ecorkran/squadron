@@ -1177,3 +1177,16 @@ def test_reinstalling_to_the_same_destination_still_removes_stale_files(
     assert result.exit_code == 0  # type: ignore[attr-defined]
     assert not (target / "sq" / "retired.md").exists()
     assert "Removed 1 stale command(s)" in result.output  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# Monitor skill: no session summary when the run stopped short
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("relative", ["sq/monitor.md", "agents/sq-monitor/SKILL.md"])
+def test_monitor_skips_summary_for_paused_or_failed_runs(relative: str) -> None:
+    """A paused or failed run is not finished; summarizing it spends tokens for nothing."""
+    content = (get_commands_source() / relative).read_text()
+    step3 = content.split("## Step 3", 1)[1].split("## Step 4", 1)[0]
+    assert "Step 6" not in step3, f"{relative}: Step 3 routes a stopped run to the summary step"

@@ -50,10 +50,10 @@ The exit code says how the run ended. The JSON on stdout carries `checkpoint` (p
 
 - **0, completed:** go to Step 4.
 - **3, paused:** read `checkpoint`.
-  - `resets_at` is set: a usage limit stopped the run. Report the reset time in local time and the resume command (`sq run --resume <run-id>`), then go to Step 6.
-  - `kind` is `awaits_human`: the implementing agent stopped on something only the Project Manager can decide. Find each `BLOCKED:` line in the slice's task file (the slice index is in the run's `params`). For each, state the decision needed and your recommendation, then go to Step 6. Do not resume the run.
+  - `resets_at` is set: a usage limit stopped the run. Report the reset time in local time and the resume command (`sq run --resume <run-id>`), then go to Step 7.
+  - `kind` is `awaits_human`: the implementing agent stopped on something only the Project Manager can decide. Find each `BLOCKED:` line in the slice's task file (the slice index is in the run's `params`). For each, state the decision needed and your recommendation, then go to Step 7. Do not resume the run.
   - `review_file` is set: a review held the run. Evaluate that review as in Step 4 and respond as in Step 5, then report and ask whether to resume. Do not resume on your own.
-- **1, failed:** read `failure`. Get the actual error before saying anything about the cause; never guess one. Report it and go to Step 6.
+- **1, failed:** read `failure`. Get the actual error before saying anything about the cause; never guess one. Report it and go to Step 7.
 - **Any other exit code:** report the line `sq runs wait` printed on stderr and stop.
 
 ## Step 4: Evaluate the reviews
@@ -77,6 +77,8 @@ The review's `template` decides what kind of work the response is:
 If a finding is too large to fix now, or it matches an open issue, file a GitHub issue or comment on the existing one, and say which. Never push.
 
 ## Step 6: Save a summary
+
+Only after a completed run. A paused or failed run skips this step: it is not finished, and a summary of it spends tokens for nothing.
 
 Run `$sq-summary`.
 
