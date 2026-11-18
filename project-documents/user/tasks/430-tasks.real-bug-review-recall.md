@@ -14,8 +14,8 @@ projectState: Slices 420–426 complete (replay stack built and frozen). Slice 4
   plan amended. The hand-run recall data is committed under user/reference/review-recall-results/.
   Target is main (git.integration_branch empty).
 dateCreated: 20261116
-dateUpdated: 20261116
-status: not_started
+dateUpdated: 20261118
+status: in_progress
 turns: 48
 promptTokens: 4792203
 cachedTokens: 4617673
@@ -57,15 +57,15 @@ revision_number: 2
 ## Tasks
 
 ### Task 1: Commit the task file, correct the design, create the branch
-- [ ] Read the target: `cf config get git.integration_branch` (its value, or `main` when empty). Check out the target. If `git status --short` lists this task file, commit it by path as `docs: revise slice 430 tasks`
-  - [ ] Success: `git status --short` does not list the task file
-- [ ] Edit `user/slices/430-slice.real-bug-review-recall.md` so it states each design-gap bullet in the Context Summary: Component Structure (model homes, the scoring modules, and the modules `stage_identity.py`, `leak_check.py` and `run_loop.py`, which the component table lacks), D2 and D11 (the comb alias is `luna-r`, the OpenRouter alias RESULTS.md section 5 measured; plain `luna` is the Codex alias, which was not measured), D4 (`combs` key), D9 (lock name, timeout check), D10 (overrides path), D12 (seed), D3 (among `person` labelers the newest `updated` wins, PM-approved 20261116; no disagreement listing), the report identity rule (D4: (`config_key`, `effort_sent`); `entry_key` only for `run`'s stored-entry check) and a Non-functional line (recall runs serially under D9 as a PM-run benchmark, so it has no load-test tier). Remove the "PM to confirm" sentences in D11 and D13, D13's "If not, the three squadron cases list their files in `extra_locations`..." sentence, and "pending PM confirmation" in walkthrough step 7
-  - [ ] Success: `grep -n "PM to confirm\|pending PM\|bench_lock\|squadron history not read" project-documents/user/slices/430-slice.real-bug-review-recall.md` finds nothing; the design names `metrology/recall_*_models.py`, the string `combs` key, the three scoring modules, `BenchmarkLock`, `check_review_timeout`, the overrides path, the entry-selection rule, the person-labeler rule, the no-load-test line, `luna-r` in D2 and D11 and the three missing modules in the component table
+- [x] Read the target: `cf config get git.integration_branch` (its value, or `main` when empty). Check out the target. If `git status --short` lists this task file, commit it by path as `docs: revise slice 430 tasks`
+  - [x] Success: `git status --short` does not list the task file
+- [x] Edit `user/slices/430-slice.real-bug-review-recall.md` so it states each design-gap bullet in the Context Summary: Component Structure (model homes, the scoring modules, and the modules `stage_identity.py`, `leak_check.py` and `run_loop.py`, which the component table lacks), D2 and D11 (the comb alias is `luna-r`, the OpenRouter alias RESULTS.md section 5 measured; plain `luna` is the Codex alias, which was not measured), D4 (`combs` key), D9 (lock name, timeout check), D10 (overrides path), D12 (seed), D3 (among `person` labelers the newest `updated` wins, PM-approved 20261116; no disagreement listing), the report identity rule (D4: (`config_key`, `effort_sent`); `entry_key` only for `run`'s stored-entry check) and a Non-functional line (recall runs serially under D9 as a PM-run benchmark, so it has no load-test tier). Remove the "PM to confirm" sentences in D11 and D13, D13's "If not, the three squadron cases list their files in `extra_locations`..." sentence, and "pending PM confirmation" in walkthrough step 7
+  - [x] Success: `grep -n "PM to confirm\|pending PM\|bench_lock\|squadron history not read" project-documents/user/slices/430-slice.real-bug-review-recall.md` finds nothing; the design names `metrology/recall_*_models.py`, the string `combs` key, the three scoring modules, `BenchmarkLock`, `check_review_timeout`, the overrides path, the entry-selection rule, the person-labeler rule, the no-load-test line, `luna-r` in D2 and D11 and the three missing modules in the component table
 
 **Commit**: `docs: correct slice 430 design for model homes, lock, entry selection`
 
-- [ ] `git checkout -b 430-slice.real-bug-review-recall <target>` (or switch to it if it exists)
-  - [ ] Success: `git branch --show-current` prints the slice branch
+- [x] `git checkout -b 430-slice.real-bug-review-recall <target>` (or switch to it if it exists)
+  - [x] Success: `git branch --show-current` prints the slice branch
 
 ### Task 2a: Case models (D1, D3, D10)
 - [ ] Convention for Tasks 2a–2c: one `*_models.py` per record type, holding that record's payload and its part models, like the existing `metrology/*_models.py` modules (for example `grade_models.py`, `snapshot_models.py`). The one-class-per-file rule applies to services, not payload parts

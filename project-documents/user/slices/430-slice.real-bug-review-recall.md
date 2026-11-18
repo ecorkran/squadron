@@ -6,8 +6,8 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [420, 421, 424, 425, 402]
 interfaces: [432, 433]
 dateCreated: 20261115
-dateUpdated: 20261116
-status: not_started
+dateUpdated: 20261118
+status: in_progress
 ---
 
 # Slice Design: real-bug-review-recall
@@ -68,7 +68,7 @@ Excluded:
 - **424 (complete):**
   - `leak_scan.scan`, `transcript_source_for(profile)` and `build_leak_rules`.
   - The `leak_rule_source` helpers `installed_package_location` and `uv_cache_dir`.
-  - The benchmark process lock (`bench_lock`), which takes over a lock whose owner is gone.
+  - The benchmark process lock (`BenchmarkLock`), which takes over a lock whose owner is gone.
 - **425 (complete):** `ReviewBudget` (`benchmark/grade_budget.py`), the `render_bound` pattern (`grade_plan.py`), `EXIT_CAP_REACHED = 2` (`cli/commands/benchmark_grade.py`), `ReviewerRef` (`metrology/grade_models.py`), resume by deterministic record id, and `paired_stats` (`compare_pair`, `pair_seed`).
 - **402 (complete):** normalized finding categories (`map_historical_category`) and the `CodeReviewFinding` vocabulary.
 - The source repos named by each case must be readable at the recorded path. A missing repo is a harness failure (D8), not an error that stops the run.
@@ -91,20 +91,28 @@ New package `src/squadron/benchmark/recall/`, kept apart from the replay modules
 
 | Module | Responsibility |
 |---|---|
-| `case_models.py` | `RealBugCase`, `KnownBug`, `BugLocation`, `RecallCaseSet`; the case-file loader and validator |
+| `case_models.py` | The case-file loader and validator (`load_case_file`, `derive_locations`). The case payloads live in `metrology/recall_case_models.py` |
 | `kinds.py` | The `RecallKind` protocol and registry (D14); `CodeKind`, the only implementation here |
 | `recipe.py` | `Recipe` model, recipe-file loader, expanding a recipe into the stage keys it needs |
-| `stage_models.py` | `RecallRun`, `StageEntry`, `RecallFinding`, `StageConfig`, `CombDecision`, `StageUsage`, `StageOutcome` |
-| `label_models.py` | `RecallLabels` (per case and labeler), `HitVerdict`, `FindingGrade`, `Labeler` |
+| `stage_identity.py` | Live stage identity from the alias registry (`live_stage_config`) and `LiveStageResolver`, the live `StageIdentityResolver` |
 | `recall_store.py` | Read and write for the four record types, deterministic ids |
 | `review_sandbox.py` | Wraps `HistoryFreeSandbox` and fetches the ancestry back to `base` (D7) |
-| `stage_runner.py` | One stage call: scrubbed subprocess in the sandbox, leak scan, giving a `StageEntry` (D6) |
+| `stage_runner.py` | One stage call: scrubbed subprocess in the sandbox, giving a `StageEntry` (D6) |
+| `leak_check.py` | The `LeakChecker` used by `stage_runner`: transcript leak scan or `confined` (D6) |
+| `run_loop.py` | Serial dispatch of pending stages: sandboxes, caps, resume, orphan ingest, retry (D8, D9) |
 | `hit_rule.py` | Location gate and label resolution (D3) |
 | `decisions.py` | Lenient parser for `<finding-id>: <WORD> — reason` lines |
 | `run_plan.py` | Missing stages for (recipe, case set, runs), auth preflight, bound and refusal checks |
-| `scoring.py` | Recipe outputs per (case, run), metrics, pool and fan-out composition, recall bounds, paired intervals. Pure: no I/O |
+| `scoring.py` | Recipe outputs per (case, run): entry selection, comb chains, fan-out and pool composition; defines the `StageIdentityResolver` protocol. Pure: no I/O |
+| `scoring_metrics.py` | Per-row metrics, recall bounds, real share. Pure |
+| `scoring_paired.py` | Paired intervals per recipe pair (D12). Pure |
 | `report_render.py` | Table rendering (text and JSON) |
 | `hand_run_import.py` | Reads the hand-run folders and writes run and label records |
+
+Record payloads live beside the other metrology payloads, because `MetrologyRecord` (`metrology/models.py`) imports every payload from `metrology/*_models.py` and never imports `benchmark/`:
+- `metrology/recall_case_models.py`: `RealBugCase`, `KnownBug`, `BugLocation`, `RecallCaseSet`
+- `metrology/recall_run_models.py`: `RecallRun`, `StageEntry`, `RecallFinding`, `StageConfig`, `CombDecision`, `StageUsage`, and the enums `StageKind`, `CombVerdict`, `StageOutcome`, `RecallLeakVerdict`
+- `metrology/recall_label_models.py`: `RecallLabels`, `HitVerdict`, `FindingGrade`, `LabelerKind`
 
 CLI: `cli/commands/benchmark_recall.py` (a Typer subgroup registered on `sq benchmark`), split further if it passes about 300 lines. Every collaborator (store, sandbox factory, process runner, clock) is injected through a services factory, as in `benchmark_grade.py`.
 
@@ -183,9 +191,9 @@ Status: decided
   name: haiku-sol-luna-opus
   reviewers: [haiku-xhigh, sol]   # one entry = single reviewer
   pool: false                      # true = a random pick from the members, scored as its expected value
-  combs: [luna, opus-high]         # applied in order; [] = no comb
+  combs: [luna-r, opus-high]       # applied in order; [] = no comb
   ```
-- **Combs run on each reviewer's output separately, never on a union.** A comb decides each finding on its own. Combing each output keeps every comb reusable: the luna comb of haiku-xhigh run 1 on a case serves every recipe that contains haiku-xhigh and a luna first comb. A two-stage comb (luna, then opus-high) runs opus-high on what luna kept (this is `comb.py --after`). This is also how the hand-run comb data was produced, so it imports directly.
+- **Combs run on each reviewer's output separately, never on a union.** A comb decides each finding on its own. Combing each output keeps every comb reusable: the luna-r comb of haiku-xhigh run 1 on a case serves every recipe that contains haiku-xhigh and a luna-r first comb. A two-stage comb (luna-r, then opus-high) runs opus-high on what luna-r kept (this is `comb.py --after`). This is also how the hand-run comb data was produced, so it imports directly.
 - **Fan-out score** for run k on a case is the union of each reviewer's final kept findings for run k. A known bug is hit if any reviewer's kept finding hits it. The finding count is the sum, with duplicates across reviewers counted, and the report says so.
 - **Pool score.** The plan's pool picks one member at random per case run. The report scores that pick by its expected value, the mean of the members' per-case metrics, which is exact and adds no sampling noise. Computing it needs every member's stored output. **Cost consequence:** `run` on a pool of N members makes N review calls per case run (plus their combs), not one. When the members are already stored, a pool costs nothing. Pool and fan-out are not combined in one recipe, and the loader refuses `pool: true` with one reviewer.
 - **Report rows** are keyed by recipe name plus the identities of the stages they use (D4). A recipe file whose stages resolve to different identities on different cases is reported as separate rows and flagged, never merged.
@@ -209,7 +217,7 @@ Status: decided
   - `label` lists every undecided hit candidate.
 - **Matched nothing.** A kept finding matched nothing when it is decided for every bug of its case (by the gate or by a label) and none of those decisions is `HIT` or `ADJACENT`. A finding that is undecided for any bug is counted only as undecided. It uses the lower-bound kept set.
 - **Content key** is sha256 of the normalized (location, title, description), with whitespace collapsed. A label attaches to finding content, not to a stage, so a comb (which passes findings through by id) inherits the label, and an identical finding in a repeat run needs no second label.
-- **Precedence:** person over import passes.
+- **Precedence:** person over import passes. Among `person` labelers, the record with the newest `updated` wins (PM-approved 20261116); there is no disagreement listing.
 - **Why this rule.** The gate is deliberately loose (file level), so it never decides a real hit away. The person decides what the gate cannot. A test checks the gate against every imported hit label (Success Criteria). If an imported hit fails the gate, the case needs an `extra_locations` entry with its reason. The gate itself is not loosened.
 - Rejected: a model matcher, which the runbook forbids for hits. Also rejected: symbol or line-range matching as a decider. The hand-run hits cite neighbouring lines, effect blocks and callers, so a strict span test would deflate recall. The symbol is shown in the `label` listing as a hint only.
 
@@ -217,7 +225,7 @@ Status: decided
 Status: decided
 - **`RecallRun`**, one record per (case, run index), as the architecture's coarse-record rule asks:
   - `reviews: dict[entry_key, StageEntry]`, one per reviewer config.
-  - `combs: dict[(entry_key, chain_key), StageEntry]`. Here `chain_key` is the ordered comb entry keys joined with `>`. A two-stage comb's input is the entry whose chain is one shorter.
+  - `combs: dict[str, StageEntry]`, keyed by the string `"<entry_key>|<chain_key>"` (a tuple cannot be a JSON object key). Here `chain_key` is the ordered comb entry keys joined with `>`. A two-stage comb's input is the entry whose chain is one shorter.
   - `superseded: list[StageEntry]`: entries a retry replaced (D8).
 - **`StageEntry`**:
   - `config`: `StageConfig` (below)
@@ -236,6 +244,7 @@ Status: decided
   - **Difference from 425's `reviewer_key`:** `reviewer_key` hashes model, profile, configured effort and template hash. `config_key` leaves out configured effort and adds `tool_use` and `max_output_tokens`. Effort enters identity only as effort sent. 425's `ReviewerRef` is not changed.
   - Imported entries follow D10, with explicit unknown markers.
 - **Stage identity in reports** is (`config_key`, `effort_sent`). Two aliases that resolve to the same model and settings and send the same effort are one row. An `effort_sent` of `null` is shown as "not recorded", never as the alias's effort.
+- **Entry selection.** `report` matches a recipe stage to stored entries by stage identity (`config_key`, `effort_sent`). Live identities come from an injected `StageIdentityResolver` (protocol in `scoring.py`; live implementation `LiveStageResolver` in `stage_identity.py`). An entry whose `source` is `import:*` matches when its `alias` equals the recipe's alias. Each distinct stage identity found becomes its own row; a recipe with both live and imported matches gives separate, flagged rows. `entry_key` is used only by `run`, to decide whether a stage is already stored, and only live `entry_key` matches count as stored.
 - **`entry_key`** is sha256 of (`config_key`, `effort_configured`). Configured effort is in this key only so that two calls that could send different efforts, and so are distinct pending calls, are not taken for each other before they run. It is not identity: report rows use `effort_sent`.
 - `RecallFinding`: finding_id, content_key, severity, category (402 vocabulary through `map_historical_category`), raw_category, location, title, description. This extends `CodeReviewFinding` with the full text, which combing and labelling need. Findings are stored in full.
 - **Record id:** `rbrun-<sha12>` of (case_id, run_index).
@@ -320,7 +329,7 @@ Other I/O paths:
 | `import`: a hand-run file is unreadable or not valid JSON, or lacks a field the import needs | WARNING | That file is skipped and listed in the summary with the reason. The import continues, and exits 1 at the end if anything was skipped |
 | `import`: a grade ref names a config, run or finding index with no imported finding | WARNING | That ref is skipped and listed. The other refs of the pass are imported |
 | Store lock held by a live process | ERROR | Refused, exit 1, naming the owner pid |
-| Store lock whose owner is gone | WARNING | Taken over (424's `bench_lock` behavior) |
+| Store lock whose owner is gone | WARNING | Taken over (424's `BenchmarkLock` behavior) |
 | `write_record` fails | ERROR | The command stops with exit 1. Records already written stay, and the output file stays in `recall-out/` for the next run to ingest |
 
 - **Retry deletes nothing.** `run --retry-harness` runs harness-failure and dropped-leak entries again. The new entry replaces the old one in the run record, and the old one moves to `superseded`, so the report always uses the current entry. Config failures are results and are not retried.
@@ -328,14 +337,14 @@ Other I/O paths:
 
 ### D9 — Cost bound, cap and resume follow 425; calls run serially
 Status: decided
-- `run` refuses to start without `--max-cost`, or without `benchmark.review_timeout_s` set (exit 1, through `benchmark_common`).
+- `run` refuses to start without `--max-cost`, or without `benchmark.review_timeout_s` set (exit 1; the timeout through `check_review_timeout` in `benchmark/grading_config.py`, as `benchmark_grade.py` does).
 - **Per-call figure** for each stage config is the largest observed `cost_usd` for that `config_key` in recall run records. With none observed, `--call-cost` is required, and the command refuses without it.
 - **Stated bound** = the sum of the per-call figures for every missing priced call, plus the largest per-call figure once. That last term is the overshoot: the cap is checked before each call, so one call can cross it. The line says "estimate" when any figure comes from observed costs, because a later call can cost more than any earlier one. It says "from --call-cost" otherwise.
 - **Plan-billed calls.** Calls with `cost_basis` `plan` (Codex) count as $0 toward the dollar cap. When the plan holds any, `--max-plan-calls N` is required, and `run` stops before the (N+1)th plan-billed call with exit 2. The bound line shows the plan-billed call count against that cap.
 - **The bound prints before the first call**, after the lock is taken and the auth preflight passes. It lists missing stages by kind and config, the dollar bound with its label, the plan-billed count, and "capped at $X". The wording follows `grade_plan.render_bound`.
 - `ReviewBudget` is reused as it is: `before_review()` before each dispatch, `after_review(cost)` after. On `GradeCapReached`, or at the plan-call cap, the command stops dispatching, keeps every record written, prints what is left, and exits 2.
 - **Calls run one at a time**, following the architecture's non-goal. Concurrency is [#146](https://github.com/ecorkran/squadron/issues/146).
-- The store lock is 424's `bench_lock`, keyed on the recall store. It stops two recall commands from running at once.
+- The store lock is 424's `BenchmarkLock.acquire(root, benchmark_id, runner)` with lock id `recall`. It stops two recall commands from running at once.
 
 ### D10 — Import maps the hand-run files and names the source of every field
 Status: decided
@@ -382,28 +391,28 @@ Status: decided
   - A member (or matched ref) of an issue whose `known` is `Bn` gets `HIT` for bug Bn.
   - Members of other issues in the same case get `MISS` for every bug of that case. The grader had sorted them as distinct issues.
   - The cf5e840c partial hit is imported as `HIT`, as RESULTS.md section 13 records the PM decision.
-- **Overrides.** The section 12 adjudications that overrode grades in the data (921-I9 REAL, 197-I14 MINOR) are applied as person labels from a small committed overrides file, so the decision is recorded, not hidden.
+- **Overrides.** The section 12 adjudications that overrode grades in the data (921-I9 REAL, 197-I14 MINOR) are applied as person labels from a small committed overrides file, `user/reference/review-recall-overrides.yaml` (outside the cases folder, so `cases add <dir>` never reads it), so the decision is recorded, not hidden. Each entry is `{case, issue, grade, reason}` and is written as one `RecallLabels` per case with labeler `person:results-section-12`.
 - Every imported entry has `leak: not_scanned` (D6).
 - Not imported: `20261112-311/` (markdown experiments on one case) and `20261115-design/` (432's).
 - The import is idempotent. Run record and label record ids are deterministic, and a second import changes nothing.
 
 ### D11 — The first live recipe is a PM-run walkthrough step on the non-squadron cases
 Status: decided
-- The first recipe is haiku-xhigh and sol in parallel, then a luna comb, then an opus-high comb, one run. Its recipe file is committed with this slice, and it runs on case set `real-bugs-nonsquadron`. That set is the 14 cases outside squadron's own repo, following the measurement-slices rule that no task runs against squadron's own history.
+- The first recipe is haiku-xhigh and sol in parallel, then a luna-r comb, then an opus-high comb, one run. The comb alias is `luna-r`, the OpenRouter alias RESULTS.md section 5 measured; plain `luna` is the Codex alias, which was not measured as a comb. Its recipe file is committed with this slice, and it runs on case set `real-bugs-nonsquadron`. That set is the 14 cases outside squadron's own repo, following the measurement-slices rule that no task runs against squadron's own history.
 - Run serially (D9), it takes the sum of its calls. That is about 10 minutes per case at the hand-run median times, so over an hour for 14 cases. The measurement rule says no task needs hours. So this design makes the run walkthrough step 7, run by the PM after the slice, not an implementation task. Its report is appended to RESULTS.md as a new section, with the date.
-- **PM to confirm** that this changes the plan's criterion "The first recipe measured live is ...". It would become "The first recipe is committed and ready; the PM runs it after the slice". The plan entry is updated to match once the PM confirms.
+- The plan's criterion becomes "The first recipe is committed and ready; the PM runs it after the slice" (PM decision 20261116).
 - The comb prompt is the hand-run first draft. Its template hash is in every comb entry, so a later revision shows as a separate row.
 
 ### D12 — Recipe comparisons carry paired intervals
 Status: decided
-- For every pair of recipes in a report, scoring takes the cases both have complete and that have nothing undecided in either recipe (D3). Per case, it reduces each recipe to one value: recall (bug-hits / (bugs × runs)), and separately findings per run. `paired_stats.compare_pair` then gives the mean difference and its bootstrap interval, over cases, with the seed from `pair_seed(<set name and version>, <row keys>)`.
+- For every pair of recipes in a report, scoring takes the cases both have complete and that have nothing undecided in either recipe (D3). Per case, it reduces each recipe to one value: recall (bug-hits / (bugs × runs)), and separately findings per run. `paired_stats.compare_pair` then gives the mean difference and its bootstrap interval, over cases, with the seed from `pair_seed(benchmark_id, key_a, key_b)`, where `benchmark_id` is `<set name>@v<version>` and the keys are the two row keys.
 - A pair whose interval spans zero is printed as "not distinguishable", not ranked. Fewer than 8 usable shared cases (the runbook's floor) prints "too few cases" instead of an interval. The line also gives the number of cases left out for undecided items.
 - Graded-real share gets no interval. It is agent-graded, and the report already marks it as first-pass.
 
 ### D13 — `cases add` reads squadron's own commits for three cases
 Status: decided
 - D1 derives bug locations from each proof commit's file list. For the three squadron cases (932, 175, 197), that is `git show --name-only` on four squadron commits (`5e384226`, `0a850c0a`, `af50b937`, `366250ba`). It runs no review, build or test against squadron's history, and takes seconds.
-- The measurement-slices rule says no task runs against squadron's own history. **PM to confirm** that reading commit metadata for case records is outside that rule. If not, the three squadron cases list their files in `extra_locations` with the reason "squadron history not read (measurement rule)", and their locations are not derived.
+- Reading commit metadata for case records is outside the measurement-slices rule (PM decision 20261116).
 
 ### D14 — The case kind is a seam
 Status: decided
@@ -415,6 +424,7 @@ Status: decided
 - `cases add`, `stage_runner` and the import look up the kind and never branch on it. The recipe model, combs, labels, the hit rule and `scoring` take no kind input. 432 adds `DocumentKind` and a registry entry, without changing them.
 
 ### Technology Choices
+- **Non-functional.** Recall runs serially under D9 as a PM-run benchmark, so it has no load-test tier.
 - PyYAML for case and recipe files (already a dependency, used for templates). Pydantic models for records, as in every other metrology payload.
 - No new dependencies.
 
@@ -580,7 +590,7 @@ All commands are new in this slice. Run from the squadron checkout.
    ```
    The first command lists the undecided candidates. After labelling, the undecided count drops to 0 and recall prints as one number. Real share shows the live entries as ungraded.
 
-7. **First live recipe (D11, pending PM confirmation), run by the PM after the slice.**
+7. **First live recipe (D11), run by the PM after the slice.**
    ```bash
    sq benchmark recall run --set real-bugs-nonsquadron --runs 1 \
      --recipe recipes/haiku-sol-luna-opus.yaml --max-cost 25 --max-plan-calls 14
