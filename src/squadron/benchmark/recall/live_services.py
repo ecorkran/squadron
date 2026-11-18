@@ -22,12 +22,11 @@ from squadron.benchmark.recall.run_loop import KindSandboxFactory, SandboxFactor
 from squadron.benchmark.recall.run_plan import ConfigFor
 from squadron.benchmark.recall.stage_identity import live_stage_config
 from squadron.benchmark.recall.stage_runner import LeakChecker
+from squadron.benchmark.sandbox import RECALL_SANDBOXES
 from squadron.config.keys import BENCHMARK_AUTH_PROBE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
 from squadron.core.process_runner import ProcessRunner
 from squadron.providers.base import ProfileName
-
-RECALL_SANDBOXES = "recall-sandboxes"
 
 
 @dataclass(frozen=True)

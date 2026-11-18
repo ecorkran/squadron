@@ -27,6 +27,7 @@ from squadron.benchmark.recall.stage_ingest import (
     read_comb_input,
     write_comb_input,
 )
+from squadron.benchmark.sandbox import RECALL_HOMES, RECALL_OUT
 from squadron.benchmark.scrubbed_env import CredentialGrant, MissingCredentialError, ScrubbedEnvironment
 from squadron.core.process_runner import (
     ProcessCwdNotFoundError,
@@ -46,8 +47,6 @@ from squadron.metrology.recall_run_models import (
 )
 from squadron.providers.base import ProfileName
 
-RECALL_OUT = "recall-out"
-RECALL_HOMES = "recall-homes"
 COMB_TEMPLATE = "comb"
 
 

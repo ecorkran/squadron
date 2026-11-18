@@ -166,6 +166,7 @@ def sweep_orphans(
     *,
     sweep_cf_projects: bool = True,
     sibling_suffixes: Sequence[str] = (),
+    guarded_elsewhere: Sequence[str] = (),
 ) -> None:
     """Remove sandboxes whose owner is gone, and cf projects whose directory is gone.
 
@@ -175,15 +176,21 @@ def sweep_orphans(
     The keyword-only parameters default to ``sq replay``'s behavior. The benchmark sandbox
     passes ``sweep_cf_projects=False`` (it registers no cf project) and its sibling
     suffixes (``.home``, ``.out``): directories that have no lock of their own and go with
-    their owner.
+    their owner. ``guarded_elsewhere`` names directories another lock guards (the recall
+    benchmark's); they are never removed here.
     """
     sandbox_root = root if root is not None else replays_root()
-    _sweep_directories(runner, sandbox_root, tuple(sibling_suffixes))
+    _sweep_directories(runner, sandbox_root, tuple(sibling_suffixes), frozenset(guarded_elsewhere))
     if sweep_cf_projects:
         _sweep_cf_projects(runner)
 
 
-def _sweep_directories(runner: ProcessRunner, root: Path, sibling_suffixes: tuple[str, ...]) -> None:
+def _sweep_directories(
+    runner: ProcessRunner,
+    root: Path,
+    sibling_suffixes: tuple[str, ...],
+    guarded_elsewhere: frozenset[str],
+) -> None:
     if not root.is_dir():
         return
     try:
@@ -194,6 +201,8 @@ def _sweep_directories(runner: ProcessRunner, root: Path, sibling_suffixes: tupl
     for entry in entries:
         if not entry.is_dir():
             continue  # the lock files beside the sandboxes
+        if entry.name in guarded_elsewhere:
+            continue  # another lock guards it; it is not a sandbox
         owner = _sibling_owner(entry.name, sibling_suffixes)
         if owner is not None and (root / owner).is_dir():
             continue  # a sibling whose owner directory exists: removed with the owner below

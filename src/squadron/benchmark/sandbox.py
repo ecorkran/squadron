@@ -32,6 +32,12 @@ from squadron.replay.sandbox import sweep_orphans
 HOME_SUFFIX = ".home"
 OUT_SUFFIX = ".out"
 SIBLING_SUFFIXES = (HOME_SUFFIX, OUT_SUFFIX)
+#: ``sq benchmark recall``'s working directories under the benchmark root. The recall lock
+#: guards them, not a lock of their own, so the orphan sweep must never remove them.
+RECALL_SANDBOXES = "recall-sandboxes"
+RECALL_OUT = "recall-out"
+RECALL_HOMES = "recall-homes"
+RECALL_DIRS = (RECALL_SANDBOXES, RECALL_OUT, RECALL_HOMES)
 
 
 def benchmark_root() -> Path:
@@ -46,6 +52,7 @@ def sweep_benchmark_orphans(runner: ProcessRunner, root: Path | None = None) -> 
         root if root is not None else benchmark_root(),
         sweep_cf_projects=False,
         sibling_suffixes=SIBLING_SUFFIXES,
+        guarded_elsewhere=RECALL_DIRS,
     )
 
 

@@ -19,6 +19,7 @@ from squadron.benchmark.adapter import (
 )
 from squadron.benchmark.python_adapter import PythonBenchmarkAdapter
 from squadron.benchmark.sandbox import (
+    RECALL_DIRS,
     BenchmarkSandbox,
     benchmark_root,
     sweep_benchmark_orphans,
@@ -184,6 +185,16 @@ def test_sweep_removes_siblings_whose_owner_directory_is_missing(tmp_path: Path)
     (root / "kept.lock").write_text(live.to_json())
     sweep_benchmark_orphans(SubprocessRunner(), root)
     assert leftovers(root) == ["kept.home", "kept.lock"]
+
+
+def test_sweep_leaves_the_recall_directories_alone(tmp_path: Path) -> None:
+    # They have no lock of their own: the recall lock guards them, and a concurrent
+    # fix-case build once deleted them under a running recall benchmark.
+    root = tmp_path / "root"
+    for name in RECALL_DIRS:
+        (root / name / "inner").mkdir(parents=True)
+    sweep_benchmark_orphans(SubprocessRunner(), root)
+    assert leftovers(root) == sorted(RECALL_DIRS)
 
 
 class _NoInstallAdapter:

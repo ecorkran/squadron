@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipe `haiku-solr-luna-opus`: the D11 recipe with `sol-r` (OpenRouter) in place of `sol`, so it runs without Codex credits.
 
 ### Fixed
+- Building fix or slice cases while `sq benchmark recall run` is running no longer deletes the recall run's working folders.
 - Benchmark sandboxes (recall reviews, replays, fix and slice case qualification) build at commits that declare git submodules instead of failing; submodule folders are left empty. Rebuild fix and slice cases to pick up commits that failed this way.
 
 ## [0.24.34] - 20261118
