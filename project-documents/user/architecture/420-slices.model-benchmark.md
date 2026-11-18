@@ -203,7 +203,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
 15. [ ] **(434) Recipe Reviews in Pipelines** — A pipeline review step takes a 430 recipe by name in place of one model (`review-model: haiku-solr-luna-opus`). Its reviewers run on the real work, its combs filter their findings, and the kept findings become the review the step acts on: one verdict, one review file, the same revise loop. Each stage's output, cost and kept/dropped decisions are recorded against the run, so every real P6 run that uses a recipe also measures it. Can be built alongside 431.
    - **Value:** User-facing. Real slices get the review that finds the most known bugs instead of one model, and recipe cost and finding counts come from real work with no hand-run benchmark.
    - **Success Criteria:**
-     - A pipeline's `review-model` (and a step's `review.model`) accepts a recipe name; a single model alias works as before. A name that is neither fails before the run starts.
+     - A pipeline's `review-model`, a step's `review.model` and `sq review --model` accept a recipe name; a single model alias works as before. A name that is neither fails before the run starts.
      - The review step's findings are the recipe's kept findings, and its verdict comes from them by the existing verdict rule. A revise round reruns the whole recipe.
      - A reviewer or comb stage that fails is reported in the review and the run record, never silently dropped from the merge.
      - Per-stage findings, kept/dropped decisions and cost are stored with the run and readable by 430's report and 431.
