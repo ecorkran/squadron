@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq benchmark recall run/report/label --recipe` takes a recipe name such as `haiku-sol-opus`; a file path still works.
 - Recipe `haiku-solr-luna-opus`: the D11 recipe with `sol-r` (OpenRouter) in place of `sol`, so it runs without Codex credits.
 
+### Fixed
+- `sq benchmark recall run` reviews cases whose commit declares git submodules instead of failing them; submodule folders are left empty.
+
 ## [0.24.34] - 20261118
 
 ### Added

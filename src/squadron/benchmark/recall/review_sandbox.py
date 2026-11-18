@@ -1,9 +1,10 @@
 """The recall review sandbox: head plus its ancestry back to base, nothing later (D7).
 
-Wraps ``HistoryFreeSandbox`` unchanged: it builds the one-commit tree at ``head`` under its
-own fixed bound, then this module deepens it through the injected ``ProcessRunner`` so
-``sq review code --diff <base>`` finds a merge base. Fetching a commit brings only its
-ancestors, so no commit later than ``head`` (and so no fix) can be present. No ref is made.
+Wraps ``HistoryFreeSandbox``, with submodules left unfilled since a review only reads. It
+builds the one-commit tree at ``head`` under its own fixed bound, then this module deepens
+it through the injected ``ProcessRunner`` so ``sq review code --diff <base>`` finds a merge
+base. Fetching a commit brings only its ancestors, so no commit later than ``head`` (and so
+no fix) can be present. No ref is made.
 """
 
 from __future__ import annotations
@@ -34,7 +35,12 @@ def review_sandbox(
     if not repo.is_dir():
         raise SandboxError(f"source repo missing: {repo}")
     with HistoryFreeSandbox(
-        start_sha=head, sandbox_id=sandbox_id, repo_root=repo, runner=runner, root=root
+        start_sha=head,
+        sandbox_id=sandbox_id,
+        repo_root=repo,
+        runner=runner,
+        root=root,
+        allow_unfilled_submodules=True,
     ) as sandbox:
         tree = sandbox.path
         count = _rev_count(runner, repo, base, head, fetch_timeout)
