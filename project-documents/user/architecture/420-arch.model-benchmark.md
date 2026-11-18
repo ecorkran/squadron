@@ -7,7 +7,7 @@ project: squadron
 parent: ../project-guides/001-initiative-plan.squadron.md
 dependencies: [140, 300, 320, 400]
 dateCreated: 20261104
-dateUpdated: 20261115
+dateUpdated: 20261118
 status: not_started
 ---
 
@@ -34,6 +34,15 @@ This component answers "does model X at effort Y do this job as well as model Z,
 PM decision after slices 420–426. The implementation replay stack is built and stays, with no further work on it: each data point costs dollars and hours and few cases qualify (squadron's own suite takes about 18 minutes a run), so its reports say "too few cases". The second half measures with what is cheap and already recorded: reviewer recall on real escaped bugs (430), a report over recorded pipeline runs (431), the same recall method on documents (432), and one answers table per category (433). Two rules follow. No task runs against squadron's own history or needs hours. Every measured run prints its cost bound first and stops at a cap.
 
 Reviewer recall's sandbox holds the diff's head and its ancestry back to base, and nothing later; "one commit" describes the replay sandbox. (Slice 430 D7: `sq review code --diff <base>` needs a merge base. Fetching a commit brings its ancestors only, so the fix cannot be present.)
+
+## Amendment (20261118)
+
+Slice 434 lets production reviews use 430's recipes: the pipeline review step and `sq review` accept a recipe name in place of one model. This is the one place this component changes production behavior, and it is limited to the review path: the review action and its pre-run check, `sq review`, and the review file's frontmatter.
+
+- **Code boundary.** Recipe code that both production and the benchmark use lives in `squadron/recipes/`. It imports `review/` and `metrology/`; `pipeline/`, `cli/` and `benchmark/` import it; it never imports `benchmark/`.
+- **Cost rule.** A production recipe review is not a measured run. It prints no bound of its own. In a pipeline it is bounded as any review action is, by `pipeline.max_cost_usd` (947); a standalone `sq review` is uncapped, as it is for a single model. The rule that a measured run prints its bound and stops at its own cap still applies to every benchmark command.
+- **Records.** Each recipe review writes one coarse record to the metrology store as a by-product, which 430's report, 431 and 433 read. "Measure, never gate" holds: nothing reads a benchmark result to choose a recipe.
+- **Serial stages.** "Several in parallel" in the Overview describes a recipe's shape. In 430 and 434 its stages run one after another ([#372](https://github.com/ecorkran/squadron/issues/372)), so recorded durations are serial.
 
 ## Design Goals
 

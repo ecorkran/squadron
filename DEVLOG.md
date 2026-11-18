@@ -13,6 +13,16 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261118
 
+### Slice 434: Recipe Reviews in Pipelines — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/434-slice.recipe-reviews-in-pipelines.md`; `cf validate design` passes. Not committed; no review run.
+- A review model name is classified once as alias or recipe (`sq review`, pipeline pre-run check, review action). Recipes are searched project → user → built-in; the recipe model, comb call and decisions parser move from `benchmark/recall/` to `review/recipe/`.
+- Stages run one at a time (concurrency is #372). Combs run in process on the real tree and need a diff. Pool recipes, judge templates and an explicit profile are refused.
+- Verdict is `verdict_from_findings` over kept findings. An incomplete recipe (a failed reviewer or comb) cannot pass: nothing kept gives UNKNOWN and the review fails; kept CONCERN/FAIL findings give their verdict and the loop goes on.
+- One `recipe_review` metrology record per review, from the CLI and the pipeline; `sq benchmark recall report --real-work` reads them.
+- Shipped `review-model` defaults do not change; that stays with #369.
+- Next: Phase 5 task breakdown.
+
 ### Release 0.24.34
 
 - **Contents:** slice 430 `sq benchmark recall` (real-bug code-review recall: case files, hand-run import, recipe runs with cost bound and caps, labels, report), plus the gate-review fixes on it (non-finite cost limits refused, empty combs neither capped nor charged, UNKNOWN-verdict reviews recorded as config failures); `sol-r` alias (sol through OpenRouter); `/sq:monitor` no longer saves a session summary for paused or failed runs. Issues filed: #370, #371.
