@@ -9,6 +9,7 @@ largest figure once (the overshoot: the cap is checked before each call). Plan-b
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -107,6 +108,11 @@ def observed_costs(runs: list[RecallRun]) -> dict[str, float]:
     return found
 
 
+def _finite_positive(value: float) -> bool:
+    """NaN fails every comparison, so ``value <= 0`` alone lets it through and disables a cap."""
+    return math.isfinite(value) and value > 0
+
+
 def build_run_bound(
     pending: list[PendingStage],
     runs: list[RecallRun],
@@ -116,8 +122,10 @@ def build_run_bound(
     leak_judgeable: Callable[[ProfileName], bool],
 ) -> RunBound:
     """The bound for *pending*; every D9 refusal raises ``RecallRefusal``."""
-    if max_cost is None or max_cost <= 0:
-        raise RecallRefusal(f"{MAX_COST_FLAG} is required and must be positive")
+    if max_cost is None or not _finite_positive(max_cost):
+        raise RecallRefusal(f"{MAX_COST_FLAG} is required and must be a finite positive figure")
+    if call_cost is not None and not _finite_positive(call_cost):
+        raise RecallRefusal(f"{CALL_COST_FLAG} must be a finite positive figure")
     observed = observed_costs(runs)
     figures: dict[str, CallFigure] = {}
     plan_billed = 0

@@ -18,24 +18,33 @@ from squadron.metrology.content_sidecars import ContentSidecars, SidecarKind
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_run_models import (
     LIVE_SOURCE,
+    RecallFinding,
     RecallLeakVerdict,
     RecallRun,
     StageEntry,
+    StageKind,
     StageOutcome,
     StageUsage,
 )
-from tests.benchmark.recall.scoring_support import make_case
+from tests.benchmark.recall.scoring_support import finding, make_case
 from tests.benchmark.recall.stage_support import FakeSandboxes, plan_config_for
 from tests.benchmark.recall.support import FIXED_NOW, fake_services
 
 CASES = [make_case("case-a"), make_case("case-b")]
+DEFAULT_FINDING = finding(1, "src/a.py")
 
 
 class Recorder:
-    """A stage call that records order and returns an ok entry costing *cost*."""
+    """A stage call that records order and returns an ok entry costing *cost*.
 
-    def __init__(self, cost: float | None = 0.01) -> None:
+    A review returns *findings* (one by default), so the combs after it have input.
+    """
+
+    def __init__(
+        self, cost: float | None = 0.01, findings: tuple[RecallFinding, ...] = (DEFAULT_FINDING,)
+    ) -> None:
         self.cost = cost
+        self.findings = findings
         self.calls: list[str] = []
 
     def __call__(self, stage: PendingStage, run: RecallRun, sandbox: Path) -> StageEntry:
@@ -45,6 +54,7 @@ class Recorder:
             config=stage.config,
             effort_configured=stage.effort_configured,
             effort_sent=None,
+            findings=self.findings if stage.kind is StageKind.REVIEW else (),
             usage=StageUsage(cost_usd=self.cost),
             outcome=StageOutcome.OK,
             leak=RecallLeakVerdict.CONFINED,
@@ -178,3 +188,16 @@ def test_plan_cap_stops_before_the_next_plan_billed_call(tmp_path: Path) -> None
     result = run_pending(bound, _deps(tmp_path, _store(tmp_path), FakeSandboxes(tmp_path), call, None))
     assert len(call.calls) == 3
     assert result.status is LoopStatus.CAPPED and "plan-billed call cap 3" in str(result.reason)
+
+
+def test_empty_comb_makes_no_call_and_spends_no_plan_cap(tmp_path: Path) -> None:
+    """A comb over a review with no findings is no call, so it is neither capped nor counted."""
+    call = Recorder(cost=None, findings=())
+    recipe = Recipe(name="r", reviewers=("codex",), combs=("codex-comb", "codex-comb2"))
+    bound = _bound(recipe, CASES[:1], [1], plan_cap=1)
+    store = _store(tmp_path)
+    result = run_pending(bound, _deps(tmp_path, store, FakeSandboxes(tmp_path), call, None))
+    assert call.calls == ["case-a/1/review/codex"]
+    assert result.status is LoopStatus.COMPLETE
+    run = store.get_run(CASES[0].case_id, 1)
+    assert run is not None and len(run.combs) == 2

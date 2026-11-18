@@ -22,9 +22,15 @@ from squadron.benchmark.recall.kinds import KindContext, get_kind
 from squadron.benchmark.recall.recall_store import RecallRecordStore
 from squadron.benchmark.recall.run_bound import RunBound
 from squadron.benchmark.recall.run_plan import PendingStage
-from squadron.benchmark.recall.stage_ingest import IngestContext, failure_entry, stage_label
+from squadron.benchmark.recall.stage_ingest import (
+    IngestContext,
+    empty_comb_entry,
+    failure_entry,
+    stage_label,
+)
 from squadron.benchmark.recall.stage_runner import (
     StageDeps,
+    comb_input_findings,
     ingest_orphan,
     remove_home,
     run_stage,
@@ -156,6 +162,10 @@ def _run_one(
             "the earlier call's cost was spent without a record",
             stage_label(stage),
         )
+    if stage.kind is StageKind.COMB and not comb_input_findings(stage, run):
+        # Nothing to decide, so no call: neither capped nor charged.
+        _store(stage, empty_comb_entry(stage, deps.ingest), deps, counters, run)
+        return
     plan_billed = bound.is_plan_billed(stage)
     _check_caps(plan_billed, bound, deps, counters)
     entry = deps.call(stage, run, sandbox)

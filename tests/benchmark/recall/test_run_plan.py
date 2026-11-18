@@ -45,6 +45,19 @@ def test_refuses_without_max_cost() -> None:
         build_run_bound(_pending(Recipe(name="r", reviewers=("a",))), [], None, 0.01, None, ALWAYS)
 
 
+@pytest.mark.parametrize("max_cost", [float("nan"), float("inf"), 0.0, -1.0])
+def test_refuses_a_max_cost_that_is_not_finite_and_positive(max_cost: float) -> None:
+    """NaN passed ``<= 0`` and disabled the cap (430 gate review)."""
+    with pytest.raises(RecallRefusal, match="--max-cost"):
+        build_run_bound(_pending(Recipe(name="r", reviewers=("a",))), [], max_cost, 0.01, None, ALWAYS)
+
+
+@pytest.mark.parametrize("call_cost", [float("nan"), float("inf"), 0.0, -1.0])
+def test_refuses_a_call_cost_that_is_not_finite_and_positive(call_cost: float) -> None:
+    with pytest.raises(RecallRefusal, match="--call-cost"):
+        build_run_bound(_pending(Recipe(name="r", reviewers=("a",))), [], 1.0, call_cost, None, ALWAYS)
+
+
 def test_refuses_without_review_timeout() -> None:
     with pytest.raises(RecallRefusal, match="benchmark.review_timeout_s"):
         require_review_timeout(None)
