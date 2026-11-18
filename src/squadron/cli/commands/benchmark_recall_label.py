@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -14,7 +13,7 @@ from squadron.benchmark.recall.label_candidates import (
     undecided_candidates,
 )
 from squadron.benchmark.recall.recall_services import RecallServices, RecallServicesFactory, recall_lock
-from squadron.benchmark.recall.recipe import RecipeError, load_recipe
+from squadron.benchmark.recall.recipe import RecipeError, load_recipes
 from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.cli.commands.benchmark_common import stderr_exit
 from squadron.cli.commands.benchmark_recall_common import REFUSED_ERRORS, open_services
@@ -52,7 +51,7 @@ def _cases(services: RecallServices, set_ref: str, names: list[str]) -> list[Rea
 def run_label(
     services: RecallServices,
     set_ref: str,
-    recipe_paths: list[Path],
+    recipe_refs: list[str],
     case_names: list[str],
     runs: int,
     hit: tuple[str, str, str] | None,
@@ -73,7 +72,7 @@ def run_label(
             )
         typer.echo(f"recorded {verdict.value} for {key} {bug_id} as {record.labeler}")
         return
-    recipes = [load_recipe(path) for path in recipe_paths]
+    recipes = load_recipes(recipe_refs, services.repo_root)
     found = undecided_candidates(
         services.store, cases, recipes, list(range(1, runs + 1)), services.stage_resolver
     )
@@ -86,8 +85,8 @@ def run_label(
 def make_label_command(services_factory: RecallServicesFactory) -> Callable[..., None]:
     def label_command(
         set_ref: Annotated[str, typer.Option("--set", help="Case set, NAME or NAME@VERSION.")],
-        recipe_paths: Annotated[
-            list[Path] | None, typer.Option("--recipe", help="Only findings these recipes keep.")
+        recipe_refs: Annotated[
+            list[str] | None, typer.Option("--recipe", help="Only findings these recipes keep.")
         ] = None,
         case_names: Annotated[
             list[str] | None, typer.Option("--case", help="Only this case (repeatable).")
@@ -104,7 +103,7 @@ def make_label_command(services_factory: RecallServicesFactory) -> Callable[...,
             run_label(
                 open_services(services_factory),
                 set_ref,
-                recipe_paths or [],
+                recipe_refs or [],
                 case_names or [],
                 runs,
                 hit,

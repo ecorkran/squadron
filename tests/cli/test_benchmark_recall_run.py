@@ -19,7 +19,7 @@ from squadron.config.keys import BENCHMARK_REVIEW_TIMEOUT_KEY
 from squadron.core.process_lock import ProcessLock
 from squadron.core.process_runner import ProcessResult, SubprocessRunner
 from squadron.providers.base import ProfileName
-from tests.benchmark.recall.committed import RECIPES_DIR, add_committed_sets, proof_runner
+from tests.benchmark.recall.committed import RECIPES_DIR, REPO_ROOT, add_committed_sets, proof_runner
 from tests.benchmark.recall.fixtures.bug_repo.build import BuiltBugRepo, build
 from tests.benchmark.recall.stage_support import (
     FakeSandboxes,
@@ -133,6 +133,22 @@ def test_d11_recipe_on_nonsquadron_prints_bound_and_makes_no_call(tmp_path: Path
     )  # fmt: skip
     assert result.exit_code == 0, result.output
     assert "84 stages to run" in result.output and "plan-billed calls: 14, cap 14" in result.output
+    assert events == []
+
+
+def test_recipe_by_name_runs_sol_r_variant_with_no_plan_calls(tmp_path: Path) -> None:
+    events: list[str] = []
+    missing = FakeSandboxes(tmp_path / "tree")
+    services = _services(tmp_path, events, config_for=live_stage_config, sandboxes=missing)
+    services = dataclasses.replace(services, process_runner=proof_runner(), repo_root=REPO_ROOT)
+    add_committed_sets(services)
+    missing.failures.update({case.name: "source repo missing" for case in services.store.list_cases()})
+    result = invoke_recall(
+        services, "run", "--set", "real-bugs-nonsquadron", "--recipe", "haiku-solr-luna-opus",
+        "--max-cost", "25", "--call-cost", "0.5",
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "84 stages to run" in result.output and "plan-billed" not in result.output
     assert events == []
 
 

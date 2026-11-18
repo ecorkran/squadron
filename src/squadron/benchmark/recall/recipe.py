@@ -17,6 +17,10 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from squadron.metrology.recall_run_models import StageKind
 
+#: Where a recipe named without a path lives, relative to the repository root.
+RECIPES_DIR = Path("project-documents/user/reference/review-recall-recipes")
+RECIPE_SUFFIX = ".yaml"
+
 
 class RecipeError(Exception):
     """A recipe file is unreadable or invalid."""
@@ -68,6 +72,25 @@ def load_recipe(path: Path) -> Recipe:
     except ValidationError as exc:
         reasons = "; ".join(error["msg"] for error in exc.errors())
         raise RecipeError(path, reasons) from exc
+
+
+def resolve_recipe(ref: str, repo_root: Path) -> Path:
+    """A recipe name (``haiku-sol-opus``) maps to its file in ``RECIPES_DIR``; a ref with a
+    directory part or a YAML suffix is a path as given. An unknown name lists the known ones."""
+    as_path = Path(ref)
+    if as_path.suffix in (RECIPE_SUFFIX, ".yml") or len(as_path.parts) > 1:
+        return as_path
+    recipes_dir = repo_root / RECIPES_DIR
+    path = recipes_dir / f"{ref}{RECIPE_SUFFIX}"
+    if not path.is_file():
+        known = sorted(p.stem for p in recipes_dir.glob(f"*{RECIPE_SUFFIX}"))
+        raise RecipeError(path, f"no recipe named {ref!r}; known: {', '.join(known) or 'none'}")
+    return path
+
+
+def load_recipes(refs: list[str], repo_root: Path) -> list[Recipe]:
+    """Resolve and load each recipe ref (a name or a path)."""
+    return [load_recipe(resolve_recipe(ref, repo_root)) for ref in refs]
 
 
 def required_stages(recipe: Recipe) -> tuple[RequiredStage, ...]:

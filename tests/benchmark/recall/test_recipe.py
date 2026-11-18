@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from squadron.benchmark.recall.recipe import RecipeError, RequiredStage, load_recipe, required_stages
+from squadron.benchmark.recall.recipe import (
+    RecipeError,
+    RequiredStage,
+    load_recipe,
+    required_stages,
+    resolve_recipe,
+)
 from squadron.metrology.recall_run_models import StageKind
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -20,6 +26,7 @@ COMMITTED = {
     "haiku-sol-opus",
     "haiku-sol-pool",
     "haiku-sol-luna-opus",
+    "haiku-solr-luna-opus",
 }
 
 
@@ -78,3 +85,21 @@ def test_d11_recipe_is_fan_out_then_luna_r_then_opus_high() -> None:
         False,
         ("luna-r", "opus-high"),
     )
+
+
+def test_recipe_name_resolves_to_committed_file() -> None:
+    assert resolve_recipe("haiku-sol-opus", REPO_ROOT) == RECIPES_DIR / "haiku-sol-opus.yaml"
+    assert load_recipe(resolve_recipe("haiku-solr-luna-opus", REPO_ROOT)).reviewers == (
+        "haiku-xhigh",
+        "sol-r",
+    )
+
+
+def test_recipe_ref_with_path_or_suffix_is_used_as_given(tmp_path: Path) -> None:
+    assert resolve_recipe("own.yaml", REPO_ROOT) == Path("own.yaml")
+    assert resolve_recipe(str(tmp_path / "own"), REPO_ROOT) == tmp_path / "own"
+
+
+def test_unknown_recipe_name_lists_known_names() -> None:
+    with pytest.raises(RecipeError, match="no recipe named 'nope'; known: .*haiku-sol-opus"):
+        resolve_recipe("nope", REPO_ROOT)

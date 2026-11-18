@@ -1,0 +1,5 @@
+# D11 with sol-r (OpenRouter) in place of sol, so it runs without Codex credits.
+name: haiku-solr-luna-opus
+reviewers: [haiku-xhigh, sol-r]
+pool: false
+combs: [luna-r, opus-high]

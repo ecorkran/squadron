@@ -17,7 +17,7 @@ import typer
 from squadron.benchmark.bench_plan import BenchmarkRefusal
 from squadron.benchmark.grade_budget import ReviewBudget
 from squadron.benchmark.recall.recall_services import RecallServices, RecallServicesFactory, recall_lock
-from squadron.benchmark.recall.recipe import RecipeError, load_recipe
+from squadron.benchmark.recall.recipe import RecipeError, load_recipes
 from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.benchmark.recall.report_build import set_label
 from squadron.benchmark.recall.run_bound import (
@@ -43,7 +43,7 @@ RUN_ERRORS = (*REFUSED_ERRORS, RecipeError, StageIdentityError, BenchmarkRefusal
 
 @dataclass(frozen=True)
 class RunOptions:
-    recipe_paths: list[Path]
+    recipe_refs: list[str]
     set_ref: str
     runs: int
     max_cost: float | None
@@ -67,7 +67,7 @@ def _cases(services: RecallServices, set_ref: str, names: list[str]) -> tuple[st
 def _plan(services: RecallServices, options: RunOptions) -> tuple[str, RunBound]:
     if options.runs < 1:
         raise RecallRefusal("--runs must be at least 1")
-    recipes = [load_recipe(path) for path in options.recipe_paths]
+    recipes = load_recipes(options.recipe_refs, services.repo_root)
     label, cases = _cases(services, options.set_ref, options.case_names)
     stored = services.store.list_runs()
     runs = {(run.case_id, run.run_index): run for run in stored}
@@ -147,7 +147,9 @@ def run_recall(services: RecallServices, options: RunOptions) -> int:
 
 def make_run_command(services_factory: RecallServicesFactory) -> Callable[..., None]:
     def run_command(
-        recipe_paths: Annotated[list[Path], typer.Option("--recipe", help="Recipe file (repeatable).")],
+        recipe_refs: Annotated[
+            list[str], typer.Option("--recipe", help="Recipe name or file (repeatable).")
+        ],
         set_ref: Annotated[str, typer.Option("--set", help="Case set, NAME or NAME@VERSION.")],
         runs: Annotated[int, typer.Option("--runs", help="Run indexes 1..N.")] = 1,
         max_cost: Annotated[
@@ -168,7 +170,7 @@ def make_run_command(services_factory: RecallServicesFactory) -> Callable[..., N
     ) -> None:
         """Run the missing stages (costs money: prints a bound first, stops at the caps)."""
         options = RunOptions(
-            recipe_paths,
+            recipe_refs,
             set_ref,
             runs,
             max_cost,
