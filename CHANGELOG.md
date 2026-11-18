@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.32] - 20261117
+
 ### Added
 - `sq benchmark slice-cases build --set NAME` turns a project's completed slices (recorded by `sq metrology slice-ranges`) into benchmark cases: the slice design and task file as they stood at the fork are the task and the landed branch is the reference. A slice that cannot be a case (landed twice, merged the target into its branch, no task file, no code change, no regression tests left) is counted by reason in `sq benchmark yield`, which now shows slice-case rows beside the fix-case rows.
 - `sq benchmark run` replays slice cases through `sq run P6 --producer-only` in a scrubbed sandbox registered with cf inside the sandbox's own home, so your cf project list is untouched.
