@@ -6,11 +6,13 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies:
 - 430
 - 425
+- 420
+- 947
 interfaces:
 - 431
 - 433
 dateCreated: 20261118
-dateUpdated: 20261118
+dateUpdated: 20261119
 status: not_started
 turns: 64
 promptTokens: 7517862
@@ -92,13 +94,26 @@ New top-level package `src/squadron/recipes/`. It sits above `review/` and `metr
 | Module | Responsibility |
 |---|---|
 | `recipe.py` | `Recipe`, `RequiredStage`, `load_recipe`, `required_stages` (moved from `benchmark/recall/recipe.py`) |
-| `recipe_search.py` | `resolve_recipe(ref, search_dirs)` and the production search directories (D1) |
-| `model_ref.py` | `classify_review_model(name, ...)`, returning `AliasRef` or `RecipeRef`; raises on a name that is neither or both (D2) |
+| `recipe_search.py` | `resolve_recipe(ref, search_dirs)`, `load_recipes`, `find_recipe` and `production_recipe_dirs(cwd)` (D1) |
+| `model_ref.py` | `classify_review_model(name, ...)`, returning `AliasRef` or `RecipeRef`; raises on a name that is neither or both; `validate_recipe_review` (D2) |
 | `comb_call.py` | `render_findings`, `run_comb_stage`, `COMB_ALLOWED_TOOLS`, `finding_id_at` (moved, see Migration Plan) |
 | `decisions.py` | The decisions parser (moved unchanged) |
+| `stage_config.py` | `stage_config`, `alias_stage_config`, `planned_stages`: resolved alias settings to 430's `StageConfig` (D8) |
+| `kept_findings.py` | The kept-findings rule over findings and comb decisions (D5) |
 | `recipe_runner.py` | Runs the stages in order and returns a `RecipeOutcome`: every stage's result, the kept findings, `complete` (D3–D5) |
 | `recipe_merge.py` | Builds the merged `ReviewResult` and its verdict from a `RecipeOutcome` (D5, D6) |
-| `recipe_record.py` | `RecipeRecordSink` protocol and the metrology-store implementation (D8) |
+| `recipe_record.py` | `RecipeRecordSink` protocol, the metrology-store implementation and `build_recipe_record` (D8) |
+| `recipe_review.py` | `run_recipe_review`: the caller flow both entry points share (save, then record; aborted record; cancellation write; write-failure catch) (D5, D8) |
+
+Outside the package:
+
+| Module | Responsibility |
+|---|---|
+| `benchmark/recall/recipe_dirs.py` | `RECIPES_DIR` and `benchmark_recipe_dirs(repo_root)` (D1) |
+| `benchmark/recall/real_work.py` | The real-work table rows (D10) |
+| `metrology/recipe_review_models.py` | `RecipeStage`, `RecipeReview` payload (D8) |
+| `pipeline/actions/review_recipe.py` | The review action's recipe path and `recipe_usage_record` (D9) |
+| `cli/commands/review_recipe.py` | `sq review`'s recipe path |
 
 `SCORED_SEVERITIES` moves to `review/models.py`, next to `Severity`, and 430's `scoring.py` imports it.
 
@@ -139,22 +154,24 @@ Status: decided
   - **`sq benchmark recall`** searches its existing `RECIPES_DIR` (`user/reference/review-recall-recipes/`), then the shipped directory. It keeps accepting a path, as today.
 - A recipe file's `name` must equal its file stem, checked at load.
 - Shipped recipes: `haiku-solr-luna-opus`, `haiku-sol-luna-opus` and `haiku-sol-opus`. They move from `user/reference/review-recall-recipes/` to `data/recipes/`. None of the three is an alias in `models.toml`.
-- The other six benchmark recipes stay where they are. Five of them (`haiku-xhigh`, `sonnet-high`, `sonnet`, `sol`, `luna`) are named after the alias they wrap, so they must stay out of the production search, where D2 makes a name that is both an alias and a recipe an error. `RECIPES_DIR` stays a constant in `benchmark/recall/`.
+- The other eight benchmark recipes stay where they are: `haiku-mimo-opus`, `haiku-opus`, `haiku-sol-pool`, `haiku-xhigh`, `luna`, `sol`, `sonnet-high`, `sonnet`. Five of them (`haiku-xhigh`, `sonnet-high`, `sonnet`, `sol`, `luna`) are named after the alias they wrap, so they must stay out of the production search, where D2 makes a name that is both an alias and a recipe an error.
+- `RECIPES_DIR` stays a constant in `benchmark/recall/`, in `recipe_dirs.py`, with `benchmark_recipe_dirs(repo_root)` (`RECIPES_DIR`, then the shipped directory), which the three benchmark commands pass to `load_recipes`.
 
 ### D2 — One classification of a review model name, applied before any model call
 Status: decided
-- `classify_review_model(name, profile_source)` returns:
+- `classify_review_model(name, *, profile_source, search_dirs)` returns:
   - `AliasRef` when the name is a known alias (or a literal model id with a profile source, the existing #175 rule);
-  - `RecipeRef(recipe)` when a recipe of that name is found by the production search;
+  - `RecipeRef(recipe, path)` when a recipe of that name is found by the production search;
   - an error when it is both ("`<name>` is a model alias and a recipe; rename the recipe"), or neither. The neither message is the existing unknown-alias message with the known recipe names added.
-- A `RecipeRef` is validated at the same moment. Each failure names the recipe and the offending member:
+- A `RecipeRef` is validated right after classification at each site by `validate_recipe_review(ref, *, template, has_diff, explicit_profile)`, a separate function because the pre-run check and execution know different inputs. Each failure names the recipe and the offending member:
   - every reviewer and comb alias must pass `require_known_model`;
   - `pool: true` is refused, because a random pick could change the verdict between revise rounds with no change to the code;
   - a judge template is refused;
   - a recipe with combs on a review that has no diff is refused (D4);
   - an explicit `--profile` or step `profile` is refused, because each stage's alias decides its own profile.
 - Where it runs:
-  - `sq run`: in the pipeline pre-run check (`classification.py`, and `loader.py`'s `_validate_model_alias` for literal names), so a bad name stops the run before the first step. Session classification treats a recipe as its member aliases.
+  - `sq run`: in the pipeline pre-run check (`classification.py`, and `loader.py`'s `_validate_model_alias` for literal names), so a bad name stops the run before the first step. Session classification treats a recipe as its member aliases. Every `ReviewModelError` is collected with the other bad names, so one pre-run error lists them all.
+  - Slash command rendering: `prompt_renderer._render_review` classifies the name before resolving it for display; a `RecipeRef` uses the recipe name as the display model and does not call the alias resolver.
   - `sq review`: in `_run_review_command`, before the review call.
   - The review action classifies again at execution. That is the only point where a `{review-model}` placeholder is resolved for certain.
 - Model cascade: the recipe name is taken from the same cascade as a model (action, step, `-m`, pipeline, config, template default). No new param or flag.
@@ -205,6 +222,8 @@ Failed stages (each is logged at WARNING with the recipe, stage and reason, appe
 - All reviewers failing is the first case: nothing kept, UNKNOWN, the review fails.
 - Rejected: failing the review on any stage failure. One reviewer hitting a quota would discard the other reviewer's findings and stop a loop that had work to do. Also rejected: a synthetic "reviewer failed" finding, which would send the reviser a finding it cannot fix.
 
+Marks in the merged review: `ReviewFinding` gains no field. `recipe_merge` appends one line to each finding's description, `Reviewer: <alias>`, plus `(not combed: <comb alias> failed)` when the finding passed through a failed comb.
+
 Other failures. The runner appends each finished stage to a `RecipeProgress` the caller owns, so the caller still has the finished stages when the runner does not return:
 
 | Mode | Level | Effect |
@@ -214,12 +233,15 @@ Other failures. The runner appends each finished stage to a `RecipeProgress` the
 | The run is cancelled or interrupted mid-recipe (Ctrl-C, pipeline cancel) | WARNING | The caller writes the same aborted record, synchronously, because an awaited write would be cancelled with the task. The cancellation then propagates. As with a cancelled single-model review, the step has no `ActionResult`, so `RunSpend` does not see the finished stages' spend; the record holds it |
 | A stage call hangs or runs long | WARNING once, when the stage passes `review.recipe_stage_slow_s`, naming the recipe, stage, alias and elapsed time | The call is not stopped: `run_review_with_profile` has no time bound, and a recipe-only bound would make the two review paths differ. Cancelling the run takes the row above |
 
+The caller flow (save then record, the aborted record, the synchronous write on cancellation, the record-write catch of D8) is the same for the CLI and the action, so it lives once in `recipes/recipe_review.py` (`run_recipe_review`), which takes the review call, the save callable and the sink as arguments.
+
 ### D6 — One merged review, and a revise round reruns the whole recipe
 Status: decided
 - `recipe_merge` builds one `ReviewResult`:
-  - findings: reviewer 1's kept findings, then reviewer 2's, then the NOTE and PASS findings in the same reviewer order. Each finding names its reviewer alias in the review body. Finding ids are renumbered over the merged list by the existing id rule.
+  - findings: reviewer 1's kept findings, then reviewer 2's, then the NOTE and PASS findings in the same reviewer order. Each finding names its reviewer alias in its description (D5's marks). Finding ids are renumbered over the merged list by the existing id rule.
   - `raw_output`: a rendered summary (verdict, stage table, findings). Each stage's raw output is in the sidecar, not in the review file.
   - `cost_usd`, `duration_seconds`, `turns`, `tool_calls_made`: sums over stages.
+  - `recipe`: `review/` cannot import `recipes/`, so `review/models.py` holds `RecipeReviewInfo(name, complete, stage_section)` and `ReviewResult.recipe: RecipeReviewInfo | None = None`. `stage_section` is the rendered "Recipe" section built by `recipe_merge`. `ReviewResult.to_dict()` is unchanged.
 - The revise loop is unchanged. Its review action runs again each round, so every round runs every stage. No stage output is carried between rounds.
 - Dropped findings are not in the review file. The reviser reads that file, and a dropped finding there would be acted on.
 
@@ -230,7 +252,8 @@ Status: decided
   - `recipeComplete: true|false`.
 - Readers of `aiModel`:
   - `metrology/identity.py` reads it as a model identity, for judge-template reviews only. D2 refuses recipes on judge templates, so it never sees a recipe name.
-  - `review/frontmatter_usage.py` reads it into a usage record's `model` field, where the recipe name is the only name the whole review has.
+  - `review/frontmatter_usage.py` `record_from_frontmatter` sets `alias` from `aiModel` and `model` to `None` when `aiRecipe` is true.
+  - `stats/reviews_report.py` (`sq stats reviews`) and `stats/review_rounds.py` (the effort report) read `aiModel` as the reviewing model. A recipe review is listed there under the recipe name, the only name the whole review has; neither reader changes.
   - Any new reader checks `aiRecipe` first.
 - Body: a "Recipe" section before the findings, with one row per stage (`kind`, `alias`, answering model, `outcome`, findings or kept/dropped/undecided counts, cost) and, for a failed stage, its reason.
 - **Review ingest is unchanged.** `CodeReviewRecord` has no model field: it holds the review path, commit, slice, verdict and findings. A recipe review's merged findings carry the reviewers' normalized categories, so `sq metrology` ingests it like any code review, and 400's reports see one review with the kept findings. An UNKNOWN recipe review is not recorded, by the existing rule. No review written before this slice has a recipe name in `aiModel`.
@@ -240,7 +263,7 @@ Status: decided
 Status: decided
 - The record is written for every recipe review, from the pipeline action and from `sq review` alike. Prompt-only pipelines (slash commands) run `sq review` as a shell command and have no `ActionResult`, so the run state file cannot be the record's home. The plan's "stored with the run" is now "stored in the metrology store, keyed by run id" for executor-run pipelines; prompt-only pipelines' records have null run linkage (schema below).
 - Payload `RecipeReview` in `metrology/recipe_review_models.py`, record type `recipe_review` (schema in Implementation Details). It reuses 430's stage payload types and adds no new enum.
-- Stage identity is 430's: `StageConfig` (`config_key`) plus `effort_sent`. The pure part of `live_stage_config` (resolved alias settings to `StageConfig`) moves to `recipes/stage_config.py`, and both the runner and 430 call it; only the auth-check dependency stays in `benchmark/recall/`. `effort_sent` is the stage result's `effort` (430 D6). That key is absent when the provider applied no effort, and the record then holds `null`, never the alias's configured effort (420 arch, Absent is not zero); a test covers it.
+- Stage identity is 430's: `StageConfig` (`config_key`) plus `effort_sent`. `recipes/stage_config.py` holds `stage_config(alias, model, profile, template_hash) -> StageConfig` (reading `model_allows_tools` and `model_max_output_tokens` from `models/aliases.py`), `alias_stage_config(alias, template_hash)`, the production entry, which takes model and profile from `resolve_model_alias` and raises when the alias has no profile, and `planned_stages(recipe, review_template_hash)`, one config per `required_stages` entry. A recipe review's review stages use the step's own template hash, comb stages the built-in `comb` hash. Production runs no auth check; member aliases are already checked by `require_known_model` at classification (D2). `live_stage_config` keeps its signature `(alias, stage_kind)` in `benchmark/recall/stage_identity.py` and calls `stage_config`. `effort_sent` is the stage result's `effort` (430 D6). That key is absent when the provider applied no effort, and the record then holds `null`, never the alias's configured effort (420 arch, Absent is not zero); a test covers it.
 - `RecipeRecordSink.write(record, raw_outputs)` is injected. The pipeline executor and the CLI pass the metrology-store sink; tests pass a fake.
 - `write` is synchronous. Normal paths call it through `asyncio.to_thread`. The cancellation path (D5) calls it directly, since an awaited call would be cancelled with the task; if it raises there, the error is logged at ERROR and the cancellation still propagates.
 - Order: the review file is saved first, then the record is written. If the save raises, the record is written with `review_file: null` and the save error then propagates as it does today.
@@ -250,9 +273,10 @@ Status: decided
 ### D9 — The step's usage record is the recipe's total, under the pipeline cost cap
 Status: decided
 - A recipe review is a production review. The architecture's rule that a measured run prints a bound and stops at its own cap applies to benchmark commands (`sq benchmark recall run` keeps it). In a pipeline, a review, single-model or recipe, is bounded by `pipeline.max_cost_usd` (947). A standalone `sq review` has no cap today for any model, and this slice adds none; the 20261118 amendment says so.
-- The action stamps one `UsageRecord`: `alias` is the recipe name, `model` is `None`, `cost_usd` is the sum of the stages' known costs, `turns` and `duration_seconds` are sums, `tokens` are summed per field.
+- The action stamps one `UsageRecord`: `alias` is the recipe name (`RunSpend` keys its unpriced warning on `alias`), `model` is `None`, `cost_usd` is the sum of the stages' known costs, `turns` and `duration_seconds` are sums, `tokens` are summed per field.
 - **With an unpriced stage, the stamped cost is a floor.** The cap then counts less than the recipe spent. This is kept over stamping `None`, which would make `RunSpend` count nothing for the whole recipe, as it does for an unpriced single-model step; counting the priced stages stops a capped run sooner. Each unpriced stage is named in a WARNING and in the record, and the real-work table counts reviews with one (D10). When no stage has a cost, `cost_usd` is `None`, and `RunSpend` warns once for the recipe name as it does for an unpriced alias.
 - `cost_basis` is the stages' common basis when they share one, else `None`. Per-stage bases are in the record.
+- The review file's frontmatter gives a second usage record, through `record_from_frontmatter`, also with the recipe name in `alias` and `model` `None` (D7). The two feed different totals, as for a single-model review today: the stamped record feeds `RunSpend`; the frontmatter record feeds per-file reports (`stats/`, `review/artifact_usage.py`). Neither total reads the other, so no review is counted twice in one total.
 - A failed review (D5) still stamps what its stages spent, as a single-model provider failure does (slice 175 D5).
 - The cost cap is checked after each action, as today. A recipe review is one action (a split review runs the recipe per part inside it), so one review can cross the cap by its own cost, as any action can.
 
@@ -270,7 +294,7 @@ Status: decided
   | Verdicts | Count of PASS, CONCERNS, FAIL, UNKNOWN |
   | Cost/review | Mean of known costs, with the number of reviews that had an unpriced stage |
 
-- `--real-work` needs no `--set` and no `--recipe`; `--recipe` filters by name. It makes no calls.
+- `--real-work` needs no `--set` and no `--recipe`; `--recipe` filters by name. It makes no calls. `--set`, required today, becomes optional and is required unless `--real-work` is given.
 - 431 and 433 read `recipe_review` records through `MetrologyStore.iter_records`: 431 by `run_id` and `step_name`, 433 by recipe.
 
 ### D11 — Shipped defaults do not change
@@ -301,17 +325,18 @@ Consumers are from an import search of `src/` and `tests/`.
 
 | Moved | From | To | Consumers updated |
 |---|---|---|---|
-| `Recipe`, `RequiredStage`, `load_recipe`, `load_recipes`, `resolve_recipe`, `required_stages`, `RecipeError` | `benchmark/recall/recipe.py` | `recipes/recipe.py`, `recipe_search.py` | `label_candidates.py`, `report_build.py`, `run_plan.py`, `scoring.py`; `benchmark_recall_label.py`, `benchmark_recall_report.py`, `benchmark_recall_run.py` (these three pass the benchmark search directories); in `tests/benchmark/recall/`: `stage_support.py`, `test_leak_check.py`, `test_recipe.py`, `test_report_render.py`, `test_reproduce_results.py`, `test_run_end_to_end.py`, `test_run_loop_resume.py`, `test_run_loop.py`, `test_run_plan_expand.py`, `test_run_plan.py`, `test_scoring_metrics.py`, `test_scoring_outputs.py`, `test_scoring_paired.py`, `test_stage_identity.py`, `test_stage_runner.py` |
+| `Recipe`, `RequiredStage`, `load_recipe`, `load_recipes`, `resolve_recipe`, `required_stages`, `RecipeError`, `RECIPE_SUFFIX` | `benchmark/recall/recipe.py` | `recipes/recipe.py`, `recipe_search.py` (`RECIPES_DIR` to `benchmark/recall/recipe_dirs.py`) | `label_candidates.py`, `report_build.py`, `run_plan.py`, `scoring.py`; `benchmark_recall_label.py`, `benchmark_recall_report.py`, `benchmark_recall_run.py` (these three pass the benchmark search directories); in `tests/benchmark/recall/`: `stage_support.py`, `test_leak_check.py`, `test_recipe.py`, `test_report_render.py`, `test_reproduce_results.py`, `test_run_end_to_end.py`, `test_run_loop_resume.py`, `test_run_loop.py`, `test_run_plan_expand.py`, `test_run_plan.py`, `test_scoring_metrics.py`, `test_scoring_outputs.py`, `test_scoring_paired.py`, `test_stage_identity.py`, `test_stage_runner.py` |
 | `render_findings`, `run_comb_stage`, `COMB_ALLOWED_TOOLS`, `ReviewCall`, `StageModel` | `benchmark/recall/stage_command.py` | `recipes/comb_call.py` | `benchmark_recall_stage.py`, `stage_command.py` (keeps the file I/O helpers), `test_stage_command.py` |
 | `finding_id_at`, `FINDING_ID_PREFIX` | `benchmark/recall/review_output.py` | `recipes/comb_call.py` | `review_output.py`, `hand_run_combs.py`, `stage_command.py`, `stage_ingest.py` |
-| Pure part of `live_stage_config` | `benchmark/recall/stage_identity.py` | `recipes/stage_config.py` | `stage_identity.py`, `test_stage_identity.py` |
+| Pure part of `live_stage_config` | `benchmark/recall/stage_identity.py` | `recipes/stage_config.py` | `stage_identity.py`, `test_stage_identity.py`; `live_services.py` unchanged |
 | `parse_decisions` and its types | `benchmark/recall/decisions.py` | `recipes/decisions.py` | `hand_run_combs.py`, `stage_command.py`, `stage_ingest.py`, `test_decisions.py` |
 | `SCORED_SEVERITIES` | `benchmark/recall/scoring.py` | `review/models.py` | `scoring.py`, `label_candidates.py` |
 | Three recipe files | `user/reference/review-recall-recipes/` | `src/squadron/data/recipes/` | runbook paths; package data in `pyproject.toml` if data files are listed there |
 
-- `RECIPES_DIR` stays in `benchmark/recall/`, and the six other recipe files do not move.
+- `RECIPES_DIR` stays in `benchmark/recall/` (`recipe_dirs.py`), and the eight other recipe files do not move.
 - Imports are changed at the consumers; no re-export shims are left behind.
-- Behavior check: `tests/benchmark/recall/` and `tests/cli/test_benchmark_recall_*.py` pass with only import and path edits, and the 430 walkthrough step 3 report (hand-run table) prints the same rows.
+- Call-site edits beyond imports: `resolve_recipe` and `load_recipes` take search directories (`test_recipe.py` and the three `benchmark_recall_*` commands pass `benchmark_recipe_dirs`); the three moved recipe files are loaded from the shipped directory in `test_recipe.py`, `test_run_plan.py`, `test_benchmark_recall_run.py` and `test_reproduce_results.py`, with `committed.py`'s `RECIPES_DIR` as the old directory; `test_recipe.py`'s `COMMITTED` set drops the three moved names.
+- Behavior check: `tests/benchmark/recall/` and `tests/cli/test_benchmark_recall_*.py` pass with only those edits, and the 430 walkthrough step 3 report (hand-run table) prints the same rows.
 
 ### API Contracts
 
@@ -326,7 +351,7 @@ No new command or flag except `report --real-work`.
 | `sq benchmark recall report --real-work [--recipe NAME]` | | D10 |
 
 - `sq review --output json` prints the merged `ReviewResult.to_dict()` for a recipe review, the same shape a single-model review prints.
-- Slash commands and prompt-only renderings run `sq review <template> <slice> --model <name>` (`prompt_renderer._render_review`), so they get recipe reviews through the CLI with no change of their own.
+- Slash commands and prompt-only renderings run `sq review <template> <slice> --model <name>` (`prompt_renderer._render_review`), so they get recipe reviews through the CLI. The rendered command is unchanged; the renderer classifies the name first and shows the recipe name as the display model, instead of resolving it as an alias (D2).
 
 ### Database / Storage Schema
 
@@ -395,7 +420,7 @@ The plan's 431 and 433 entries now list 434 as a dependency with these contracts
 - README or the pipelines doc that describes `review-model` says a recipe name is accepted, where recipes are searched, and how to add one. CHANGELOG has a user-facing bullet.
 
 ### Integration Requirements
-- After the move, every 430 command works by recipe name from squadron's checkout, and its tests pass with import and path edits only.
+- After the move, every 430 command works by recipe name from squadron's checkout, and its tests pass with the Migration Plan's import and call-site edits only.
 
 ### Verification Walkthrough
 
@@ -406,7 +431,7 @@ Draft; refined after implementation. Run from the squadron checkout with `uv run
    ls src/squadron/data/recipes/ project-documents/user/reference/review-recall-recipes/
    uv run sq benchmark recall report --set real-bugs-original --runs 1 --recipe haiku-sol-opus --recipe haiku-xhigh
    ```
-   The three shipped recipes are in `data/recipes/`, the other six are where they were, and the report prints the same haiku-sol-opus row as 430's walkthrough step 4 (`8/14 | 57%`) and a haiku-xhigh row.
+   The three shipped recipes are in `data/recipes/`, the other eight are where they were, and the report prints the same haiku-sol-opus row as 430's walkthrough step 4 (`8/14 | 57%`) and a haiku-xhigh row.
 
 2. **Bad names fail before the run.**
    ```bash

@@ -13,7 +13,7 @@ projectState: Slices 420–426 and 430 complete; 0.24.34 released with `sq bench
   (git.integration_branch empty).
 dateCreated: 20261119
 dateUpdated: 20261119
-status: not_started
+status: in_progress
 turns: 31
 promptTokens: 2619319
 cachedTokens: 2492805
@@ -59,9 +59,9 @@ revision_number: 2
 ## Tasks
 
 ### Task 1: Commit the task file, correct the design, create the branch
-- [ ] Read the target: `cf config get git.integration_branch` (its value, or `main` when empty). Check out the target. If `git status --short` lists this task file, commit it by path as `docs: revise slice 434 tasks`
-- [ ] Write each Context Summary design gap into the design, as a plain statement, not a change note: D1, D2, D5, D6, D7, D8, D9, D10, API Contracts (slash commands), the Architecture Component Structure table, the Migration Plan (including its "import and path edits only" lines) and the frontmatter `dependencies`. Bump `dateUpdated`
-  - [ ] `cf validate design` passes on the edited file
+- [x] Read the target: `cf config get git.integration_branch` (its value, or `main` when empty). Check out the target. If `git status --short` lists this task file, commit it by path as `docs: revise slice 434 tasks`
+- [x] Write each Context Summary design gap into the design, as a plain statement, not a change note: D1, D2, D5, D6, D7, D8, D9, D10, API Contracts (slash commands), the Architecture Component Structure table, the Migration Plan (including its "import and path edits only" lines) and the frontmatter `dependencies`. Bump `dateUpdated`
+  - [x] `cf validate design` passes on the edited file
 
 **Commit**: `docs: correct slice 434 design for recipe dirs, stage config, result carrier`
 
