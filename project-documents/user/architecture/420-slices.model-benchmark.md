@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 420-arch.model-benchmark.md
 project: squadron
 dateCreated: 20261104
-dateUpdated: 20261118
+dateUpdated: 20261119
 status: not_started
 ---
 
@@ -164,7 +164,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
      - The rule for when a finding hits a known bug is stated and tested. Findings it cannot decide are listed for a person and not counted.
      - The first recipe is committed and ready, and the PM runs it after the slice (it takes over an hour serially, so no task runs it): haiku-xhigh and sol in parallel, then a luna comb, then an opus-high comb (RESULTS.md section 5: opus-high combing haiku-xhigh kept all 6 of its known bugs at 86% real, and combing sol kept all 5 at 92%). The comb prompt is a first draft and is versioned with its records.
    - **Dependencies:** [420, 421, 424, 425] (effort sent, sandbox and scrubbed environment, leak scan, record store, cap and bound code); 402 normalized findings.
-   - **Interfaces:** Provides stored real-bug cases, per-stage review and comb records, recipe scoring and the recall report. Consumed by 432 and 433.
+   - **Interfaces:** Provides stored real-bug cases, per-stage review and comb records, recipe scoring and the recall report. Consumed by 432.
    - **Follow-up outside this slice (#369):** shipped code-review defaults (P6, implement, implement-plan) are haiku-xhigh alone, because a pipeline review step takes one model. Once the first recipe's live run holds up, #369 lets the step name a recipe (haiku-xhigh + sol, opus-high comb) and makes it the default.
    - **Risk Level:** Medium (the hit rule; the graded-real share is agent-graded and needs a human-checked sample)
    - **Relative Effort:** 3/5
@@ -176,29 +176,22 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
      - Runs with no review, and runs whose records cannot be read, are counted and named, never dropped silently.
      - Finding categories are right for current reviews (needs #338 fixed).
    - **Dependencies:** 199 run listings, 175 usage records, review frontmatter; #338. [434] for recipe reviews: its `recipe_review` metrology records, read by `run_id` and `step_name`, and `aiRecipe` in review frontmatter.
-   - **Interfaces:** Provides the implementation rows 433 reads.
+   - **Interfaces:** Provides the implementation rows for `review-recall-results/SUMMARY.md` and `ANSWERS.yaml`.
    - **Risk Level:** Low
    - **Relative Effort:** 2/5
 
-13. [ ] **(432) Design and Task Review Recall from Real Corrections** — 430's method on documents. A case is a slice design or task file as its review passed it, plus the flaws corrected later (a "correct the design" commit, a task rewrite after a blocked run). It starts with a spike: mine ten candidate cases by hand under the runbook's validity rule, and count how many are flaws a review of that document could have caught. Fewer than five stops the slice, with the counts recorded as the result.
-   - **Value:** Shows which model reviews designs and task breakdowns, the checks that run before code is written.
+13. [ ] **(432) Document Review Recall from Real Corrections** — 430's method on documents: architecture documents, slice designs and task files. A case is a document as its review passed it, plus the flaws corrected later (a "correct the design" commit, a task rewrite after a blocked run). The spike is done (amended 20261119): the hand-run mining found 82 valid flaws in 43 cases from squadron, context-forge and migratory (19 arch, 32 slice, 31 tasks), far past the stop line of five, and the hand-run grids answered the first question (`review-recall-results/RESULTS.md` sections 16-20). What remains is making that repeatable, so a new model is measured on documents with one command instead of a hand-run grid and its grading agents.
+   - **Value:** Shows which model reviews architecture documents, designs and task breakdowns, the checks that run before code is written, and re-measures cheaply when a new model arrives.
    - **Success Criteria:**
-     - The spike's counts are recorded, with the go or stop decision they give.
-     - If it goes on: cases are stored as 430 cases of a document kind, reviewed with the slice and tasks templates, and scored by 430's report.
+     - The 43 mined cases and their flaws (`reference/design-review-recall-cases*.md`) load as 430 cases of a document kind (arch, slice, tasks), reviewed with the matching template, and scored by 430's report per kind.
+     - The hand-run results import as stored outputs, and the report reproduces section 16's per-kind table for haiku-xhigh, opus-high and fable-medium with no new calls.
+     - More architecture cases are added as records (#373): the 19 arch flaws cannot separate the top configs.
    - **Dependencies:** [430].
    - **Interfaces:** Consumes 430's case records, recipes and report.
-   - **Risk Level:** High (yield is unknown until the spike)
-   - **Relative Effort:** 3/5 (the spike alone is 1/5)
+   - **Risk Level:** Medium (document flaws are matched by agent grading, not by file location)
+   - **Relative Effort:** 3/5
 
-14. [ ] **(433) Model Answers Report** — One table per category (code review, design review, task review, design writer, task writer, implementation): the configured default, the best measured config, the evidence count and its date, each row naming its source report (430, 432, `sq replay report`, 431). A category with no data says "unmeasured".
-   - **Value:** User-facing. "Which model for this job, and how do I know" in one place.
-   - **Success Criteria:**
-     - Every category has a row, measured or "unmeasured".
-     - A measured row names its source and count, and a row below the evidence floor says so.
-   - **Dependencies:** [430, 431]; 177 replay report. [434] for real-work recipe rows: its `recipe_review` metrology records, shown by `sq benchmark recall report --real-work`.
-   - **Interfaces:** Consumes the reports of 430, 431, 432 and 177.
-   - **Risk Level:** Low
-   - **Relative Effort:** 2/5
+14. [x] **(433) Model Answers Report** — ⏪ Dropped 20261119. `review-recall-results/SUMMARY.md` and `ANSWERS.yaml` already give the per-category answer with its evidence and confidence, updated by hand when data changes. Real-work recipe rows come from `sq benchmark recall report --real-work` (434).
 
 15. [ ] **(434) Recipe Reviews in Pipelines** — A pipeline review step takes a 430 recipe by name in place of one model (`review-model: haiku-solr-luna-opus`). Its reviewers run on the real work, its combs filter their findings, and the kept findings (plus the uncombed NOTE and PASS findings) become the review the step acts on: one verdict, one review file, the same revise loop. Each stage's output, cost and kept/dropped decisions are recorded in the metrology store, keyed by run id, so every real P6 run that uses a recipe also leaves a record of it. Stages run one after another (#372). Can be built alongside 431.
    - **Value:** User-facing. Real slices get a review whose comb cuts the noise the reviser has to chase (430's live run, 20261118: no recipe found more bugs than haiku-xhigh alone, but haiku-solr-luna-opus halved the findings and cut those matching no known bug from 229 to 95). Recipe cost, revise rounds and finding counts then come from real work with no hand-run benchmark.
@@ -209,7 +202,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
      - Per-stage findings, kept/dropped decisions and cost are stored in the metrology store, keyed by run id, and readable by 430's report and 431.
      - The same recipe gives the same result shape from the CLI and slash commands. (Squadron has no MCP review tool; amended 20261118.)
    - **Dependencies:** [430, 425] (425 for content sidecars); review step dispatch.
-   - **Interfaces:** Consumes 430's recipes and comb stage. Provides per-stage review records on pipeline runs that 431 and 433 read.
+   - **Interfaces:** Consumes 430's recipes and comb stage. Provides per-stage review records on pipeline runs that 431 reads.
    - **Risk Level:** Med (the merged verdict and how a failed stage affects it)
    - **Relative Effort:** 3/5
 
@@ -234,7 +227,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
      - A sequential stage names the stages it reads; its prompt carries their deduped findings (435), and it is stored and scored like any reviewer.
      - The report compares, on real-bugs-nonsquadron: haiku-xhigh with 3–4 focuses against haiku-xhigh ×3 (435), and haiku-xhigh → sequential mimo or sol-r against the same pair in parallel, each with and without the opus-high comb.
      - 434 recipes in pipelines accept both shapes.
-   - **Dependencies:** [430, 435].
+   - **Dependencies:** [430, 435]. Scope is set by 435's results (amended 20261119): design starts only after 435's report exists. If repeat-and-vote clearly beats the measured recipes, the design cuts the shapes that report leaves little room for, and says which and why.
    - **Interfaces:** Extends 430's recipe file, stage runner and stage identities; reads 435's finding groups.
    - **Risk Level:** Med (a sequential reviewer that repeats or argues with earlier findings instead of finding new ones)
    - **Relative Effort:** 3/5
@@ -255,6 +248,11 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
 **Re-plan 20261115 (PM decision):**
 - Slices 427–429 are dropped and 430–433 added (section "Measurement Slices"). The design and task writer comparison stays with 177's `sq replay`; it needs no new slice.
 - The live runs on squadron in 426 were deleted and replaced by end-to-end tests on a fixture project.
+
+**Relevance review 20261119 (PM decision):**
+- 433 dropped: the hand-maintained SUMMARY.md and ANSWERS.yaml do its job.
+- 432's spike is done (82 flaws in 43 cases); the slice now makes document recall repeatable and covers architecture documents (#373).
+- 436's scope waits on 435's results.
 
 **Open for slice design:**
 - The producer-only mode's flag name and how it reports the stop (424).

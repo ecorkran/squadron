@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261118
+dateUpdated: 20261119
 ---
 
 # Development Log
@@ -10,6 +10,15 @@ dateUpdated: 20261118
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261119
+
+### Slice 434: Recipe Reviews in Pipelines — Tasks Complete (Phase 5)
+
+- Tasks: `project-documents/user/tasks/434-tasks.recipe-reviews-in-pipelines.md` (23 tasks, 256 lines, effort 5/5). Not committed; no review run.
+- Design gaps found against the code, written into the design by Task 1: eight benchmark recipe files stay (not six); `RECIPES_DIR` moves to `benchmark/recall/recipe_dirs.py`; the moved stage-config function takes the template hash (today's `live_stage_config` hardcodes `code`); `ReviewResult.recipe: RecipeReviewInfo` carries the recipe name, completeness and stage section to persistence; reviewer and "not combed" marks are a line in each finding's description; the save→record→abort flow lives once in `recipes/recipe_review.py`; `report --set` becomes optional with `--real-work`.
+- The package is `recipes/` (design), not `review/recipe/` as the 20261118 entry said; recipes are searched project → built-in only.
+- Task 23 runs live walkthrough steps 4, 5, 7; it needs `OPENROUTER_API_KEY` and Codex credentials.
 
 ## 20261118
 
