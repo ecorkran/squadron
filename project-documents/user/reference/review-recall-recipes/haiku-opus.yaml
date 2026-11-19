@@ -1,0 +1,6 @@
+# One cheap reviewer, one strong comb: tests whether the comb alone gives
+# haiku-solr-luna-opus's noise cut without the second reviewer and luna pass.
+name: haiku-opus
+reviewers: [haiku-xhigh]
+pool: false
+combs: [opus-high]
