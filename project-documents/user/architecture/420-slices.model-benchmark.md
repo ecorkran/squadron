@@ -201,7 +201,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
    - **Relative Effort:** 2/5
 
 15. [ ] **(434) Recipe Reviews in Pipelines** — A pipeline review step takes a 430 recipe by name in place of one model (`review-model: haiku-solr-luna-opus`). Its reviewers run on the real work, its combs filter their findings, and the kept findings (plus the uncombed NOTE and PASS findings) become the review the step acts on: one verdict, one review file, the same revise loop. Each stage's output, cost and kept/dropped decisions are recorded in the metrology store, keyed by run id, so every real P6 run that uses a recipe also leaves a record of it. Stages run one after another (#372). Can be built alongside 431.
-   - **Value:** User-facing. Real slices get the review that finds the most known bugs instead of one model, and recipe cost and finding counts come from real work with no hand-run benchmark.
+   - **Value:** User-facing. Real slices get a review whose comb cuts the noise the reviser has to chase (430's live run, 20261118: no recipe found more bugs than haiku-xhigh alone, but haiku-solr-luna-opus halved the findings and cut those matching no known bug from 229 to 95). Recipe cost, revise rounds and finding counts then come from real work with no hand-run benchmark.
    - **Success Criteria:**
      - A pipeline's `review-model`, a step's `review.model` and `sq review --model` accept a recipe name; a single model alias works as before. A name that is neither fails before the run starts. A pool recipe is refused: its random pick could change the verdict between revise rounds (amended 20261118).
      - The review step's findings are the recipe's kept findings, and its verdict comes from them by the existing verdict rule. A revise round reruns the whole recipe.
@@ -211,6 +211,31 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
    - **Dependencies:** [430, 425] (425 for content sidecars); review step dispatch.
    - **Interfaces:** Consumes 430's recipes and comb stage. Provides per-stage review records on pipeline runs that 431 and 433 read.
    - **Risk Level:** Med (the merged verdict and how a failed stage affects it)
+   - **Relative Effort:** 3/5
+
+16. [ ] **(435) Repeated Reviewers and Finding Dedupe** — A recipe can run the same reviewer several times on one case run (`repeat: 3`) and merge the outputs, and duplicate findings across reviewers or repeats are merged into one issue before combing or counting. A vote filter keeps only issues raised by at least N of the repeats, as a comb that costs no model call beyond the dedupe. Added 20261118 from 430's live data: one haiku-xhigh run finds 35% of the real-bugs-nonsquadron bugs, but the union of its 3 runs finds 11 of 18 (61%), more than any measured recipe, at triple the findings.
+   - **Value:** User-facing. Tests the cheapest known lever on recall (repeat a cheap reviewer) and whether agreement across repeats filters noise as well as an opus-high comb (haiku-opus: 1.4 findings/run, 36 matched nothing, but 15 of haiku's 19 bug hits).
+   - **Success Criteria:**
+     - A recipe declares a repeat count per reviewer. Stored single-review outputs are reused where the store already holds enough samples, and `run` prints the bound for only the missing ones.
+     - Fan-out and repeat outputs pass through a dedupe stage that groups findings naming the same issue; the report gives findings/run both before and after dedupe, and a duplicate never counts twice after it.
+     - A vote filter (`min_votes: N`) keeps an issue only when N or more repeats raised it, and is scored like a comb (kept/dropped per finding, recall lower and upper bounds).
+     - The report compares, on real-bugs-nonsquadron: haiku-xhigh ×1, ×3 union, ×3 vote-2, ×3 + opus-high comb, against haiku-opus and haiku-solr-luna-opus.
+     - 434 recipes in pipelines accept repeat and dedupe, so a production review can use them; a vote filter's verdict is deterministic for a fixed set of stage outputs.
+   - **Dependencies:** [430]; [434] for production use.
+   - **Interfaces:** Extends 430's recipe file, stage identities, scoring and report. Provides deduped finding groups that 436's sequential reviewer can read.
+   - **Risk Level:** Med (dedupe quality: two findings in different words about one bug must merge, two bugs in one file must not)
+   - **Relative Effort:** 3/5
+
+17. [ ] **(436) Focused and Sequential Reviewers** — Two new reviewer shapes in a recipe. **Focused:** a reviewer entry names a focus (a rules file such as correctness, concurrency, error handling, security, tests), sent with the review the way `sq review --rules` sends one, so several cheap reviewers each look at one thing. **Sequential:** a reviewer stage reads the findings of the stages before it and is asked only what they missed; its findings join the merge. Neither shape has been measured: 430's design-review "second pass" was two independent reviews unioned, and the only sequential stages so far are two combs in a row.
+   - **Value:** User-facing. Answers whether a narrow brief lifts cheap models (haiku, mimo, glm-flash) more than repetition does, and whether "find what they missed" beats an independent second reviewer.
+   - **Success Criteria:**
+     - A reviewer entry may carry a focus; the focus file's content is part of the stage identity, so a changed focus never reuses an old output.
+     - A sequential stage names the stages it reads; its prompt carries their deduped findings (435), and it is stored and scored like any reviewer.
+     - The report compares, on real-bugs-nonsquadron: haiku-xhigh with 3–4 focuses against haiku-xhigh ×3 (435), and haiku-xhigh → sequential mimo or sol-r against the same pair in parallel, each with and without the opus-high comb.
+     - 434 recipes in pipelines accept both shapes.
+   - **Dependencies:** [430, 435].
+   - **Interfaces:** Extends 430's recipe file, stage runner and stage identities; reads 435's finding groups.
+   - **Risk Level:** Med (a sequential reviewer that repeats or argues with earlier findings instead of finding new ones)
    - **Relative Effort:** 3/5
 
 ---

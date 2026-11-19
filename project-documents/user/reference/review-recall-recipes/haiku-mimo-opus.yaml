@@ -1,0 +1,6 @@
+# haiku-solr-luna-opus's shape with a cheap OpenRouter second reviewer (mimo) in
+# place of sol-r, and the opus-high comb alone.
+name: haiku-mimo-opus
+reviewers: [haiku-xhigh, mimo]
+pool: false
+combs: [opus-high]
