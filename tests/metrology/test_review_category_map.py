@@ -50,6 +50,15 @@ def test_the_lenient_key_applies() -> None:
     assert result.raw_category == "Error Handling"
 
 
+@pytest.mark.parametrize("member", list(ReviewCategory))
+def test_every_canonical_value_maps_to_itself_with_no_raw_string(member: ReviewCategory) -> None:
+    """Reviews written since normalization carry canonical names; they must not file as other (#338)."""
+    result = map_historical_category(member.value)
+
+    assert result.category is member
+    assert result.raw_category is None
+
+
 @pytest.mark.parametrize("raw", [None, "", "uncategorized", "Uncategorized"])
 def test_missing_and_uncategorized_stay_missing(raw: str | None) -> None:
     result = map_historical_category(raw)

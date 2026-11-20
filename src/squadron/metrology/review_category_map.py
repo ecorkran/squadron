@@ -35,15 +35,22 @@ HISTORICAL_CATEGORIES: dict[str, ReviewCategory] = {
     historical: member for member, strings in _ROWS.items() for historical in strings
 }
 
+#: Canonical ``ReviewCategory`` value to category. Checked before the historical table (#338).
+_CANONICAL_CATEGORIES: dict[str, ReviewCategory] = {member.value: member for member in ReviewCategory}
+
 
 def map_historical_category(raw: str | None) -> NormalizedCategory:
-    """Map one historical category string; a missing or ``uncategorized`` one stays missing."""
+    """Map one category string from a review.
+
+    A canonical ``ReviewCategory`` value maps to itself. A historical string maps through the
+    table. A missing or ``uncategorized`` one stays missing. Anything else is ``other``.
+    """
     if raw is None or not raw.strip():
         return NormalizedCategory(None, None)
     key = lenient_category_key(raw)
     if key == UNCATEGORIZED:
         return NormalizedCategory(None, None)
-    member = HISTORICAL_CATEGORIES.get(key)
+    member = _CANONICAL_CATEGORIES.get(key) or HISTORICAL_CATEGORIES.get(key)
     if member is None:
         return NormalizedCategory(ReviewCategory.OTHER, raw)
     return NormalizedCategory(member, None if raw == member.value else raw)

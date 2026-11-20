@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Building fix or slice cases while `sq benchmark recall run` is running no longer deletes the recall run's working folders.
 - Benchmark sandboxes (recall reviews, replays, fix and slice case qualification) build at commits that declare git submodules instead of failing; submodule folders are left empty. Rebuild fix and slice cases to pick up commits that failed this way.
+- `sq metrology ingest-reviews` files findings under their own category instead of `other` when the review already uses the current category names.
 
 ## [0.24.34] - 20261118
 
