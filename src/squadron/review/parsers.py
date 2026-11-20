@@ -143,7 +143,7 @@ def _extract_verdict(text: str) -> Verdict:
     return _VERDICT_MAP.get(keyword, Verdict.UNKNOWN)
 
 
-def _verdict_from_findings(findings: list[ReviewFinding]) -> Verdict:
+def verdict_from_findings(findings: list[ReviewFinding]) -> Verdict:
     """Derive a verdict from parsed finding severities (#28).
 
     Most-severe-wins over the severity vocabulary the findings already
@@ -998,7 +998,7 @@ def parse_review_output(
         # No provenance to record: the verdict is the caller's, not the parser's.
         verdict_source = None
     elif verdict is Verdict.UNKNOWN and findings:
-        derived = _verdict_from_findings(findings)
+        derived = verdict_from_findings(findings)
         logger.warning(
             "%s review (model=%s) parsed %d finding(s) but no usable "
             "'## Summary' verdict; deriving %s from finding severities. "

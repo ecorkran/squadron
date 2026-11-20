@@ -17,7 +17,7 @@ def _dispatch(name: str, **config: object) -> StepConfig:
 
 def _errors(*steps: StepConfig, params: dict[str, object] | None = None) -> list[tuple[str, str]]:
     definition = PipelineDefinition(name="t", description="t", params=params or {}, steps=list(steps))
-    return [(e.field, e.message) for e in validate_pipeline(definition)]
+    return [(e.field, e.message) for e in validate_pipeline(definition, cwd=".")]
 
 
 def test_reply_from_an_earlier_dispatch_step_is_valid() -> None:

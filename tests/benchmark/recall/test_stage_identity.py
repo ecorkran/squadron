@@ -6,7 +6,6 @@ import dataclasses
 
 import pytest
 
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.scoring import recipe_outputs
 from squadron.benchmark.recall.stage_identity import (
     LiveStageResolver,
@@ -27,6 +26,7 @@ from squadron.metrology.recall_run_models import (
 from squadron.models import aliases
 from squadron.models.aliases import ModelAlias
 from squadron.pipeline.usage_capture import effort_sent_by_profile
+from squadron.recipes.recipe import Recipe
 from squadron.review import templates
 from squadron.review.templates import load_template
 from tests.benchmark.recall.scoring_support import finding, make_case, make_run

@@ -1578,7 +1578,7 @@ class TestNewlineFreeBaseline:
 
         A literal-minded implementation wiring normalization only into the
         findings path (leaving _extract_verdict fed raw text) would also
-        produce PASS here: _verdict_from_findings' most-severe-wins
+        produce PASS here: verdict_from_findings' most-severe-wins
         derivation over 4 non-FAIL/CONCERN findings yields PASS too, with
         fallback_used=True. That would pass every other Part 1 criterion
         while silently missing D3's fix to _extract_verdict itself.

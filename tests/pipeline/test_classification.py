@@ -3,13 +3,14 @@
 Covers:
   - ModelResolver.cascade_candidates() (T3)
   - PipelineClassification property logic (T5)
-  - classify_pipeline() non-pool path (T7)
-  - classify_pipeline() pool path (T9)
+  - classify_pipeline(cwd=".") non-pool path (T7)
+  - classify_pipeline(cwd=".") pool path (T9)
   - Side-effect-freeness regression (T10)
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -36,6 +37,7 @@ from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.steps.collection import EachStepType
 from squadron.pipeline.usage_capture import UsageCapture
+from squadron.recipes.recipe_search import PROJECT_RECIPES_DIR
 
 # ---------------------------------------------------------------------------
 # T1 — SpyPoolBackend and definition builders
@@ -280,7 +282,7 @@ def test_classifies_all_claude_pipeline_as_persistent() -> None:
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(config_default="sonnet")
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert all(s.classification == StepClass.SDK_REQUIRED for s in result.steps)
     assert result.needs_persistent_session is True
@@ -295,7 +297,7 @@ def test_classifies_all_minimax_pipeline_as_claude_free() -> None:
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert all(s.classification == StepClass.NON_SDK for s in result.steps)
     assert result.needs_persistent_session is False
@@ -307,7 +309,7 @@ def test_classifies_review_only_sdk_as_one_shot() -> None:
     steps = [make_step("review", "review-step", {"template": "slice", "model": "sonnet"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert result.steps[0].classification == StepClass.SDK_REQUIRED
     assert result.needs_persistent_session is False
@@ -323,7 +325,7 @@ def test_classifies_mixed_pipeline_per_step() -> None:
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert result.steps[0].classification == StepClass.SDK_REQUIRED
     assert result.steps[1].classification == StepClass.NON_SDK
@@ -340,7 +342,7 @@ def test_cli_override_honored() -> None:
     ]
     pipeline = make_pipeline(steps, model="sonnet")
     resolver = make_resolver(cli_override="minimax31-flash")
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert all(s.classification == StepClass.NON_SDK for s in result.steps)
     assert result.shape == PipelineShape.CLAUDE_FREE
@@ -354,7 +356,7 @@ def test_non_model_steps_skipped() -> None:
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(config_default="sonnet")
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].step_name == "dispatch-step"
@@ -365,7 +367,7 @@ def test_misconfigured_step_raises() -> None:
     pipeline = make_pipeline(steps)
     resolver = make_resolver()  # no model at any level
     with pytest.raises(ClassificationError, match="bad-step"):
-        classify_pipeline(pipeline, resolver)
+        classify_pipeline(pipeline, resolver, cwd=".")
 
 
 def test_step_index_matches_definition_order() -> None:
@@ -377,7 +379,7 @@ def test_step_index_matches_definition_order() -> None:
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 2
     assert result.steps[0].step_index == 0
@@ -392,7 +394,7 @@ def test_one_shot_excludes_non_sdk_review() -> None:
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert result.needs_one_shot_claude is False
     assert result.needs_persistent_session is True
@@ -429,7 +431,7 @@ def test_pool_all_sdk_collapses_to_sdk_required() -> None:
     steps = [make_step("dispatch", "pool-step", {"model": "pool:sdk-pool"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
-    result = classify_pipeline(pipeline, resolver, pool_backend=spy)
+    result = classify_pipeline(pipeline, resolver, pool_backend=spy, cwd=".")
 
     assert result.steps[0].classification == StepClass.SDK_REQUIRED
     assert spy.select_call_count == 0
@@ -440,7 +442,7 @@ def test_pool_all_non_sdk_collapses_to_non_sdk() -> None:
     steps = [make_step("dispatch", "pool-step", {"model": "pool:non-sdk-pool"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
-    result = classify_pipeline(pipeline, resolver, pool_backend=spy)
+    result = classify_pipeline(pipeline, resolver, pool_backend=spy, cwd=".")
 
     assert result.steps[0].classification == StepClass.NON_SDK
     assert spy.select_call_count == 0
@@ -451,7 +453,7 @@ def test_pool_mixed_classifies_as_pool_uncertain() -> None:
     steps = [make_step("dispatch", "pool-step", {"model": "pool:mixed-pool"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
-    result = classify_pipeline(pipeline, resolver, pool_backend=spy)
+    result = classify_pipeline(pipeline, resolver, pool_backend=spy, cwd=".")
 
     assert result.steps[0].classification == StepClass.POOL_UNCERTAIN
     assert result.steps[0].pool_name == "mixed-pool"
@@ -465,7 +467,7 @@ def test_pool_uncertain_strict_treats_as_persistent() -> None:
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
     result = classify_pipeline(
-        pipeline, resolver, pool_backend=spy, policy=PoolClassificationPolicy.STRICT
+        pipeline, resolver, pool_backend=spy, policy=PoolClassificationPolicy.STRICT, cwd="."
     )
 
     assert result.needs_persistent_session is True
@@ -477,7 +479,7 @@ def test_pool_uncertain_lazy_does_not_need_persistent() -> None:
     steps = [make_step("dispatch", "pool-step", {"model": "pool:mixed-pool"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
-    result = classify_pipeline(pipeline, resolver, pool_backend=spy)
+    result = classify_pipeline(pipeline, resolver, pool_backend=spy, cwd=".")
 
     assert result.needs_persistent_session is False
 
@@ -487,7 +489,7 @@ def test_pool_without_backend_raises() -> None:
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
     with pytest.raises(ClassificationError, match="pool backend"):
-        classify_pipeline(pipeline, resolver, pool_backend=None)
+        classify_pipeline(pipeline, resolver, pool_backend=None, cwd=".")
 
 
 # ---------------------------------------------------------------------------
@@ -513,8 +515,8 @@ def test_classification_is_idempotent_and_side_effect_free() -> None:
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
 
-    result_a = classify_pipeline(pipeline, resolver, pool_backend=spy)
-    result_b = classify_pipeline(pipeline, resolver, pool_backend=spy)
+    result_a = classify_pipeline(pipeline, resolver, pool_backend=spy, cwd=".")
+    result_b = classify_pipeline(pipeline, resolver, pool_backend=spy, cwd=".")
 
     # Structural equality (frozen dataclass comparison)
     assert result_a == result_b
@@ -602,7 +604,7 @@ def test_classify_default_policy_is_lazy() -> None:
     steps = [make_step("dispatch", "step-a", {"model": "sonnet"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
     assert result.policy == PoolClassificationPolicy.LAZY
 
 
@@ -610,7 +612,7 @@ def test_classify_explicit_strict_policy() -> None:
     steps = [make_step("dispatch", "step-a", {"model": "sonnet"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver, policy=PoolClassificationPolicy.STRICT)
+    result = classify_pipeline(pipeline, resolver, policy=PoolClassificationPolicy.STRICT, cwd=".")
     assert result.policy == PoolClassificationPolicy.STRICT
 
 
@@ -649,7 +651,7 @@ def _make_fan_out_step(models: object, name: str = "fan-0") -> StepConfig:
 def test_each_sdk_inner_classifies_as_persistent() -> None:
     pipeline = make_pipeline([_make_each_step("sonnet", "each-0")])
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     row = result.steps[0]
@@ -662,7 +664,7 @@ def test_each_sdk_inner_classifies_as_persistent() -> None:
 def test_each_non_sdk_inner_classifies_as_claude_free() -> None:
     pipeline = make_pipeline([_make_each_step("minimax31-flash", "each-0")])
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.NON_SDK
@@ -672,7 +674,7 @@ def test_each_non_sdk_inner_classifies_as_claude_free() -> None:
 def test_loop_sdk_inner_classifies_as_persistent() -> None:
     pipeline = make_pipeline([_make_loop_step("sonnet", "loop-0")])
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.SDK_REQUIRED
@@ -682,7 +684,7 @@ def test_loop_sdk_inner_classifies_as_persistent() -> None:
 def test_fan_out_all_sdk_literal_list() -> None:
     pipeline = make_pipeline([_make_fan_out_step(["sonnet", "sonnet"])])
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.SDK_REQUIRED
@@ -692,7 +694,7 @@ def test_fan_out_all_sdk_literal_list() -> None:
 def test_fan_out_all_non_sdk_literal_list() -> None:
     pipeline = make_pipeline([_make_fan_out_step(["minimax31-flash", "minimax31-flash"])])
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.NON_SDK
@@ -701,7 +703,7 @@ def test_fan_out_all_non_sdk_literal_list() -> None:
 def test_fan_out_mixed_literal_list_is_pool_uncertain() -> None:
     pipeline = make_pipeline([_make_fan_out_step(["sonnet", "minimax31-flash"])])
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.POOL_UNCERTAIN
@@ -711,7 +713,7 @@ def test_fan_out_pool_ref_delegates_to_pool_classify() -> None:
     spy = SpyPoolBackend({"review": _MIXED_POOL})
     pipeline = make_pipeline([_make_fan_out_step("pool:review")])
     resolver = make_resolver(pool_backend=spy)
-    result = classify_pipeline(pipeline, resolver, pool_backend=spy)
+    result = classify_pipeline(pipeline, resolver, pool_backend=spy, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.POOL_UNCERTAIN
@@ -728,7 +730,7 @@ def test_container_with_unregistered_inner_step_type_returns_no_rows() -> None:
     with patch.object(EachStepType, "inner_steps", return_value=[sentinel]):
         pipeline = make_pipeline([_make_each_step("sonnet")])
         resolver = make_resolver()
-        result = classify_pipeline(pipeline, resolver)
+        result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 0
 
@@ -740,7 +742,7 @@ def test_top_level_steps_still_classified_alongside_containers() -> None:
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
-    result = classify_pipeline(pipeline, resolver)
+    result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 2
     container_row = next(r for r in result.steps if r.step_name == "each-0")
@@ -784,7 +786,7 @@ def test_review_step_with_no_cascade_model_falls_back_to_template_model() -> Non
         "squadron.review.templates.get_template",
         return_value=_make_template(model="minimax31-flash"),
     ):
-        result = classify_pipeline(pipeline, resolver)
+        result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.NON_SDK
@@ -805,7 +807,7 @@ def test_review_step_with_no_cascade_and_no_template_model_still_raises() -> Non
         ),
         pytest.raises(ClassificationError, match="no model at any cascade level"),
     ):
-        classify_pipeline(pipeline, resolver)
+        classify_pipeline(pipeline, resolver, cwd=".")
 
 
 def test_loop_container_review_inner_falls_back_to_template_model() -> None:
@@ -826,7 +828,7 @@ def test_loop_container_review_inner_falls_back_to_template_model() -> None:
         "squadron.review.templates.get_template",
         return_value=_make_template(model="minimax31-flash"),
     ):
-        result = classify_pipeline(pipeline, resolver)
+        result = classify_pipeline(pipeline, resolver, cwd=".")
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.NON_SDK
@@ -841,7 +843,7 @@ def test_unknown_alias_via_cli_override_is_rejected() -> None:
     pipeline = make_pipeline([make_step("dispatch", "step-a")])
     resolver = make_resolver(cli_override="glm-flash-low.")
     with pytest.raises(ClassificationError, match="unknown model alias 'glm-flash-low.'"):
-        classify_pipeline(pipeline, resolver)
+        classify_pipeline(pipeline, resolver, cwd=".")
 
 
 def test_unknown_alias_via_param_override_is_rejected() -> None:
@@ -852,9 +854,9 @@ def test_unknown_alias_via_param_override_is_rejected() -> None:
     resolver = make_resolver()
 
     # The YAML default is a good alias, so classifying with defaults passes.
-    classify_pipeline(pipeline, resolver)
+    classify_pipeline(pipeline, resolver, cwd=".")
     with pytest.raises(ClassificationError, match="unknown model alias 'sonet'"):
-        classify_pipeline(pipeline, resolver, params={"review-model": "sonet"})
+        classify_pipeline(pipeline, resolver, params={"review-model": "sonet"}, cwd=".")
 
 
 def test_two_bad_aliases_appear_in_one_error() -> None:
@@ -864,7 +866,7 @@ def test_two_bad_aliases_appear_in_one_error() -> None:
     ]
     pipeline = make_pipeline(steps)
     with pytest.raises(ClassificationError) as excinfo:
-        classify_pipeline(pipeline, make_resolver())
+        classify_pipeline(pipeline, make_resolver(), cwd=".")
     assert "'bad-one'" in str(excinfo.value)
     assert "'bad-two'" in str(excinfo.value)
 
@@ -872,20 +874,24 @@ def test_two_bad_aliases_appear_in_one_error() -> None:
 def test_same_bad_alias_is_listed_once() -> None:
     steps = [make_step("dispatch", "step-a"), make_step("dispatch", "step-b")]
     with pytest.raises(ClassificationError) as excinfo:
-        classify_pipeline(make_pipeline(steps), make_resolver(cli_override="bad-one"))
+        classify_pipeline(make_pipeline(steps), make_resolver(cli_override="bad-one"), cwd=".")
     assert str(excinfo.value).count("unknown model alias 'bad-one'") == 1
 
 
 def test_profile_param_justifies_a_literal_model_id() -> None:
     steps = [make_step("dispatch", "step-a", {"model": "my-literal-model"})]
-    result = classify_pipeline(make_pipeline(steps), make_resolver(), params={"profile": "openrouter"})
+    result = classify_pipeline(
+        make_pipeline(steps), make_resolver(), params={"profile": "openrouter"}, cwd="."
+    )
     assert result.steps[0].resolved_alias == "my-literal-model"
 
 
 def test_pool_candidates_are_not_alias_checked() -> None:
     spy = SpyPoolBackend({"sdk-pool": _SDK_POOL})
     steps = [make_step("dispatch", "pool-step", {"model": "pool:sdk-pool"})]
-    result = classify_pipeline(make_pipeline(steps), make_resolver(pool_backend=spy), pool_backend=spy)
+    result = classify_pipeline(
+        make_pipeline(steps), make_resolver(pool_backend=spy), pool_backend=spy, cwd="."
+    )
     assert result.steps[0].pool_name == "sdk-pool"
 
 
@@ -983,6 +989,7 @@ def test_label_and_classifier_agree(
         make_pipeline([make_step("dispatch", "d", config)], model=pipeline_model),
         resolver,
         pool_backend=spy,
+        cwd=".",
     )
     row = result.steps[0]
     expected = row.resolved_alias or f"pool:{row.pool_name}"
@@ -1030,20 +1037,20 @@ def _review_pipeline(template: str, *, model: str | None = "sonnet") -> Pipeline
 
 def test_unknown_review_template_fails_classification_with_a_suggestion() -> None:
     with pytest.raises(ClassificationError, match="unknown review template 'cod'; did you mean"):
-        classify_pipeline(_review_pipeline("cod"), make_resolver())
+        classify_pipeline(_review_pipeline("cod"), make_resolver(), cwd=".")
 
 
 def test_unknown_template_and_unknown_alias_are_reported_together() -> None:
     pipeline = _review_pipeline("cod", model="glm-flash-low.")
     with pytest.raises(ClassificationError) as raised:
-        classify_pipeline(pipeline, make_resolver())
+        classify_pipeline(pipeline, make_resolver(), cwd=".")
     message = str(raised.value)
     assert "unknown review template 'cod'" in message
     assert "unknown model alias 'glm-flash-low.'" in message
 
 
 def test_template_name_holding_a_placeholder_is_skipped() -> None:
-    result = classify_pipeline(_review_pipeline("{template}"), make_resolver())
+    result = classify_pipeline(_review_pipeline("{template}"), make_resolver(), cwd=".")
     assert len(result.steps) == 1
 
 
@@ -1088,7 +1095,7 @@ def test_every_builtin_pipeline_names_only_known_review_templates() -> None:
     for path in sorted(pipelines_dir.glob("*.yaml")):
         definition = load_pipeline(str(path))
         try:
-            classify_pipeline(definition, make_resolver(pipeline_model="sonnet"))
+            classify_pipeline(definition, make_resolver(pipeline_model="sonnet"), cwd=".")
         except ClassificationError as exc:
             # Other classification errors (e.g. required params with no value here) are not
             # this test's concern; only an unknown template name fails it.
@@ -1111,7 +1118,7 @@ def _config_stub(monkeypatch: pytest.MonkeyPatch, profile: str | None) -> None:
 
 def _classify_review_with_template(template: object, model: str) -> object:
     with patch("squadron.review.templates.get_template", return_value=template):
-        return classify_pipeline(_review_pipeline("code", model=model), make_resolver())
+        return classify_pipeline(_review_pipeline("code", model=model), make_resolver(), cwd=".")
 
 
 def test_literal_id_passes_for_a_review_step_when_default_review_profile_is_set(
@@ -1152,6 +1159,79 @@ def test_non_review_actions_keep_the_run_level_profile_param(
     _config_stub(monkeypatch, "openrouter")  # must not rescue a dispatch step
     pipeline = make_pipeline([make_step("dispatch", "dispatch-0", {"model": _LITERAL_ID})])
     with pytest.raises(ClassificationError, match="unknown model alias"):
-        classify_pipeline(pipeline, make_resolver())
-    result = classify_pipeline(pipeline, make_resolver(), params={"profile": "openrouter"})
+        classify_pipeline(pipeline, make_resolver(), cwd=".")
+    result = classify_pipeline(pipeline, make_resolver(), params={"profile": "openrouter"}, cwd=".")
     assert len(result.steps) == 1
+
+
+# ---------------------------------------------------------------------------
+# Slice 434 D2 — recipe names at the pre-run check
+# ---------------------------------------------------------------------------
+
+
+def _project_recipe(tmp_path: Path, name: str, body: str) -> None:
+    recipes = tmp_path / PROJECT_RECIPES_DIR
+    recipes.mkdir(parents=True, exist_ok=True)
+    (recipes / f"{name}.yaml").write_text(f"name: {name}\n{body}", encoding="utf-8")
+
+
+def test_review_model_recipe_passes_the_pre_run_check() -> None:
+    steps = [make_step("review", "review-step", {"template": "code", "model": "{review-model}"})]
+    pipeline = make_pipeline(steps)
+    pipeline.params["review-model"] = "haiku-xhigh"
+    result = classify_pipeline(
+        pipeline, make_resolver(), params={"review-model": "haiku-sol-opus"}, cwd="."
+    )
+    assert len(result.steps) == 1
+    assert result.steps[0].rationale.startswith("recipe haiku-sol-opus")
+
+
+def test_unknown_review_model_lists_the_recipe_names() -> None:
+    steps = [make_step("review", "review-step", {"template": "code", "model": "no-such-name"})]
+    with pytest.raises(ClassificationError) as excinfo:
+        classify_pipeline(make_pipeline(steps), make_resolver(), cwd=".")
+    message = str(excinfo.value)
+    assert "unknown model alias 'no-such-name'" in message
+    assert "Known recipes:" in message and "haiku-sol-opus" in message
+
+
+def test_recipe_with_unknown_member_fails_naming_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _project_recipe(tmp_path, "ghosted", "reviewers: [haiku-xhigh, no-such-member]\n")
+    monkeypatch.chdir(tmp_path)
+    steps = [make_step("review", "review-step", {"template": "code", "model": "ghosted"})]
+    with pytest.raises(ClassificationError, match="recipe 'ghosted': reviewer 'no-such-member'"):
+        classify_pipeline(make_pipeline(steps), make_resolver(), cwd=".")
+
+
+@pytest.mark.parametrize(
+    ("template", "params", "reason"),
+    [
+        ("code", {"profile": "openrouter"}, "profile 'openrouter' is refused"),
+        ("judge.slice-vs-arch", {}, "judge template"),
+    ],
+)
+def test_recipe_with_explicit_profile_or_judge_template_is_refused(
+    template: str, params: dict[str, object], reason: str
+) -> None:
+    steps = [make_step("review", "review-step", {"template": template, "model": "haiku-sol-opus"})]
+    with pytest.raises(ClassificationError, match=f"recipe 'haiku-sol-opus'.*{reason}"):
+        classify_pipeline(make_pipeline(steps), make_resolver(), params=params, cwd=".")
+
+
+def test_recipe_is_found_in_the_run_cwd_not_the_process_cwd(tmp_path: Path) -> None:
+    """``sq review --max --cwd <repo>`` classifies where the loop will run (434 D1)."""
+    _project_recipe(tmp_path, "local-only", "reviewers: [haiku-xhigh]\n")
+    steps = [make_step("review", "review-step", {"template": "code", "model": "local-only"})]
+    with pytest.raises(ClassificationError, match="unknown model alias 'local-only'"):
+        classify_pipeline(make_pipeline(steps), make_resolver(), cwd=".")
+    result = classify_pipeline(make_pipeline(steps), make_resolver(), cwd=str(tmp_path))
+    assert result.steps[0].rationale.startswith("recipe local-only")
+
+
+def test_tool_less_recipe_step_is_refused_at_the_pre_run_check() -> None:
+    config = {"template": "code", "model": "haiku-sol-opus", "allowed_tools": []}
+    steps = [make_step("review", "review-step", config)]
+    with pytest.raises(ClassificationError, match="recipe 'haiku-sol-opus'.*tool-less review"):
+        classify_pipeline(make_pipeline(steps), make_resolver(), cwd=".")

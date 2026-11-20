@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from squadron.benchmark.recall.label_precedence import ResolvedLabels
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.scoring import RowOutputs, recipe_outputs
 from squadron.benchmark.recall.scoring_metrics import Bounds, row_metrics
 from squadron.benchmark.recall.scoring_select import (
@@ -13,6 +12,7 @@ from squadron.benchmark.recall.scoring_select import (
 )
 from squadron.metrology.recall_label_models import FindingGrade, HitVerdict
 from squadron.metrology.recall_run_models import LIVE_SOURCE, RecallRun
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.scoring_support import StubResolver, finding, make_case, make_run, review
 
 CASE = make_case()  # B1 in src/a.py, B2 in src/b.py

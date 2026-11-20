@@ -12,13 +12,13 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.benchmark.recall.review_output import read_findings
-from squadron.benchmark.recall.stage_command import COMB_ALLOWED_TOOLS, render_findings
 from squadron.cli.commands import benchmark_recall_stage
 from squadron.cli.commands.benchmark_recall import build_recall_app
 from squadron.data import data_dir
 from squadron.metrology.recall_run_models import CombVerdict
 from squadron.models import aliases
 from squadron.models.aliases import ModelAlias
+from squadron.recipes.comb_call import COMB_ALLOWED_TOOLS, render_findings
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.templates import TemplateOutput, load_template
 from tests.benchmark.recall.committed import RESULTS_DIR

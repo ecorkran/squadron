@@ -13,7 +13,7 @@ interfaces:
 - 433
 dateCreated: 20261118
 dateUpdated: 20261119
-status: not_started
+status: complete
 turns: 64
 promptTokens: 7517862
 cachedTokens: 7247104
@@ -152,7 +152,7 @@ Status: decided
 - `resolve_recipe(ref, search_dirs)` takes its directories from the caller. First match wins; when a later directory also holds the name (a project recipe overriding a shipped one), a WARNING names both files. A file found by name that fails to load (bad YAML, unknown key, `name` not matching its stem) raises `RecipeError` with its path; the search never moves on to the next directory.
   - **Production** (`sq review`, pipelines) searches `project-documents/user/recipes/` under the working directory, then `src/squadron/data/recipes/` (shipped). It takes names only, looked up as `<name>.yaml`.
   - **`sq benchmark recall`** searches its existing `RECIPES_DIR` (`user/reference/review-recall-recipes/`), then the shipped directory. It keeps accepting a path, as today.
-- A recipe file's `name` must equal its file stem, checked at load.
+- A recipe file's `name` must equal its file stem, checked at load for every recipe file, including one `sq benchmark recall` is given by path.
 - Shipped recipes: `haiku-solr-luna-opus`, `haiku-sol-luna-opus` and `haiku-sol-opus`. They move from `user/reference/review-recall-recipes/` to `data/recipes/`. None of the three is an alias in `models.toml`.
 - The other eight benchmark recipes stay where they are: `haiku-mimo-opus`, `haiku-opus`, `haiku-sol-pool`, `haiku-xhigh`, `luna`, `sol`, `sonnet-high`, `sonnet`. Five of them (`haiku-xhigh`, `sonnet-high`, `sonnet`, `sol`, `luna`) are named after the alias they wrap, so they must stay out of the production search, where D2 makes a name that is both an alias and a recipe an error.
 - `RECIPES_DIR` stays a constant in `benchmark/recall/`, in `recipe_dirs.py`, with `benchmark_recipe_dirs(repo_root)` (`RECIPES_DIR`, then the shipped directory), which the three benchmark commands pass to `load_recipes`.
@@ -307,7 +307,7 @@ Status: decided
 - No new dependencies. PyYAML and Pydantic as in 430.
 - New config key `review.recipe_stage_slow_s`, default 1800, in the config defaults table. Of the 1,176 hand-run review and comb calls with a recorded duration, the median is 66 s, the 99th percentile 1,564 s and the longest 2,762 s.
 - **Non-functional.**
-  - Stage calls are sequential awaits of the existing review call. The slow-stage warning is one timer per stage call, cancelled when the call returns. File and git work in the runner goes through `asyncio.to_thread`, as the review action's saves do. No load-test tier: no two model calls run at once.
+  - Stage calls are sequential awaits of the existing review call. The slow-stage warning is one timer per stage call, cancelled when the call returns. File and git work in the runner goes through `asyncio.to_thread`, as the review action's saves do. No load-test tier: no two model calls run at once; a load test for the recipe runner and review action is deferred to [#379](https://github.com/ecorkran/squadron/issues/379).
   - **Record size.** The architecture's rule holds: findings stay inline, raw output goes to the `REVIEWS` sidecar. A record holds one recipe's stages. 430's run records, which hold every config's findings for a case run, average 107 KB and peak at 253 KB in the dev store (54 records), so a recipe record is well under that.
   - **Record count.** One record per recipe review executed, not per stage: a review step writes one record per round, bounded by the loop's `max-revisions`. The store reads every file on every query, and this count grows with ordinary use at the rate review files already do.
   - **Cost.** Recording adds no model call. A recipe's spend is its stages' spend, counted under the pipeline cap (D9).
@@ -424,45 +424,58 @@ The plan's 431 and 433 entries now list 434 as a dependency with these contracts
 
 ### Verification Walkthrough
 
-Draft; refined after implementation. Run from the squadron checkout with `uv run sq` until a release carries the change. Steps 1–3 and 6 make no model call.
+Verified 20261119 on the slice branch. Run from the squadron checkout with `uv run sq` until a release carries the change. Steps 1, 2 and 6 make no model call; step 3 makes one review call; steps 4, 5 and 7 are live recipe runs (about $1 each) and need `OPENROUTER_API_KEY` for the `sol-r` and `luna-r` stages.
 
 1. **Recipes resolve by name.**
    ```bash
    ls src/squadron/data/recipes/ project-documents/user/reference/review-recall-recipes/
    uv run sq benchmark recall report --set real-bugs-original --runs 1 --recipe haiku-sol-opus --recipe haiku-xhigh
    ```
-   The three shipped recipes are in `data/recipes/`, the other eight are where they were, and the report prints the same haiku-sol-opus row as 430's walkthrough step 4 (`8/14 | 57%`) and a haiku-xhigh row.
+   `data/recipes/` holds `haiku-sol-luna-opus`, `haiku-sol-opus`, `haiku-solr-luna-opus`; the reference directory still holds the other eight. The report prints the rows it printed before the move, byte for byte (compared with `diff` against output captured before the files moved), including `| haiku-sol-opus [imported 22aa1419] | 10 | 1 | 8/14 | 57% |` and two `haiku-xhigh` rows.
 
 2. **Bad names fail before the run.**
    ```bash
-   uv run sq review code --diff HEAD~1 --model no-such-name --no-save
-   uv run sq run P6 434 -p review-model=no-such-name
+   uv run sq review code --diff HEAD~3 --model no-such-name --no-save
+   uv run sq run P6 434 -p review-model=no-such-name --dry-run
    uv run sq review slice 430 --model haiku-solr-luna-opus --no-save
    ```
-   Each prints an error and exits non-zero with no model call: unknown name (with the known recipes listed), the same at the pipeline pre-run check with no step started, combs refused without a diff.
+   Each exits 1 with no model call:
+   - `Error: unknown model alias 'no-such-name' If this is a literal model ID, set a profile. Known recipes: haiku-sol-luna-opus, haiku-sol-opus, haiku-solr-luna-opus.`
+   - `Error: Pipeline classification failed — unknown model alias 'no-such-name' ...` with the same recipe list.
+   - `Error: recipe 'haiku-solr-luna-opus': comb 'luna-r' needs a diff; template 'slice' has no diff input here`
 
-3. **A single alias is unchanged.** `uv run sq review code --diff HEAD~1 --model haiku-xhigh --no-save -v` runs one review with today's output, from squadron's checkout.
+   Caveats: the range must contain reviewable code, or the existing scope check refuses first (in squadron's checkout `HEAD~1` was a docs-only commit, hence `HEAD~3`). `sq run` without `--dry-run` takes the project run lock, so it refuses while another run holds it; `--dry-run` runs the same pre-run classification.
 
-4. **A recipe review from the CLI (live, four to six calls).** In a small fixture repo with one commit that adds a defect:
+3. **A single alias is unchanged.** `uv run sq review code --diff HEAD~3 --model haiku-xhigh --no-save -v` ran one review (`Review: code  Verdict: CONCERNS  Model: claude-haiku-5-5`, about $0.42) with today's output and no recipe section.
+
+4. **A recipe review from the CLI (live, six calls).** In a temp fixture repo whose last commit turns `total -= amount` into `total += amount` in a debit branch, with `sq config set metrology.project_id fixture-434 --project` so records can be keyed (a repo with no git remote and no recorded id gets `recipe record: not written`):
    ```bash
-   uv run sq review code --diff HEAD~1 --model haiku-solr-luna-opus -v
-   uv run sq review code --diff HEAD~1 --model haiku-solr-luna-opus --no-save --output json > /tmp/recipe-review.json
+   uv run sq review code --diff HEAD~1 --model haiku-solr-luna-opus -v --cwd <fixture>
+   uv run sq review code --diff HEAD~1 --model haiku-solr-luna-opus --no-save --output json --cwd <fixture> > /tmp/recipe-review.json
    ```
-   The first prints the stage table (two reviews, up to four combs) with findings, kept, dropped and cost per stage, then the merged verdict. The second writes the merged review's JSON document from stdout.
+   The first exits 2 (FAIL) and prints both reviewers' kept FAIL finding on the debit sign, each ending `Reviewer: haiku-xhigh` / `Reviewer: sol-r`, then the "Recipe" table: `review haiku-xhigh` 3 findings, `comb haiku-xhigh > luna-r` kept 1 / dropped 2, `comb haiku-xhigh > luna-r > opus-high` kept 1, `review sol-r` 1 finding, its two combs kept 1 each; about $0.97 in total. Without a slice number the review file is not saved (the existing rule for slice-less code reviews). The second writes a JSON document with `verdict: FAIL`, `model: haiku-solr-luna-opus` and the single-model key set.
 
-5. **A recipe review in a revise loop (live).** In the same fixture, registered with cf:
+   Caveat: the review parser logs one WARNING per comb call (`comb review ... produced no usable '## Summary' verdict`), because comb output is decision lines, not a review. The decisions are parsed correctly; the line is noise.
+
+5. **A recipe review in a revise loop (live).** The same fixture registered with cf (`cf init --lite`, a slice plan listing slice 100, `100-slice.ledger-fix.md`, and branch `100-slice.ledger-fix` holding the defect commit on top of `main`):
    ```bash
    uv run sq review code 100 --model haiku-solr-luna-opus --max 1
    ```
-   One review file is written with `aiModel: haiku-solr-luna-opus`, `aiRecipe: true` and the stage table. If the verdict is not PASS, the reviser runs once and the recipe runs again in full. `sq runs` shows the review step's cost as the recipe total.
+   Output: `review FAIL (3)  project-documents/user/reviews/100-review.code.ledger-fix.md`, the reviser (sonnet) fixed the sign, the whole recipe ran again, `round 1 PASS (3) committed ...`, `final: PASS after 1 round`. The review file has `aiModel: haiku-solr-luna-opus`, `aiRecipe: true`, `recipeComplete: true` and one `## Recipe` section.
+
+   Correction: `sq review --max` runs its pipeline in a scratch runs directory (slice 941), so `sq runs` does not list it. The step's usage record carrying the recipe total is asserted by `tests/pipeline/actions/test_review_recipe.py` (usage record and `--max-cost` tests); the records in step 6 carry each review's cost.
 
 6. **The records.**
    ```bash
-   uv run sq benchmark recall report --real-work
+   cd <fixture> && uv run sq benchmark recall report --real-work
    ```
-   One `haiku-solr-luna-opus` row with the reviews from steps 4 and 5, their raw, kept and dropped counts and cost per review.
+   `Real work: 4 recipe reviews in 1 rows.` and one row `| haiku-solr-luna-opus [c30cea42] | 4 | 0 (0) | 4.0 | 1.5 | 2.5 | 0.0 | PASS 1 CONCERNS 0 FAIL 3 UNKNOWN 0 | $0.74 (0) |` (the two step 4 reviews and the two step 5 rounds).
 
-7. **A failed stage.** With `OPENROUTER_API_KEY` unset, repeat step 4's first command. Both reviewers' aliases are checked first; the haiku-xhigh stage runs, the sol-r stage and the luna-r combs are recorded as failed with the provider's reason, and the result follows D5: FAIL with `complete: false` when haiku-xhigh's findings are kept, otherwise UNKNOWN and exit 1. The review file names the failed stages either way.
+7. **A failed stage.** With `OPENROUTER_API_KEY` unset:
+   ```bash
+   env -u OPENROUTER_API_KEY uv run sq review code --diff HEAD~1 --model haiku-solr-luna-opus --cwd <fixture>
+   ```
+   Every member alias passes the name check; the `haiku-xhigh` review ran, `comb haiku-xhigh > luna-r` and `review sol-r` were recorded `harness_failure` with the provider's 401 reason (each logged at WARNING), and the result followed D5: nothing was kept, so the verdict is UNKNOWN, `Recipe haiku-solr-luna-opus is incomplete with nothing kept.` lists both failed stages, and the command exits 1. (By this point the fixture's `HEAD~1` was the reviser's fix, so haiku-xhigh's findings were PASS/NOTE plus one finding the opus-high comb dropped.)
 
 ## Risk Assessment
 

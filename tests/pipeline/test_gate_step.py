@@ -282,7 +282,7 @@ class TestGateExpandPerPolicy:
 
 
 class TestValidatePipelineGateReferences:
-    """validate_pipeline() catches a gate naming a nonexistent or later step
+    """validate_pipeline(cwd=".") catches a gate naming a nonexistent or later step
     at load time — distinct from GateAction's execute-time UNKNOWN fallback."""
 
     def _make_pipeline(
@@ -302,7 +302,7 @@ class TestValidatePipelineGateReferences:
                 ),
             ]
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         fields = [e.field for e in errors]
         assert "steps[compose-gate].judge_from" in fields
         assert "steps[compose-gate].review_from" in fields
@@ -329,7 +329,7 @@ class TestValidatePipelineGateReferences:
                 ),
             ]
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         fields = [e.field for e in errors]
         # Both names exist in the pipeline but run AFTER the gate — still invalid.
         assert "steps[compose-gate].judge_from" in fields
@@ -357,7 +357,7 @@ class TestValidatePipelineGateReferences:
                 ),
             ]
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         gate_errors = [e for e in errors if "compose-gate" in e.field]
         assert gate_errors == []
 
@@ -380,7 +380,7 @@ class TestValidatePipelineGateReferences:
                 ),
             ]
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert "steps[settled].review_from" in [e.field for e in errors]
 
     def test_findings_addressed_prior_review_validates_clean(self) -> None:
@@ -400,7 +400,7 @@ class TestValidatePipelineGateReferences:
                 ),
             ]
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert [e for e in errors if "settled" in e.field] == []
 
     def test_param_placeholder_source_skipped(self) -> None:
@@ -418,6 +418,6 @@ class TestValidatePipelineGateReferences:
             ],
             params={"judge_step": "judge-slice", "review_step": "review-slice"},
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         gate_errors = [e for e in errors if "compose-gate" in e.field]
         assert gate_errors == []

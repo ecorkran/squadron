@@ -13,17 +13,11 @@ from squadron.core.models import Effort
 from squadron.core.usage import CostBasis
 from squadron.metrology.recall_run_models import RecallFinding, StageUsage, content_key
 from squadron.metrology.review_category_map import map_historical_category
-
-FINDING_ID_PREFIX = "F"
+from squadron.recipes.comb_call import finding_id_at
 
 
 class ReviewOutputError(ValueError):
     """The document lacks a field the reader needs, or a field has the wrong shape."""
-
-
-def finding_id_at(index: int) -> str:
-    """The positional finding id of the finding at *index* (0-based) in ``findings``."""
-    return f"{FINDING_ID_PREFIX}{index + 1}"
 
 
 def read_findings(data: Mapping[str, Any]) -> tuple[RecallFinding, ...]:

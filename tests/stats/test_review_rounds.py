@@ -118,3 +118,13 @@ def test_git_call_count_is_two_plus_the_versions_read(review_repo: StatsRepo) ->
 
     assert len(runner.calls) == 2 + 3
     assert [call[0] for call in runner.calls].count("show") == 3
+
+
+def test_recipe_review_round_is_listed_under_the_recipe_name(stats_repo: StatsRepo) -> None:
+    front = (
+        "docType: review\nverdict: FAIL\naiModel: haiku-sol-opus\naiRecipe: true\nrecipeComplete: false"
+    )
+    stats_repo.commit("init", {"README.md": "x\n"}, _T1)
+    stats_repo.commit("recipe review", {_REVIEW: f"---\n{front}\n---\n\nBody\n"}, _T2)
+    result = review_rounds(_history(stats_repo), 176, "tasks")
+    assert [r.model for r in result.rounds] == ["haiku-sol-opus"]

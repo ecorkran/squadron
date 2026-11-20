@@ -13,7 +13,6 @@ import itertools
 from collections import Counter
 from dataclasses import dataclass, field
 
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.scoring_select import (
     StageIdentity,
     StageIdentityResolver,
@@ -30,10 +29,9 @@ from squadron.metrology.recall_run_models import (
     StageEntry,
     StageOutcome,
 )
-from squadron.review.models import Severity
+from squadron.recipes.recipe import Recipe
+from squadron.review.models import SCORED_SEVERITIES
 
-#: The finding severities a recipe's output is scored on.
-SCORED_SEVERITIES = frozenset({Severity.CONCERN.value, Severity.FAIL.value})
 HARNESS_DROP = "harness"
 LEAK_DROP_PREFIX = "leak:"
 _ROW_KEY_DIGITS = 8

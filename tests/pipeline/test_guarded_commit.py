@@ -207,7 +207,7 @@ def test_prompt_only_refuses_the_commit_step() -> None:
 
     with pytest.raises(PromptOnlyUnsupportedError, match="sq run"):
         render_step_instructions(
-            step, step_index=0, total_steps=1, params={}, resolver=MagicMock(), run_id="run-1"
+            step, step_index=0, total_steps=1, params={}, resolver=MagicMock(), run_id="run-1", cwd="."
         )
 
 

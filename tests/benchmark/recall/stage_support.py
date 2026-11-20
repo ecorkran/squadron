@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.run_plan import PendingStage, expand_pending
 from squadron.benchmark.recall.stage_ingest import IngestContext
 from squadron.benchmark.recall.stage_runner import StageContext, StageDeps
@@ -19,6 +18,7 @@ from squadron.core.process_runner import ProcessResult
 from squadron.metrology.content_sidecars import ContentSidecars, SidecarKind
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_run_models import RecallLeakVerdict, StageConfig, StageKind
+from squadron.recipes.recipe import Recipe
 from squadron.replay.history_free_sandbox import SandboxError
 from tests.benchmark.recall.support import FIXED_NOW
 from tests.benchmark.support import RunnerCall, ScriptedRunner, ok

@@ -18,7 +18,7 @@ from squadron.benchmark.recall.kinds import KindContext, registered_kind
 from squadron.benchmark.recall.leak_check import LeakInputs, TranscriptLeakChecker
 from squadron.benchmark.recall.live_services import LiveRunServices
 from squadron.benchmark.recall.recall_services import RecallServices
-from squadron.benchmark.recall.recipe import Recipe
+from squadron.benchmark.recall.recipe_dirs import RECIPES_DIR
 from squadron.benchmark.recall.run_loop import KindSandboxFactory
 from squadron.benchmark.recall.run_plan import expand_pending
 from squadron.benchmark.recall.scoring_select import StageIdentity
@@ -30,6 +30,7 @@ from squadron.core.process_runner import SubprocessRunner
 from squadron.metrology.recall_case_models import RealBugCase, RecallCaseKind
 from squadron.metrology.recall_run_models import RecallLeakVerdict, RecallRun, StageKind, StageOutcome
 from squadron.providers.base import ProfileName
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.fixtures.bug_repo.build import BUG_FILE, BuiltBugRepo
 from tests.benchmark.recall.scoring_support import make_case
 from tests.benchmark.recall.stage_support import harness_env, live_config_for
@@ -143,6 +144,12 @@ def test_two_reviews_with_verdicts_and_a_leak_dropped_from_report(
     assert report.exit_code == 0, report.output
     assert "| rev | 1 | 1 |" in report.output
     assert "Dropped (leak): 1 (leaked 1)" in report.output
+    bench_dir = tmp_path / RECIPES_DIR
+    bench_dir.mkdir(parents=True)
+    (bench_dir / "rev.yaml").write_text("name: rev\nreviewers: [rev]\n", encoding="utf-8")
+    by_name = invoke_recall(services, "report", "--set", "fixture", "--recipe", "rev", "--runs", "1")
+    assert by_name.exit_code == 0, by_name.output
+    assert "| rev | 1 | 1 |" in by_name.output
 
 
 class StubKind:

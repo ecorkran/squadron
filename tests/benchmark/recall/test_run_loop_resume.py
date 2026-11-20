@@ -10,7 +10,6 @@ import pytest
 
 from squadron.benchmark.grade_budget import ReviewBudget
 from squadron.benchmark.recall.recall_store import RecallRecordStore
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.run_bound import build_run_bound
 from squadron.benchmark.recall.run_loop import LoopResult, LoopStatus, live_loop_deps, run_pending
 from squadron.benchmark.recall.run_plan import PendingStage, expand_pending
@@ -18,6 +17,7 @@ from squadron.benchmark.recall.stage_runner import stage_paths
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.recall_run_models import RecallRun, StageKind, StageOutcome
 from squadron.metrology.store import MetrologyStore
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.scoring_support import make_case
 from tests.benchmark.recall.stage_support import (
     FakeSandboxes,

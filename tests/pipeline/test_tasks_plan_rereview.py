@@ -51,7 +51,7 @@ def test_tasks_plan_keeps_existing_tasks_and_validates() -> None:
     tasks_step = next(s["tasks"] for s in body if "tasks" in s)
 
     assert tasks_step["existing"] == "keep"
-    assert validate_pipeline(definition) == []
+    assert validate_pipeline(definition, cwd=".") == []
 
 
 @pytest.mark.asyncio

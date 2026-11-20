@@ -19,11 +19,13 @@ from squadron.metrology.models import (
     RECORD_TYPE_RECALL_CASE_SET,
     RECORD_TYPE_RECALL_LABELS,
     RECORD_TYPE_RECALL_RUN,
+    RECORD_TYPE_RECIPE_REVIEW,
     MetrologyRecord,
 )
 from squadron.metrology.recall_case_models import RealBugCase, RecallCaseSet, case_set_id
 from squadron.metrology.recall_label_models import RecallLabels, labels_record_id
 from squadron.metrology.recall_run_models import RecallRun, run_record_id
+from squadron.metrology.recipe_review_models import RecipeReview
 from squadron.metrology.store import MetrologyStore, SchemaVersionError
 
 _logger = logging.getLogger(__name__)
@@ -153,6 +155,11 @@ class RecallRecordStore:
             if r.recall_labels and (wanted is None or r.recall_labels.case_id in wanted)
         ]
         return sorted(found, key=lambda item: (item.case_id, item.labeler))
+
+    def list_recipe_reviews(self) -> list[RecipeReview]:
+        """Every ``recipe_review`` record (slice 434 D8), oldest first."""
+        found = [r.recipe_review for r in self._iter(RECORD_TYPE_RECIPE_REVIEW) if r.recipe_review]
+        return sorted(found, key=lambda record: record.created)
 
     # ---------------------------------------------------------------- helpers
 

@@ -233,7 +233,9 @@ async def _run(
         )
         return EXIT_RUN_FAILED
     try:
-        classification = classify_for_run(definition, model_override=None, params=params, strict=False)
+        classification = classify_for_run(
+            definition, model_override=None, params=params, strict=False, cwd=cwd
+        )
     except ClassificationError as exc:
         typer.echo(f"Error: pipeline classification failed: {exc}", err=True)
         return EXIT_RUN_FAILED

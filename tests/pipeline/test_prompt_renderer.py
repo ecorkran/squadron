@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -215,6 +216,19 @@ class TestRenderReview:
         assert "152" in result.command
         assert result.command == "sq review slice 152 --model glm5"
 
+    def test_recipe_model_renders_by_name_without_resolving(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        resolver = MagicMock()
+        with caplog.at_level(logging.DEBUG, logger="squadron.pipeline.prompt_renderer"):
+            result = _render_review(
+                {"template": "code", "model": "haiku-sol-opus"}, {"slice": "434"}, resolver
+            )
+        assert result.command == "sq review code 434 --model haiku-sol-opus"
+        assert result.model == "haiku-sol-opus"
+        resolver.resolve.assert_not_called()
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
 
 class TestRenderReviewVerbosity:
     @pytest.mark.parametrize(
@@ -348,6 +362,7 @@ class TestRenderBranch:
             params={"slice": "152"},
             resolver=_make_resolver(),
             run_id="run-test",
+            cwd=".",
         )
 
         assert [a.command for a in result.actions] == ["sq _branch merge --slice 152"]
@@ -562,6 +577,7 @@ class TestRenderStepInstructions:
             params={"slice": "152"},
             resolver=resolver,
             run_id="run-test",
+            cwd=".",
         )
 
         assert result.run_id == "run-test"
@@ -619,6 +635,7 @@ class TestRenderStepInstructions:
             params={"slice": "152"},
             resolver=resolver,
             run_id="run-test",
+            cwd=".",
         )
 
         assert len(result.actions) == 1
@@ -637,12 +654,7 @@ class TestRenderStepInstructions:
         )
 
         result = render_step_instructions(
-            step,
-            step_index=2,
-            total_steps=6,
-            params={},
-            resolver=resolver,
-            run_id="run-test",
+            step, step_index=2, total_steps=6, params={}, resolver=resolver, run_id="run-test", cwd="."
         )
 
         assert len(result.actions) == 1
@@ -668,6 +680,7 @@ class TestRenderStepInstructions:
             params={"slice": "152"},
             resolver=resolver,
             run_id="run-test",
+            cwd=".",
         )
 
         assert len(result.actions) == 1
@@ -694,6 +707,7 @@ class TestRenderStepInstructions:
             params={"slice": "152"},
             resolver=resolver,
             run_id="run-test",
+            cwd=".",
         )
 
         assert [a.action_type for a in result.actions] == ["devlog", "commit"]
@@ -711,12 +725,7 @@ class TestRenderStepInstructions:
         )
 
         result = render_step_instructions(
-            step,
-            step_index=0,
-            total_steps=1,
-            params={},
-            resolver=resolver,
-            run_id="run-test",
+            step, step_index=0, total_steps=1, params={}, resolver=resolver, run_id="run-test", cwd="."
         )
 
         types = [a.action_type for a in result.actions]
@@ -736,12 +745,7 @@ class TestRenderStepInstructions:
         )
 
         result = render_step_instructions(
-            step,
-            step_index=0,
-            total_steps=1,
-            params={},
-            resolver=resolver,
-            run_id="run-test",
+            step, step_index=0, total_steps=1, params={}, resolver=resolver, run_id="run-test", cwd="."
         )
 
         raw = result.to_json()
@@ -800,12 +804,7 @@ def test_executor_only_step_warns_that_prompt_only_skips_it(
         caplog.at_level(logging.WARNING, logger="squadron.pipeline.prompt_renderer"),
     ):
         instructions = render_step_instructions(
-            step,
-            step_index=0,
-            total_steps=1,
-            params={},
-            resolver=MagicMock(),
-            run_id="r1",
+            step, step_index=0, total_steps=1, params={}, resolver=MagicMock(), run_id="r1", cwd="."
         )
 
     assert instructions.actions == []
@@ -826,7 +825,7 @@ def test_other_empty_step_does_not_warn(caplog: pytest.LogCaptureFixture) -> Non
         caplog.at_level(logging.WARNING, logger="squadron.pipeline.prompt_renderer"),
     ):
         render_step_instructions(
-            step, step_index=0, total_steps=1, params={}, resolver=MagicMock(), run_id="r1"
+            step, step_index=0, total_steps=1, params={}, resolver=MagicMock(), run_id="r1", cwd="."
         )
 
     assert not caplog.records

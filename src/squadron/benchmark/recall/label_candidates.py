@@ -14,14 +14,15 @@ from datetime import datetime
 from squadron.benchmark.recall.hit_rule import HitOutcome, resolve
 from squadron.benchmark.recall.label_precedence import ResolvedLabels
 from squadron.benchmark.recall.recall_store import RecallRecordStore
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.benchmark.recall.report_build import resolved_labels
-from squadron.benchmark.recall.scoring import SCORED_SEVERITIES, recipe_outputs
+from squadron.benchmark.recall.scoring import recipe_outputs
 from squadron.benchmark.recall.scoring_select import StageIdentityResolver
 from squadron.metrology.recall_case_models import KnownBug, RealBugCase
 from squadron.metrology.recall_label_models import HitVerdict, LabelerKind, RecallLabels, labeler_name
 from squadron.metrology.recall_run_models import RecallFinding, RecallRun
+from squadron.recipes.recipe import Recipe
+from squadron.review.models import SCORED_SEVERITIES
 
 ALL_STORED = "(stored reviews)"
 

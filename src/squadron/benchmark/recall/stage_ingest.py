@@ -17,10 +17,8 @@ from typing import Any, cast
 
 from pydantic import TypeAdapter
 
-from squadron.benchmark.recall.decisions import parse_decisions
 from squadron.benchmark.recall.review_output import (
     ReviewOutputError,
-    finding_id_at,
     read_effort,
     read_findings,
     read_usage,
@@ -39,6 +37,8 @@ from squadron.metrology.recall_run_models import (
     StageUsage,
 )
 from squadron.pipeline.usage_capture import effort_sent_by_profile
+from squadron.recipes.comb_call import finding_id_at
+from squadron.recipes.decisions import parse_decisions
 from squadron.review.models import Verdict
 
 _logger = logging.getLogger(__name__)

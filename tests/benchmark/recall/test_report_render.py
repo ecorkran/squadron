@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from squadron.benchmark.recall.label_precedence import ResolvedLabels
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.report_render import ReportData, ReportRow, render_text
 from squadron.benchmark.recall.scoring import recipe_outputs
 from squadron.benchmark.recall.scoring_metrics import row_metrics
@@ -13,6 +12,7 @@ from squadron.core.models import Effort
 from squadron.metrology.recall_case_models import RecallCaseSet
 from squadron.metrology.recall_label_models import HitVerdict
 from squadron.metrology.recall_run_models import RecallRun, StageEntry
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.scoring_support import finding, make_case, make_run, review
 from tests.benchmark.recall.support import FIXED_NOW
 

@@ -28,17 +28,17 @@ def test_builtin_pipelines_found() -> None:
 @pytest.mark.parametrize("name", _BUILTIN_PIPELINES)
 def test_builtin_pipeline_validates_and_classifies(name: str) -> None:
     definition = load_pipeline(name)
-    assert validate_pipeline(definition) == []
+    assert validate_pipeline(definition, cwd=".") == []
 
     pool_backend = DefaultPoolBackend()
     resolver = ModelResolver(pipeline_model=definition.model, pool_backend=pool_backend)
-    classify_pipeline(definition, resolver, pool_backend)
+    classify_pipeline(definition, resolver, pool_backend, cwd=".")
 
 
 @pytest.mark.parametrize("name", _BUILTIN_PIPELINES)
 def test_builtin_pipeline_passes_strict_validation(name: str) -> None:
     """Slice 949 Success Criterion 8: no built-in carries a key its step type ignores."""
-    assert validate_pipeline(load_pipeline(name), strict=True) == []
+    assert validate_pipeline(load_pipeline(name), strict=True, cwd=".") == []
 
 
 def test_implement_plan_params_and_shape() -> None:
@@ -131,5 +131,5 @@ def test_a_pipeline_with_a_squash_step_is_told_to_delete_it() -> None:
         params={},
         steps=[StepConfig(step_type="squash", name="squash-0", config={})],
     )
-    messages = [e.message for e in validate_pipeline(definition)]
+    messages = [e.message for e in validate_pipeline(definition, cwd=".")]
     assert any("removed in 0.24.12" in m and "delete it" in m for m in messages)

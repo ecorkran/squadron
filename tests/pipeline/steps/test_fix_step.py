@@ -137,7 +137,7 @@ def test_builtin_fix_pipeline_loads_and_passes_strict_validation() -> None:
         "commit-to": "target",
     }
     assert [step.step_type for step in definition.steps] == ["fix"]
-    assert validate_pipeline(definition, strict=True) == []
+    assert validate_pipeline(definition, strict=True, cwd=".") == []
     assert any_step_needs_context_forge(definition.steps) is False
 
 

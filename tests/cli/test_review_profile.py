@@ -572,7 +572,7 @@ class TestUnknownAliasGuard:
             steps=[StepConfig(step_type="dispatch", name="d", config={})],
         )
         with pytest.raises(ClassificationError) as excinfo:
-            classify_pipeline(definition, ModelResolver(cli_override=bad_alias))
+            classify_pipeline(definition, ModelResolver(cli_override=bad_alias), cwd=".")
 
         # Rich wraps long lines, so compare with whitespace collapsed.
         assert str(excinfo.value) in " ".join(review_out.split())

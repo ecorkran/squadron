@@ -12,6 +12,7 @@ from pathlib import Path
 
 from squadron.core.usage import CostBasis, TokenUsage, UsageRecord
 from squadron.models.aliases import get_all_aliases
+from squadron.review.persistence import AI_RECIPE_KEY
 from squadron.review.run_cost import (
     KEY_CACHE_WRITE_TOKENS,
     KEY_CACHED_TOKENS,
@@ -40,9 +41,14 @@ def record_from_frontmatter(path: Path, front: Mapping[str, object]) -> UsageRec
     tokens = TokenUsage(**{name: _int(path, front, key) for name, key in _INT_KEYS.items()})
     requested = frontmatter_text(front, "requestedModel")
     effort = frontmatter_text(front, "effort")
+    model = frontmatter_text(front, "aiModel")
+    alias = requested if requested in get_all_aliases() else None
+    if front.get(AI_RECIPE_KEY) is True:
+        # Slice 434 D7, D9: aiModel is a recipe name, which has no single model.
+        model, alias = None, frontmatter_text(front, "aiModel")
     return UsageRecord(
-        model=frontmatter_text(front, "aiModel"),
-        alias=requested if requested in get_all_aliases() else None,
+        model=model,
+        alias=alias,
         profile=frontmatter_text(front, "aiProfile"),
         effort=effort,
         turns=_int(path, front, KEY_TURNS),

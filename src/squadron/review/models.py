@@ -32,6 +32,10 @@ class Severity(StrEnum):
     FAIL = "FAIL"
 
 
+#: The finding severities a recipe's combs see and a recall run is scored on.
+SCORED_SEVERITIES = frozenset({Severity.CONCERN.value, Severity.FAIL.value})
+
+
 class VerdictSource(StrEnum):
     """Where a review's verdict came from: stated, derived, or imposed.
 
@@ -177,6 +181,19 @@ class FindingScanCounts:
     """Matches that became actual findings after severity validation."""
 
 
+@dataclass(frozen=True)
+class RecipeReviewInfo:
+    """A recipe review's identity on its merged result (slice 434, D6, D7).
+
+    ``stage_section`` is the rendered "Recipe" markdown section (one row per stage), built
+    by ``recipes.recipe_merge``; ``review/`` writes it but never imports ``recipes/``.
+    """
+
+    name: str
+    complete: bool
+    stage_section: str
+
+
 @dataclass
 class ReviewResult:
     """Structured output from a review execution."""
@@ -306,6 +323,8 @@ class ReviewResult:
     # The provider profile the review ran through (slice 940 D6). None on a hand-built
     # result: the artifact omits aiProfile rather than naming a profile nobody chose.
     profile: str | None = None
+    # Set only on a recipe review's merged result (slice 434, D7); not in to_dict().
+    recipe: RecipeReviewInfo | None = None
 
     @property
     def run_cost(self) -> RunCost:

@@ -1,7 +1,7 @@
 """Integration tests for loop: nested-loop validation via validate_pipeline.
 
 Tasks 15-16: verify the nested-loop ban surfaces through the full
-validate_pipeline() path, not just through LoopStepType.validate() directly.
+validate_pipeline(cwd=".") path, not just through LoopStepType.validate() directly.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ def _pipeline_with_loop(loop_cfg: dict[str, object]) -> PipelineDefinition:
 def test_inner_step_with_loop_subfield_fails_validation() -> None:
     """loop: body containing an inner step with loop: sub-field → ValidationError.
 
-    The inner step (review:) carries a loop: sub-field. validate_pipeline()
+    The inner step (review:) carries a loop: sub-field. validate_pipeline(cwd=".")
     must return an error naming the inner step and the violation.
     """
     pipeline = _pipeline_with_loop(
@@ -41,7 +41,7 @@ def test_inner_step_with_loop_subfield_fails_validation() -> None:
         }
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
 
     assert errors, "expected at least one validation error"
     messages = [e.message for e in errors]
@@ -58,7 +58,7 @@ def test_inner_step_with_loop_subfield_fails_validation() -> None:
 def test_inner_loop_step_type_fails_validation() -> None:
     """loop: body containing an inner loop: step type → ValidationError.
 
-    The inner step is itself a loop: type. validate_pipeline() must return
+    The inner step is itself a loop: type. validate_pipeline(cwd=".") must return
     an error naming the inner step and identifying the type violation.
     """
     pipeline = _pipeline_with_loop(
@@ -77,7 +77,7 @@ def test_inner_loop_step_type_fails_validation() -> None:
         }
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
 
     assert errors, "expected at least one validation error"
     messages = [e.message for e in errors]
@@ -116,7 +116,7 @@ def _target_shape(**loop_overrides: object) -> dict[str, object]:
 def test_target_shape_validates_clean() -> None:
     """dispatch + review + findings-addressed gate: the review is consumed by
     the gate, so only the gate's verdict counts toward until:."""
-    errors = validate_pipeline(_pipeline_with_loop(_target_shape()))
+    errors = validate_pipeline(_pipeline_with_loop(_target_shape()), cwd=".")
     assert errors == [], f"expected the target shape to validate clean, got: {errors}"
 
 
@@ -138,7 +138,7 @@ def test_two_reviews_with_gate_naming_one_still_rejects() -> None:
         )
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
     assert any("verdict-bearing" in e.message for e in errors), (
         f"expected ambiguous-verdict error, got: {[e.message for e in errors]}"
     )
@@ -162,7 +162,7 @@ def test_gate_naming_a_step_outside_the_body_rejects() -> None:
         )
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
     messages = [e.message for e in errors]
     assert any("verdict-bearing" in m for m in messages), messages
     assert any("not a step in this loop body" in m for m in messages), messages
@@ -185,7 +185,7 @@ def test_gate_naming_a_later_step_rejects() -> None:
         )
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
     assert any("does not run before it in this loop body" in e.message for e in errors), (
         f"expected an ordering error, got: {[e.message for e in errors]}"
     )
@@ -215,7 +215,7 @@ def test_most_severe_gate_before_its_review_rejects() -> None:
         )
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
     assert any("does not run before it in this loop body" in e.message for e in errors), (
         f"expected an ordering error, got: {[e.message for e in errors]}"
     )
@@ -227,7 +227,7 @@ def test_findings_addressed_without_commit_source_rejects() -> None:
     cfg = _target_shape()
     del cfg["commit_each_iteration"]
 
-    errors = validate_pipeline(_pipeline_with_loop(cfg))
+    errors = validate_pipeline(_pipeline_with_loop(cfg), cwd=".")
     commit_errors = [e for e in errors if e.field == "commit_each_iteration"]
     assert len(commit_errors) == 1, f"got: {[e.message for e in errors]}"
     assert "findings-addressed" in commit_errors[0].message
@@ -255,7 +255,7 @@ def test_phase_bodied_loop_satisfies_the_commit_source_requirement() -> None:
         }
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
     assert [e for e in errors if e.field == "commit_each_iteration"] == [], (
         f"expected no commit-source error, got: {[e.message for e in errors]}"
     )
@@ -281,14 +281,14 @@ def test_most_severe_gate_in_a_loop_needs_no_commit_source() -> None:
         }
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
     assert errors == [], f"expected a most-severe loop to validate clean, got: {errors}"
 
 
 def test_loop_with_two_reviews_and_until_fails_full_pipeline_validation() -> None:
-    """A loop: body with two reviews and until: fails validate_pipeline().
+    """A loop: body with two reviews and until: fails validate_pipeline(cwd=".").
 
-    Exercises the full validate_pipeline() path (not just
+    Exercises the full validate_pipeline(cwd=".") path (not just
     LoopStepType.validate() directly), naming both offending steps.
     """
     pipeline = _pipeline_with_loop(
@@ -302,7 +302,7 @@ def test_loop_with_two_reviews_and_until_fails_full_pipeline_validation() -> Non
         }
     )
 
-    errors = validate_pipeline(pipeline)
+    errors = validate_pipeline(pipeline, cwd=".")
 
     assert errors, "expected at least one validation error"
     messages = [e.message for e in errors]
@@ -320,7 +320,7 @@ def _loop_errors(**loop_cfg: object) -> list[str]:
     cfg: dict[str, object] = {"max": 2, "steps": [{"review": {"template": "slice"}}], **loop_cfg}
     definition = _pipeline_with_loop(cfg)
     definition.params.update({"max-revisions": 3, "pass": "review.pass", "accept": "x"})
-    return [e.field for e in validate_pipeline(definition)]
+    return [e.field for e in validate_pipeline(definition, cwd=".")]
 
 
 def test_accept_if_and_skip_if_met_with_until_validate_clean() -> None:
@@ -362,7 +362,9 @@ def _resolve_messages(resolve: object, **loop_cfg: object) -> list[str]:
         "resolve": resolve,
         **loop_cfg,
     }
-    return [e.message for e in validate_pipeline(_pipeline_with_loop(cfg)) if e.field == "resolve"]
+    return [
+        e.message for e in validate_pipeline(_pipeline_with_loop(cfg), cwd=".") if e.field == "resolve"
+    ]
 
 
 def test_resolve_with_a_dispatch_config_validates_clean() -> None:

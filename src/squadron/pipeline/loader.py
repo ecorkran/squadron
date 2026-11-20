@@ -23,6 +23,13 @@ from squadron.pipeline.branch_rules import implement_branch_errors
 from squadron.pipeline.dispatch_keys import REPLY_FROM_KEY
 from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
 from squadron.pipeline.schema import PipelineSchema
+from squadron.pipeline.steps import StepTypeName
+from squadron.recipes.model_ref import (
+    AliasRef,
+    ReviewModelError,
+    resolve_review_model_ref,
+)
+from squadron.recipes.recipe_search import production_recipe_dirs
 
 _logger = logging.getLogger(__name__)
 
@@ -343,12 +350,13 @@ def validate_pipeline(
     definition: PipelineDefinition,
     *,
     strict: bool = False,
+    cwd: str,
 ) -> list[ValidationError]:
     """Semantic validation of a pipeline definition.
 
     Checks beyond structural schema validation:
     - Step types are registered in the step type registry
-    - Model aliases resolve
+    - Model aliases resolve; a review model may be a recipe found under ``cwd``
     - Review template names exist
     - Param placeholders in step configs reference declared params
     - With ``strict``, no step carries a key its step type does not read
@@ -403,12 +411,18 @@ def validate_pipeline(
         # Validate step-level model alias
         model_val = step.config.get("model")
         if isinstance(model_val, str):
-            _validate_model_alias(
-                model_val,
-                f"steps[{step.name}].model",
-                errors,
-                resolve_model_alias,
-            )
+            if step.step_type == StepTypeName.REVIEW:
+                _validate_review_model(model_val, f"steps[{step.name}].model", errors, cwd)
+            else:
+                _validate_model_alias(
+                    model_val,
+                    f"steps[{step.name}].model",
+                    errors,
+                    resolve_model_alias,
+                )
+        review_model = _review_dict_model(step)
+        if review_model is not None:
+            _validate_review_model(review_model, f"steps[{step.name}].review.model", errors, cwd)
 
         # Validate review template references
         _validate_review_template(step, errors, get_template)
@@ -454,6 +468,40 @@ def _validate_model_alias(
                 action_type="pipeline",
             )
         )
+
+
+def _review_dict_model(step: StepConfig) -> str | None:
+    """The ``model`` of a step's ``review: {template, model}`` block, if it names one."""
+    review_val = step.config.get("review")
+    if not isinstance(review_val, dict):
+        return None
+    model: object = cast(dict[str, Any], review_val).get("model")
+    return model if isinstance(model, str) else None
+
+
+def _validate_review_model(name: str, field: str, errors: list[ValidationError], cwd: str) -> None:
+    """A review model name may be an alias or a recipe (slice 434, D2). Skip placeholders.
+
+    An alias keeps the alias check; a recipe has its member aliases checked. The template
+    and profile refusals run at the pre-run classification, where the step is resolved.
+    """
+    if "{" in name:
+        return
+    try:
+        ref = resolve_review_model_ref(
+            name,
+            profile_source=False,
+            search_dirs=production_recipe_dirs(Path(cwd)),
+            template=None,
+            has_diff=False,
+            explicit_profile=None,
+            no_tools=False,
+        )
+    except ReviewModelError as exc:
+        errors.append(ValidationError(field=field, message=str(exc), action_type="pipeline"))
+        return
+    if isinstance(ref, AliasRef):
+        _validate_model_alias(name, field, errors, None)
 
 
 def _validate_review_template(

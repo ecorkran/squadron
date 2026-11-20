@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.run_plan import PendingStage, expand_pending
 from squadron.benchmark.recall.scoring import recipe_outputs
 from squadron.benchmark.recall.scoring_select import StageIdentity
@@ -25,6 +24,7 @@ from squadron.metrology.recall_run_models import (
     StageKind,
     StageOutcome,
 )
+from squadron.recipes.recipe import Recipe
 from squadron.review.models import Verdict
 from tests.benchmark.recall.scoring_support import StubResolver, make_case
 from tests.benchmark.recall.stage_support import (

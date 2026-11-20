@@ -57,5 +57,5 @@ def test_pipeline_params_block_rejects_the_reserved_key() -> None:
         params={"slice": "required", RUN_PRODUCER_ONLY: "x"},
         steps=[StepConfig(step_type="devlog", name="devlog-0", config={"mode": "auto"})],
     )
-    errors = validate_pipeline(definition)
+    errors = validate_pipeline(definition, cwd=".")
     assert any(e.field == f"params.{RUN_PRODUCER_ONLY}" for e in errors)

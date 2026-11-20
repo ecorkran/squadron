@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from squadron.benchmark.recall.decisions import parse_decisions
 from squadron.metrology.recall_run_models import CombVerdict
+from squadron.recipes.decisions import parse_decisions
 
 FIXTURES = Path(__file__).parent / "fixtures" / "decisions"
 KEEP, DROP, UNDECIDED = CombVerdict.KEEP, CombVerdict.DROP, CombVerdict.UNDECIDED

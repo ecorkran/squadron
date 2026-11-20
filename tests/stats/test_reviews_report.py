@@ -111,3 +111,11 @@ def test_reads_frontmatter_only(reviews: Path) -> None:
     # outside the directory (the alias tables) are not artifact reads.
     artifact_reads = [c for c in read_text.call_args_list if c.args[0].parent == reviews]
     assert len(artifact_reads) == len(list(reviews.glob("*.md")))
+
+
+def test_recipe_review_is_listed_under_the_recipe_name(tmp_path: Path) -> None:
+    _artifact(tmp_path, "1-review.md", aiModel="haiku-sol-opus", aiRecipe="true", costUsd=0.5)
+    (row,) = reviews_usage_report(tmp_path, None).rows
+    assert row.model == "haiku-sol-opus"
+    assert row.record.alias == "haiku-sol-opus" and row.record.model is None
+    assert row.record.cost_usd == 0.5

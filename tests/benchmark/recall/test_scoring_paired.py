@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from squadron.benchmark.recall.label_precedence import ResolvedLabels
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.scoring import RowOutputs, recipe_outputs
 from squadron.benchmark.recall.scoring_paired import (
     MIN_RECALL_PAIRED_CASES,
@@ -16,6 +15,7 @@ from squadron.metrology.grade_models import PairVerdict
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_label_models import HitVerdict
 from squadron.metrology.recall_run_models import RecallRun
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.scoring_support import finding, make_case, make_run, review
 
 BENCH = "s@v1"

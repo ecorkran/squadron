@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from squadron.benchmark.recall.recall_services import RecallServices
+from squadron.benchmark.recall.recipe_dirs import RECIPES_DIR
 from tests.benchmark.recall.scoring_support import finding, make_case, make_run, review
 from tests.benchmark.recall.support import fake_services, invoke_recall
 
@@ -71,3 +72,13 @@ def test_unknown_key_or_bug_is_refused(tmp_path: Path) -> None:
     no_person = invoke_recall(services, "label", "--set", "s", "--hit", OPEN.content_key, "B1", "HIT")
     assert no_person.exit_code == 1 and "--by" in no_person.output
     assert services.store.list_labels() == []
+
+
+def test_recipe_named_without_path_is_found_in_the_benchmark_dir(tmp_path: Path) -> None:
+    services = _services(tmp_path)
+    bench_dir = tmp_path / RECIPES_DIR
+    bench_dir.mkdir(parents=True)
+    (bench_dir / "rev.yaml").write_text("name: rev\nreviewers: [rev]\n", encoding="utf-8")
+    result = invoke_recall(services, "label", "--set", "s", "--recipe", "rev")
+    assert result.exit_code == 0, result.output
+    assert "affects: rev run 1" in result.output

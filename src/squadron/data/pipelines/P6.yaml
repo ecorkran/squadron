@@ -12,6 +12,9 @@ params:
   # the findings while keeping all 8. A review step takes one model, so this default is
   # haiku-xhigh alone; with an OpenAI account or key, `review-model: sol` is the cleaner
   # single reviewer. Data: project-documents/user/reference/review-recall-results/SUMMARY.md.
+  # review-model also takes a recipe name (reviewers plus comb filters, run as one review):
+  # the shipped haiku-solr-luna-opus (needs OPENROUTER_API_KEY), haiku-sol-luna-opus (needs
+  # Codex credits) and haiku-sol-opus. The default stays haiku-xhigh, which needs neither.
   review-model: haiku-xhigh
   max-revisions: "2"
   pass-threshold: review.pass

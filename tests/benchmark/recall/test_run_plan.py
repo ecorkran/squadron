@@ -10,7 +10,6 @@ import pytest
 
 from squadron.benchmark.auth_check import AuthAnswer, AuthCheckResult
 from squadron.benchmark.recall.leak_check import leak_judgeable
-from squadron.benchmark.recall.recipe import Recipe, load_recipe
 from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.benchmark.recall.run_bound import (
     auth_preflight,
@@ -28,7 +27,9 @@ from squadron.metrology.recall_run_models import (
     StageUsage,
 )
 from squadron.providers.base import ProfileName
-from tests.benchmark.recall.committed import RECIPES_DIR, SETS_FILE, committed_cases, parse_sets
+from squadron.recipes.recipe import Recipe, load_recipe
+from squadron.recipes.recipe_search import shipped_recipes_dir
+from tests.benchmark.recall.committed import SETS_FILE, committed_cases, parse_sets
 from tests.benchmark.recall.scoring_support import make_case, review
 from tests.benchmark.recall.stage_support import live_config_for, pending_for
 
@@ -126,7 +127,7 @@ def test_auth_failure_is_error_and_refusal(tmp_path: Path, caplog: pytest.LogCap
 def test_d11_recipe_on_nonsquadron_cases_gives_bound_with_plan_billed_count() -> None:
     cases = committed_cases()
     members = parse_sets(SETS_FILE.read_text(encoding="utf-8"))["real-bugs-nonsquadron"]
-    recipe = load_recipe(RECIPES_DIR / "haiku-sol-luna-opus.yaml")
+    recipe = load_recipe(shipped_recipes_dir() / "haiku-sol-luna-opus.yaml")
     pending = expand_pending([recipe], [cases[m] for m in members], [1], {}, live_stage_config)
     assert len(pending) == 14 * 2 * 3
     with pytest.raises(RecallRefusal, match="--max-plan-calls"):

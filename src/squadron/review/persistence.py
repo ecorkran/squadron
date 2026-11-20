@@ -44,6 +44,10 @@ TASKS_DIR = Path("project-documents/user/tasks")
 #: ``integrations.context_forge.ARCHITECTURE_DIR``.
 SLICES_DIR = Path("project-documents/user/slices")
 
+# Slice 434 D7: frontmatter keys of a recipe review; any reader of aiModel checks aiRecipe.
+AI_RECIPE_KEY = "aiRecipe"
+RECIPE_COMPLETE_KEY = "recipeComplete"
+
 
 class SliceInfo(TypedDict):
     """Resolved slice metadata from Context-Forge."""
@@ -415,6 +419,7 @@ def _review_frontmatter_lines(
     run_cost: RunCost | None = None,
     effort: Effort | None = None,
     profile: str | None = None,
+    recipe_complete: bool | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -475,6 +480,10 @@ def _review_frontmatter_lines(
     # for" with no need to reimplement the D9 equivalence rule.
     if requested_model is not None:
         lines.append(f"requestedModel: {requested_model}")
+    # Slice 434 D7: aiModel above is a recipe name, not a model. Absent on every other review.
+    if recipe_complete is not None:
+        lines.append(f"{AI_RECIPE_KEY}: true")
+        lines.append(f"{RECIPE_COMPLETE_KEY}: {'true' if recipe_complete else 'false'}")
     # Slice 940 D6 (#193): the provider profile the review ran through, absent when
     # unknown. Never a placeholder: a gate must be able to trust a present value.
     if profile is not None:
@@ -577,7 +586,9 @@ def format_review_markdown(
             placeholder, and the resolve path falls back to file history.
     """
     today = result.timestamp.strftime("%Y%m%d")
-    resolved_model = model or result.model or "unknown"
+    recipe = result.recipe
+    # A recipe review has no single model: aiModel is the recipe name (slice 434 D7).
+    resolved_model = recipe.name if recipe is not None else model or result.model or "unknown"
     resolved_verdict = verdict_override or result.verdict.value
     # Keyed on the *resolved* verdict deliberately (design D3): a judge template's raw
     # parse is always UNKNOWN because its verdict is score-derived and arrives as an
@@ -630,13 +641,16 @@ def format_review_markdown(
         ),
         conventions_source=result.conventions_source,
         project_rules=result.project_rules,
-        requested_model=result.requested_model if result.model_substituted else None,
+        requested_model=(
+            result.requested_model if result.model_substituted and recipe is None else None
+        ),
         recovery_turn=result.recovery_turn_used,
         run_id=result.run_id,
         squadron_version=squadron_version,
         run_cost=result.run_cost,
         effort=result.effort,
-        profile=result.profile,
+        profile=result.profile if recipe is None else None,
+        recipe_complete=recipe.complete if recipe is not None else None,
     )
 
     if result.score is not None:
@@ -713,6 +727,10 @@ def format_review_markdown(
             "and this review came from one follow-up prompt"
         )
     lines.append("")
+
+    if recipe is not None:
+        lines.append(recipe.stage_section)
+        lines.append("")
 
     if result.findings:
         lines.append("## Findings")

@@ -13,12 +13,14 @@ from squadron.benchmark.recall.label_candidates import (
     undecided_candidates,
 )
 from squadron.benchmark.recall.recall_services import RecallServices, RecallServicesFactory, recall_lock
-from squadron.benchmark.recall.recipe import RecipeError, load_recipes
+from squadron.benchmark.recall.recipe_dirs import benchmark_recipe_dirs
 from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.cli.commands.benchmark_common import stderr_exit
 from squadron.cli.commands.benchmark_recall_common import REFUSED_ERRORS, open_services
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_label_models import HitVerdict
+from squadron.recipes.recipe import RecipeError
+from squadron.recipes.recipe_search import load_recipes
 
 
 def render_candidate(candidate: Candidate) -> list[str]:
@@ -72,7 +74,7 @@ def run_label(
             )
         typer.echo(f"recorded {verdict.value} for {key} {bug_id} as {record.labeler}")
         return
-    recipes = load_recipes(recipe_refs, services.repo_root)
+    recipes = load_recipes(recipe_refs, benchmark_recipe_dirs(services.repo_root))
     found = undecided_candidates(
         services.store, cases, recipes, list(range(1, runs + 1)), services.stage_resolver
     )
