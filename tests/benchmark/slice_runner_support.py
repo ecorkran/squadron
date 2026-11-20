@@ -29,6 +29,9 @@ CAPS = Caps(run_cap_usd=20.0, per_replay_cap_usd=8.0, per_replay_source="--max-c
 SQ_PATH = "/installed/bin/sq"
 PLAN = "project-documents/user/architecture/500-slices.demo.md"
 PLAN_TEXT = f"# Plan\n\n1. [ ] **({SLICE_INDEX}) Demo** — text. Effort: 2/5\n"
+#: The slice's design at the start commit, as a real fork tree holds it; it names the branch.
+DESIGN = f"project-documents/user/slices/{SLICE_INDEX}-slice.demo.md"
+SLICE_BRANCH = f"{SLICE_INDEX}-slice.demo"
 
 
 def slice_case(
@@ -132,6 +135,8 @@ class SandboxDouble:
         self.created_branches: list[str] = []
         (self.tree / PLAN).parent.mkdir(parents=True)
         (self.tree / PLAN).write_text(PLAN_TEXT)
+        (self.tree / DESIGN).parent.mkdir(parents=True)
+        (self.tree / DESIGN).write_text("# Demo\n")
         run_test_git(self.tree, "init", "-q", "-b", branch)
         run_test_git(self.tree, "add", "-A")
         run_test_git(self.tree, "commit", "-q", "-m", "start")

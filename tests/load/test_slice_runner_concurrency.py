@@ -65,8 +65,12 @@ def test_eight_concurrent_runs_register_under_their_own_homes_and_branches(tmp_p
     assert homes == {str(sandbox.home) for sandbox in sandboxes}  # one home per run, none shared
     registries = {Path(home) / ".config" / "context-forge" for home in homes}
     assert len(registries) == RUNS
-    branches = {sandbox.branch() for sandbox in sandboxes}
-    assert len(branches) == RUNS  # no shared branch
+    # Each sandbox is its own repository, so all sit on the same slice branch name; the
+    # integration target each registers is its own base branch.
+    targets = {
+        c.argv[-1] for c in recorder.calls if c.argv[1:4] == ("config", "set", "git.integration_branch")
+    }
+    assert len(targets) == RUNS
     for sandbox in sandboxes:
         own = [c for c in recorder.calls if c.cwd == str(sandbox.tree)]
         assert len(own) == 3  # init, config set, set arch

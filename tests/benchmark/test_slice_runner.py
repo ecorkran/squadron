@@ -10,14 +10,15 @@ import pytest
 
 from squadron.benchmark.case_runners import FixCaseRunner
 from squadron.benchmark.slice_runner import (
+    BASE_BRANCH_PREFIX,
     CF_TOOLS,
-    SLICE_BRANCH_SUFFIX,
     SLICE_PIPELINE,
     SLICE_PRODUCER_STEP,
     SliceCaseRunner,
 )
 from squadron.core.process_runner import SubprocessRunner
 from squadron.metrology.benchmark_models import BenchmarkCase, CaseKind, CaseProvenance
+from squadron.pipeline.git_ops import branch_work_count
 from squadron.pr.branch import parse_slice_branch
 from squadron.replay.history_free_sandbox import SandboxError
 from tests.benchmark.slice_qualify_support import typical_setup
@@ -25,6 +26,8 @@ from tests.benchmark.slice_repos import two_parent_landing
 from tests.benchmark.slice_runner_support import (
     CAPS,
     CONFIG,
+    DESIGN,
+    SLICE_BRANCH,
     SLICE_INDEX,
     SQ_PATH,
     CfRecorder,
@@ -98,35 +101,55 @@ def test_registration_happens_before_the_producer_and_under_the_same_env(
     assert {call.cwd for call in recorder.calls} == {str(sandbox.tree)}
 
 
-def test_a_tree_on_a_branch_registers_that_branch_and_creates_none(
-    tmp_path: Path, events: Events
-) -> None:
-    recorder, invoker = CfRecorder(events), Invoker(events)
-    sandbox = _sandbox(tmp_path, detached=False, branch=f"{SLICE_INDEX}-slice.existing")
-
-    _runner(tmp_path, recorder, invoker).run(slice_case(), CONFIG, sandbox, CAPS, "implreplay-r1")
-
-    assert sandbox.created_branches == []
+def _registered_target(recorder: CfRecorder) -> str:
     set_branch = next(
         c for c in recorder.calls if c.argv[1:4] == ("config", "set", "git.integration_branch")
     )
-    assert set_branch.argv[-1] == f"{SLICE_INDEX}-slice.existing"
+    return set_branch.argv[-1]
 
 
-def test_a_detached_tree_gets_a_slice_branch_and_registers_it(tmp_path: Path, events: Events) -> None:
+def test_a_tree_on_a_branch_registers_that_branch_and_works_on_the_slice_branch(
+    tmp_path: Path, events: Events
+) -> None:
+    recorder, invoker = CfRecorder(events), Invoker(events)
+    sandbox = _sandbox(tmp_path, detached=False, branch="main")
+
+    _runner(tmp_path, recorder, invoker).run(slice_case(), CONFIG, sandbox, CAPS, "implreplay-r1")
+
+    assert sandbox.created_branches == [SLICE_BRANCH]
+    assert sandbox.branch() == SLICE_BRANCH
+    assert _registered_target(recorder) == "main"
+
+
+def test_a_detached_tree_gets_a_base_target_and_the_branch_cf_names_for_the_slice(
+    tmp_path: Path, events: Events
+) -> None:
     recorder, invoker = CfRecorder(events), Invoker(events)
     sandbox = _sandbox(tmp_path, detached=True, name="sandbox-9")
 
     _runner(tmp_path, recorder, invoker).run(slice_case(), CONFIG, sandbox, CAPS, "implreplay-r1")
 
-    expected = f"{SLICE_INDEX}-slice.{SLICE_BRANCH_SUFFIX}sandbox-9"
-    assert sandbox.created_branches == [expected]
-    assert sandbox.branch() == expected
-    assert parse_slice_branch(expected) == SLICE_INDEX  # what --producer-only checks
-    set_branch = next(
-        c for c in recorder.calls if c.argv[1:4] == ("config", "set", "git.integration_branch")
-    )
-    assert set_branch.argv[-1] == expected
+    base = f"{BASE_BRANCH_PREFIX}sandbox-9"
+    assert sandbox.created_branches == [base, SLICE_BRANCH]
+    assert sandbox.branch() == SLICE_BRANCH
+    assert parse_slice_branch(SLICE_BRANCH) == SLICE_INDEX  # what --producer-only checks
+    assert _registered_target(recorder) == base
+    # P6's implement step counts the slice branch's work against the target before it
+    # dispatches; at the start commit that count must succeed and be zero.
+    assert branch_work_count(SLICE_BRANCH, base, cwd=str(sandbox.tree)) == 0
+
+
+def test_a_tree_without_the_slice_design_is_a_harness_absence_and_no_producer(
+    tmp_path: Path, events: Events
+) -> None:
+    recorder, invoker = CfRecorder(events), Invoker(events)
+    sandbox = _sandbox(tmp_path, detached=True)
+    (sandbox.tree / DESIGN).unlink()
+
+    with pytest.raises(SandboxError, match=f"{SLICE_INDEX}-slice"):
+        _runner(tmp_path, recorder, invoker).run(slice_case(), CONFIG, sandbox, CAPS, "implreplay-r1")
+
+    assert invoker.calls == []
 
 
 def test_a_failing_registration_is_a_harness_absence_with_an_error_log_and_no_producer(

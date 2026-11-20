@@ -24,10 +24,13 @@ from squadron.benchmark.slice_qualify_types import SliceQualifyDeps
 from squadron.core.process_runner import ProcessRunner
 from squadron.metrology.benchmark_environment import EnvironmentIdentity
 from squadron.metrology.benchmark_models import BenchmarkCase
+from squadron.metrology.replay_models import ReplayPhase
+from squadron.pipeline.git_ops import slice_branch_name
 from squadron.pipeline.state import RunState
 from squadron.providers.base import ProfileName
 from squadron.replay.cf_registration import CfRegistration, CfRegistrationError
 from squadron.replay.history_free_sandbox import SandboxError
+from squadron.replay.start_point import artifact_files, artifact_pattern
 
 _logger = logging.getLogger(__name__)
 
@@ -36,9 +39,10 @@ SLICE_PIPELINE = "P6"
 SLICE_PRODUCER_STEP = "implement"
 #: cf is a node script, so the scrubbed ``PATH`` needs ``node`` as well as ``cf`` (Task 10 spike).
 CF_TOOLS = ("cf", "node")
-#: ``sq run --producer-only`` refuses a branch that does not parse as ``{index}-slice.{name}``,
-#: so a detached tree is put on ``{index}-slice.`` + this + the sandbox id.
-SLICE_BRANCH_SUFFIX = "benchmark-"
+#: A detached tree's integration target: a branch at the start commit, named this + the
+#: sandbox id. P6 counts the slice branch's commits against the target, so the target must
+#: be a different branch from the slice branch, holding the start commit.
+BASE_BRANCH_PREFIX = "benchmark-base-"
 
 #: Builds the registration for one environment (the producer's, scrubbed home included).
 RegistrationFactory = Callable[[Mapping[str, str]], CfRegistration]
@@ -103,9 +107,9 @@ class SliceCaseRunner:
         if config.profile is None:
             raise ValueError(f"model alias '{config.alias}' resolves to no provider profile")
         env = sandbox.producer_env(ProfileName(config.profile), CF_TOOLS)
-        branch = self._branch(sandbox, index)
+        target = self._enter_slice_branch(sandbox, index)
         try:
-            self._registration_for(env).register(sandbox.tree, sandbox.tree.name, branch, index)
+            self._registration_for(env).register(sandbox.tree, sandbox.tree.name, target, index)
         except CfRegistrationError as exc:
             # The producer never ran, so replay_one records a harness absence, not the config's.
             _logger.exception(
@@ -132,18 +136,20 @@ class SliceCaseRunner:
         # P6 has no frozen issue text to check; everything else is the fix classification.
         return classify_producer_run(process, state, head_before, head_after, None)
 
-    def _branch(self, sandbox: ReplaySandbox, index: int) -> str:
-        """The branch the tree is on, creating a slice branch when it is detached."""
-        current = self._current_branch(sandbox.tree)
-        if current:
-            return current
-        name = f"{index}-slice.{SLICE_BRANCH_SUFFIX}{sandbox.tree.name}"
-        try:
-            sandbox.checkout_branch(name)
-        except SandboxError:
-            _logger.exception("could not create branch %s for slice %d", name, index)
-            raise
-        return name
+    def _enter_slice_branch(self, sandbox: ReplaySandbox, index: int) -> str:
+        """Put the tree on the slice's branch, as P6's ``branch: enter`` would; return the target.
+
+        The target is the branch the tree was on, or a new base branch when it is detached.
+        The slice branch is named from the design file, the way cf names it, because P6
+        counts that branch's commits against the target before and after the dispatch.
+        """
+        slice_branch = _slice_branch(sandbox.tree, index)
+        target = self._current_branch(sandbox.tree)
+        if not target:
+            target = f"{BASE_BRANCH_PREFIX}{sandbox.tree.name}"
+            _checkout(sandbox, target, index)
+        _checkout(sandbox, slice_branch, index)
+        return target
 
     def _current_branch(self, tree: Path) -> str:
         """``git branch --show-current`` in *tree*; empty for a detached HEAD."""
@@ -154,3 +160,21 @@ class SliceCaseRunner:
         except SliceHarnessError as exc:
             # ``run_git`` logged it; the tree cannot be used.
             raise SandboxError(str(exc)) from exc
+
+
+def _slice_branch(tree: Path, index: int) -> str:
+    """``{index}-slice.{name}`` from the slice's design file in *tree* (the start commit)."""
+    designs = artifact_files(ReplayPhase.DESIGN, index, tree)
+    if not designs:
+        pattern = artifact_pattern(ReplayPhase.DESIGN, index)
+        _logger.error("slice %d: no %s in %s; cannot name its branch", index, pattern, tree)
+        raise SandboxError(f"no {pattern} in {tree}; cannot name the slice branch")
+    return slice_branch_name(index, designs[0].name)
+
+
+def _checkout(sandbox: ReplaySandbox, name: str, index: int) -> None:
+    try:
+        sandbox.checkout_branch(name)
+    except SandboxError:
+        _logger.exception("could not create branch %s for slice %d", name, index)
+        raise
