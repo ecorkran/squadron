@@ -25,7 +25,7 @@ class TestTasksTemplate:
         assert t.setting_sources == ["project"]
         assert t.prompt_builder is None
         assert t.prompt_template is not None
-        assert t.model == "opus"
+        assert t.model == "haiku-xhigh"
 
     def test_required_inputs(self) -> None:
         t = load_template(_tasks_yaml())

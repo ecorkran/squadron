@@ -30,7 +30,7 @@ class TestCodeTemplate:
         assert t.allowed_tools == ["read_file", "list_files", "grep"]
         assert t.permission_mode == "bypassPermissions"
         assert t.setting_sources == ["project"]
-        assert t.model == "sonnet"
+        assert t.model == "haiku-xhigh"
 
     def test_no_required_inputs(self) -> None:
         t = load_template(_code_yaml())
