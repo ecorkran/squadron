@@ -97,7 +97,14 @@ def resolve_review_files(
             files.append(root)
         else:
             raise ReviewIngestInputError(f"{root} doesn't exist. Check the PATHS argument.")
-    return files, directories
+    # Overlapping PATHS name the same file more than once; count each file once.
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for path in files:
+        if path.resolve() not in seen:
+            seen.add(path.resolve())
+            unique.append(path)
+    return unique, directories
 
 
 def _read_frontmatter(path: Path) -> dict[str, object]:

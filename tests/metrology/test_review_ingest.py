@@ -241,6 +241,16 @@ def test_slice_index_comes_from_the_source_document_basename_only(
     assert _slice_index(source) == expected
 
 
+def test_overlapping_paths_resolve_each_file_once(reviews: Path) -> None:
+    project = make_project_id()
+    target = reviews / SLICE_947
+
+    files, _ = resolve_review_files([reviews, target, reviews / ".." / "reviews"], project, reviews)
+
+    assert len(files) == len(set(files))
+    assert sum(1 for path in files if path.name == SLICE_947) == 1
+
+
 def test_default_reviews_dir_with_no_paths_must_exist(tmp_path: Path) -> None:
     project = make_project_id()
 
