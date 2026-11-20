@@ -147,3 +147,15 @@ dateUpdated: 20261021
 - [x] Layer 4: live probe kept as `tests/providers/sdk/test_tool_less_live.py` (`SQ_LIVE_SDK=1`), rerun on every Agent SDK bump
 - [x] Tests, docs/PIPELINES.md and CHANGELOG bullet
 - **Commit**: `fix: run allowed_tools: [] dispatch steps tool-less on SDK models (#299)`
+
+## #374 Document reviews record the blob of the text they reviewed (part 1)
+
+Parts 2 (ingest of slice, tasks and arch reviews) and 3 (per-finding outcomes) stay open on #374.
+
+- [x] `review/document_stamp.py`: `resolve_blob_stamp(path)` returns the blob hash of the file's working-tree content (`git hash-object`) and `current`, true when that equals the blob at HEAD (`git rev-parse HEAD:<path>`). A file not yet at HEAD gives `current: false`. A missing file, a path outside a repository, or a git failure logs a WARNING and returns None; no placeholder
+- [x] Frontmatter gains `reviewedBlob` and `reviewedBlobCurrent` for the document named by `sourceDocument`, and `parentBlob` and `parentBlobCurrent` for the document named by its frontmatter `parent:`. Keys are omitted when unresolved. Written from `format_review_markdown` and `save_provider_failure`, the two callers of `_review_frontmatter_lines`
+- [x] `reviewedSha` is unchanged; `sq pr create`, `--since` and metrology ingest read it as a commit
+- [x] PR reviews get no document keys if their `source_document()` names a file in the operator's tree
+- [x] Tests: stamp for a committed clean file, a modified file, an uncommitted new file, a path outside a repository, and a missing file; frontmatter carries the keys in a repository and omits them outside one; parent keys follow frontmatter `parent:`
+- [x] CHANGELOG bullet
+- **Commit**: `feat: record the blob of the reviewed document and its parent in review frontmatter (#374)`

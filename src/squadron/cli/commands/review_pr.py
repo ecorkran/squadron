@@ -179,6 +179,10 @@ class PrTarget:
     def source_document(self) -> str | None:
         return self._record.url
 
+    def local_document(self, source_document: str | None) -> Path | None:
+        # The source is the PR's URL, not a file in the operator's tree (#374).
+        return None
+
     def reviewed_sha(self) -> str | None:
         """The PR's head, never the operator's.
 

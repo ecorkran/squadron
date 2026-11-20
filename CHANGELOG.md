@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq benchmark recall report --real-work`: counts and cost of the recipe reviews your project has run.
 - `sq benchmark recall run/report/label --recipe` takes a recipe name such as `haiku-sol-opus`; a file path still works.
 - Recipe `haiku-solr-luna-opus`: the D11 recipe with `sol-r` (OpenRouter) in place of `sol`, so it runs without Codex credits.
+- Document review files record the blob of the document they reviewed and of its parent (`reviewedBlob`, `reviewedBlobCurrent`, `parentBlob`, `parentBlobCurrent`), so a review of an uncommitted edit can be traced to the text it read.
 
 ### Fixed
 - Building fix or slice cases while `sq benchmark recall run` is running no longer deletes the recall run's working folders.

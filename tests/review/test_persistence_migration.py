@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -110,6 +111,11 @@ def _arch_slice_info() -> SliceInfo:
     )
 
 
+def _no_document_blobs(_document: Path | None) -> None:
+    """Stands in for ``resolve_document_blobs`` where the blob keys must stay absent."""
+    return None
+
+
 class TestPreMigrationByteIdentity:
     """Each path's rendered artifact, pinned against its pre-migration capture."""
 
@@ -127,6 +133,9 @@ class TestPreMigrationByteIdentity:
         fixture = _FIXTURES / "383-postkeys-slice.md"
         assert rendered == fixture.read_text()
 
+    # The arch document is a real file in this repo, so #374's blob keys would appear.
+    # They are additive and tested in test_document_stamp.py; this pins the pre-#374 bytes.
+    @patch("squadron.review.persistence.resolve_document_blobs", new=_no_document_blobs)
     def test_arch_path(self) -> None:
         """The arch review's source document is its input file, not a design file."""
         arch_info = _arch_slice_info()

@@ -31,6 +31,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from squadron.review.document_stamp import local_path
 from squadron.review.persistence import SliceInfo, resolve_reviewed_sha, slice_review_stem
 from squadron.review.rules import RulesSource
 
@@ -80,6 +81,15 @@ class SaveTarget(Protocol):
         For a slice or arch review that is the right tree; for a PR review it
         is a different tree entirely, and the resulting sha is wrong in a way
         that still looks plausible (D3).
+        """
+        ...
+
+    def local_document(self, source_document: str | None) -> Path | None:
+        """The reviewed text as a file in the operator's tree, or None when it is not one.
+
+        ``source_document`` is the value the artifact's ``sourceDocument`` key
+        carries. A PR's source is a URL, so a PR target answers None and no blob
+        is stamped (#374).
         """
         ...
 
@@ -149,6 +159,9 @@ class SliceTarget:
     def reviewed_sha(self) -> str | None:
         return resolve_reviewed_sha(self._cwd)
 
+    def local_document(self, source_document: str | None) -> Path | None:
+        return local_path(source_document)
+
     def heading_label(self) -> str | None:
         return f"slice {self._info['index']}"
 
@@ -200,6 +213,9 @@ class ArchTarget:
     def reviewed_sha(self) -> str | None:
         return resolve_reviewed_sha(self._cwd)
 
+    def local_document(self, source_document: str | None) -> Path | None:
+        return local_path(source_document)
+
     def heading_label(self) -> str | None:
         # The index is the initiative's; an arch review belongs to no slice.
         return f"initiative {self._index}"
@@ -248,6 +264,9 @@ class StepTarget:
 
     def reviewed_sha(self) -> str | None:
         return resolve_reviewed_sha(self._cwd)
+
+    def local_document(self, source_document: str | None) -> Path | None:
+        return local_path(source_document)
 
     def heading_label(self) -> str | None:
         # A step review resolved no slice, so there is no index to print.

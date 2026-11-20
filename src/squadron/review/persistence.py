@@ -18,6 +18,12 @@ from squadron.documents.schema import DocType, DocumentStatus
 from squadron.integrations.context_forge import ARCHITECTURE_DIR
 from squadron.project_rules.conventions import ConventionsSource
 from squadron.providers.errors import ProviderError
+from squadron.review.document_stamp import (
+    DocumentBlobs,
+    document_blob_lines,
+    local_path,
+    resolve_document_blobs,
+)
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
 from squadron.review.parts import part_stem
@@ -94,6 +100,7 @@ class SaveTargetProtocol(Protocol):
     def frontmatter_fields(self) -> dict[str, object]: ...
     def source_document(self) -> str | None: ...
     def reviewed_sha(self) -> str | None: ...
+    def local_document(self, source_document: str | None) -> Path | None: ...
     def heading_label(self) -> str | None: ...
 
 
@@ -420,6 +427,7 @@ def _review_frontmatter_lines(
     effort: Effort | None = None,
     profile: str | None = None,
     recipe_complete: bool | None = None,
+    document_blobs: DocumentBlobs | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -497,6 +505,9 @@ def _review_frontmatter_lines(
     )
     if reviewed_sha is not None:
         lines.append(f"reviewedSha: {reviewed_sha}")
+    # #374: the blob of the reviewed document and its parent, beside the commit stamp.
+    if document_blobs is not None:
+        lines.extend(document_blob_lines(document_blobs))
     if revision_number is not None:
         lines.append(f"revision_number: {revision_number}")
     if tools_given is not None:
@@ -602,6 +613,12 @@ def format_review_markdown(
     if source_document is None and slice_info is not None:
         source_document = slice_info.get("design_file") or ""
     source_doc = source_document or ""
+    # #374: stamp the file the sourceDocument key names, read from that same string.
+    document = (
+        target.local_document(source_doc or None)
+        if target is not None
+        else local_path(source_doc or None)
+    )
 
     # Slice-derived fields. A target supersedes them where one is supplied;
     # the fallbacks are what the step path (which passes neither) already writes.
@@ -631,6 +648,7 @@ def format_review_markdown(
         model=resolved_model,
         today=today,
         reviewed_sha=reviewed_sha,
+        document_blobs=resolve_document_blobs(document),
         revision_number=revision_number,
         tools_given=result.tools_given,
         tool_calls_made=result.tool_calls_made,
@@ -1066,6 +1084,7 @@ def format_provider_failure_markdown(
         model=model or "unknown",
         today=today,
         reviewed_sha=reviewed_sha,
+        document_blobs=resolve_document_blobs(local_path(source_doc or None)),
         revision_number=None,
         tools_given=tools_given,
         tool_calls_made=exc.tool_calls_made,

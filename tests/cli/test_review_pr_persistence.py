@@ -72,6 +72,12 @@ class TestPrTargetShape:
 
         assert stem == "pr-83-review.code.ecorkran-squadron"
 
+    def test_pr_source_is_never_a_local_document(self) -> None:
+        """The source is the PR's URL, so no blob is stamped from the operator's tree (#374)."""
+        target = PrTarget(_record(83), RulesSource.PROJECT, qualify=False)
+
+        assert target.local_document(target.source_document()) is None
+
     def test_stem_never_uses_the_worktree_path_key(self) -> None:
         """``path_key`` stays the scratch worktree's name only (926, D3)."""
         record = _record(83)
