@@ -1,58 +1,61 @@
-"""Ingest code-review files into the metrology store (slice 402, D5, D6, D7).
+"""Ingest review files into the metrology store (slice 402, D5, D6, D7; #374 part 2).
 
-One ``code_review`` record per code-review file, findings inline. The review files stay
-the source; a record is a derived copy keyed on project and path, so ingest always writes
-and re-running replaces in place. Everything that can't be counted honestly is skipped
-with a reason or listed as failed, never defaulted.
+One ``code_review`` record per code-review file and one ``document_review`` record per
+slice, tasks or arch review file, findings inline. The review files stay the source; a
+record is a derived copy keyed on project and path, so ingest always writes and
+re-running replaces in place. Everything that can't be counted honestly is skipped with a
+reason or listed as failed, never defaulted.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
-from pathlib import Path, PurePosixPath
-from typing import cast
+from datetime import UTC, datetime
+from pathlib import Path
 
 from squadron.core.finding_categories import ReviewCategory
 from squadron.documents.frontmatter import parse_frontmatter
+from squadron.metrology.document_review_ingest import DOCUMENT_REVIEW_TYPES, build_document_record
+from squadron.metrology.document_review_models import DocumentReviewRecord
 from squadron.metrology.errors import ReviewIngestInputError
 from squadron.metrology.project_id import ProjectId
 from squadron.metrology.review_category_map import UNCATEGORIZED, map_historical_category
+from squadron.metrology.review_ingest_fields import (
+    FileProblem,
+    FindingFields,
+    parse_findings,
+    reviewed_at,
+    slice_index,
+    text_or_none,
+)
 from squadron.metrology.review_models import CodeReviewFinding, CodeReviewRecord
 from squadron.metrology.store import MetrologyStore, code_review_record_id
-from squadron.review.models import Severity, Verdict
+from squadron.review.models import Verdict
 from squadron.review.reviews_dir import resolve_reviews_dir
 
 _logger = logging.getLogger(__name__)
 
-#: The project's document-naming convention for a review's source: ``{n}-slice.`` or
-#: ``{n}-tasks.`` at the start of the ``sourceDocument`` basename (D6).
-SLICE_SOURCE_PATTERN = re.compile(r"^(\d+)-(?:slice|tasks)\.")
-
 CODE_REVIEW_TYPE = "code"
 _REVIEW_FILE_GLOB = "*.md"
-_SEVERITIES = {severity.value.lower(): severity for severity in Severity}
-_DATE_FORMAT = "%Y%m%d"
 
 
 @dataclass
 class IngestResult:
     """What an ingest run did. The caller passes it in so the counts survive an abort."""
 
+    #: Records written, code and document reviews together.
     ingested: int = 0
+    #: How many of ``ingested`` were document (slice, tasks, arch) reviews.
+    documents: int = 0
     replaced: int = 0
-    skipped_not_code: int = 0
+    #: Files whose ``reviewType`` is neither code nor a document review type.
+    skipped_other_type: int = 0
     skipped_unknown_verdict: int = 0
     #: Findings dropped for a severity outside the review scale, across all ingested files.
     dropped_findings: int = 0
     failed: list[tuple[Path, str]] = field(default_factory=list[tuple[Path, str]])
-
-
-class _FileProblem(Exception):
-    """A file can't be ingested; the message is the reason listed under ``failed``."""
 
 
 def default_reviews_dir(project_id: ProjectId, cwd: Path) -> Path:
@@ -111,33 +114,15 @@ def _read_frontmatter(path: Path) -> dict[str, object]:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        raise _FileProblem(f"can't be read: {exc}") from exc
+        raise FileProblem(f"can't be read: {exc}") from exc
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise _FileProblem(f"isn't valid UTF-8: {exc}") from exc
+        raise FileProblem(f"isn't valid UTF-8: {exc}") from exc
     frontmatter = parse_frontmatter(text)
     if frontmatter is None:
-        raise _FileProblem("has no readable frontmatter")
+        raise FileProblem("has no readable frontmatter")
     return frontmatter
-
-
-def _slice_index(source_document: object) -> int | None:
-    if not isinstance(source_document, str) or not source_document.strip():
-        return None
-    match = SLICE_SOURCE_PATTERN.match(PurePosixPath(source_document.strip()).name)
-    return int(match.group(1)) if match else None
-
-
-def _reviewed_at(value: object) -> date:
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    try:
-        return datetime.strptime(str(value), _DATE_FORMAT).replace(tzinfo=UTC).date()
-    except ValueError as exc:
-        raise _FileProblem(f"has an unreadable dateCreated {value!r}") from exc
 
 
 def _review_path(path: Path, repo_root: Path) -> str:
@@ -148,72 +133,34 @@ def _review_path(path: Path, repo_root: Path) -> str:
         return resolved.as_posix()
 
 
-def _text_or_none(value: object) -> str | None:
-    return None if value is None else str(value)
-
-
 def _stored_category(raw: object, raw_category: object) -> tuple[ReviewCategory | None, str | None]:
     """A write-time file's stored category, which must already be a ``ReviewCategory``."""
     if raw is None or str(raw) == UNCATEGORIZED:
         return None, None
     try:
-        return ReviewCategory(str(raw)), _text_or_none(raw_category)
+        return ReviewCategory(str(raw)), text_or_none(raw_category)
     except ValueError as exc:
-        raise _FileProblem(f"stores category {raw!r}, which isn't a ReviewCategory value") from exc
+        raise FileProblem(f"stores category {raw!r}, which isn't a ReviewCategory value") from exc
 
 
-def _finding(entry: object, *, read_side: bool, path: Path) -> CodeReviewFinding | None:
-    """One finding, or None (with a WARNING) when its severity isn't on the review scale."""
-    if not isinstance(entry, dict):
-        raise _FileProblem("has a finding that isn't a mapping")
-    fields = {str(key): value for key, value in cast("dict[object, object]", entry).items()}
-    severity = _SEVERITIES.get(str(fields.get("severity", "")).strip().lower())
-    if severity is None:
-        _logger.warning(
-            "%s: finding %s has severity %r, which isn't a review severity; dropped",
-            path,
-            fields.get("id"),
-            fields.get("severity"),
-        )
-        return None
-    if fields.get("id") is None or fields.get("summary") is None:
-        raise _FileProblem("has a finding with no id or summary")
-    raw = fields.get("category")
+def _code_finding(fields: FindingFields, *, read_side: bool) -> CodeReviewFinding:
+    raw = fields.fields.get("category")
     if read_side:
         mapped = map_historical_category(None if raw is None else str(raw))
         category, raw_category = mapped.category, mapped.raw_category
     else:
-        category, raw_category = _stored_category(raw, fields.get("rawCategory"))
+        category, raw_category = _stored_category(raw, fields.fields.get("rawCategory"))
     return CodeReviewFinding(
-        finding_id=str(fields["id"]),
-        severity=severity,
+        finding_id=fields.finding_id(),
+        severity=fields.severity,
         category=category,
         raw_category=raw_category,
-        location=_text_or_none(fields.get("location")),
-        summary=str(fields["summary"]),
+        location=fields.location(),
+        summary=fields.summary(),
     )
 
 
-def _findings(
-    frontmatter: dict[str, object], *, read_side: bool, path: Path
-) -> tuple[list[CodeReviewFinding], int]:
-    entries = frontmatter.get("findings")
-    if entries is None:
-        return [], 0
-    if not isinstance(entries, list):
-        raise _FileProblem("has a findings entry that isn't a list")
-    kept: list[CodeReviewFinding] = []
-    dropped = 0
-    for entry in cast("list[object]", entries):
-        finding = _finding(entry, read_side=read_side, path=path)
-        if finding is None:
-            dropped += 1
-        else:
-            kept.append(finding)
-    return kept, dropped
-
-
-def _build_record(
+def _build_code_record(
     frontmatter: dict[str, object],
     verdict: Verdict,
     path: Path,
@@ -221,16 +168,18 @@ def _build_record(
     project_id: ProjectId,
 ) -> CodeReviewRecord:
     read_side = frontmatter.get("categoriesNormalized") is not True
-    findings, unnormalized = _findings(frontmatter, read_side=read_side, path=path)
+    findings, unnormalized = parse_findings(
+        frontmatter, path, lambda fields: _code_finding(fields, read_side=read_side)
+    )
     return CodeReviewRecord(
         record_id=code_review_record_id(project_id, review_path),
         project_id=project_id,
         review_path=review_path,
-        commit_sha=_text_or_none(frontmatter.get("reviewedSha")),
-        slice_index=_slice_index(frontmatter.get("sourceDocument")),
+        commit_sha=text_or_none(frontmatter.get("reviewedSha")),
+        slice_index=slice_index(frontmatter.get("sourceDocument")),
         verdict=verdict,
         read_side_mapped=read_side,
-        reviewed_at=_reviewed_at(frontmatter.get("dateCreated")),
+        reviewed_at=reviewed_at(frontmatter.get("dateCreated")),
         ingested_at=datetime.now(UTC),
         findings=findings,
         unnormalized_count=unnormalized,
@@ -240,7 +189,7 @@ def _build_record(
 def _review_type(frontmatter: dict[str, object]) -> str:
     review_type = frontmatter.get("reviewType")
     if review_type is None:
-        raise _FileProblem("is missing reviewType")
+        raise FileProblem("is missing reviewType")
     return str(review_type)
 
 
@@ -248,11 +197,18 @@ def _verdict(frontmatter: dict[str, object]) -> Verdict:
     """The review's verdict; a missing or unrecognized one is a failure."""
     raw = frontmatter.get("verdict")
     if raw is None:
-        raise _FileProblem("is missing verdict")
+        raise FileProblem("is missing verdict")
     try:
         return Verdict(str(raw))
     except ValueError as exc:
-        raise _FileProblem(f"has an unrecognized verdict {raw!r}") from exc
+        raise FileProblem(f"has an unrecognized verdict {raw!r}") from exc
+
+
+def _write(store: MetrologyStore, record: CodeReviewRecord | DocumentReviewRecord) -> None:
+    if isinstance(record, DocumentReviewRecord):
+        store.write_document_review(record)
+    else:
+        store.write_code_review(record)
 
 
 def ingest_reviews(
@@ -269,26 +225,33 @@ def ingest_reviews(
     what was written before it.
     """
     known_ids = {review.record_id for review in store.list_code_reviews(project_id)}
+    known_ids |= {review.record_id for review in store.list_document_reviews(project_id)}
     for path in files:
         try:
             frontmatter = _read_frontmatter(path)
-            if _review_type(frontmatter) != CODE_REVIEW_TYPE:
-                # Other review types use their own verdict vocabulary; they aren't checked.
-                result.skipped_not_code += 1
+            review_type = _review_type(frontmatter)
+            if review_type != CODE_REVIEW_TYPE and review_type not in DOCUMENT_REVIEW_TYPES:
+                result.skipped_other_type += 1
                 continue
             verdict = _verdict(frontmatter)
             if verdict is Verdict.UNKNOWN:
                 result.skipped_unknown_verdict += 1
                 continue
-            record = _build_record(
-                frontmatter, verdict, path, _review_path(path, repo_root), project_id
+            review_path = _review_path(path, repo_root)
+            record = (
+                _build_code_record(frontmatter, verdict, path, review_path, project_id)
+                if review_type == CODE_REVIEW_TYPE
+                else build_document_record(
+                    frontmatter, review_type, verdict, path, review_path, project_id
+                )
             )
-        except _FileProblem as exc:
+        except FileProblem as exc:
             _logger.warning("Can't ingest %s: it %s", path, exc)
             result.failed.append((path, str(exc)))
             continue
-        store.write_code_review(record)
+        _write(store, record)
         result.ingested += 1
+        result.documents += isinstance(record, DocumentReviewRecord)
         result.dropped_findings += record.unnormalized_count
         if record.record_id in known_ids:
             result.replaced += 1

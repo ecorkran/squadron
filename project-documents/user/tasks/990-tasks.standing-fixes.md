@@ -159,3 +159,15 @@ Parts 2 (ingest of slice, tasks and arch reviews) and 3 (per-finding outcomes) s
 - [x] Tests: stamp for a committed clean file, a modified file, an uncommitted new file, a path outside a repository, and a missing file; frontmatter carries the keys in a repository and omits them outside one; parent keys follow frontmatter `parent:`
 - [x] CHANGELOG bullet
 - **Commit**: `feat: record the blob of the reviewed document and its parent in review frontmatter (#374)`
+
+## #374 Ingest slice, tasks and arch reviews (part 2)
+
+Part 3 (per-finding outcomes) stays open on #374.
+
+- [x] `metrology/document_review_models.py`: `DocumentReviewRecord` and `DocumentReviewFinding`, a sibling of `CodeReviewRecord`. Categories are free-form strings (document review templates set their own); severity and verdict use the review scale; records carry `review_type`, `source_document`, `slice_index` and the part-1 blob stamps
+- [x] Store: `RECORD_TYPE_DOCUMENT_REVIEW`, a `document_review` envelope field, `write_document_review` and `list_document_reviews`, id deterministic per (project, path)
+- [x] Ingest: `reviewType` of `slice`, `tasks` or `arch` writes a document record; `code` is unchanged; any other type is skipped and counted. A verdict outside the review scale fails the file, as for code reviews
+- [x] CLI summary reports code and document reviews separately
+- [x] Tests: the arch fixture ingests with its categories and verdict; blob keys carried when present and None when absent; slice index from `sourceDocument`; an unrecognized verdict on a tasks review fails; an unknown review type is skipped
+- [x] CHANGELOG bullet
+- **Commit**: `feat: ingest slice, tasks and arch reviews into the metrology store (#374)`

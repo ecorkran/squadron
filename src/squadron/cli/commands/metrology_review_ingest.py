@@ -26,9 +26,13 @@ _INPUT_FAILURES = (MetrologyIdentityError, ReviewIngestInputError)
 
 
 def _echo_summary(result: IngestResult, store_dir: Path) -> None:
-    typer.echo(f"Ingested {result.ingested} code reviews into {store_dir} ({result.replaced} replaced)")
+    code = result.ingested - result.documents
     typer.echo(
-        f"Skipped: {result.skipped_not_code} not code reviews, "
+        f"Ingested {code} code reviews and {result.documents} slice, tasks or arch reviews "
+        f"into {store_dir} ({result.replaced} replaced)"
+    )
+    typer.echo(
+        f"Skipped: {result.skipped_other_type} of another review type, "
         f"{result.skipped_unknown_verdict} unknown verdict"
     )
     if result.dropped_findings:
@@ -56,11 +60,11 @@ def register_review_ingest_command(metrology_app: typer.Typer) -> None:
             None, "--cwd", help="Project root (default: the current directory)"
         ),
     ) -> None:
-        """Write one code_review record per code-review file into the metrology store.
+        """Write one record per code, slice, tasks or arch review file into the metrology store.
 
         Re-running is safe: a record is keyed on project and path, so ingesting a file
-        again replaces its record. Arch, slice and tasks reviews and reviews with an
-        UNKNOWN verdict are skipped and counted. Reviews written before categories were
+        again replaces its record. Other review types and reviews with an UNKNOWN
+        verdict are skipped and counted. Reviews written before categories were
         normalized are mapped through a fixed table and marked read-side mapped.
         """
         repo_root = Path(cwd).expanduser().resolve() if cwd else Path.cwd().resolve()
@@ -77,7 +81,7 @@ def register_review_ingest_command(metrology_app: typer.Typer) -> None:
             typer.echo(f"Error: {exc}", err=True)
             raise typer.Exit(code=1) from exc
         except MetrologyStoreError as exc:
-            _logger.error("Could not write a code review to %s: %s", store_dir, exc)
+            _logger.error("Could not write a review record to %s: %s", store_dir, exc)
             _echo_summary(result, store_dir)
             typer.echo(f"Store error: {exc}", err=True)
             raise typer.Exit(code=1) from exc

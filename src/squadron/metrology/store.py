@@ -20,12 +20,14 @@ from pathlib import Path
 from typing import cast
 
 from squadron.config.manager import get_config
+from squadron.metrology.document_review_models import DocumentReviewRecord
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
     RECORD_TYPE_AUDIT_FINDING,
     RECORD_TYPE_AUDIT_NOISE_FLOOR,
     RECORD_TYPE_CODE_REVIEW,
     RECORD_TYPE_CODE_SNAPSHOT,
+    RECORD_TYPE_DOCUMENT_REVIEW,
     RECORD_TYPE_GRADUATED_CONFIG,
     RECORD_TYPE_PAIRWISE_JUDGMENT,
     RECORD_TYPE_PRODUCER_REPLAY,
@@ -117,11 +119,20 @@ def generate_judgment_id(now: datetime | None = None) -> str:
     return f"pair-{stamp}-{uuid.uuid4().hex[:8]}"
 
 
-def code_review_record_id(project_id: ProjectId, review_path: str) -> str:
-    """The deterministic record id of an ingested code review: one per (project, path)."""
+def _review_file_record_id(prefix: str, project_id: ProjectId, review_path: str) -> str:
     project_digest = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()[:12]
     path_digest = hashlib.sha256(review_path.encode("utf-8")).hexdigest()[:12]
-    return f"codereview-{project_digest}-{path_digest}"
+    return f"{prefix}-{project_digest}-{path_digest}"
+
+
+def code_review_record_id(project_id: ProjectId, review_path: str) -> str:
+    """The deterministic record id of an ingested code review: one per (project, path)."""
+    return _review_file_record_id("codereview", project_id, review_path)
+
+
+def document_review_record_id(project_id: ProjectId, review_path: str) -> str:
+    """The deterministic record id of an ingested document review: one per (project, path)."""
+    return _review_file_record_id("docreview", project_id, review_path)
 
 
 def snapshot_record_id(project_id: ProjectId, commit_sha: str) -> str:
@@ -561,6 +572,41 @@ class MetrologyStore:
         for _, record in self._iter_records():
             review = record.code_review
             if review is None or record.record_type != RECORD_TYPE_CODE_REVIEW:
+                continue
+            if review.project_id.value != project_id.value:
+                continue
+            reviews.append(review)
+        reviews.sort(key=lambda item: item.reviewed_at, reverse=True)
+        return reviews
+
+    def write_document_review(self, review: DocumentReviewRecord) -> str:
+        """Envelope and persist an ingested document review; return its record id.
+
+        The id is deterministic per (project, review path), so re-ingesting a file
+        replaces its record in place.
+        """
+        record_id = document_review_record_id(review.project_id, review.review_path)
+        if review.record_id != record_id:
+            raise MetrologyStoreError(
+                f"Document review id {review.record_id!r} does not match the record id "
+                f"{record_id!r} for this project and path"
+            )
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_DOCUMENT_REVIEW,
+            document_review=review,
+        )
+        self._write_atomic(
+            self._record_path(record_id), json.dumps(record.model_dump(mode="json"), indent=2)
+        )
+        return record_id
+
+    def list_document_reviews(self, project_id: ProjectId) -> list[DocumentReviewRecord]:
+        """Return a project's ingested document reviews, newest ``reviewed_at`` first."""
+        reviews: list[DocumentReviewRecord] = []
+        for _, record in self._iter_records():
+            review = record.document_review
+            if review is None or record.record_type != RECORD_TYPE_DOCUMENT_REVIEW:
                 continue
             if review.project_id.value != project_id.value:
                 continue

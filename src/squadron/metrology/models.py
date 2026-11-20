@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from squadron.core.finding_categories import AuditCategory as AuditCategory  # re-exported
 from squadron.metrology.benchmark_models import BenchmarkCase, CaseSet, FixQualification
 from squadron.metrology.benchmark_replay_models import BenchmarkRun, ImplementationReplay
+from squadron.metrology.document_review_models import DocumentReviewRecord
 from squadron.metrology.floor_stat import FloorStat as FloorStat  # re-exported
 from squadron.metrology.grade_records import (
     ImplementationGrade,
@@ -56,6 +57,8 @@ RECORD_TYPE_PAIRWISE_JUDGMENT = "pairwise_judgment"
 RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"
 #: Written by 402's review ingest: one record per code-review file.
 RECORD_TYPE_CODE_REVIEW = "code_review"
+#: Written by review ingest (#374): one record per slice, tasks or arch review file.
+RECORD_TYPE_DOCUMENT_REVIEW = "document_review"
 #: Written by 403's slice-range resolver: one record per project.
 RECORD_TYPE_SLICE_RANGES = "slice_ranges"
 #: Written by 421's benchmark case store: one record per case, one per case-set version.
@@ -276,7 +279,7 @@ class MetrologyRecord(BaseModel):
     ``"implementation_grade"`` and ``"sample_size_estimate"``; 426 writes
     ``"slice_qualification"``, ``"diff_judgment"`` and ``"over_size_case"``; 430 writes
     ``"recall_case"``, ``"recall_case_set"``, ``"recall_run"`` and ``"recall_labels"``; 434 writes
-    ``"recipe_review"``. Each addition
+    ``"recipe_review"``; review ingest (#374) writes ``"document_review"``. Each addition
     is an optional sibling field, so the envelope shape stays backward compatible and
     ``schema_version`` does not move — no store migration is needed.
     """
@@ -291,6 +294,7 @@ class MetrologyRecord(BaseModel):
     pairwise_judgment: PairwiseJudgment | None = None
     code_snapshot: CodeSnapshot | None = None
     code_review: CodeReviewRecord | None = None
+    document_review: DocumentReviewRecord | None = None
     slice_ranges: SliceRanges | None = None
     benchmark_case: BenchmarkCase | None = None
     case_set: CaseSet | None = None

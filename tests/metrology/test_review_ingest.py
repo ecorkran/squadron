@@ -10,13 +10,14 @@ from pathlib import Path
 import pytest
 
 from squadron.core.finding_categories import ReviewCategory
+from squadron.metrology.document_review_models import BlobRef
 from squadron.metrology.errors import MetrologyStoreError, ReviewIngestInputError
 from squadron.metrology.review_ingest import (
     IngestResult,
-    _slice_index,  # pyright: ignore[reportPrivateUsage]
     ingest_reviews,
     resolve_review_files,
 )
+from squadron.metrology.review_ingest_fields import slice_index
 from squadron.metrology.review_models import CodeReviewRecord
 from squadron.metrology.store import MetrologyStore
 from squadron.review.models import Severity, Verdict
@@ -61,8 +62,9 @@ def test_the_fixture_directory_is_classified(reviews: Path, store: MetrologyStor
         "synthetic-new-format.code.md",
         "synthetic-bad-severity.code.md",
     }
-    assert result.ingested == 5
-    assert result.skipped_not_code == 1  # the arch review
+    assert result.ingested == 6
+    assert result.documents == 1  # the arch review
+    assert result.skipped_other_type == 0
     assert result.skipped_unknown_verdict == 2  # the degraded PR review and 0-review
     assert {path.name for path, _ in result.failed} == {
         "synthetic-malformed-frontmatter.code.md",
@@ -147,22 +149,92 @@ def test_an_unrecognized_severity_is_counted_dropped_and_logged(
     )
 
 
-def test_a_non_code_review_is_skipped_whatever_its_verdict_but_a_code_review_is_checked(
+def test_another_review_type_is_skipped_whatever_its_verdict_but_a_document_review_is_checked(
     reviews: Path, store: MetrologyStore
 ) -> None:
-    (reviews / "tasks-resolved.md").write_text(
-        "---\nreviewType: tasks\nverdict: RESOLVED\n---\n", encoding="utf-8"
+    (reviews / "judge.md").write_text(
+        "---\nreviewType: judge.slice-vs-arch\nverdict: RESOLVED\n---\n", encoding="utf-8"
     )
-    (reviews / "code-resolved.code.md").write_text(
-        "---\nreviewType: code\nverdict: RESOLVED\ndateCreated: 20261001\n---\n", encoding="utf-8"
+    (reviews / "tasks-resolved.md").write_text(
+        "---\nreviewType: tasks\nverdict: RESOLVED\ndateCreated: 20261001\n---\n", encoding="utf-8"
     )
 
     result, _ = run(reviews, store)
 
-    assert result.skipped_not_code == 2
+    assert result.skipped_other_type == 1
     failed = {path.name: reason for path, reason in result.failed}
-    assert "unrecognized verdict" in failed["code-resolved.code.md"]
-    assert "tasks-resolved.md" not in failed
+    assert "unrecognized verdict" in failed["tasks-resolved.md"]
+    assert "judge.md" not in failed
+
+
+def test_the_arch_review_is_a_document_record_with_its_own_categories(
+    reviews: Path, store: MetrologyStore
+) -> None:
+    run(reviews, store)
+    (record,) = store.list_document_reviews(make_project_id())
+
+    assert record.review_type == "arch"
+    assert record.verdict is Verdict.CONCERNS
+    assert record.slice_index is None
+    assert record.source_document is not None
+    assert record.source_document.endswith("320-arch.judge-calibration-quality-metrology.md")
+    assert (record.reviewed_blob, record.parent_blob) == (None, None)
+    assert record.findings[0].category == "consistency"
+    assert {f.category for f in record.findings} >= {"completeness", "dependencies"}
+
+
+SLICE_REVIEW = """---
+reviewType: slice
+verdict: PASS
+sourceDocument: project-documents/user/slices/434-slice.recipe-reviews.md
+dateCreated: 20261119
+reviewedBlob: {blob}
+reviewedBlobCurrent: false
+parentBlob: {parent}
+parentBlobCurrent: {parent_current}
+findings:
+  - id: F001
+    severity: pass
+    category: data-model
+    summary: "fine"
+  - id: F002
+    severity: note
+    category: uncategorized
+    summary: "no category"
+---
+"""
+
+
+def test_a_slice_review_carries_its_blob_stamps_and_slice_index(
+    reviews: Path, store: MetrologyStore
+) -> None:
+    (reviews / "434-review.slice.md").write_text(
+        SLICE_REVIEW.format(blob="a" * 40, parent="b" * 40, parent_current="true"), encoding="utf-8"
+    )
+
+    run(reviews, store)
+    by_type = {r.review_type: r for r in store.list_document_reviews(make_project_id())}
+    record = by_type["slice"]
+
+    assert record.slice_index == 434
+    assert record.reviewed_blob == BlobRef(blob="a" * 40, current=False)
+    assert record.parent_blob == BlobRef(blob="b" * 40, current=True)
+    assert [(f.severity, f.category) for f in record.findings] == [
+        (Severity.PASS, "data-model"),
+        (Severity.NOTE, None),
+    ]
+
+
+def test_a_blob_without_a_boolean_current_fails_the_file(reviews: Path, store: MetrologyStore) -> None:
+    (reviews / "434-review.slice.md").write_text(
+        SLICE_REVIEW.format(blob="a" * 40, parent="b" * 40, parent_current="maybe"),
+        encoding="utf-8",
+    )
+
+    result, _ = run(reviews, store)
+
+    failed = {path.name: reason for path, reason in result.failed}
+    assert "parentBlobCurrent" in failed["434-review.slice.md"]
 
 
 def test_a_non_utf8_file_is_failed(reviews: Path, store: MetrologyStore) -> None:
@@ -188,10 +260,10 @@ def test_re_ingesting_after_an_edit_replaces_the_record(reviews: Path, store: Me
 
     result, records = run(reviews, store)
 
-    assert result.replaced == result.ingested == 5
+    assert result.replaced == result.ingested == 6
     assert records["synthetic-pr-review.code.md"].findings[0].summary == "edited"
     assert records[SLICE_947].findings == []
-    assert len(list(store.store_dir.glob("*.json"))) == 5
+    assert len(list(store.store_dir.glob("*.json"))) == 6
 
 
 def test_a_nonexistent_path_raises_and_writes_nothing(tmp_path: Path, store: MetrologyStore) -> None:
@@ -221,7 +293,8 @@ def test_a_store_error_on_the_second_write_leaves_the_first_in_the_result(
     with pytest.raises(MetrologyStoreError, match="disk full"):
         ingest_reviews(project, reviews, files, store, result)
 
-    assert result.ingested == 1
+    # 156 (code) and 320 (arch, a document write) land before 947 fails.
+    assert (result.ingested, result.documents) == (2, 1)
 
 
 @pytest.mark.parametrize(
@@ -238,7 +311,7 @@ def test_a_store_error_on_the_second_write_leaves_the_first_in_the_result(
 def test_slice_index_comes_from_the_source_document_basename_only(
     source: str | None, expected: int | None
 ) -> None:
-    assert _slice_index(source) == expected
+    assert slice_index(source) == expected
 
 
 def test_overlapping_paths_resolve_each_file_once(reviews: Path) -> None:

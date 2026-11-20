@@ -69,13 +69,16 @@ def test_fixture_directory_prints_counts_and_exits_one_for_the_failed_files(
     code, output = invoke(project, reviews)
 
     assert code == 1, output
-    assert f"Ingested 5 code reviews into {store_dir} (0 replaced)" in output
-    assert "Skipped: 1 not code reviews, 2 unknown verdict" in output
+    assert (
+        f"Ingested 5 code reviews and 1 slice, tasks or arch reviews into {store_dir} (0 replaced)"
+        in output
+    )
+    assert "Skipped: 0 of another review type, 2 unknown verdict" in output
     assert "Dropped: 1 findings with a severity outside the review scale" in output
     assert "Failed: 3" in output
     for name in BAD_FILES:
         assert name in output
-    assert len(record_files(store_dir)) == 5
+    assert len(record_files(store_dir)) == 6
 
 
 def test_only_good_files_exit_zero_and_a_second_run_replaces(
@@ -88,8 +91,8 @@ def test_only_good_files_exit_zero_and_a_second_run_replaces(
     second_code, second_output = invoke(project, reviews)
 
     assert (first_code, second_code) == (0, 0)
-    assert "(5 replaced)" in second_output
-    assert len(record_files(store_dir)) == 5
+    assert "(6 replaced)" in second_output
+    assert len(record_files(store_dir)) == 6
 
 
 def test_nonexistent_path_exits_one_and_writes_nothing(
