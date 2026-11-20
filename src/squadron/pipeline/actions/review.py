@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
@@ -16,6 +16,7 @@ from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.judge import Provenance, judge_verdict
 from squadron.pipeline.actions.review_fold import fold_review_parts
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
+from squadron.pipeline.actions.review_recipe import RecipePart, RecipePartAborted, run_recipe_part
 from squadron.pipeline.actions.tool_support import (
     DispatchRoute,
     resolve_allowed_tools,
@@ -23,6 +24,7 @@ from squadron.pipeline.actions.tool_support import (
 )
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import (
+    POOL_PREFIX,
     ModelPoolNotImplemented,
     ModelResolutionError,
     ResolvedModel,
@@ -35,6 +37,13 @@ from squadron.pipeline.usage_capture import (
 )
 from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 from squadron.providers.errors import ProviderError
+from squadron.recipes.model_ref import (
+    RecipeRef,
+    ReviewModelError,
+    resolve_review_model_ref,
+)
+from squadron.recipes.recipe_outcome import RecipeStageResult
+from squadron.recipes.recipe_search import production_recipe_dirs
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
     DiffSpecError,
@@ -140,19 +149,31 @@ class _PartProviderFailure(Exception):
 
 
 @dataclass(frozen=True)
+class _AliasModel:
+    """A single-model review's resolved model and the profile it runs through."""
+
+    resolved: ResolvedModel
+    profile_name: str
+
+
+@dataclass(frozen=True)
 class _PartSettings:
     """What every part of one review shares: template, model, rules, target."""
 
     template: ReviewTemplate
     template_name: str
-    resolved: ResolvedModel
-    profile_name: str
+    #: A single model, or a recipe run as one review (slice 434, D2).
+    model: _AliasModel | RecipeRef
     rules: ReviewRules
     rules_source: RulesSource
     allowed_tools: list[str] | None
     slice_info: SliceInfo | None
     # Initiative index of an architecture review (``plan`` param, no slice).
     arch_index: int | None
+    # The files the diff scope check returned; a recipe's combs are told them (434 D4).
+    changed_files: list[str]
+    # A recipe's stages from every part run so far, so an abort stamps them all (434 D9).
+    recipe_spent: list[RecipeStageResult] = field(default_factory=list[RecipeStageResult])
 
 
 class ReviewAction:
@@ -192,6 +213,7 @@ class ReviewAction:
             DiffSpecError,
             EmptyScopeError,
             TaskFileReadError,
+            ReviewModelError,
         ) as exc:
             _logger.warning(
                 "review: step %s failed before/during template resolution: %s",
@@ -203,6 +225,12 @@ class ReviewAction:
             # A named failure: one ERROR line, no traceback (as dispatch and summary do).
             _logger.error("review: step %s failed: %s", context.step_name, failure.error)
             return self._exception_result(context, failure.error, failure=failure)
+        except RecipePartAborted as aborted:
+            # Logged with its traceback where it happened (run_recipe_review).
+            _logger.error("review: step %s failed: %s", context.step_name, aborted.error)
+            result = self._exception_result(context, aborted.error)
+            stamp(result.metadata, aborted.record)
+            return result
         except Exception as exc:
             _logger.exception("review: unexpected error in step %s", context.step_name)
             return self._exception_result(context, exc)
@@ -243,16 +271,6 @@ class ReviewAction:
     async def _review(self, context: ActionContext) -> ActionResult:
         template_name = str(context.params["template"])
         template = self._load_template(template_name)
-        resolved = self._resolve_model(context, template)
-
-        # Same cascade `sq review` uses: explicit param → alias → template →
-        # default_review_profile config → SDK (#184).
-        profile_name = resolve_review_profile(
-            self._explicit_profile(context), resolved.profile, template
-        ).name
-        _logger.info(
-            "review: step %s profile=%s model=%s", context.step_name, profile_name, resolved.model_id
-        )
 
         inputs = self._base_inputs(context)
 
@@ -282,33 +300,48 @@ class ReviewAction:
             self._validate_inputs(template, template_name, part, _part_label(number, count, part))
         # Rules depend on the diff, file glob and rules params, never on the
         # part's input file, so every part shares one resolution.
-        rules, rules_source = self._resolve_rules(context, template_name, part_inputs[0])
-
         # A step-level allowed_tools overrides the template's default; None leaves the
         # template authoritative (slice 265).
         allowed_tools = resolve_allowed_tools(context, self.action_type)
+        # Resolved once the diff and tool setting are certain, so a recipe is refused here
+        # (D2). Classification reads recipe and alias files, so it runs off the loop.
+        # Alias resolution stays on the loop: for a pool it fires the pool-selection
+        # callback, which rewrites the run state file the heartbeat also writes.
+        recipe = await asyncio.to_thread(
+            self._classify_recipe,
+            context,
+            template,
+            bool(part_inputs[0].get("diff")),
+            allowed_tools == [],
+        )
+        model = recipe if recipe is not None else self._alias_model(context, template)
+        rules, rules_source, changed_files = self._resolve_rules(context, template_name, part_inputs[0])
         # `allowed_tools: []` asks for a tool-less review; refuse it before any model call
         # when the provider would still bring tools of its own (#306).
-        if allowed_tools == [] and (
-            refusal := tool_isolation_failure(
-                action_type=self.action_type,
-                step_name=context.step_name,
-                model=resolved.model_id,
-                profile_name=profile_name,
-                route=DispatchRoute.AGENT,
+        if (
+            allowed_tools == []
+            and isinstance(model, _AliasModel)
+            and (
+                refusal := tool_isolation_failure(
+                    action_type=self.action_type,
+                    step_name=context.step_name,
+                    model=model.resolved.model_id,
+                    profile_name=model.profile_name,
+                    route=DispatchRoute.AGENT,
+                )
             )
         ):
             return refusal
         settings = _PartSettings(
             template=template,
             template_name=template_name,
-            resolved=resolved,
-            profile_name=profile_name,
+            model=model,
             rules=rules,
             rules_source=rules_source,
             allowed_tools=allowed_tools,
             slice_info=slice_info,
             arch_index=arch_index,
+            changed_files=changed_files,
         )
         # One part keeps its unsuffixed name; two or more are always keyed by
         # "input" (the fan-out key), and review_parts names them part-1..N.
@@ -343,7 +376,48 @@ class ReviewAction:
             raise KeyError(f"Review template '{template_name}' not found")
         return template
 
-    def _resolve_model(self, context: ActionContext, template: ReviewTemplate) -> ResolvedModel:
+    def _alias_model(self, context: ActionContext, template: ReviewTemplate) -> _AliasModel:
+        """The winning cascade candidate resolved as a model, with its review profile."""
+        resolved = self._resolve_alias(context, template)
+        # Same cascade `sq review` uses: explicit param → alias → template →
+        # default_review_profile config → SDK (#184).
+        profile_name = resolve_review_profile(
+            self._explicit_profile(context), resolved.profile, template
+        ).name
+        _logger.info(
+            "review: step %s profile=%s model=%s", context.step_name, profile_name, resolved.model_id
+        )
+        return _AliasModel(resolved=resolved, profile_name=profile_name)
+
+    def _classify_recipe(
+        self, context: ActionContext, template: ReviewTemplate, has_diff: bool, no_tools: bool
+    ) -> RecipeRef | None:
+        """A ``RecipeRef`` when the winning candidate names a recipe this review can run
+        (slice 434, D2); a recipe it cannot run raises ``ReviewModelError``."""
+        action_model = str(context.params["model"]) if "model" in context.params else None
+        step_model = str(context.params["step_model"]) if "step_model" in context.params else None
+        candidates = context.resolver.cascade_candidates(
+            action_model=action_model, step_model=step_model
+        )
+        candidate = next((c for c in candidates if c is not None), template.model)
+        if candidate is None or candidate.startswith(POOL_PREFIX):
+            return None
+        profile_source = review_profile_source(self._explicit_profile(context) is not None, template)
+        ref = resolve_review_model_ref(
+            candidate,
+            profile_source=profile_source,
+            search_dirs=production_recipe_dirs(Path(context.cwd)),
+            template=template,
+            has_diff=has_diff,
+            explicit_profile=self._explicit_profile(context),
+            no_tools=no_tools,
+        )
+        if not isinstance(ref, RecipeRef):
+            return None
+        _logger.info("review: step %s recipe=%s", context.step_name, ref.recipe.name)
+        return ref
+
+    def _resolve_alias(self, context: ActionContext, template: ReviewTemplate) -> ResolvedModel:
         # Model resolution — same pattern as dispatch, with one addition: when
         # the standard cascade (CLI/action/step/pipeline/config) is entirely
         # empty, fall back to the template's own `model:` default — the same
@@ -422,7 +496,7 @@ class ReviewAction:
 
     def _resolve_rules(
         self, context: ActionContext, template_name: str, inputs: dict[str, str]
-    ) -> tuple[ReviewRules, RulesSource]:
+    ) -> tuple[ReviewRules, RulesSource, list[str]]:
         # Rules content — mirror CLI: template rules + language auto-detection,
         # layered on any explicit rules_content passed in via params.
         cwd = context.cwd
@@ -440,8 +514,9 @@ class ReviewAction:
         # review of nothing passing here is the harm this guard exists to stop
         # (issue #62). Outside the rules-dir branch by design — a review with no
         # rules directory needs the guard just as much.
+        changed_files: list[str] = []
         if diff_ref:
-            assert_reviewable_scope(diff_ref, cwd, exclude_patterns)
+            changed_files = assert_reviewable_scope(diff_ref, cwd, exclude_patterns)
 
         rules_dir, rules_source = resolve_rules_dir(cwd, None, None)
         file_paths: list[str] = []
@@ -459,7 +534,7 @@ class ReviewAction:
             manual_rules_content=manual_rules,
             cwd=cwd,
         )
-        return rules, rules_source
+        return rules, rules_source, changed_files
 
     async def _run_part(
         self,
@@ -475,18 +550,21 @@ class ReviewAction:
         in log lines when the review is split.
         """
         capture = require_capture(context.usage_capture, self.action_type)
+        model = settings.model
+        if isinstance(model, RecipeRef):
+            return await self._run_recipe_part(settings, context, inputs, model, name_suffix, position)
         try:
             result = await run_review_with_profile(
                 settings.template,
                 inputs,
-                profile=settings.profile_name,
-                model=settings.resolved.model_id,
+                profile=model.profile_name,
+                model=model.resolved.model_id,
                 rules_content=settings.rules.content,
                 allowed_tools=settings.allowed_tools,
-                model_allows_tools=settings.resolved.allows_tools,
-                max_output_tokens=settings.resolved.max_output_tokens,
-                effort=settings.resolved.effort,
-                alias=settings.resolved.alias,
+                model_allows_tools=model.resolved.allows_tools,
+                max_output_tokens=model.resolved.max_output_tokens,
+                effort=model.resolved.effort,
+                alias=model.resolved.alias,
                 pricing_warned=capture.warned,
             )
         except ProviderError as exc:
@@ -503,14 +581,14 @@ class ReviewAction:
                 exc,
                 settings.template_name,
                 settings.slice_info,
-                model=settings.resolved.model_id,
+                model=model.resolved.model_id,
                 source_document=inputs.get("input"),
                 tools_given=list(settings.allowed_tools) if settings.allowed_tools else None,
                 cwd=context.cwd,
                 step_name=context.step_name,
                 step_index=context.step_index,
                 run_id=context.run_id,
-                profile=settings.profile_name,
+                profile=model.profile_name,
                 name_suffix=name_suffix,
             )
             artifact = saved if saved is not None else "not written"
@@ -528,9 +606,9 @@ class ReviewAction:
                     artifact,
                 )
             # The call already resolved this profile, so the lookup cannot mask exc.
-            effort_sent = effort_sent_by_profile(settings.profile_name, settings.resolved.effort)
+            effort_sent = effort_sent_by_profile(model.profile_name, model.resolved.effort)
             record = capture.record_from_error(
-                settings.resolved, exc, model=settings.resolved.model_id, effort_sent=effort_sent
+                model.resolved, exc, model=model.resolved.model_id, effort_sent=effort_sent
             )
             # Raised, not returned: a failed part must stop the step before later
             # parts run or the fold sees a part with no verdict.
@@ -539,7 +617,7 @@ class ReviewAction:
         # Traceability (slice 195 D12, #139): the run that wrote this review.
         result.run_id = context.run_id
         # Slice 940 D6: the profile this step resolved, recorded as aiProfile.
-        result.profile = settings.profile_name
+        result.profile = model.profile_name
         # Slice 935 D7: the language rules this review was given, recorded as projectRules.
         result.project_rules = list(settings.rules.language_rules)
         verdict, provenance, verdict_override = self._enforce_verdict(settings, context, result)
@@ -547,9 +625,47 @@ class ReviewAction:
             settings, context, result, inputs, verdict_override, name_suffix, position
         )
         part = self._part_result(settings, result, inputs, review_file_path, verdict, provenance)
-        stamp(part.metadata, capture.record_from_review(result, settings.resolved, result.effort))
+        stamp(part.metadata, capture.record_from_review(result, model.resolved, result.effort))
         stamp_effort_sent(part.metadata, result.effort)
         return part
+
+    async def _run_recipe_part(
+        self,
+        settings: _PartSettings,
+        context: ActionContext,
+        inputs: dict[str, str],
+        ref: RecipeRef,
+        name_suffix: str | None,
+        position: tuple[int, int],
+    ) -> ActionResult:
+        """Run the recipe for one part (slice 434): same rules, inputs, save and mapping."""
+        capture = require_capture(context.usage_capture, self.action_type)
+
+        async def save(result: ReviewResult) -> str | None:
+            result.project_rules = list(settings.rules.language_rules)
+            return await self._save_part(settings, context, result, inputs, None, name_suffix, position)
+
+        def to_action_result(result: ReviewResult, review_file: str | None) -> ActionResult:
+            return self._part_result(
+                settings, result, inputs, review_file, result.verdict.value, Provenance.REVIEW
+            )
+
+        part = RecipePart(
+            ref=ref,
+            template=settings.template,
+            inputs=inputs,
+            rules_content=settings.rules.content,
+            allowed_tools=settings.allowed_tools,
+            changed_files=settings.changed_files,
+            spent=settings.recipe_spent,
+        )
+        return await run_recipe_part(
+            part,
+            context,
+            save=save,
+            to_action_result=to_action_result,
+            pricing_warned=capture.warned,
+        )
 
     async def _gated_parts(
         self,
@@ -734,8 +850,7 @@ class ReviewAction:
                 # Slice 927 D10: the model that answered, not the one requested — the
                 # same distinction the artifact's aiModel/requestedModel pair makes.
                 "model": result.model,
-                "requested_model": settings.resolved.model_id,
-                "profile": settings.profile_name,
+                **self._model_metadata(settings.model),
                 "template": settings.template_name,
                 # Absent when the review ran without tools, so a zero count always means
                 # "offered and declined" rather than "never offered" (design D5).
@@ -749,6 +864,13 @@ class ReviewAction:
                 ),
             },
         )
+
+    @staticmethod
+    def _model_metadata(model: _AliasModel | RecipeRef) -> dict[str, object]:
+        """What a part's metadata says was asked for; a recipe has no model or profile."""
+        if isinstance(model, RecipeRef):
+            return {"requested_model": model.recipe.name, "profile": None}
+        return {"requested_model": model.resolved.model_id, "profile": model.profile_name}
 
     def _resolve_slice_inputs(
         self,

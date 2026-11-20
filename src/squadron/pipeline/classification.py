@@ -18,10 +18,12 @@ caught by ``test_classification_is_idempotent_and_side_effect_free``.
 
 from __future__ import annotations
 
+import dataclasses
 import difflib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from squadron.core.models import Effort
@@ -32,7 +34,16 @@ from squadron.models.aliases import (
     require_known_model,
     resolve_model_alias,
 )
+from squadron.pipeline.actions import ActionType
+from squadron.pipeline.actions.tool_support import ALLOWED_TOOLS_KEY
 from squadron.providers.profiles import is_sdk_profile
+from squadron.recipes.model_ref import (
+    AliasRef,
+    ReviewModelError,
+    resolve_review_model_ref,
+    template_takes_diff,
+)
+from squadron.recipes.recipe_search import production_recipe_dirs
 from squadron.review.profile_resolution import review_profile_source
 
 if TYPE_CHECKING:
@@ -42,7 +53,7 @@ if TYPE_CHECKING:
     from squadron.review.templates import ReviewTemplate
 
 # Pre-run errors about a name that resolves to nothing; collected so one message lists them all.
-PreRunNameError = UnknownModelAliasError | UnknownReviewTemplateError
+PreRunNameError = UnknownModelAliasError | UnknownReviewTemplateError | ReviewModelError
 
 # The pipeline param that names a profile; its presence lets a literal model id through.
 PROFILE_PARAM = "profile"
@@ -423,6 +434,53 @@ def _collect_unknown_alias(
         alias_errors.append(exc)
 
 
+def _explicit_step_profile(
+    resolved_cfg: dict[str, object], classify_params: dict[str, object]
+) -> str | None:
+    """The profile a review step names itself or the run passes as a param, if any."""
+    for source in (resolved_cfg, classify_params):
+        value = source.get(PROFILE_PARAM)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _review_recipe_row(
+    candidate: str,
+    resolved_cfg: dict[str, object],
+    classify_params: dict[str, object],
+    step: StepConfig,
+    step_index: int,
+    alias_errors: list[PreRunNameError],
+    cwd: str,
+) -> StepClassification | AliasRef | None:
+    """Classify a review step's model name (slice 434, D2).
+
+    ``AliasRef``: the caller continues on the alias path. A recipe gives a row classified
+    from its member aliases. ``None``: a bad name, collected in *alias_errors*.
+    """
+    profile_source = _action_profile_source(ActionType.REVIEW, resolved_cfg, classify_params)
+    template = _review_template(ActionType.REVIEW, resolved_cfg)
+    try:
+        ref = resolve_review_model_ref(
+            candidate,
+            profile_source=profile_source,
+            search_dirs=production_recipe_dirs(Path(cwd)),
+            template=template,
+            has_diff=template is not None and template_takes_diff(template),
+            explicit_profile=_explicit_step_profile(resolved_cfg, classify_params),
+            no_tools=resolved_cfg.get(ALLOWED_TOOLS_KEY) == [],
+        )
+    except ReviewModelError as exc:
+        alias_errors.append(exc)
+        return None
+    if isinstance(ref, AliasRef):
+        return ref
+    recipe = ref.recipe
+    members = [*recipe.reviewers, *recipe.combs]
+    return _classify_alias_set(members, step, step_index, ActionType.REVIEW, f"recipe {recipe.name}")
+
+
 def _classify_container_inner(
     inner: StepConfig,
     parent_step: StepConfig,
@@ -431,6 +489,7 @@ def _classify_container_inner(
     pool_backend: PoolBackend | None,
     classify_params: dict[str, object],
     alias_errors: list[PreRunNameError],
+    cwd: str,
 ) -> list[StepClassification]:
     """Classify a single inner step returned by a container step's inner_steps().
 
@@ -535,6 +594,14 @@ def _classify_container_inner(
             )
             continue
 
+        if action_type == ActionType.REVIEW:
+            recipe_row = _review_recipe_row(
+                candidate, resolved_cfg, classify_params, parent_step, step_index, alias_errors, cwd
+            )
+            if isinstance(recipe_row, StepClassification):
+                row_results.append(dataclasses.replace(recipe_row, container_path=inner.name))
+            if not isinstance(recipe_row, AliasRef):
+                continue
         _collect_unknown_alias(
             candidate,
             _action_profile_source(action_type, resolved_cfg, classify_params),
@@ -570,6 +637,8 @@ def classify_pipeline(
     pool_backend: PoolBackend | None = None,
     policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
     params: dict[str, object] | None = None,
+    *,
+    cwd: str,
 ) -> PipelineClassification:
     """Classify each model-dispatching action in *definition*.
 
@@ -602,6 +671,8 @@ def classify_pipeline(
                 ``needs_persistent_session``.  Defaults to ``LAZY`` (no
                 upfront session for uncertain steps).  Pass ``STRICT`` to
                 use the pre-245 conservative behaviour.
+        cwd: The directory the run executes in; review recipe names are searched
+             there (slice 434 D1), as the review action searches its step's cwd.
         params: The merged runtime params (pipeline defaults plus ``--param``
                 overrides), the mapping the executor uses.  ``None`` means the
                 pipeline's own defaults only.
@@ -661,6 +732,7 @@ def classify_pipeline(
                         pool_backend,
                         classify_params,
                         alias_errors,
+                        cwd,
                     )
                 )
             continue
@@ -706,6 +778,14 @@ def classify_pipeline(
                 )
                 continue
 
+            if action_type == ActionType.REVIEW:
+                recipe_row = _review_recipe_row(
+                    candidate, resolved_cfg, classify_params, step, step_index, alias_errors, cwd
+                )
+                if isinstance(recipe_row, StepClassification):
+                    results.append(recipe_row)
+                if not isinstance(recipe_row, AliasRef):
+                    continue
             _collect_unknown_alias(
                 candidate,
                 _action_profile_source(action_type, resolved_cfg, classify_params),

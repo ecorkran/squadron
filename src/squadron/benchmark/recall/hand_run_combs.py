@@ -14,12 +14,10 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from squadron.benchmark.recall.decisions import parse_decisions
 from squadron.benchmark.recall.hand_run_reviews import HandRunNameError, split_output_name
 from squadron.benchmark.recall.import_plan import ImportContext, ImportPlan, folder_date
 from squadron.benchmark.recall.review_output import (
     ReviewOutputError,
-    finding_id_at,
     read_effort,
     read_usage,
 )
@@ -37,6 +35,8 @@ from squadron.metrology.recall_run_models import (
     comb_slot,
     run_record_id,
 )
+from squadron.recipes.comb_call import finding_id_at
+from squadron.recipes.decisions import parse_decisions
 
 COMB_FOLDER = "20261113-comb"
 COMB_OUTPUTS = "out"

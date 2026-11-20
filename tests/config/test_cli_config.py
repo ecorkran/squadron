@@ -60,6 +60,16 @@ class TestConfigGet:
         assert "cwd = ." in result.output
         assert "(default)" in result.output
 
+    def test_get_recipe_stage_slow_default(
+        self,
+        cli_runner: CliRunner,
+        patch_config_paths: dict[str, Path],
+    ) -> None:
+        result = cli_runner.invoke(app, ["config", "get", "review.recipe_stage_slow_s"])
+        assert result.exit_code == 0
+        assert "review.recipe_stage_slow_s = 1800" in result.output
+        assert "(default)" in result.output
+
     def test_get_after_set(
         self,
         cli_runner: CliRunner,

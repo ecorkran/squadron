@@ -14,12 +14,12 @@ from squadron.benchmark.recall.leak_check import (
     TranscriptLeakChecker,
     leak_judgeable,
 )
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.stage_runner import StageContext, run_stage
 from squadron.benchmark.transcripts import ToolCall, TranscriptResult, TranscriptSource
 from squadron.metrology.benchmark_replay_models import LeakScanResult
 from squadron.metrology.recall_run_models import RecallLeakVerdict, RecallRun
 from squadron.providers.base import ProfileName
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.scoring_support import make_case
 from tests.benchmark.recall.stage_support import (
     output_arg,

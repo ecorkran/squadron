@@ -63,5 +63,7 @@ def test_steps_with_tools_or_without_the_key_are_not_checked() -> None:
 def test_only_strict_validation_runs_the_check() -> None:
     definition = _definition({"model": "sonnet", "allowed_tools": [], "prompt": "x"})
     with patch(f"{_MOD}.get_provider", return_value=_provider(honors_empty_tools=False)):
-        assert not [e for e in validate_pipeline(definition) if e.field == "allowed_tools"]
-        assert [e for e in validate_pipeline(definition, strict=True) if e.field == "allowed_tools"]
+        assert not [e for e in validate_pipeline(definition, cwd=".") if e.field == "allowed_tools"]
+        assert [
+            e for e in validate_pipeline(definition, strict=True, cwd=".") if e.field == "allowed_tools"
+        ]

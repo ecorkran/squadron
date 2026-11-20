@@ -22,6 +22,9 @@ CF_CLI_TIMEOUT_KEY = "cf.cli_timeout_s"
 BENCHMARK_AUTH_PROBE_TIMEOUT_KEY = "benchmark.auth_probe_timeout_s"
 BENCHMARK_INSTALL_TIMEOUT_KEY = "benchmark.install_timeout_s"
 BENCHMARK_SUITE_TIMEOUT_KEY = "benchmark.suite_timeout_s"
+# Slice 434 D3, D5: a recipe review stage still running after this many seconds logs one
+# WARNING naming it; the call is not stopped. Read with get_positive_int_config.
+REVIEW_RECIPE_STAGE_SLOW_KEY = "review.recipe_stage_slow_s"
 # Slice 422 D9, D12: qualification repeats and the yield report's separability inputs.
 BENCHMARK_QUALIFICATION_REPEATS_KEY = "benchmark.qualification_repeats"
 BENCHMARK_PLANNED_SAMPLES_KEY = "benchmark.planned_samples"
@@ -205,6 +208,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         description=(
             "Seconds between a running pipeline's heartbeat writes to its run state. "
             "A run is listed as stale after ten missed intervals; must be positive."
+        ),
+    ),
+    REVIEW_RECIPE_STAGE_SLOW_KEY: ConfigKey(
+        name=REVIEW_RECIPE_STAGE_SLOW_KEY,
+        type_=int,
+        default=1800,
+        description=(
+            "Seconds after which a recipe review stage still running logs one slow-stage "
+            "WARNING naming the recipe, stage and alias. The call is not stopped; must "
+            "be positive."
         ),
     ),
     "review.max_file_size_bytes": ConfigKey(

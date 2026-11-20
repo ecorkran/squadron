@@ -22,6 +22,7 @@ from rich.text import Text
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.cli.commands.param_parsing import STRAY_PARAM_COMMAND
 from squadron.cli.commands.review_model_param import PARAM_OPTION_HELP, resolve_review_model
+from squadron.cli.commands.review_recipe import CliPersist, CliRecipeReview, run_recipe_cli
 from squadron.cli.commands.review_revise import (
     refuse_revise_model_without_max,
     run_review_revise,
@@ -46,6 +47,12 @@ from squadron.models.aliases import (
 from squadron.pipeline.actions.judge import judge_verdict
 from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.errors import ProviderError
+from squadron.recipes.model_ref import (
+    RecipeRef,
+    ReviewModelError,
+    resolve_review_model_ref,
+)
+from squadron.recipes.recipe_search import production_recipe_dirs
 from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.document_target import DocumentKind, slice_for_document
 from squadron.review.git_utils import (
@@ -405,6 +412,7 @@ def _save_and_report(
     name_suffix: str | None = None,
     project_name: str | None = None,
     json_stdout: bool = False,
+    saved_paths: list[Path] | None = None,
 ) -> bool:
     """Persist a review, reporting either where it landed or why it did not.
 
@@ -435,6 +443,8 @@ def _save_and_report(
         _report_console(json_stdout).print(f"[red]Review not saved: {escape(str(exc))}[/red]")
         return False
     _report_console(json_stdout).print(f"[green]Saved review to {escape(str(path))}[/green]")
+    if saved_paths is not None:
+        saved_paths.append(Path(path))
     return True
 
 
@@ -718,6 +728,46 @@ def _gate_task_parts(part_inputs: list[dict[str, str]]) -> dict[str, ReviewResul
         raise typer.Exit(code=1) from exc
 
 
+def _classify_or_exit(
+    name: str | None,
+    profile_flag: str | None,
+    template: ReviewTemplate,
+    inputs: dict[str, str],
+    no_tools: bool,
+) -> RecipeRef | None:
+    """A ``RecipeRef`` for a recipe name, else ``None``; a bad name or a refused recipe
+    prints the error and exits 1 before any call (slice 434, D2)."""
+    if name is None:
+        return None
+    try:
+        ref = resolve_review_model_ref(
+            name,
+            profile_source=review_profile_source(profile_flag is not None, template),
+            search_dirs=production_recipe_dirs(Path(inputs.get("cwd") or ".")),
+            template=template,
+            has_diff=bool(inputs.get("diff")),
+            explicit_profile=profile_flag,
+            no_tools=no_tools,
+        )
+    except ReviewModelError as exc:
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
+        raise typer.Exit(code=1) from None
+    return ref if isinstance(ref, RecipeRef) else None
+
+
+def _require_persist(
+    persist: CliPersist[SaveOutcome] | None, ref: RecipeRef
+) -> CliPersist[SaveOutcome]:
+    """Only the subcommands that hand over their save step run recipes."""
+    if persist is None:
+        rprint(
+            f"[red]Error: recipe '{escape(ref.recipe.name)}' is not supported here; recipe "
+            "reviews run from sq review code, slice, tasks and arch.[/red]"
+        )
+        raise typer.Exit(code=1)
+    return persist
+
+
 def _run_review_command(
     template_name: str,
     inputs: dict[str, str],
@@ -735,6 +785,8 @@ def _run_review_command(
     convention_root: str | None = None,
     setting_sources_override: list[str] | None = None,
     language_rules: tuple[str, ...] = (),
+    persist: CliPersist[SaveOutcome] | None = None,
+    changed_files: tuple[str, ...] = (),
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
@@ -788,6 +840,25 @@ def _run_review_command(
     # collapses it to a model id, after which the alias metadata is
     # unrecoverable (slice 266).
     alias_name = _resolve_model(model_flag, template, template_name)
+    recipe = _classify_or_exit(alias_name, profile_flag, template, inputs, no_tools)
+    if recipe is not None:
+        review = CliRecipeReview(
+            template=template,
+            inputs=inputs,
+            rules_content=rules_content,
+            verbosity=verbosity,
+            no_tools=no_tools,
+            language_rules=selected_rules,
+            persist=_require_persist(persist, recipe),
+            changed_files=list(changed_files),
+        )
+        result = run_recipe_cli(recipe, review, json_stdout=output == OutputMode.JSON)
+        display_result(result, output, output_path, verbosity)
+        if verbosity >= 1 and output != OutputMode.JSON and result.recipe is not None:
+            rprint(escape(result.recipe.stage_section))
+        if result.verdict is Verdict.UNKNOWN:
+            raise typer.Exit(code=1)
+        return result
     allows_tools = model_allows_tools(alias_name)
     max_output_tokens = model_max_output_tokens(alias_name)
     effort = model_effort(alias_name)
@@ -967,6 +1038,27 @@ def review_slice(
         "against": against,
         "cwd": review_cwd,
     }
+
+    def save(result: ReviewResult, paths: list[Path]) -> SaveOutcome:
+        return _resolve_save_outcome(
+            no_save=no_save,
+            # Bound before the closure so the narrowing survives into it: a checker
+            # cannot carry `persistable=... is not None` across the lambda boundary.
+            target=slice_info,
+            save=lambda info: _save_and_report(
+                result,
+                "slice",
+                SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
+                as_json=use_json,
+                json_stdout=output == OutputMode.JSON,
+                input_file=input_file,
+                project_name=info["project"],
+                saved_paths=paths,
+            ),
+            review_type="slice",
+        )
+
+    persist = CliPersist(save)
     result = _run_review_command(
         "slice",
         inputs,
@@ -979,26 +1071,10 @@ def review_slice(
         rules_dir=resolved_rules_dir,
         failure_target=slice_info,
         no_save=no_save,
+        persist=persist,
     )
 
-    outcome = _resolve_save_outcome(
-        no_save=no_save,
-        # Bound before the closure so the narrowing survives into it: a checker
-        # cannot carry `persistable=... is not None` across the lambda boundary.
-        target=slice_info,
-        save=lambda info: _save_and_report(
-            result,
-            "slice",
-            SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
-            as_json=use_json,
-            json_stdout=output == OutputMode.JSON,
-            input_file=input_file,
-            project_name=info["project"],
-        ),
-        review_type="slice",
-    )
-
-    _exit_on(result.verdict, outcome)
+    _exit_on(result.verdict, persist.run(result))
 
 
 def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
@@ -1068,21 +1144,16 @@ def review_arch(
     # never reaches that closure, and without a target there is nothing to
     # name the failure artifact after.
     arch_failure_target = _arch_slice_info(arch_index, input_file) if arch_index is not None else None
-    result = _run_review_command(
-        "arch",
-        inputs,
-        output,
-        output_path,
-        verbosity,
-        model_flag=model,
-        profile_flag=profile,
-        no_tools=no_tools,
-        rules_dir=resolved_rules_dir,
-        failure_target=arch_failure_target,
-        no_save=no_save,
-    )
 
-    def _save_arch(index: int) -> bool:
+    def save(result: ReviewResult, paths: list[Path]) -> SaveOutcome:
+        return _resolve_save_outcome(
+            no_save=no_save,
+            target=arch_index,
+            save=lambda index: _save_arch(result, index, paths),
+            review_type="arch",
+        )
+
+    def _save_arch(result: ReviewResult, index: int, paths: list[Path]) -> bool:
         # Always ArchTarget, never SliceTarget. The reuse of arch_failure_target
         # that stood here was unreachable in its SliceTarget branch's negation:
         # this closure runs only when arch_index is not None, which is exactly
@@ -1101,16 +1172,26 @@ def review_arch(
             json_stdout=output == OutputMode.JSON,
             input_file=input_file,
             project_name=cf_project_name(),
+            saved_paths=paths,
         )
 
-    outcome = _resolve_save_outcome(
+    persist = CliPersist(save)
+    result = _run_review_command(
+        "arch",
+        inputs,
+        output,
+        output_path,
+        verbosity,
+        model_flag=model,
+        profile_flag=profile,
+        no_tools=no_tools,
+        rules_dir=resolved_rules_dir,
+        failure_target=arch_failure_target,
         no_save=no_save,
-        target=arch_index,
-        save=_save_arch,
-        review_type="arch",
+        persist=persist,
     )
 
-    _exit_on(result.verdict, outcome)
+    _exit_on(result.verdict, persist.run(result))
 
 
 @review_app.command("tasks", **STRAY_PARAM_COMMAND)
@@ -1197,7 +1278,9 @@ def review_tasks(
     parts = review_parts(task_file_paths)
     part_inputs = [{"input": part.input_path, "against": against, "cwd": review_cwd} for part in parts]
 
-    def _save_part(part_result: ReviewResult, path: str, suf: str | None) -> SaveOutcome:
+    def _save_part(
+        part_result: ReviewResult, path: str, suf: str | None, paths: list[Path] | None = None
+    ) -> SaveOutcome:
         def _save(info: SliceInfo) -> bool:
             return _save_and_report(
                 part_result,
@@ -1208,6 +1291,7 @@ def review_tasks(
                 input_file=path,
                 name_suffix=suf,
                 project_name=info["project"],
+                saved_paths=paths,
             )
 
         return _resolve_save_outcome(
@@ -1236,6 +1320,9 @@ def review_tasks(
             )
         # The suffix is bound before the run so a provider failure lands in this
         # part's own slot, the same one its success path would write.
+        persist = CliPersist(
+            lambda r, paths, task_path=task_path, suffix=suffix: _save_part(r, task_path, suffix, paths)
+        )
         result = _run_review_command(
             "tasks",
             inputs,
@@ -1249,11 +1336,12 @@ def review_tasks(
             failure_target=slice_info,
             no_save=no_save,
             failure_name_suffix=suffix,
+            persist=persist,
         )
         results.append((task_path, result))
         # Every part is saved before the next runs: the reviews have already been
         # paid for, so a later part's failure must not cost this one.
-        outcome = _worst_outcome(outcome, _save_part(result, task_path, suffix))
+        outcome = _worst_outcome(outcome, persist.run(result))
 
     _exit_on(Verdict(worst_verdict(str(r.verdict) for _, r in results)), outcome)
 
@@ -1379,9 +1467,10 @@ def review_code(
     # Pre-flight: a range with nothing reviewable in it must not reach the
     # model. Deliberately outside the rules-dir branch below — a review with no
     # rules directory needs this guard just as much (issue #62).
+    changed_files: list[str] = []
     if diff:
         try:
-            assert_reviewable_scope(diff, review_cwd, exclude_patterns)
+            changed_files = assert_reviewable_scope(diff, review_cwd, exclude_patterns)
         except EmptyScopeError as exc:
             rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
@@ -1428,6 +1517,24 @@ def review_code(
         inputs["diff"] = diff
     if exclude_patterns:
         inputs["diff_exclude_patterns"] = ",".join(exclude_patterns)
+
+    def save(result: ReviewResult, paths: list[Path]) -> SaveOutcome:
+        return _resolve_save_outcome(
+            no_save=no_save,
+            target=slice_info,
+            save=lambda info: _save_and_report(
+                result,
+                "code",
+                SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
+                as_json=use_json,
+                json_stdout=output == OutputMode.JSON,
+                project_name=info["project"],
+                saved_paths=paths,
+            ),
+            review_type="code",
+        )
+
+    persist = CliPersist(save)
     result = _run_review_command(
         "code",
         inputs,
@@ -1446,23 +1553,11 @@ def review_code(
         # rules onto content that already has them (issue #24).
         rules_dir=None,
         language_rules=tuple(language_rules),
+        persist=persist,
+        changed_files=tuple(changed_files),
     )
 
-    outcome = _resolve_save_outcome(
-        no_save=no_save,
-        target=slice_info,
-        save=lambda info: _save_and_report(
-            result,
-            "code",
-            SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
-            as_json=use_json,
-            json_stdout=output == OutputMode.JSON,
-            project_name=info["project"],
-        ),
-        review_type="code",
-    )
-
-    _exit_on(result.verdict, outcome)
+    _exit_on(result.verdict, persist.run(result))
 
 
 @review_app.command("list")

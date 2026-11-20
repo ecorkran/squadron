@@ -81,6 +81,8 @@ from squadron.pipeline.models import (
     local_output_key,
     prior_output_key,
 )
+from squadron.pipeline.resolver import POOL_PREFIX
+from squadron.pipeline.run_services import RunServices, capture_of, sink_of
 from squadron.pipeline.run_spend import RunSpend, read_cost_cap, remaining_budget
 from squadron.pipeline.sources import (
     FLAG_KIND_KEY,
@@ -101,6 +103,7 @@ from squadron.providers.base import (
     USAGE_KEY,
 )
 from squadron.providers.errors import BudgetExhaustedError
+from squadron.recipes.recipe_record import RecipeRecordSink, metrology_recipe_sink
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -480,6 +483,7 @@ async def execute_pipeline(
     observer: RunObserver | None = None,
     runs_dir: Path | None = None,
     item_rerun: ItemRerun | None = None,
+    recipe_sink: RecipeRecordSink | None = None,
     _action_registry: dict[str, object] | None = None,
 ) -> PipelineResult:
     """Execute *definition* with the given *params*.
@@ -644,10 +648,14 @@ async def execute_pipeline(
     # later loop in the same run still has to pass on its own.
     resume_accept = start_from is not None and merged_params.pop(ACCEPT_DECISION, None) is True
 
-    # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
-    usage_capture = UsageCapture(set())
-    # One per invocation, shared by every step including fan_out branches (D4, D6).
-    spend = RunSpend(cost_cap)
+    services = RunServices(
+        # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
+        usage_capture=UsageCapture(set()),
+        # Shared by every step including fan_out branches (slice 947 D4, D6).
+        spend=RunSpend(cost_cap),
+        # Where recipe reviews write their records (434 D8); the store opens on first write.
+        recipe_sink=recipe_sink if recipe_sink is not None else metrology_recipe_sink(effective_cwd),
+    )
 
     # Resume: seed the session with the most recent applicable compact summary.
     # A connected session is rotated now; a lazy one gets the seed at connect.
@@ -678,7 +686,7 @@ async def execute_pipeline(
             sdk_candidate = _step_sdk_candidate(step, resolver, merged_params)
             if sdk_candidate is not None:
                 try:
-                    budget = remaining_budget(cost_cap, spend.known_usd)
+                    budget = remaining_budget(cost_cap, services.spend.known_usd)
                 except BudgetExhaustedError as exc:
                     return _budget_exhausted_result(
                         definition, step, step_results, observer, effective_run_id, exc
@@ -720,8 +728,7 @@ async def execute_pipeline(
             resolver=resolver,
             cf_client=cf_client,
             sdk_session=sdk_session,
-            usage_capture=usage_capture,
-            spend=spend,
+            services=services,
             get_step_type_fn=get_step_type,
             get_action_fn=get_action_fn,
             runs_dir=runs_dir,
@@ -1004,8 +1011,7 @@ async def _execute_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None,
-    usage_capture: UsageCapture | None = None,
-    spend: RunSpend | None = None,
+    services: RunServices | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None,
@@ -1036,8 +1042,7 @@ async def _execute_step(
         "resolver": resolver,
         "cf_client": cf_client,
         "sdk_session": sdk_session,
-        "usage_capture": usage_capture,
-        "spend": spend,
+        "services": services,
         "get_step_type_fn": get_step_type_fn,
         "get_action_fn": get_action_fn,
         "runs_dir": runs_dir,
@@ -1098,8 +1103,7 @@ async def _execute_step_once(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
-    usage_capture: UsageCapture | None = None,
-    spend: RunSpend | None = None,
+    services: RunServices | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     iteration: int = 0,
@@ -1170,7 +1174,8 @@ async def _execute_step_once(
             cf_client=cf_client,
             cwd=cwd,
             sdk_session=sdk_session,
-            usage_capture=usage_capture,
+            usage_capture=capture_of(services),
+            recipe_sink=sink_of(services),
             step_outputs=step_outputs if step_outputs is not None else {},
             iteration=iteration,
             prior_iteration_step_outputs=(
@@ -1220,9 +1225,9 @@ async def _execute_step_once(
 
         # Cost cap (slice 947 D4/D5): count this action's spend, then fail the run at the
         # action that crossed the cap. An action already failing keeps its own error.
-        if spend is not None:
-            spend.add(result.metadata.get(USAGE_KEY), step_name=step.name)
-            if result.success and (cap_error := spend.cap_error()) is not None:
+        if services is not None:
+            services.spend.add(result.metadata.get(USAGE_KEY), step_name=step.name)
+            if result.success and (cap_error := services.spend.cap_error()) is not None:
                 result.success = False
                 result.error = cap_error
                 result.metadata[FAILURE_KIND_KEY] = FailureKind.COST_CAP.value
@@ -1464,8 +1469,7 @@ async def _execute_loop_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
-    usage_capture: UsageCapture | None = None,
-    spend: RunSpend | None = None,
+    services: RunServices | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1522,8 +1526,7 @@ async def _execute_loop_step(
             resolver=resolver,
             cf_client=cf_client,
             sdk_session=sdk_session,
-            usage_capture=usage_capture,
-            spend=spend,
+            services=services,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             iteration=iteration,
@@ -1608,8 +1611,7 @@ async def _execute_loop_body(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
-    usage_capture: UsageCapture | None = None,
-    spend: RunSpend | None = None,
+    services: RunServices | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1650,8 +1652,7 @@ async def _execute_loop_body(
         resolver=resolver,
         cf_client=cf_client,
         sdk_session=sdk_session,
-        usage_capture=usage_capture,
-        spend=spend,
+        services=services,
         get_step_type_fn=get_step_type_fn,
         get_action_fn=get_action_fn,
         runs_dir=runs_dir,
@@ -1679,8 +1680,7 @@ async def _execute_loop_body(
             resolver=resolver,
             cf_client=cf_client,
             sdk_session=sdk_session,
-            usage_capture=usage_capture,
-            spend=spend,
+            services=services,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             runs_dir=runs_dir,
@@ -1712,8 +1712,7 @@ async def _resolve_final_notes(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None,
-    usage_capture: UsageCapture | None,
-    spend: RunSpend | None,
+    services: RunServices | None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None,
@@ -1761,8 +1760,7 @@ async def _resolve_final_notes(
         resolver=resolver,
         cf_client=cf_client,
         sdk_session=sdk_session,
-        usage_capture=usage_capture,
-        spend=spend,
+        services=services,
         get_step_type_fn=get_step_type_fn,
         get_action_fn=get_action_fn,
         runs_dir=runs_dir,
@@ -1781,7 +1779,8 @@ async def _resolve_final_notes(
         cf_client=cf_client,
         cwd=cwd,
         sdk_session=sdk_session,
-        usage_capture=usage_capture,
+        usage_capture=capture_of(services),
+        recipe_sink=sink_of(services),
     )
     commit_result = await execute_stamped(get_action_fn("commit"), commit_ctx, ActionType.COMMIT)
     actions.append(commit_result)
@@ -1826,8 +1825,7 @@ async def _run_loop_rounds(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
-    usage_capture: UsageCapture | None = None,
-    spend: RunSpend | None = None,
+    services: RunServices | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1920,8 +1918,7 @@ async def _run_loop_rounds(
                 resolver=resolver,
                 cf_client=cf_client,
                 sdk_session=sdk_session,
-                usage_capture=usage_capture,
-                spend=spend,
+                services=services,
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
                 iteration=iteration,
@@ -2034,7 +2031,8 @@ async def _run_loop_rounds(
                     cf_client=cf_client,
                     cwd=cwd,
                     sdk_session=sdk_session,
-                    usage_capture=usage_capture,
+                    usage_capture=capture_of(services),
+                    recipe_sink=sink_of(services),
                     step_outputs=visible_step_outputs,
                     iteration=iteration,
                 )
@@ -2213,8 +2211,7 @@ async def _execute_each_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
-    usage_capture: UsageCapture | None = None,
-    spend: RunSpend | None = None,
+    services: RunServices | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -2278,8 +2275,7 @@ async def _execute_each_step(
                     resolver=resolver,
                     cf_client=cf_client,
                     sdk_session=sdk_session,
-                    usage_capture=usage_capture,
-                    spend=spend,
+                    services=services,
                     get_step_type_fn=get_step_type_fn,
                     get_action_fn=get_action_fn,
                     runs_dir=runs_dir,
@@ -2473,8 +2469,6 @@ async def _run_each_item(
 # Fan-out step executor
 # ---------------------------------------------------------------------------
 
-_POOL_PREFIX = "pool:"
-
 
 async def _execute_fan_out_step(
     *,
@@ -2490,8 +2484,7 @@ async def _execute_fan_out_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
-    usage_capture: UsageCapture | None = None,
-    spend: RunSpend | None = None,
+    services: RunServices | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -2511,7 +2504,7 @@ async def _execute_fan_out_step(
 
     # 1. Build model list — call resolver.resolve() once per branch, keep profile.
     try:
-        if isinstance(models_raw, str) and models_raw.startswith(_POOL_PREFIX):
+        if isinstance(models_raw, str) and models_raw.startswith(POOL_PREFIX):
             n = int(resolved_config.get("n", 1))  # type: ignore[arg-type]
             pool_ref = models_raw  # e.g. "pool:review"
             branch_models: list[tuple[str, str | None]] = [resolver.resolve(pool_ref) for _ in range(n)]
@@ -2566,8 +2559,7 @@ async def _execute_fan_out_step(
             resolver=resolver,
             cf_client=cf_client,
             sdk_session=None,  # never propagate session into branches
-            usage_capture=usage_capture,
-            spend=spend,
+            services=services,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             runs_dir=runs_dir,

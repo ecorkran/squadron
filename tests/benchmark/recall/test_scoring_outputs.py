@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.scoring import recipe_outputs
 from squadron.benchmark.recall.scoring_select import ImportOnlyResolver, StageIdentity, identity_of
 from squadron.metrology.recall_run_models import (
@@ -12,6 +11,7 @@ from squadron.metrology.recall_run_models import (
     RecallRun,
     StageOutcome,
 )
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.scoring_support import (
     StubResolver,
     add_chain,

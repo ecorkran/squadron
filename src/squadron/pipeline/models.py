@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from squadron.pipeline.resolver import ModelResolver
     from squadron.pipeline.sdk_session import SDKExecutionSession
     from squadron.pipeline.usage_capture import UsageCapture
+    from squadron.recipes.recipe_record import RecipeRecordSink
     from squadron.review.persistence import CfClientProtocol
 
 
@@ -130,6 +131,9 @@ class ActionContext:
     # None means a context with no LLM run (standalone branch_run / commit_run); an LLM
     # action that finds None raises rather than skipping capture.
     usage_capture: UsageCapture | None = None
+    # Where a recipe review writes its record (slice 434 D8), set by the executor. None
+    # means a context with no review (standalone branch_run / commit_run).
+    recipe_sink: RecipeRecordSink | None = None
 
 
 @dataclass

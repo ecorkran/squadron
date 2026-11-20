@@ -299,7 +299,7 @@ class TestIdentityIsFileName:
 
 
 class TestValidatePipelineSummaryStep:
-    """validate_pipeline() propagates SummaryStepType.validate() errors."""
+    """validate_pipeline(cwd=".") propagates SummaryStepType.validate() errors."""
 
     def _make_pipeline(self, step_cfg: dict[str, object]) -> PipelineDefinition:
         from squadron.pipeline.models import PipelineDefinition, StepConfig
@@ -315,7 +315,7 @@ class TestValidatePipelineSummaryStep:
         from squadron.pipeline.loader import validate_pipeline
 
         defn = self._make_pipeline({"template": "minimal-sdk", "emit": ["banana"]})
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         fields = [e.field for e in errors]
         assert "emit" in fields
 
@@ -323,14 +323,14 @@ class TestValidatePipelineSummaryStep:
         from squadron.pipeline.loader import validate_pipeline
 
         defn = self._make_pipeline({"template": "minimal-sdk"})
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert errors == []
 
     def test_rotate_emit_validates_clean(self) -> None:
         from squadron.pipeline.loader import validate_pipeline
 
         defn = self._make_pipeline({"template": "minimal-sdk", "emit": ["rotate"]})
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert errors == []
 
 
@@ -356,7 +356,7 @@ class TestValidatePipelineAllowedTools:
         from squadron.pipeline.loader import validate_pipeline
 
         defn = self._make_pipeline({"prompt": "hi", "allowed_tools": ["read_fil"]})
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert errors
         assert any(e.field == "allowed_tools" and "read_fil" in e.message for e in errors)
 
@@ -364,7 +364,7 @@ class TestValidatePipelineAllowedTools:
         from squadron.pipeline.loader import validate_pipeline
 
         defn = self._make_pipeline({"prompt": "hi", "allowed_tools": ["read_file"]})
-        assert validate_pipeline(defn) == []
+        assert validate_pipeline(defn, cwd=".") == []
 
 
 class TestPipelineInfoParams:
@@ -532,3 +532,46 @@ def test_builtin_and_complete_override_do_not_warn(
         load_pipeline("p5", project_dir=tmp_path / "none", user_dir=user)
 
     assert [r for r in caplog.records if r.levelname == "WARNING"] == []
+
+
+# ---------------------------------------------------------------------------
+# Slice 434 D2 — a literal review model name may be a recipe
+# ---------------------------------------------------------------------------
+
+
+class TestValidateReviewModel:
+    def _review(self, model: str) -> PipelineDefinition:
+        from squadron.pipeline.models import StepConfig
+
+        step = StepConfig(step_type="review", name="r", config={"template": "code", "model": model})
+        return PipelineDefinition(name="test", description="test", params={}, steps=[step])
+
+    def test_shipped_recipe_passes(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        assert validate_pipeline(self._review("haiku-sol-opus"), cwd=".") == []
+
+    def test_alias_still_passes(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        assert validate_pipeline(self._review("haiku-xhigh"), cwd=".") == []
+
+    def test_recipe_member_is_checked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+        from squadron.recipes.recipe_search import PROJECT_RECIPES_DIR
+
+        recipes = tmp_path / PROJECT_RECIPES_DIR
+        recipes.mkdir(parents=True)
+        (recipes / "ghosted.yaml").write_text(
+            "name: ghosted\nreviewers: [haiku-xhigh, no-such-member]\n", encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+        errors = validate_pipeline(self._review("ghosted"), cwd=".")
+        assert [e.field for e in errors] == ["steps[r].model"]
+        assert "no-such-member" in errors[0].message
+
+    def test_unknown_name_fails_listing_recipes(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        errors = validate_pipeline(self._review("no-such-name"), cwd=".")
+        assert len(errors) == 1 and "Known recipes:" in errors[0].message

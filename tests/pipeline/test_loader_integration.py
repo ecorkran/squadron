@@ -29,7 +29,7 @@ class TestLoadAllBuiltIns:
     @pytest.mark.parametrize("name", _BUILTIN_NAMES)
     def test_validate_no_errors(self, name: str) -> None:
         defn = load_pipeline(name, project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         # Filter out unknown step type warnings (e.g. "each")
         real_errors = [e for e in errors if not (e.field == "step_type" and "Unknown" in e.message)]
         assert real_errors == [], f"Unexpected errors for {name}: {real_errors}"
@@ -79,7 +79,7 @@ class TestBuiltInPipelineStructure:
     )
     def test_plan_batch_shape(self, name: str, source: str, phase_step: str) -> None:
         defn = load_pipeline(name, project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
-        assert validate_pipeline(defn) == []
+        assert validate_pipeline(defn, cwd=".") == []
         assert len(defn.steps) == 1
         each = defn.steps[0]
         # The step name names the report file: {run_id}.slices.report.md.

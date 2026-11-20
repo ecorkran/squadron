@@ -12,35 +12,24 @@ import logging
 from squadron.benchmark.auth_check import UnresolvedProfileError, resolve_alias_profile
 from squadron.benchmark.recall.scoring_select import StageIdentity
 from squadron.core.models import Effort
-from squadron.data import data_dir
-from squadron.metrology.identity import template_behavior_hash
 from squadron.metrology.recall_run_models import StageConfig, StageKind
-from squadron.models.aliases import (
-    get_all_aliases,
-    model_allows_tools,
-    model_effort,
-    model_max_output_tokens,
-)
+from squadron.models.aliases import get_all_aliases, model_effort
 from squadron.pipeline.usage_capture import effort_sent_by_profile
-from squadron.review.templates import load_template
+from squadron.recipes.stage_config import (
+    COMB_TEMPLATE_NAME,
+    StageConfigError,
+    builtin_template_hash,
+    stage_config,
+)
 
 _logger = logging.getLogger(__name__)
 
 #: The built-in template each stage kind sends.
-STAGE_TEMPLATES: dict[StageKind, str] = {StageKind.REVIEW: "code", StageKind.COMB: "comb"}
+STAGE_TEMPLATES: dict[StageKind, str] = {StageKind.REVIEW: "code", StageKind.COMB: COMB_TEMPLATE_NAME}
 
 
 class StageIdentityError(ValueError):
     """An alias or template that gives no live stage identity."""
-
-
-def builtin_template_hash(name: str) -> str:
-    """The hash of the shipped template file. Stage calls run in a scrubbed home with no
-    user templates, so the built-in is what they execute, whatever this process's home holds."""
-    path = data_dir() / "templates" / f"{name}.yaml"
-    if not path.is_file():
-        raise StageIdentityError(f"built-in template {name!r} not found at {path}")
-    return template_behavior_hash(load_template(path))
 
 
 def live_stage_config(alias: str, stage_kind: StageKind) -> tuple[StageConfig, Effort | None]:
@@ -49,17 +38,10 @@ def live_stage_config(alias: str, stage_kind: StageKind) -> tuple[StageConfig, E
         raise StageIdentityError(f"model alias {alias!r} is not in the alias registry")
     try:
         model, profile = resolve_alias_profile(alias)
-    except UnresolvedProfileError as exc:
+        template_hash = builtin_template_hash(STAGE_TEMPLATES[stage_kind])
+    except (UnresolvedProfileError, StageConfigError) as exc:
         raise StageIdentityError(str(exc)) from exc
-    template_hash = builtin_template_hash(STAGE_TEMPLATES[stage_kind])
-    config = StageConfig(
-        model=model,
-        profile=profile.value,
-        template_hash=template_hash,
-        tool_use=model_allows_tools(alias),
-        max_output_tokens=model_max_output_tokens(alias),
-    )
-    return config, model_effort(alias)
+    return stage_config(alias, model, profile.value, template_hash), model_effort(alias)
 
 
 class LiveStageResolver:

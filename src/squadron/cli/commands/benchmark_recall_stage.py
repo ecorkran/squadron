@@ -16,10 +16,8 @@ import typer
 from squadron.benchmark.auth_check import UnresolvedProfileError, resolve_alias_profile
 from squadron.benchmark.recall.stage_command import (
     StageInputError,
-    StageModel,
     changed_files,
     read_stage_input,
-    run_comb_stage,
     write_stage_output,
 )
 from squadron.cli.commands.benchmark_common import stderr_exit
@@ -27,6 +25,7 @@ from squadron.config.keys import BENCHMARK_RECALL_FETCH_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
 from squadron.core.process_runner import SubprocessRunner
 from squadron.models.aliases import model_allows_tools, model_effort, model_max_output_tokens
+from squadron.recipes.comb_call import StageModel, run_comb_stage
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.templates import get_template, load_all_templates
 

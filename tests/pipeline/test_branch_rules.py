@@ -80,6 +80,6 @@ def test_validate_pipeline_reports_the_rule() -> None:
         name="no-enter", description="t", params={}, steps=[_implement("go")]
     )
 
-    messages = [e.message for e in validate_pipeline(definition)]
+    messages = [e.message for e in validate_pipeline(definition, cwd=".")]
 
     assert any("implement step go needs a preceding branch: {op: enter}" in m for m in messages)

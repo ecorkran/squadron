@@ -13,13 +13,15 @@ from squadron.benchmark.auth_check import AuthAnswer, AuthCheckResult
 from squadron.benchmark.bench_lock import BenchmarkLock
 from squadron.benchmark.recall.live_services import LiveRunServices
 from squadron.benchmark.recall.recall_services import RECALL_LOCK_ID, RecallServices
+from squadron.benchmark.recall.recipe_dirs import RECIPES_DIR as BENCH_RECIPES_DIR
 from squadron.benchmark.recall.stage_identity import live_stage_config
 from squadron.cli.commands import benchmark_recall_run
 from squadron.config.keys import BENCHMARK_REVIEW_TIMEOUT_KEY
 from squadron.core.process_lock import ProcessLock
 from squadron.core.process_runner import ProcessResult, SubprocessRunner
 from squadron.providers.base import ProfileName
-from tests.benchmark.recall.committed import RECIPES_DIR, REPO_ROOT, add_committed_sets, proof_runner
+from squadron.recipes.recipe_search import shipped_recipes_dir
+from tests.benchmark.recall.committed import REPO_ROOT, add_committed_sets, proof_runner
 from tests.benchmark.recall.fixtures.bug_repo.build import BuiltBugRepo, build
 from tests.benchmark.recall.stage_support import (
     FakeSandboxes,
@@ -126,7 +128,7 @@ def test_d11_recipe_on_nonsquadron_prints_bound_and_makes_no_call(tmp_path: Path
     services = dataclasses.replace(services, process_runner=proof_runner())
     add_committed_sets(services)
     missing.failures.update({case.name: "source repo missing" for case in services.store.list_cases()})
-    recipe = str(RECIPES_DIR / "haiku-sol-luna-opus.yaml")
+    recipe = str(shipped_recipes_dir() / "haiku-sol-luna-opus.yaml")
     result = invoke_recall(
         services, "run", "--set", "real-bugs-nonsquadron", "--recipe", recipe,
         "--max-cost", "25", "--max-plan-calls", "14", "--call-cost", "0.5",
@@ -205,4 +207,20 @@ def test_lock_of_a_dead_owner_is_taken_over(
         r.levelno == logging.WARNING and "taking over the lock" in r.getMessage()
         for r in caplog.records
     )
+    assert events == ["call"]
+
+
+def test_recipe_named_without_path_is_found_in_the_benchmark_dir(
+    tmp_path: Path, bug_repo: BuiltBugRepo
+) -> None:
+    events: list[str] = []
+    services = _services(tmp_path, events)
+    _add_fixture(services, bug_repo)
+    bench_dir = tmp_path / BENCH_RECIPES_DIR
+    bench_dir.mkdir(parents=True)
+    _recipe(bench_dir)
+    result = invoke_recall(
+        services, "run", "--set", "fixture", "--recipe", "rev", "--max-cost", "1", "--call-cost", "0.01"
+    )
+    assert result.exit_code == 0, result.output
     assert events == ["call"]

@@ -11,6 +11,7 @@ import json
 import logging
 import shlex
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from squadron.models.aliases import UnknownModelAliasError
@@ -43,6 +44,8 @@ from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionE
 from squadron.pipeline.steps import StepTypeName, get_step_type
 from squadron.pipeline.steps.branch import WHEN_PARAM
 from squadron.providers.profiles import is_sdk_profile
+from squadron.recipes.model_ref import RecipeRef, ReviewModelError, resolve_review_model_ref
+from squadron.recipes.recipe_search import production_recipe_dirs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -241,14 +244,35 @@ def _render_dispatch(
     )
 
 
+def _is_recipe_name(name: str, cwd: str) -> bool:
+    """Whether *name* classifies as a recipe. Unknown names are left to the resolver
+    (``profile_source=True`` stops classification judging them); a broken recipe or a
+    name that is both is logged and also left to it, since ``sq review`` refuses it."""
+    try:
+        ref = resolve_review_model_ref(
+            name,
+            profile_source=True,
+            search_dirs=production_recipe_dirs(Path(cwd)),
+            template=None,
+            has_diff=False,
+            explicit_profile=None,
+            no_tools=False,
+        )
+    except ReviewModelError as exc:
+        _logger.warning("review action: %s", exc)
+        return False
+    return isinstance(ref, RecipeRef)
+
+
 def _render_review(
     config: dict[str, object],
     params: dict[str, object],
     resolver: ModelResolver,
     *,
     verbosity: int = 0,
+    cwd: str = ".",
 ) -> ActionInstruction:
-    """Build instruction for a review action."""
+    """Build instruction for a review action; ``cwd`` is where the rendered command runs."""
     template_name = str(config.get("template", ""))
     review_model_alias = config.get("model")
     review_model_id: str | None = None
@@ -257,6 +281,10 @@ def _render_review(
     alias_str: str | None = None
     if review_model_alias is not None:
         alias_str = str(review_model_alias)
+    if alias_str is not None and _is_recipe_name(alias_str, cwd):
+        # A recipe has no single model; its name is the display model (slice 434, D2).
+        review_model_id = alias_str
+    elif alias_str is not None:
         try:
             review_model_id, _ = resolver.resolve(alias_str)
         except (
@@ -562,6 +590,7 @@ def _build_action_instruction(
     resolver: ModelResolver,
     *,
     verbosity: int = 0,
+    cwd: str = ".",
 ) -> ActionInstruction:
     """Dispatch to the appropriate builder for an action type."""
     builder = _BUILDERS.get(action_type)
@@ -573,7 +602,7 @@ def _build_action_instruction(
 
     # Builders that need the resolver
     if action_type == ActionType.REVIEW:
-        return builder(config, params, resolver, verbosity=verbosity)  # type: ignore[operator]
+        return builder(config, params, resolver, verbosity=verbosity, cwd=cwd)  # type: ignore[operator]
 
     if action_type in (ActionType.DISPATCH, ActionType.SUMMARY):
         return builder(config, params, resolver)  # type: ignore[operator]
@@ -595,7 +624,7 @@ def render_step_instructions(
     resolver: ModelResolver,
     run_id: str,
     verbosity: int = 0,
-    cwd: str | None = None,
+    cwd: str,
 ) -> StepInstructions:
     """Expand a step into executable instruction objects.
 
@@ -636,7 +665,12 @@ def render_step_instructions(
             continue
         instructions.append(
             _build_action_instruction(
-                action_type, resolved_config, render_params, resolver, verbosity=verbosity
+                action_type,
+                resolved_config,
+                render_params,
+                resolver,
+                verbosity=verbosity,
+                cwd=cwd,
             )
         )
 

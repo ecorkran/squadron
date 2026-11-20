@@ -19,6 +19,7 @@ from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.models import (
     FindingScanCounts,
+    RecipeReviewInfo,
     ReviewFinding,
     ReviewResult,
     Severity,
@@ -26,6 +27,8 @@ from squadron.review.models import (
     VerdictSource,
 )
 from squadron.review.persistence import (
+    AI_RECIPE_KEY,
+    RECIPE_COMPLETE_KEY,
     REVIEWS_DIR,
     SliceInfo,
     format_provider_failure_markdown,
@@ -1818,3 +1821,40 @@ class TestReviewTraceability:
         frontmatter = read_frontmatter(artifact)
         assert frontmatter is not None
         assert frontmatter["providerFailure"] is True
+
+
+# ---------------------------------------------------------------------------
+# Slice 434 D7 — a recipe review's frontmatter and stage section
+# ---------------------------------------------------------------------------
+
+STAGE_SECTION = "## Recipe\n\n| Stage | Kind |\n|---|---|\n| review rev-a | review |"
+
+
+def _recipe_result(complete: bool = False) -> ReviewResult:
+    result = _make_result(Verdict.FAIL, model="duo")
+    result.profile = "openrouter"
+    result.requested_model = "vendor/requested"
+    result.answering_models = ["vendor/other"]
+    result.recipe = RecipeReviewInfo(name="duo", complete=complete, stage_section=STAGE_SECTION)
+    return result
+
+
+class TestRecipeReviewMarkdown:
+    def test_frontmatter_names_the_recipe_and_omits_profile_and_requested_model(self) -> None:
+        md = format_review_markdown(_recipe_result(), "code", _make_slice_info(), model="haiku")
+        front = cast(dict[str, object], yaml.safe_load(md.split("---")[1]))
+        assert front["aiModel"] == "duo"
+        assert front[AI_RECIPE_KEY] is True and front[RECIPE_COMPLETE_KEY] is False
+        assert "aiProfile" not in front and "requestedModel" not in front
+
+    def test_stage_section_comes_before_findings(self) -> None:
+        md = format_review_markdown(_recipe_result(complete=True), "code", _make_slice_info())
+        assert f"{RECIPE_COMPLETE_KEY}: true" in md
+        assert md.index(STAGE_SECTION) < md.index("## Findings")
+
+    def test_single_model_review_has_no_recipe_keys(self) -> None:
+        result = _make_result()
+        result.profile = "openrouter"
+        md = format_review_markdown(result, "code", _make_slice_info())
+        assert AI_RECIPE_KEY not in md and RECIPE_COMPLETE_KEY not in md and "## Recipe" not in md
+        assert "aiProfile: openrouter" in md

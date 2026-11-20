@@ -32,6 +32,7 @@ from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # 
 from squadron.metrology.recall_case_models import RealBugCase, RecallCaseSet
 from squadron.metrology.recall_label_models import RecallLabels
 from squadron.metrology.recall_run_models import RecallRun
+from squadron.metrology.recipe_review_models import RecipeReview
 from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
 from squadron.metrology.review_models import CodeReviewRecord
 from squadron.metrology.slice_case_models import DiffJudgment, OverSizeCase, SliceQualification
@@ -82,6 +83,8 @@ RECORD_TYPE_RECALL_CASE = "recall_case"
 RECORD_TYPE_RECALL_CASE_SET = "recall_case_set"
 RECORD_TYPE_RECALL_RUN = "recall_run"
 RECORD_TYPE_RECALL_LABELS = "recall_labels"
+#: Written by 434's recipe reviews: one record per recipe review executed.
+RECORD_TYPE_RECIPE_REVIEW = "recipe_review"
 
 
 class JudgeResultRef(BaseModel):
@@ -272,7 +275,8 @@ class MetrologyRecord(BaseModel):
     ``"implementation_replay"``; 425 writes ``"reference_grade"``,
     ``"implementation_grade"`` and ``"sample_size_estimate"``; 426 writes
     ``"slice_qualification"``, ``"diff_judgment"`` and ``"over_size_case"``; 430 writes
-    ``"recall_case"``, ``"recall_case_set"``, ``"recall_run"`` and ``"recall_labels"``. Each addition
+    ``"recall_case"``, ``"recall_case_set"``, ``"recall_run"`` and ``"recall_labels"``; 434 writes
+    ``"recipe_review"``. Each addition
     is an optional sibling field, so the envelope shape stays backward compatible and
     ``schema_version`` does not move — no store migration is needed.
     """
@@ -303,3 +307,4 @@ class MetrologyRecord(BaseModel):
     recall_case_set: RecallCaseSet | None = None
     recall_run: RecallRun | None = None
     recall_labels: RecallLabels | None = None
+    recipe_review: RecipeReview | None = None

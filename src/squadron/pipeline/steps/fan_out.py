@@ -6,10 +6,10 @@ from typing import cast
 
 from squadron.pipeline.intelligence.fan_in.reducers import get_reducer
 from squadron.pipeline.models import StepConfig, ValidationError
+from squadron.pipeline.resolver import POOL_PREFIX
 from squadron.pipeline.steps import StepTypeName, register_step_type
 from squadron.pipeline.steps.utils import any_step_needs_context_forge, unpack_inner_steps
 
-_POOL_PREFIX = "pool:"
 _KNOWN_KEYS = frozenset({"models", "inner", "n", "fan_in"})
 
 
@@ -75,7 +75,7 @@ class FanOutStepType:
 
         # 4. If models is a pool ref, n must be a positive integer
         models_raw = cfg.get("models")
-        if isinstance(models_raw, str) and models_raw.startswith(_POOL_PREFIX):
+        if isinstance(models_raw, str) and models_raw.startswith(POOL_PREFIX):
             n = cfg.get("n")
             if n is None or not isinstance(n, int) or n < 1:
                 errors.append(

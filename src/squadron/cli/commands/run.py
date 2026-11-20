@@ -377,7 +377,7 @@ async def _run_pipeline(
         raise ValueError("new_run_id and run_id cannot both be given")
     definition = load_pipeline(pipeline_name)
 
-    errors = validate_pipeline(definition)
+    errors = validate_pipeline(definition, cwd=os.getcwd())
     if errors:
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
@@ -496,7 +496,7 @@ async def _run_pipeline_sdk(
 
     # Validate before classification — fail fast on bad YAML
     definition = load_pipeline(pipeline_name)
-    errors = validate_pipeline(definition)
+    errors = validate_pipeline(definition, cwd=os.getcwd())
     if errors:
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
@@ -506,7 +506,7 @@ async def _run_pipeline_sdk(
 
     try:
         classification = classify_for_run(
-            definition, model_override=model_override, params=params, strict=strict
+            definition, model_override=model_override, params=params, strict=strict, cwd=os.getcwd()
         )
     except ClassificationError as exc:
         rprint(f"[red]Error: Pipeline classification failed — {escape(str(exc))}[/red]")
@@ -674,7 +674,7 @@ def _handle_explain(
         rprint(f"[red]Error: Pipeline '{escape(str(pipeline_name))}' not found.[/red]")
         raise typer.Exit(1) from None
 
-    errors = validate_pipeline(definition)
+    errors = validate_pipeline(definition, cwd=os.getcwd())
     if errors:
         for err in errors:
             rprint(f"[red]{escape(str(err.field))}: {escape(str(err.message))}[/red]")
@@ -693,7 +693,11 @@ def _handle_explain(
 
     try:
         classification = classify_for_run(
-            definition, model_override=cli_override, params=explain_params, strict=strict
+            definition,
+            model_override=cli_override,
+            params=explain_params,
+            strict=strict,
+            cwd=os.getcwd(),
         )
     except ClassificationError as exc:
         rprint(f"[red]Error: Classification failed — {escape(str(exc))}[/red]")
@@ -898,7 +902,7 @@ def _handle_prompt_only_init(
         )
         raise typer.Exit(1) from None
 
-    errors = validate_pipeline(definition)
+    errors = validate_pipeline(definition, cwd=os.getcwd())
     if errors:
         rprint(
             f"[red]Validation errors for '{escape(str(definition.name))}':[/red]",
@@ -1423,7 +1427,7 @@ def run(
         except FileNotFoundError:
             rprint(f"[red]Error: Pipeline '{escape(str(pipeline))}' not found.[/red]")
             raise typer.Exit(1) from None
-        errors = validate_pipeline(definition, strict=strict)
+        errors = validate_pipeline(definition, strict=strict, cwd=os.getcwd())
         if not errors:
             rprint(f"[bright_green]Pipeline '{escape(str(definition.name))}' is valid.[/bright_green]")
             raise typer.Exit(0)
@@ -1450,7 +1454,7 @@ def run(
             rprint(f"[red]Error: Pipeline '{escape(str(pipeline))}' not found.[/red]")
             raise typer.Exit(1) from None
 
-        errors = validate_pipeline(definition)
+        errors = validate_pipeline(definition, cwd=os.getcwd())
         if errors:
             rprint(f"[red]Validation errors for '{escape(str(definition.name))}':[/red]")
             for err in errors:
@@ -1471,6 +1475,7 @@ def run(
                 model_override=_extract_model_override(model, param),
                 params=params,
                 strict=strict,
+                cwd=os.getcwd(),
             )
         except ClassificationError as exc:
             rprint(f"[red]Error: Pipeline classification failed — {escape(str(exc))}[/red]")

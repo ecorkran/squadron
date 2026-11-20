@@ -48,7 +48,7 @@ def test_code_pipelines_enter_implement_devlog_merge_in_order(name: str) -> None
 
 @pytest.mark.parametrize("name", _CODE_PIPELINES)
 def test_code_pipelines_validate(name: str) -> None:
-    assert validate_pipeline(load_pipeline(name)) == []
+    assert validate_pipeline(load_pipeline(name), cwd=".") == []
 
 
 def test_p6_summary_runs_after_the_merge() -> None:
@@ -81,7 +81,7 @@ def test_every_builtin_with_an_implement_step_passes_the_enter_rule() -> None:
         definition = load_pipeline(path.stem)
         if any(s.step_type == "implement" for s in definition.steps):
             checked += 1
-            assert validate_pipeline(definition) == [], path.name
+            assert validate_pipeline(definition, cwd=".") == [], path.name
     assert checked >= len(_CODE_PIPELINES)
 
 

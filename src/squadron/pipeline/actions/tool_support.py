@@ -102,6 +102,10 @@ def tool_isolation_failure(
     )
 
 
+#: The step key that narrows a step's tools; ``[]`` asks for a tool-less step.
+ALLOWED_TOOLS_KEY = "allowed_tools"
+
+
 def resolve_allowed_tools(context: ActionContext, action_type: str) -> list[str] | None:
     """Narrow ``context.params["allowed_tools"]`` to a list of tool names.
 
@@ -110,7 +114,7 @@ def resolve_allowed_tools(context: ActionContext, action_type: str) -> list[str]
     caught, so it raises rather than silently dropping tools — a silent drop reproduces
     exactly the no-op-with-prose failure this slice exists to prevent.
     """
-    raw = context.params.get("allowed_tools")
+    raw = context.params.get(ALLOWED_TOOLS_KEY)
     if raw is None:
         return None
     if not isinstance(raw, list) or not all(isinstance(name, str) for name in raw):  # pyright: ignore[reportUnknownVariableType]

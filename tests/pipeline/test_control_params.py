@@ -37,7 +37,7 @@ def test_a_reserved_key_in_a_pipeline_params_block_is_rejected(key: str) -> None
         steps=[StepConfig(step_type="devlog", name="devlog-0", config={"mode": "auto"})],
     )
 
-    errors = validate_pipeline(definition)
+    errors = validate_pipeline(definition, cwd=".")
 
     assert [(e.field, e.message) for e in errors if e.field.startswith("params.")] == [
         (

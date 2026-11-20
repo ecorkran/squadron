@@ -13,6 +13,34 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261119
 
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: CONCERNS)
+- revise-code:commit-5: PASS
+
+### Slice 434: Recipe Reviews in Pipelines — Implementation Complete (Phase 6)
+
+- Branch `434-slice.recipe-reviews-in-pipelines`, 11 commits; not merged or pushed. Gates: ruff, pyright 0 errors, full pytest pass (run by directory).
+- Built: `recipes/` package (search, classification, runner, merge, record, shared flow); recipe reviews from the review action and `sq review code|slice|tasks|arch`; review frontmatter `aiRecipe`/`recipeComplete` and a "Recipe" stage table; `recipe_review` metrology records; `sq benchmark recall report --real-work`. Three recipes ship in `data/recipes/`.
+- Walkthrough verified live on a temp fixture (steps 4, 5, 7 with OpenRouter): 6-stage recipe review FAIL on a seeded bug, revise loop to PASS, real-work row, failed-stage UNKNOWN exit 1.
+- Decisions beyond the design (noted in the task file): a project with no stable metrology identity is a record-write failure, not a review failure; `sq review pr` refuses recipes (it hands over no save step); the executor threads a `recipe_sink` beside `usage_capture`; `run_comb_stage` split into typed `call_comb` plus the benchmark's document wrapper.
+- Open: each comb call logs a parser WARNING ("no usable '## Summary' verdict") because comb output is decision lines; `sq runs` does not list `sq review --max` runs (941 scratch runs dir). Fixed on the way: `test_recipe.py`'s `COMMITTED` set was already failing on main (two recipe files added without updating it).
+- Next: Phase 7 code review of the branch, then merge.
+
 ### Slice 434: Recipe Reviews in Pipelines — Tasks Complete (Phase 5)
 
 - Tasks: `project-documents/user/tasks/434-tasks.recipe-reviews-in-pipelines.md` (23 tasks, 256 lines, effort 5/5). Not committed; no review run.

@@ -6,7 +6,6 @@ from collections import defaultdict
 
 from squadron.benchmark.recall.label_precedence import resolve_labels
 from squadron.benchmark.recall.recall_store import RecallRecordStore, RecallStoreError
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.report_render import ReportData, ReportRow
 from squadron.benchmark.recall.scoring import recipe_outputs
 from squadron.benchmark.recall.scoring_metrics import LabelsByCase, row_metrics
@@ -14,6 +13,7 @@ from squadron.benchmark.recall.scoring_paired import paired_lines
 from squadron.benchmark.recall.scoring_select import StageIdentityResolver
 from squadron.metrology.recall_case_models import RealBugCase, RecallCaseSet
 from squadron.metrology.recall_label_models import RecallLabels
+from squadron.recipes.recipe import Recipe
 
 
 def set_label(case_set: RecallCaseSet) -> str:

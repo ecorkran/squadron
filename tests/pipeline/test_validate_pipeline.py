@@ -34,7 +34,7 @@ class TestValidateBuiltIns:
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert errors == []
 
     def test_design_and_tasks_valid(self) -> None:
@@ -43,7 +43,7 @@ class TestValidateBuiltIns:
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert errors == []
 
     def test_review_only_valid(self) -> None:
@@ -52,7 +52,7 @@ class TestValidateBuiltIns:
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert errors == []
 
     def test_implementation_only_valid(self) -> None:
@@ -61,7 +61,7 @@ class TestValidateBuiltIns:
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         assert errors == []
 
 
@@ -72,7 +72,7 @@ class TestUnknownStepType:
         defn = _make_definition(
             steps=[StepConfig(step_type="nonexistent", name="s0", config={})],
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         step_type_errors = [e for e in errors if e.field == "step_type"]
         assert len(step_type_errors) == 1
         assert "nonexistent" in step_type_errors[0].message
@@ -83,14 +83,14 @@ class TestModelAliasValidation:
 
     def test_invalid_model_alias(self) -> None:
         defn = _make_definition(model="not-a-real-alias-xyz")
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         model_errors = [e for e in errors if e.field == "model"]
         assert len(model_errors) == 1
         assert "not-a-real-alias-xyz" in model_errors[0].message
 
     def test_valid_model_alias_no_error(self) -> None:
         defn = _make_definition(model="opus")
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         model_errors = [e for e in errors if e.field == "model"]
         assert len(model_errors) == 0
 
@@ -109,7 +109,7 @@ class TestReviewTemplateValidation:
                 ),
             ],
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         template_errors = [e for e in errors if "template" in e.field]
         assert len(template_errors) >= 1
         assert "nonexistent-template-xyz" in template_errors[0].message
@@ -128,7 +128,7 @@ class TestParamPlaceholderValidation:
                 ),
             ],
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         param_errors = [e for e in errors if "undeclared" in e.message]
         assert len(param_errors) >= 1
 
@@ -143,6 +143,6 @@ class TestParamPlaceholderValidation:
                 ),
             ],
         )
-        errors = validate_pipeline(defn)
+        errors = validate_pipeline(defn, cwd=".")
         param_errors = [e for e in errors if "placeholder" in e.message]
         assert len(param_errors) == 0

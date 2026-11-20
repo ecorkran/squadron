@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.benchmark.recall.run_plan import expand_pending
 from squadron.core.models import Effort
 from squadron.metrology.recall_run_models import (
@@ -14,6 +13,7 @@ from squadron.metrology.recall_run_models import (
     StageKind,
     StageOutcome,
 )
+from squadron.recipes.recipe import Recipe
 from tests.benchmark.recall.scoring_support import comb, config, make_case, review
 
 CASE = make_case()

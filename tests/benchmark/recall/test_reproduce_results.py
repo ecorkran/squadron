@@ -8,12 +8,14 @@ from pathlib import Path
 import pytest
 
 from squadron.benchmark.recall.recall_services import RecallServices
-from squadron.benchmark.recall.recipe import Recipe, load_recipe
+from squadron.benchmark.recall.recipe_dirs import benchmark_recipe_dirs
 from squadron.benchmark.recall.report_build import build_report, resolved_labels
 from squadron.benchmark.recall.report_render import ReportData
 from squadron.benchmark.recall.scoring_select import ImportOnlyResolver
 from squadron.metrology.recall_label_models import HitVerdict
-from tests.benchmark.recall.committed import RECIPES_DIR, imported_services
+from squadron.recipes.recipe import Recipe
+from squadron.recipes.recipe_search import load_recipes
+from tests.benchmark.recall.committed import RECIPES_DIR, REPO_ROOT, imported_services
 from tests.benchmark.recall.support import invoke_recall
 
 SECTION_1 = ("haiku-xhigh", "sol", "sonnet-high", "sonnet")
@@ -33,7 +35,7 @@ def _report(services: RecallServices, recipes: list[Recipe], set_ref: str, runs:
 
 
 def _committed(*names: str) -> list[Recipe]:
-    return [load_recipe(RECIPES_DIR / f"{name}.yaml") for name in names]
+    return load_recipes(list(names), benchmark_recipe_dirs(REPO_ROOT))
 
 
 def test_section_1_bug_hits_and_runs_with_a_hit(services: RecallServices) -> None:

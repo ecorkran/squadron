@@ -6,6 +6,8 @@ Complete reference for all squadron CLI commands.
 
 Run structured reviews using built-in templates.
 
+`--model` (or `-p review-model=<name>`) takes a model alias or a recipe name. A recipe runs several reviewers and comb filters as one review; `sq review code`, `slice`, `tasks` and `arch` accept one, and `--profile` with a recipe is refused. Where recipes are found, how to add one and what is refused: [Recipe reviews](PIPELINES.md#recipe-reviews).
+
 ### review arch
 
 Run an architectural review comparing a document against an architecture reference.

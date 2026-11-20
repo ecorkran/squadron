@@ -49,14 +49,14 @@ def _steps_for(step_type: str, config: dict[str, object]) -> list[StepConfig]:
 
 
 def _unknown_key_fields(step_type: str, config: dict[str, object], *, strict: bool) -> list[str]:
-    errors = validate_pipeline(_definition(*_steps_for(step_type, config)), strict=strict)
+    errors = validate_pipeline(_definition(*_steps_for(step_type, config)), strict=strict, cwd=".")
     return [e.field for e in errors if e.field.endswith(".colour")]
 
 
 @pytest.mark.parametrize("step_type", sorted(_VALID_CONFIGS))
 def test_valid_config_passes_strict(step_type: str) -> None:
     steps = _steps_for(step_type, _VALID_CONFIGS[step_type])
-    assert validate_pipeline(_definition(*steps), strict=True) == []
+    assert validate_pipeline(_definition(*steps), strict=True, cwd=".") == []
 
 
 @pytest.mark.parametrize("step_type", sorted(_VALID_CONFIGS))
@@ -68,7 +68,7 @@ def test_unknown_key_is_one_error_naming_the_step(step_type: str) -> None:
 def test_executor_keys_are_accepted_on_any_step() -> None:
     config = {"prompt": "hello", "step_model": "sonnet", "loop": {"max": 2}}
     steps = _steps_for("dispatch", config)
-    assert validate_pipeline(_definition(*steps), strict=True) == []
+    assert validate_pipeline(_definition(*steps), strict=True, cwd=".") == []
 
 
 @pytest.mark.parametrize("container", ["loop", "each"])

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -266,6 +267,33 @@ class TestReviewScoreThreading:
 
 
 class TestReviewModelResolution:
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_alias_resolution_stays_on_the_loop_thread(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        # resolve_full can fire the pool-selection callback, which rewrites the run state
+        # file; off the loop it could interleave with the heartbeat's write and lose one.
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+        threads: list[threading.Thread] = []
+
+        def record_thread(*_args: object, **_kwargs: object) -> ResolvedModel:
+            threads.append(threading.current_thread())
+            return ResolvedModel("claude-sonnet-4-20250514", None)
+
+        ctx = _make_context(params={"template": "code", "model": "opus"})
+        ctx.resolver.resolve_full.side_effect = record_thread  # type: ignore[attr-defined]
+        await ReviewAction().execute(ctx)
+        assert threads == [threading.main_thread()]
+
     @pytest.mark.asyncio
     @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")

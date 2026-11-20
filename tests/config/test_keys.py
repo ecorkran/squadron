@@ -15,6 +15,7 @@ from squadron.config.keys import (
     BENCHMARK_REVIEW_TIMEOUT_KEY,
     CONFIG_KEYS,
     FOREGROUND_IDLE_TIMEOUT_KEY,
+    REVIEW_RECIPE_STAGE_SLOW_KEY,
     RUN_HEARTBEAT_INTERVAL_KEY,
     get_default,
 )
@@ -282,3 +283,19 @@ class TestSliceCaseJudgeKeys:
     def test_a_set_limit_is_returned(self, patch_config_paths: dict[str, Path]) -> None:
         set_config(BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY, "1000")
         assert get_positive_int_config(BENCHMARK_JUDGE_MAX_PROMPT_CHARS_KEY) == 1000
+
+
+class TestRecipeStageSlowKey:
+    """Key added by slice 434 (D3, D5): the recipe stage slow-call WARNING threshold."""
+
+    def test_registered_as_positive_int_defaulting_to_1800(
+        self, patch_config_paths: dict[str, Path]
+    ) -> None:
+        key = CONFIG_KEYS[REVIEW_RECIPE_STAGE_SLOW_KEY]
+        assert key.type_ is int and key.default == 1800
+        assert "WARNING" in key.description
+        assert get_positive_int_config(REVIEW_RECIPE_STAGE_SLOW_KEY) == 1800
+
+    def test_a_set_value_is_returned(self, patch_config_paths: dict[str, Path]) -> None:
+        set_config(REVIEW_RECIPE_STAGE_SLOW_KEY, "60")
+        assert get_positive_int_config(REVIEW_RECIPE_STAGE_SLOW_KEY) == 60

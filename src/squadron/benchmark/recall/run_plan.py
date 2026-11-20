@@ -14,7 +14,6 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from squadron.benchmark.recall.recipe import Recipe
 from squadron.core.models import Effort
 from squadron.metrology.recall_case_models import RealBugCase
 from squadron.metrology.recall_run_models import (
@@ -29,6 +28,7 @@ from squadron.metrology.recall_run_models import (
     entry_key,
     run_record_id,
 )
+from squadron.recipes.recipe import Recipe
 
 ConfigFor = Callable[[str, StageKind], tuple[StageConfig, Effort | None]]
 

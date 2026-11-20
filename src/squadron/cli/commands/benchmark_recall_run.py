@@ -17,7 +17,7 @@ import typer
 from squadron.benchmark.bench_plan import BenchmarkRefusal
 from squadron.benchmark.grade_budget import ReviewBudget
 from squadron.benchmark.recall.recall_services import RecallServices, RecallServicesFactory, recall_lock
-from squadron.benchmark.recall.recipe import RecipeError, load_recipes
+from squadron.benchmark.recall.recipe_dirs import benchmark_recipe_dirs
 from squadron.benchmark.recall.refusal import RecallRefusal
 from squadron.benchmark.recall.report_build import set_label
 from squadron.benchmark.recall.run_bound import (
@@ -37,6 +37,8 @@ from squadron.cli.commands.benchmark_grade import EXIT_CAP_REACHED
 from squadron.cli.commands.benchmark_recall_common import REFUSED_ERRORS, open_services
 from squadron.config.keys import BENCHMARK_REVIEW_TIMEOUT_KEY
 from squadron.metrology.recall_case_models import RealBugCase
+from squadron.recipes.recipe import RecipeError
+from squadron.recipes.recipe_search import load_recipes
 
 RUN_ERRORS = (*REFUSED_ERRORS, RecipeError, StageIdentityError, BenchmarkRefusal)
 
@@ -67,7 +69,7 @@ def _cases(services: RecallServices, set_ref: str, names: list[str]) -> tuple[st
 def _plan(services: RecallServices, options: RunOptions) -> tuple[str, RunBound]:
     if options.runs < 1:
         raise RecallRefusal("--runs must be at least 1")
-    recipes = load_recipes(options.recipe_refs, services.repo_root)
+    recipes = load_recipes(options.recipe_refs, benchmark_recipe_dirs(services.repo_root))
     label, cases = _cases(services, options.set_ref, options.case_names)
     stored = services.store.list_runs()
     runs = {(run.case_id, run.run_index): run for run in stored}

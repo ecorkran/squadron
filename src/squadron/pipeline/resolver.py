@@ -40,7 +40,7 @@ if TYPE_CHECKING:
         PoolSelection,
     )
 
-_POOL_PREFIX = "pool:"
+POOL_PREFIX = "pool:"
 
 
 class ResolvedModel(NamedTuple):
@@ -199,8 +199,8 @@ class ModelResolver:
         for candidate in self.cascade_candidates(action_model, step_model):
             if candidate is None:
                 continue
-            if candidate.startswith(_POOL_PREFIX):
-                pool_name = candidate.removeprefix(_POOL_PREFIX)
+            if candidate.startswith(POOL_PREFIX):
+                pool_name = candidate.removeprefix(POOL_PREFIX)
                 return self._resolve_pool(pool_name, action_model, step_model, effective_source)
             return _resolved(candidate, profile_source=effective_source)
 

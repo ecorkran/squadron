@@ -57,7 +57,7 @@ Squadron's own history is a source too: issues closed by `fix:` commits where th
 
 ## Running a reviewer on a case
 
-Use `sq benchmark recall` (slice 430). Cases are YAML files under `review-recall-cases/`, case sets are listed in `review-recall-sets.md`, and a reviewer config is a recipe file under `review-recall-recipes/`. `--recipe` takes a recipe's name (its file name without `.yaml`) or a path to a recipe file anywhere:
+Use `sq benchmark recall` (slice 430). Cases are YAML files under `review-recall-cases/`, case sets are listed in `review-recall-sets.md`, and a reviewer config is a recipe file under `review-recall-recipes/`, or one of the recipes shipped in `src/squadron/data/recipes/` (`haiku-solr-luna-opus`, `haiku-sol-luna-opus`, `haiku-sol-opus`). `--recipe` takes a recipe's name (its file name without `.yaml`, searched in `review-recall-recipes/` then the shipped directory) or a path to a recipe file anywhere:
 
 ```bash
 sq benchmark recall cases add project-documents/user/reference/review-recall-cases/ --set real-bugs

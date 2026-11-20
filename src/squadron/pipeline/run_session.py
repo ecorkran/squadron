@@ -27,6 +27,7 @@ def classify_for_run(
     model_override: str | None,
     params: dict[str, object],
     strict: bool,
+    cwd: str,
 ) -> PipelineClassification:
     """Classify *definition* the one way every run path does.
 
@@ -43,7 +44,7 @@ def classify_for_run(
     resolver = run_resolver(
         definition, model_override=model_override, params=params, pool_backend=pool_backend
     )
-    return classify_pipeline(definition, resolver, pool_backend, policy=policy, params=params)
+    return classify_pipeline(definition, resolver, pool_backend, policy=policy, params=params, cwd=cwd)
 
 
 def run_resolver(

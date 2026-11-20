@@ -43,6 +43,7 @@ class TestPromptOnlyFullCycle:
                 params=params,
                 resolver=resolver,
                 run_id=run_id,
+                cwd=".",
             )
 
             # Verify JSON round-trip
@@ -103,6 +104,7 @@ class TestPromptOnlyFullCycle:
             params=params,
             resolver=resolver,
             run_id="run-test",
+            cwd=".",
         )
 
         assert instructions.step_name == "design-0"
@@ -155,6 +157,7 @@ class TestPromptOnlyFullCycle:
             params=params,
             resolver=resolver,
             run_id="run-test",
+            cwd=".",
         )
 
         assert len(instructions.actions) == 1

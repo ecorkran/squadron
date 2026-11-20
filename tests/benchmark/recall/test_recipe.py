@@ -6,32 +6,33 @@ from pathlib import Path
 
 import pytest
 
-from squadron.benchmark.recall.recipe import (
+from squadron.benchmark.recall.recipe_dirs import benchmark_recipe_dirs
+from squadron.metrology.recall_run_models import StageKind
+from squadron.recipes.recipe import (
     RecipeError,
     RequiredStage,
     load_recipe,
     required_stages,
-    resolve_recipe,
 )
-from squadron.metrology.recall_run_models import StageKind
+from squadron.recipes.recipe_search import resolve_recipe, shipped_recipes_dir
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RECIPES_DIR = REPO_ROOT / "project-documents" / "user" / "reference" / "review-recall-recipes"
+SHIPPED_DIR = shipped_recipes_dir()
 COMMITTED = {
     "haiku-xhigh",
     "sol",
     "sonnet-high",
     "sonnet",
     "luna",
-    "haiku-sol-opus",
     "haiku-sol-pool",
-    "haiku-sol-luna-opus",
-    "haiku-solr-luna-opus",
+    "haiku-mimo-opus",
+    "haiku-opus",
 }
 
 
-def _write(tmp_path: Path, text: str) -> Path:
-    path = tmp_path / "recipe.yaml"
+def _write(tmp_path: Path, text: str, stem: str = "r") -> Path:
+    path = tmp_path / f"{stem}.yaml"
     path.write_text(text, encoding="utf-8")
     return path
 
@@ -53,7 +54,7 @@ def test_loader_refusals(tmp_path: Path, text: str, reason: str) -> None:
 
 
 def test_single_reviewer_defaults(tmp_path: Path) -> None:
-    recipe = load_recipe(_write(tmp_path, "name: sol\nreviewers: [sol]\n"))
+    recipe = load_recipe(_write(tmp_path, "name: sol\nreviewers: [sol]\n", "sol"))
     assert (recipe.pool, recipe.combs) == (False, ())
     assert required_stages(recipe) == (RequiredStage(StageKind.REVIEW, "sol", ()),)
 
@@ -79,7 +80,7 @@ def test_every_committed_recipe_loads() -> None:
 
 
 def test_d11_recipe_is_fan_out_then_luna_r_then_opus_high() -> None:
-    recipe = load_recipe(RECIPES_DIR / "haiku-sol-luna-opus.yaml")
+    recipe = load_recipe(SHIPPED_DIR / "haiku-sol-luna-opus.yaml")
     assert (recipe.reviewers, recipe.pool, recipe.combs) == (
         ("haiku-xhigh", "sol"),
         False,
@@ -88,18 +89,23 @@ def test_d11_recipe_is_fan_out_then_luna_r_then_opus_high() -> None:
 
 
 def test_recipe_name_resolves_to_committed_file() -> None:
-    assert resolve_recipe("haiku-sol-opus", REPO_ROOT) == RECIPES_DIR / "haiku-sol-opus.yaml"
-    assert load_recipe(resolve_recipe("haiku-solr-luna-opus", REPO_ROOT)).reviewers == (
+    assert (
+        resolve_recipe("haiku-sol-opus", benchmark_recipe_dirs(REPO_ROOT))
+        == SHIPPED_DIR / "haiku-sol-opus.yaml"
+    )
+    assert load_recipe(
+        resolve_recipe("haiku-solr-luna-opus", benchmark_recipe_dirs(REPO_ROOT))
+    ).reviewers == (
         "haiku-xhigh",
         "sol-r",
     )
 
 
 def test_recipe_ref_with_path_or_suffix_is_used_as_given(tmp_path: Path) -> None:
-    assert resolve_recipe("own.yaml", REPO_ROOT) == Path("own.yaml")
-    assert resolve_recipe(str(tmp_path / "own"), REPO_ROOT) == tmp_path / "own"
+    assert resolve_recipe("own.yaml", benchmark_recipe_dirs(REPO_ROOT)) == Path("own.yaml")
+    assert resolve_recipe(str(tmp_path / "own"), benchmark_recipe_dirs(REPO_ROOT)) == tmp_path / "own"
 
 
 def test_unknown_recipe_name_lists_known_names() -> None:
     with pytest.raises(RecipeError, match="no recipe named 'nope'; known: .*haiku-sol-opus"):
-        resolve_recipe("nope", REPO_ROOT)
+        resolve_recipe("nope", benchmark_recipe_dirs(REPO_ROOT))
