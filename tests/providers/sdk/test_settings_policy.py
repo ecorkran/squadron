@@ -45,7 +45,7 @@ async def pipeline_session(tmp_path: Path) -> Observed:
 
 # (builder, expected setting_sources, auto-memory follows pipeline.auto_memory?)
 _POLICY: list[tuple[Callable[[Path], Awaitable[Observed]], list[str], bool]] = [
-    (_observed(sites.builtin_review), ["project"], False),
+    (_observed(sites.builtin_review), [], False),
     (_observed(sites.pr_review), [], False),
     (pipeline_session, ["project"], True),
     (_observed(sites.one_shot_dispatch), ["project"], True),

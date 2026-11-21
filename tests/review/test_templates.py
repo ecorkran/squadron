@@ -114,7 +114,7 @@ class TestLoadTemplate:
         assert t.system_prompt.strip() == "You are a reviewer."
         assert t.allowed_tools == ["Read", "Glob"]
         assert t.permission_mode == "bypassPermissions"
-        assert t.setting_sources == ["project"]
+        assert t.setting_sources == list(REVIEW_SETTING_SOURCES)
         assert len(t.required_inputs) == 1
         assert t.required_inputs[0].name == "input"
         assert len(t.optional_inputs) == 1
@@ -586,14 +586,15 @@ class TestSettingSourcesResolution:
         sorted((Path(__file__).parents[2] / "src/squadron/data/templates").glob("*.yaml")),
         ids=lambda p: p.stem,
     )
-    def test_every_builtin_template_uses_project(self, yaml_path: Path) -> None:
-        assert load_template(yaml_path).setting_sources == ["project"]
+    def test_no_builtin_template_loads_claude_settings(self, yaml_path: Path) -> None:
+        """Squadron injects conventions and rules itself; the CLI must not load them again."""
+        assert load_template(yaml_path).setting_sources == []
 
     @pytest.mark.parametrize(
         ("line", "expected"),
         [
-            ("", ["project"]),
-            ("setting_sources: null\n", ["project"]),
+            ("", list(REVIEW_SETTING_SOURCES)),
+            ("setting_sources: null\n", list(REVIEW_SETTING_SOURCES)),
             ("setting_sources: []\n", []),
             ("setting_sources: [user, project]\n", ["user", "project"]),
         ],

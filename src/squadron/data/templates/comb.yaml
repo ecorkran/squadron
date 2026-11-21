@@ -36,7 +36,7 @@ allowed_tools: [read_file, list_files, grep]
 permission_mode: bypassPermissions
 model: sonnet
 output: decisions
-setting_sources: [project]
+setting_sources: []
 
 inputs:
   required:

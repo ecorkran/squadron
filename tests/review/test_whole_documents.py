@@ -192,3 +192,16 @@ def test_plan_and_design_reviews_check_what_the_document_breaks_in_existing_code
 
     assert "open the existing code and tests that depend on it" in prompt
     assert "would break" in prompt
+
+
+def test_the_conventions_file_is_in_the_read_record(tmp_path: Path) -> None:
+    (tmp_path / "tasks.md").write_text(TASKS_BODY)
+    (tmp_path / "AGENTS.md").write_text("# Rules\n\nNo silent fallbacks.\n")
+    inputs = {"input": str(tmp_path / "tasks.md"), "cwd": str(tmp_path)}
+
+    records = _inject_file_contents("Review", inputs, whole_documents=True).files
+
+    conventions = next(record for record in records if record.key == "conventions")
+    assert conventions.path == str(tmp_path / "AGENTS.md")
+    assert conventions.whole is True
+    assert conventions.sha256 == hashlib.sha256(b"# Rules\n\nNo silent fallbacks.\n").hexdigest()

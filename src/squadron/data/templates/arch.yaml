@@ -133,7 +133,7 @@ model: fable-medium
 inject_documents: true
 # The review must account for every section of the document (#382).
 require_coverage: true
-setting_sources: [project]
+setting_sources: []
 
 inputs:
   required:

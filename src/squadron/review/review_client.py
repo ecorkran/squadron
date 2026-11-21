@@ -550,6 +550,8 @@ def _log_budget_skip(
 # file path; without this, the "is this a real path" check below could read a real file
 # named inside a PR body off disk and inject it (Scope corrections table, design row 3).
 _SKIP_KEYS = {"cwd", "diff", "files", "pr"}
+#: The ``key`` an injected conventions file is recorded under in the read record.
+CONVENTIONS_KEY = "conventions"
 
 
 def _truncate(content: str, label: str, max_file_size: int) -> str:
@@ -725,10 +727,15 @@ def _inject_file_contents(
         conventions = ConventionsSource.NONE
     else:
         conventions = chosen.source
-        _add_injection(
-            f"{chosen.source.value} (project conventions)",
-            demote_headings(chosen.content, levels=2),
-        )
+        demoted = demote_headings(chosen.content, levels=2)
+        if _add_injection(f"{chosen.source.value} (project conventions)", demoted):
+            # Recorded as the file on disk; demoting headings adds characters, so the
+            # cut test is made on the demoted text that was actually capped.
+            source_chars = len(chosen.content)
+            reached = source_chars if len(demoted) <= max_file_size else source_chars - 1
+            injected_files.append(
+                injected_file(CONVENTIONS_KEY, str(chosen.path), chosen.content, injected_chars=reached)
+            )
 
     # #278: tell the reviewer which files of the diff it did not receive in full.
     cut_notice = describe_cut_files(diff_injection.files) if diff_injection else None

@@ -29,7 +29,7 @@ class TestCodeTemplate:
         # emitted --allowedTools string, not the SDK reviewer's actual capability.
         assert t.allowed_tools == ["read_file", "list_files", "grep"]
         assert t.permission_mode == "bypassPermissions"
-        assert t.setting_sources == ["project"]
+        assert t.setting_sources == []
         assert t.model == "haiku-xhigh"
 
     def test_no_required_inputs(self) -> None:

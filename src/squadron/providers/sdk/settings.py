@@ -25,9 +25,11 @@ __all__ = [
 # Pipeline SDK sessions and one-shot SDK dispatch: project conventions only.
 PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 # Reviews and judges (every built-in template, and custom ones that omit the
-# key). Same value as the pipeline policy today; kept separate on purpose
-# because the two answer different questions and can diverge.
-REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
+# key): none. Squadron puts the project's conventions file and the rules that
+# match the review into the prompt itself, the same for every provider. With
+# "project" a Claude reviewer got that conventions file a second time from the
+# CLI, plus every rules file whose glob matched a file it happened to open.
+REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ()
 
 AUTO_MEMORY_DISABLE_ENV: Final = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
 
