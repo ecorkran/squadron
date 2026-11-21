@@ -269,6 +269,21 @@ output = 15.00
 cache_read = 0.15
 cache_write = 3.00
 
+# Sends reasoning_effort "medium". Not yet run against the live endpoint (20261121).
+[aliases.neon-medium]
+profile = "gemini"
+model = "gemini-4-neon"
+effort = "medium"
+private = true
+cost_tier = "moderate"
+notes = "Medium effort"
+
+[aliases.neon-medium.pricing]
+input = 3.00
+output = 15.00
+cache_read = 0.15
+cache_write = 3.00
+
 [aliases.gemini-flash]
 profile = "gemini"
 model = "gemini-3.8-flash"

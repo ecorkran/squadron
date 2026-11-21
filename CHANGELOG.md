@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Model alias `neon` for Google's Gemini 4 Neon (`gemini-4-neon`, Gemini API key). It runs at Google's default effort, which is high.
+- Model alias `neon-medium`: the same model at medium effort.
 
 ## [0.24.37] - 20261121
 
