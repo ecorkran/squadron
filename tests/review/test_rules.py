@@ -12,8 +12,10 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.cli.commands.review import load_review_rules_or_exit
+from squadron.integrations.context_forge import GUIDE_RULES_DIR
 from squadron.review.models import ReviewResult, Verdict
-from squadron.review.rules import RulesSource, load_review_rules
+from squadron.review.rules import RulesSource, guide_rules_dir, load_review_rules
 
 
 @pytest.fixture
@@ -258,6 +260,56 @@ class TestLoadReviewRulesSteps:
 
         assert loaded.language_rules == ["python.md"]
         assert (loaded.content or "").count("Python rule body.") == 1
+
+    @staticmethod
+    def _guide_dir(tmp_path: Path) -> Path:
+        guide_dir = tmp_path / "guide-rules"
+        guide_dir.mkdir()
+        (guide_dir / "general.md").write_text(
+            "---\nalwaysApply: true\nsteps: [design, review]\n---\nNo silent fallbacks.\n"
+        )
+        (guide_dir / "git.md").write_text(
+            "---\nalwaysApply: true\nsteps: [implement]\n---\nBranch naming.\n"
+        )
+        return guide_dir
+
+    def test_guide_rules_marked_for_review_go_to_every_review(self, tmp_path: Path) -> None:
+        """With or without a project rules directory, and ahead of the project's own rules."""
+        guide_dir = self._guide_dir(tmp_path)
+        rules_dir = self._rules_dir(tmp_path, "steps: [review]")
+
+        alone = load_review_rules("tasks", None, guide_rules_dir=guide_dir)
+        both = load_review_rules("tasks", rules_dir, guide_rules_dir=guide_dir)
+
+        assert alone.language_rules == ["general.md"]
+        assert "Branch naming." not in (alone.content or "")
+        assert both.language_rules == ["general.md", "python.md"]
+
+    def test_a_project_rule_replaces_the_guide_rule_of_the_same_name(self, tmp_path: Path) -> None:
+        guide_dir = self._guide_dir(tmp_path)
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "general.md").write_text("---\nsteps: [review]\n---\nProject general.\n")
+
+        loaded = load_review_rules("tasks", rules_dir, guide_rules_dir=guide_dir)
+
+        assert loaded.language_rules == ["general.md"]
+        assert "Project general." in (loaded.content or "")
+        assert "No silent fallbacks." not in (loaded.content or "")
+
+    def test_the_installed_guide_rules_directory_is_found_under_the_project(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("squadron.review.rules.GUIDE_RULES_DIR", GUIDE_RULES_DIR)
+        assert guide_rules_dir(str(tmp_path)) is None
+        installed = tmp_path / GUIDE_RULES_DIR
+        installed.mkdir(parents=True)
+        (installed / "general.md").write_text("---\nsteps: [review]\n---\nNo silent fallbacks.\n")
+
+        loaded = load_review_rules_or_exit("tasks", None, cwd=str(tmp_path))
+
+        assert guide_rules_dir(str(tmp_path)) == installed
+        assert loaded.language_rules == ["general.md"]
 
     def test_no_steps_behaves_as_before(self, tmp_path: Path) -> None:
         rules_dir = self._rules_dir(tmp_path, 'paths: ["**/*.py"]')

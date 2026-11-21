@@ -84,6 +84,7 @@ from squadron.review.rules import (
     ReviewRules,
     RulesSource,
     extract_diff_paths,
+    guide_rules_dir,
     load_review_rules,
     resolve_rules_dir,
 )
@@ -525,7 +526,14 @@ def load_review_rules_or_exit(
     message names the file, so a traceback adds nothing (slice 935 review F003).
     """
     try:
-        return load_review_rules(template_name, rules_dir, file_paths, manual_rules_content, cwd)
+        return load_review_rules(
+            template_name,
+            rules_dir,
+            file_paths,
+            manual_rules_content,
+            cwd,
+            guide_rules_dir=guide_rules_dir(cwd) if cwd is not None else None,
+        )
     except ProjectRulesError as exc:
         rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc

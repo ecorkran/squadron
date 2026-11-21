@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import logging
 import os
@@ -14,6 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from squadron.config import Settings
+from squadron.config.keys import CONFIG_KEYS
 from tests import _hermetic
 from tests.stats.repo_support import StatsRepo
 
@@ -198,3 +200,16 @@ def temp_git_repo(tmp_path: Path) -> Path:
 def stats_repo(tmp_path: Path) -> StatsRepo:
     """An empty repo on ``main`` for the effort-report tests; they add commits with chosen dates."""
     return StatsRepo(tmp_path / "repo")
+
+
+@pytest.fixture
+def conventions_injected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn ``review.inject_conventions`` on, for tests of the conventions-file injection."""
+    key = "review.inject_conventions"
+    monkeypatch.setitem(CONFIG_KEYS, key, dataclasses.replace(CONFIG_KEYS[key], default=True))
+
+
+@pytest.fixture(autouse=True)
+def no_installed_guide_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep this checkout's own installed guide rules out of reviews run by tests."""
+    monkeypatch.setattr("squadron.review.rules.GUIDE_RULES_DIR", "no-guide-rules-in-tests")

@@ -396,6 +396,7 @@ def test_demote_headings_levels_zero() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_claude_md_injected_when_present(tmp_path: Path) -> None:
     """CLAUDE.md in cwd is injected so API-only models can read conventions."""
     claude_md = tmp_path / "CLAUDE.md"
@@ -409,6 +410,7 @@ def test_claude_md_injected_when_present(tmp_path: Path) -> None:
     assert "No magic defaults." in result
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_claude_md_headings_are_demoted(tmp_path: Path) -> None:
     """CLAUDE.md H1/H2 headings are demoted by 2 levels on injection."""
     claude_md = tmp_path / "CLAUDE.md"
@@ -432,6 +434,7 @@ def test_claude_md_absent_is_silently_skipped(tmp_path: Path) -> None:
     assert injected.conventions is ConventionsSource.NONE
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_agents_md_only_is_injected(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("Agents rules here.")
     injected = _inject_file_contents("Review", {"cwd": str(tmp_path)})
@@ -440,6 +443,7 @@ def test_agents_md_only_is_injected(tmp_path: Path) -> None:
     assert injected.conventions is ConventionsSource.AGENTS_MD
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_agents_md_wins_over_claude_md_once(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").write_text("Agents rules here.")
     (tmp_path / "CLAUDE.md").write_text("Claude rules here.")
@@ -449,12 +453,14 @@ def test_agents_md_wins_over_claude_md_once(tmp_path: Path) -> None:
     assert injected.conventions is ConventionsSource.AGENTS_MD
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_claude_md_records_its_source(tmp_path: Path) -> None:
     (tmp_path / "CLAUDE.md").write_text("Claude rules here.")
     injected = _inject_file_contents("Review", {"cwd": str(tmp_path)})
     assert injected.conventions is ConventionsSource.CLAUDE_MD
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_convention_root_is_honored(tmp_path: Path) -> None:
     worktree = tmp_path / "worktree"
     trusted = tmp_path / "trusted"
@@ -467,6 +473,7 @@ def test_convention_root_is_honored(tmp_path: Path) -> None:
     assert "Untrusted rules." not in injected.prompt
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_unreadable_conventions_file_raises(tmp_path: Path) -> None:
     (tmp_path / "AGENTS.md").symlink_to(tmp_path / "missing.md")
     (tmp_path / "CLAUDE.md").write_text("Claude rules here.")

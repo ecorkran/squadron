@@ -194,6 +194,7 @@ def test_plan_and_design_reviews_check_what_the_document_breaks_in_existing_code
     assert "would break" in prompt
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_the_conventions_file_is_in_the_read_record(tmp_path: Path) -> None:
     (tmp_path / "tasks.md").write_text(TASKS_BODY)
     (tmp_path / "AGENTS.md").write_text("# Rules\n\nNo silent fallbacks.\n")

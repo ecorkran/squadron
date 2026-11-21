@@ -25,6 +25,7 @@ from squadron.review.templates import InputDef, ReviewTemplate
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_convention_root_overrides_claude_md_source(tmp_path: Path) -> None:
     """CLAUDE.md is read from convention_root, not inputs['cwd'], when given."""
     cwd_dir = tmp_path / "worktree"
@@ -42,6 +43,7 @@ def test_convention_root_overrides_claude_md_source(tmp_path: Path) -> None:
     assert "Untrusted content." not in result
 
 
+@pytest.mark.usefixtures("conventions_injected")
 def test_convention_root_omitted_reads_from_cwd_byte_identical(tmp_path: Path) -> None:
     """Omitting convention_root preserves today's cwd-sourced behavior exactly.
 
@@ -139,6 +141,7 @@ async def _run_with_mocked_provider(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("conventions_injected")
 async def test_run_review_with_profile_honors_convention_root(tmp_path: Path) -> None:
     task_file = tmp_path / "tasks.md"
     task_file.write_text("# Tasks\n- [ ] Implement feature X")
@@ -169,6 +172,7 @@ async def test_run_review_with_profile_honors_convention_root(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("conventions_injected")
 async def test_run_review_with_profile_without_convention_root_is_byte_identical(
     tmp_path: Path,
 ) -> None:

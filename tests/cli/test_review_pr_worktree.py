@@ -234,6 +234,7 @@ def _mock_sdk_agent():
 
 
 @pytest.mark.usefixtures("hosts_file")
+@pytest.mark.usefixtures("conventions_injected")
 def test_tools_enabled_worktree_cwd_and_checkout_conventions(
     real_checkout: Path, monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner
 ) -> None:

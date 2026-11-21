@@ -242,11 +242,11 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
     "review.inject_conventions": ConfigKey(
         name="review.inject_conventions",
         type_=bool,
-        default=True,
+        default=False,
         description=(
             "Put the project's conventions file (AGENTS.md, else CLAUDE.md) whole into "
-            "every review prompt. Set false when the rules reviewers need are in rule "
-            "files marked `steps: [review]`, so they are not sent twice."
+            "every review prompt. Off by default: reviewers get the rule files marked "
+            "`steps: [review]` (the guide's and the project's) instead."
         ),
     ),
     "review.max_total_injection_bytes": ConfigKey(

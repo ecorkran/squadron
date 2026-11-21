@@ -71,6 +71,7 @@ from squadron.review.rules import (
     ReviewRules,
     RulesSource,
     extract_diff_paths,
+    guide_rules_dir,
     load_review_rules,
     resolve_rules_dir,
 )
@@ -534,6 +535,7 @@ class ReviewAction:
             file_paths=file_paths,
             manual_rules_content=manual_rules,
             cwd=cwd,
+            guide_rules_dir=guide_rules_dir(cwd),
         )
         return rules, rules_source, changed_files
 

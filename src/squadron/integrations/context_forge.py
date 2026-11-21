@@ -23,6 +23,8 @@ DOCS_ROOT = "project-documents"
 ARCHITECTURE_DIR = f"{DOCS_ROOT}/user/architecture"
 #: The installed ai-project-guide's version marker, relative to the project.
 GUIDE_VERSION_FILE = f"{DOCS_ROOT}/ai-project-guide/.context-forge-guide-version"
+#: The installed guide's rule files, relative to the project.
+GUIDE_RULES_DIR = f"{DOCS_ROOT}/ai-project-guide/project-guides/rules"
 
 # ---------------------------------------------------------------------------
 # Exceptions

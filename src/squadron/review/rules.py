@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
 from squadron.config.manager import get_config
+from squadron.integrations.context_forge import GUIDE_RULES_DIR
 from squadron.project_rules.frontmatter import (
     RuleFrontmatter,
     RuleStep,
@@ -192,20 +194,41 @@ def _is_always_on(name: str, fm: RuleFrontmatter) -> bool:
     )
 
 
+def guide_rules_dir(cwd: str) -> Path | None:
+    """The installed guide's rules directory under *cwd*, ``None`` when no guide is installed."""
+    directory = Path(cwd) / GUIDE_RULES_DIR
+    return directory if directory.is_dir() else None
+
+
+def _guide_always_on(
+    guide_dir: Path | None, rules_dir: Path | None, exclude: Collection[str]
+) -> list[Path]:
+    """The guide's rule files sent to every review, less names the project's own rules use."""
+    if guide_dir is None or guide_dir == rules_dir:
+        return []
+    return [
+        guide_dir / name
+        for name, fm in sorted(load_rules_frontmatter(guide_dir).items())
+        if name not in exclude and _is_always_on(name, fm)
+    ]
+
+
 def load_review_rules(
     template_name: str,
     rules_dir: Path | None,
     file_paths: list[str] | None = None,
     manual_rules_content: str | None = None,
     cwd: str | None = None,
+    guide_rules_dir: Path | None = None,
 ) -> ReviewRules:
     """Assemble review rules from all sources, in CLI-equivalent order.
 
     Combines, in order:
       1. Template rules (``review.md`` and ``review-{template_name}.md``)
       2. Manual override rules supplied by caller
-      3. Project rules sent to every review: ``steps`` names ``review`` and the
-         file has no ``paths``
+      3. Rules sent to every review (``steps`` names ``review`` and the file has no
+         ``paths``): the guide's from *guide_rules_dir*, then the project's. A project
+         file replaces the guide file of the same name.
       4. Language-auto-detected rules matched against *file_paths*, limited to
          rules whose ``steps`` include ``review`` (slice 935 D3)
 
@@ -223,12 +246,14 @@ def load_review_rules(
                 else f"{template_rules}\n\n---\n\n{rules_content}"
             )
 
-    # Project rules: those sent to every review, then those matching the files under review.
+    # Rules sent to every review (the guide's, then the project's), then the project
+    # rules matching the files under review.
     project_rules: list[str] = []
+    frontmatter = load_rules_frontmatter(rules_dir) if rules_dir is not None else {}
+    always = sorted(name for name, fm in frontmatter.items() if _is_always_on(name, fm))
+    selected = _guide_always_on(guide_rules_dir, rules_dir, exclude=frontmatter.keys())
     if rules_dir is not None:
-        frontmatter = load_rules_frontmatter(rules_dir)
-        always = sorted(name for name, fm in frontmatter.items() if _is_always_on(name, fm))
-        selected = [rules_dir / name for name in always]
+        selected += [rules_dir / name for name in always]
         if file_paths:
             relevant = {
                 name: fm
@@ -236,6 +261,7 @@ def load_review_rules(
                 if name not in always and RuleStep.REVIEW in effective_steps(fm)
             }
             selected += match_rules_files(file_paths, rules_dir, path_globs(relevant), cwd)
+    if selected:
         loaded = _read_rules(selected)
         project_rules = [path.name for path, _ in loaded]
         project_content = RULES_SEPARATOR.join(content for _, content in loaded)
