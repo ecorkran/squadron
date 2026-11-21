@@ -8,10 +8,12 @@ from enum import StrEnum
 
 from squadron import __version__
 from squadron.core.models import Effort, SystemPromptMode
+from squadron.core.tool_calls import ToolCallRecord
 from squadron.core.usage import CostBasis, TokenUsage
 from squadron.models.snapshot import answers_as_requested
 from squadron.project_rules.conventions import ConventionsSource
 from squadron.review.injected_file import InjectedFile
+from squadron.review.read_record import read_record_dict
 from squadron.review.run_cost import RunCost
 
 
@@ -225,6 +227,9 @@ class ReviewResult:
     # case, which is exactly what issue #68 made invisible.
     tools_given: list[str] | None = None
     tool_calls_made: int | None = None
+    # Every tool call in order (#382): what the model opened and searched. None when the
+    # provider stamped no record, which the artifact reports as unreported.
+    tool_calls: list[ToolCallRecord] | None = None
     # Why tools were withheld (slice 266), or None if they were not. The third state the
     # two fields above cannot express: an empty tools_given is otherwise identical to a
     # review whose template declared no tools at all.
@@ -408,6 +413,7 @@ class ReviewResult:
             "provenance": self.provenance,
             "tools_given": self.tools_given,
             "tool_calls_made": self.tool_calls_made,
+            **read_record_dict(self.injected_files, self.tool_calls, self.input_files.get("cwd", ".")),
             "categories_normalized": self.categories_normalized,
             # Slice 918: additive and always present, null when the provider stamped
             # nothing, exactly as the two telemetry keys above behave. Emitted

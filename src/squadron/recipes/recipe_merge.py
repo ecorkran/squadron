@@ -14,6 +14,7 @@ import dataclasses
 from collections import Counter
 from collections.abc import Iterable
 
+from squadron.core.tool_calls import ToolCallRecord
 from squadron.metrology.recall_run_models import CombVerdict, RecallFinding, StageKind, StageOutcome
 from squadron.recipes.recipe_outcome import (
     RecipeOutcome,
@@ -136,6 +137,13 @@ def _summary(verdict: Verdict, section: str, findings: list[ReviewFinding]) -> s
     return "\n\n".join(body)
 
 
+def _stage_tool_calls(results: list[ReviewResult]) -> list[ToolCallRecord] | None:
+    """Every stage's tool calls in stage order (#382); None unless every stage reported its own."""
+    if not results or any(result.tool_calls is None for result in results):
+        return None
+    return [record for result in results for record in result.tool_calls or []]
+
+
 def merge_recipe(
     outcome: RecipeOutcome, recipe_name: str, template_name: str, input_files: dict[str, str]
 ) -> ReviewResult:
@@ -144,6 +152,7 @@ def merge_recipe(
     verdict = merged_verdict(findings, outcome.complete)
     section = render_stage_section(outcome, recipe_name, verdict)
     totals = stage_totals(outcome.stages)
+    results = [stage.result for stage in outcome.stages if stage.result is not None]
     return ReviewResult(
         verdict=verdict,
         findings=findings,
@@ -156,6 +165,8 @@ def merge_recipe(
         duration_seconds=totals.duration_s,
         turns=totals.turns,
         tool_calls_made=totals.tool_calls,
+        tool_calls=_stage_tool_calls(results),
+        injected_files=next((r.injected_files for r in results if r.injected_files is not None), None),
         usage=totals.tokens,
         recipe=RecipeReviewInfo(name=recipe_name, complete=outcome.complete, stage_section=section),
     )

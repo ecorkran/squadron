@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from squadron.core.models import AgentConfig
+from squadron.core.tool_calls import FILES_READ_KEY, SEARCHES_KEY, TOOL_CALLS_KEY, ToolCallRecord
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.steps import StepTypeName
@@ -184,3 +185,22 @@ async def test_default_set_not_applied(params: dict[str, object], provider: Prov
     config = await _spawned_config(params, provider)
 
     assert config.allowed_tools is None
+
+
+async def test_the_files_a_dispatch_opened_are_stored_in_its_metadata() -> None:
+    """#382: run state records what was read, not only how many calls were made."""
+    metadata = _telemetry(made=2, failed=0)
+    metadata[TOOL_CALLS_KEY] = [
+        ToolCallRecord("read_file", {"path": "src/a.py"}),
+        ToolCallRecord("grep", {"pattern": "run", "path": "src"}),
+    ]
+    result = await _run(_WRITE_PARAMS, metadata)
+
+    assert result.metadata[FILES_READ_KEY] == ["src/a.py"]
+    assert result.metadata[SEARCHES_KEY] == ["grep run in src"]
+
+
+async def test_a_dispatch_with_no_tool_record_stores_no_read_keys() -> None:
+    result = await _run(_WRITE_PARAMS, _telemetry(made=1, failed=0))
+
+    assert FILES_READ_KEY not in result.metadata

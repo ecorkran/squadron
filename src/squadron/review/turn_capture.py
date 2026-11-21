@@ -23,6 +23,7 @@ from squadron.core.models import (
     Message,
     MessageType,
 )
+from squadron.core.tool_calls import TOOL_CALLS_KEY, ToolCallRecord
 from squadron.core.usage import TokenUsage, add_optional, add_optional_float
 from squadron.providers.base import (
     ANSWERING_MODELS_KEY,
@@ -82,6 +83,8 @@ class TurnCapture:
     text_parts: list[str] = field(default_factory=list[str])
     tools_given: list[str] | None = None
     tool_calls_made: int | None = None
+    # Every tool call in order (#382); None until a provider stamps a record.
+    tool_calls: list[ToolCallRecord] | None = None
     suppressed_reason: str | None = None
     stop_reason: str | None = None
     reasoning_chars: int | None = None
@@ -146,6 +149,7 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
         message_type=MessageType.chat,
     )
     turn_calls: int | None = None
+    turn_records: list[ToolCallRecord] | None = None
     turn_failures: int | None = None
     turn_reasoning: int | None = None
     turn_count: int | None = None
@@ -157,6 +161,8 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
         if given is not None:
             capture.tools_given = given
             turn_calls = metadata.get(TOOL_CALLS_MADE_KEY, 0)
+        if metadata.get(TOOL_CALLS_KEY) is not None:
+            turn_records = list(metadata[TOOL_CALLS_KEY])
         # Guarded per key rather than on one of them: a later response that stamps nothing
         # must not erase what an earlier one reported. Counts are checked against None, not
         # truthiness — a stamped 0 is a real answer.
@@ -182,6 +188,8 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
         capture.text_parts.append(response.content)
 
     capture.tool_calls_made = add_optional(capture.tool_calls_made, turn_calls)
+    if turn_records is not None:
+        capture.tool_calls = (capture.tool_calls or []) + turn_records
     capture.failed_tool_calls = add_optional(capture.failed_tool_calls, turn_failures)
     capture.reasoning_chars = add_optional(capture.reasoning_chars, turn_reasoning)
     capture.turns = add_optional(capture.turns, turn_count)

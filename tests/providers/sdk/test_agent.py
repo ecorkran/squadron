@@ -27,6 +27,7 @@ from claude_agent_sdk import (
 )
 
 from squadron.core.models import AgentState, Message, MessageType
+from squadron.core.tool_calls import TOOL_CALLS_KEY, ToolCallRecord, files_read
 from squadron.core.usage import TokenUsage
 from squadron.providers.base import COST_USD_KEY, TURNS_KEY, USAGE_KEY
 from squadron.providers.errors import (
@@ -911,6 +912,35 @@ class TestToolTelemetry:
         assert messages[-1].metadata["tools_given"] == ["read_file", "grep"]
         assert messages[-1].metadata["tool_calls_made"] == 2
         assert messages[-1].metadata["failed_tool_calls"] == 0
+        # #382: canonical names and arguments, in call order.
+        assert messages[-1].metadata[TOOL_CALLS_KEY] == [
+            ToolCallRecord("read_file", {"path": "a.py"}),
+            ToolCallRecord("grep", {"pattern": "foo"}),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_failed_tool_result_marks_its_call_failed(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[
+                    ToolUseBlock(id="t1", name="Read", input={"file_path": "gone.py"}),
+                    ToolUseBlock(id="t2", name="Read", input={"file_path": "here.py"}),
+                ],
+                model="claude",
+            )
+            yield UserMessage(
+                content=[ToolResultBlock(tool_use_id="t1", content="no such file", is_error=True)]
+            )
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        records = messages[-1].metadata[TOOL_CALLS_KEY]
+        assert [record.failed for record in records] == [True, False]
+        assert files_read(records) == ["here.py"]
 
     @pytest.mark.asyncio
     async def test_counts_are_per_message_not_per_agent(

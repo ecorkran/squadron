@@ -31,6 +31,7 @@ from claude_agent_sdk._errors import (  # pyright: ignore[reportPrivateUsage]
 
 from squadron.core.models import AgentState, Message
 from squadron.core.teardown import close_best_effort
+from squadron.core.tool_calls import TOOL_CALLS_KEY, ToolCallRecord, compact_arguments
 from squadron.core.usage import RunTelemetry
 from squadron.logging import get_logger
 from squadron.providers.base import (
@@ -58,6 +59,7 @@ from squadron.providers.sdk.rate_limit import (
     is_throttle,
     rate_limit_backoff_s,
 )
+from squadron.providers.sdk.tool_names import canonical_tool_name
 from squadron.providers.sdk.translation import translate_sdk_message
 from squadron.providers.sdk.usage import SessionCostMeter, read_result_usage
 
@@ -97,6 +99,8 @@ class ClaudeSDKAgent:
         self._tools_given: list[str] | None = None if tools_given is None else list(tools_given)
         self._tool_calls_made = 0
         self._failed_tool_calls = 0
+        # Each call by its SDK id, in call order, so a later result can mark it failed (#382).
+        self._tool_calls: dict[str, ToolCallRecord] = {}
         self._reasoning_chars = 0
         # Distinct top-level answering model ids, in first-seen order (slice 927 D8,
         # D12). Reset per handle_message call, like the counters above.
@@ -135,6 +139,7 @@ class ClaudeSDKAgent:
         # message on the same agent (the #92 review recovery turn) sums the two counts.
         self._tool_calls_made = 0
         self._failed_tool_calls = 0
+        self._tool_calls = {}
         self._answering_models = []
         self._telemetry = RunTelemetry()
         self._usage_warned = False
@@ -218,6 +223,9 @@ class ClaudeSDKAgent:
             for block in sdk_msg.content:
                 if isinstance(block, ToolUseBlock):
                     self._tool_calls_made += 1
+                    self._tool_calls[block.id] = ToolCallRecord(
+                        canonical_tool_name(block.name), compact_arguments(block.input)
+                    )
                 elif isinstance(block, ThinkingBlock):
                     self._reasoning_chars += len(block.thinking)
             # Top-level only (slice 927 D8): a subagent spawned through the Task tool
@@ -233,9 +241,15 @@ class ClaudeSDKAgent:
         elif isinstance(sdk_msg, UserMessage) and isinstance(sdk_msg.content, list):
             # The SDK delivers tool results inside a UserMessage's content, never as a
             # top-level message (D4). String content carries no blocks.
-            self._failed_tool_calls += sum(
-                1 for block in sdk_msg.content if isinstance(block, ToolResultBlock) and block.is_error
-            )
+            failed = [
+                block
+                for block in sdk_msg.content
+                if isinstance(block, ToolResultBlock) and block.is_error
+            ]
+            self._failed_tool_calls += len(failed)
+            for block in failed:
+                if (record := self._tool_calls.get(block.tool_use_id)) is not None:
+                    record.failed = True
 
         if isinstance(sdk_msg, ResultMessage):
             self._fold_result(sdk_msg)
@@ -256,6 +270,7 @@ class ClaudeSDKAgent:
             if self._tools_given is not None:
                 final.metadata[TOOLS_GIVEN_KEY] = list(self._tools_given)
                 final.metadata[TOOL_CALLS_MADE_KEY] = self._tool_calls_made
+                final.metadata[TOOL_CALLS_KEY] = list(self._tool_calls.values())
         return translated
 
     def _fold_result(self, sdk_msg: ResultMessage) -> None:

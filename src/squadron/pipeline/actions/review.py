@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import cast
 
 from squadron.core.models import Effort
+from squadron.core.tool_calls import read_summary
 from squadron.core.usage import UsageRecord
 from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.actions import ActionType, register_action
@@ -862,6 +863,8 @@ class ReviewAction:
                     if result.tools_given
                     else {}
                 ),
+                # #382: what the review opened and searched, when the provider recorded it.
+                **(read_summary(result.tool_calls) if result.tool_calls is not None else {}),
             },
         )
 

@@ -31,6 +31,14 @@ CANONICAL_TO_CLAUDE: dict[str, str] = {
 }
 
 
+CLAUDE_TO_CANONICAL: dict[str, str] = {claude: name for name, claude in CANONICAL_TO_CLAUDE.items()}
+
+
+def canonical_tool_name(claude_name: str) -> str:
+    """The canonical name for a tool Claude Code reports; an unmapped name is kept as is."""
+    return CLAUDE_TO_CANONICAL.get(claude_name, claude_name)
+
+
 def translate_tool_names(names: list[str]) -> list[str]:
     """Return *names* in Claude vocabulary, raising on any name with no mapping.
 

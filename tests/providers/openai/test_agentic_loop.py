@@ -15,6 +15,7 @@ from openai import omit
 
 import squadron.providers.openai.agent as agent_module
 from squadron.core.models import Message, MessageType
+from squadron.core.tool_calls import ToolCallRecord
 from squadron.providers.errors import EmptyFinalTurnError, ProviderError
 from squadron.providers.openai.agent import (
     OpenAICompatibleAgent,
@@ -549,6 +550,11 @@ class TestToolUseTelemetry:
 
         assert msgs[-1].metadata["tools_given"] == ["read_file"]
         assert msgs[-1].metadata["tool_calls_made"] == 2
+        # #382: what was read, in call order.
+        assert msgs[-1].metadata["tool_calls"] == [
+            ToolCallRecord("read_file", {"path": "a.txt"}),
+            ToolCallRecord("read_file", {"path": "b.txt"}),
+        ]
 
     @pytest.mark.asyncio
     async def test_calls_across_multiple_turns_accumulate(self, tmp_path: Path) -> None:

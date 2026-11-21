@@ -23,6 +23,7 @@ from openai.types.chat import (
 import squadron.tools as tools
 from squadron.config.keys import CONFIG_KEYS
 from squadron.core.models import AgentState, Effort, Message
+from squadron.core.tool_calls import TOOL_CALLS_KEY, ToolCallRecord, compact_arguments
 from squadron.core.usage import RunTelemetry, TokenUsage
 from squadron.logging import get_logger
 from squadron.providers.base import (
@@ -89,6 +90,19 @@ def _int_key_default(key: str) -> int:
     if not isinstance(default, int):
         raise TypeError(f"config key {key!r} default must be an int, got {default!r}")
     return default
+
+
+def _tool_call_record(tool_call: dict[str, Any], *, failed: bool) -> ToolCallRecord:
+    """The record of one model-issued tool call; unparseable arguments are recorded as none."""
+    function = tool_call.get("function", {})
+    raw_arguments = function.get("arguments", "")
+    try:
+        parsed: object = json.loads(raw_arguments) if raw_arguments else {}
+    except json.JSONDecodeError:
+        # _execute_tool_call already logged it and handed the model the failure.
+        parsed = {}
+    arguments = cast(dict[str, object], parsed) if isinstance(parsed, dict) else {}
+    return ToolCallRecord(str(function.get("name", "")), compact_arguments(arguments), failed)
 
 
 def _require_final_content(
@@ -234,6 +248,7 @@ class OpenAICompatibleAgent:
         # first-seen order (slice 927 D8, D12). Reset at the top of handle_message,
         # like the tool counters, so a second call never inherits the first's models.
         self._answering_models: list[str] = []
+        self._tool_calls: list[ToolCallRecord] = []
         # Malformed usage fields already logged in this handle_message call, so D12's
         # WARNING fires once per field per call. Reset beside _answering_models.
         self._usage_warned: set[str] = set()
@@ -533,6 +548,7 @@ class OpenAICompatibleAgent:
         tool_calls_made = 0
         failed_tool_calls = 0
         first_tool_error: str | None = None
+        self._tool_calls = []
 
         for _iteration in range(max_iterations):
             # Tools are withdrawn once either budget is spent: each notice asks the
@@ -608,6 +624,7 @@ class OpenAICompatibleAgent:
                     )
                 content, tool_call_failed = await self._execute_tool_call(tool_call)
                 tool_calls_made += 1
+                self._tool_calls.append(_tool_call_record(tool_call, failed=tool_call_failed))
                 if tool_call_failed:
                     failed_tool_calls += 1
                     if first_tool_error is None:
@@ -743,6 +760,8 @@ class OpenAICompatibleAgent:
             return
         messages[-1].metadata[TOOLS_GIVEN_KEY] = list(self._tools_given)
         messages[-1].metadata[TOOL_CALLS_MADE_KEY] = tool_calls_made
+        # What was read, not only how often (#382). Empty on the no-loop paths.
+        messages[-1].metadata[TOOL_CALLS_KEY] = list(self._tool_calls) if tool_calls_made else []
 
     def _append_history(self, entry: dict[str, Any]) -> None:
         """Append a history entry and update the running character count.

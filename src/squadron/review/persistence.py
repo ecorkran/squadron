@@ -27,6 +27,7 @@ from squadron.review.document_stamp import (
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
 from squadron.review.parts import part_stem
+from squadron.review.read_record import read_record_lines
 from squadron.review.run_cost import NOT_COMPUTED, RunCost
 from squadron.review.turn_capture import describe_budget, describe_effort, ended_mid_task
 
@@ -428,6 +429,7 @@ def _review_frontmatter_lines(
     profile: str | None = None,
     recipe_complete: bool | None = None,
     document_blobs: DocumentBlobs | None = None,
+    read_record: list[str] | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -517,6 +519,9 @@ def _review_frontmatter_lines(
         lines.append(f"toolCallsMade: {0 if tool_calls_made is None else tool_calls_made}")
     if tools_suppressed_reason is not None:
         lines.append(f"toolsSuppressedReason: {tools_suppressed_reason}")
+    # #382: what was put in the prompt and what the model opened, or that it is unreported.
+    if read_record:
+        lines.extend(read_record)
     # Slice 927 D2: present exactly when the review had a diff input, true or false.
     if diff_truncated is not None:
         lines.append(f"diffTruncated: {'true' if diff_truncated else 'false'}")
@@ -653,6 +658,9 @@ def format_review_markdown(
         tools_given=result.tools_given,
         tool_calls_made=result.tool_calls_made,
         tools_suppressed_reason=result.tools_suppressed_reason,
+        read_record=read_record_lines(
+            result.injected_files, result.tool_calls, result.input_files.get("cwd", ".")
+        ),
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
         diff_cut_files=(
             [f.path for f in result.diff_injection.cut_files] if result.diff_injection else None

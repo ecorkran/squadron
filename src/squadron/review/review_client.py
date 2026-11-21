@@ -398,6 +398,7 @@ async def run_review_with_profile(
     result.profile = profile
     result.tools_given = capture.tools_given
     result.tool_calls_made = capture.tool_calls_made
+    result.tool_calls = capture.tool_calls
     # Slice 266: the gate's own result is authoritative — SDK providers do not stamp it.
     result.tools_suppressed_reason = tools_suppressed_reason or capture.suppressed_reason
     result.stop_reason = capture.stop_reason

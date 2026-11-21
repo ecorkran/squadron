@@ -24,6 +24,7 @@ from squadron.core.models import (
     describe_run_settings,
     describe_setting_sources,
 )
+from squadron.core.tool_calls import TOOL_CALLS_KEY, read_summary
 from squadron.core.usage import UsageRecord
 from squadron.integrations.context_forge import ContextForgeError
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
@@ -320,6 +321,9 @@ async def one_shot_dispatch_with_telemetry(
                 telemetry[TOOLS_GIVEN_KEY] = given
                 telemetry[TOOL_CALLS_MADE_KEY] = response.metadata.get(TOOL_CALLS_MADE_KEY, 0)
                 telemetry[FAILED_TOOL_CALLS_KEY] = response.metadata.get(FAILED_TOOL_CALLS_KEY, 0)
+                # #382: what the dispatch opened and searched, when the provider recorded it.
+                if (records := response.metadata.get(TOOL_CALLS_KEY)) is not None:
+                    telemetry.update(read_summary(records))
                 # Absent, not None, when no call failed or the provider reports no text (D3).
                 if (first_error := response.metadata.get(FIRST_TOOL_ERROR_KEY)) is not None:
                     telemetry[FIRST_TOOL_ERROR_KEY] = first_error

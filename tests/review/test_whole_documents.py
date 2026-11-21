@@ -12,6 +12,7 @@ import squadron
 from squadron.providers.base import AuthType, ProfileName, ProviderType
 from squadron.providers.profiles import ProviderProfile
 from squadron.review.document_injection import ReviewDocumentError
+from squadron.review.persistence import format_review_markdown
 from squadron.review.review_client import (
     _inject_file_contents,  # pyright: ignore[reportPrivateUsage]
     run_review_with_profile,
@@ -144,3 +145,36 @@ def test_built_in_document_templates_inject_their_documents(name: str) -> None:
 
 def test_the_code_template_does_not() -> None:
     assert load_template(_BUILT_IN / "code.yaml").inject_documents is False
+
+
+@pytest.mark.asyncio
+async def test_the_review_file_records_what_was_injected(tmp_path: Path) -> None:
+    (tmp_path / "tasks.md").write_text(TASKS_BODY)
+    (tmp_path / "design.md").write_text(DESIGN_BODY)
+    provider = _capture_provider({}, can_read_files=True)
+    profile = ProviderProfile(
+        name=ProfileName.SDK, provider=ProviderType.SDK, auth_type=AuthType.SESSION
+    )
+    with (
+        patch(f"{_P}.get_profile", return_value=profile),
+        patch(f"{_P}.get_provider", return_value=provider),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        result = await run_review_with_profile(
+            _template(inject_documents=True),
+            {
+                "input": str(tmp_path / "tasks.md"),
+                "against": str(tmp_path / "design.md"),
+                "cwd": str(tmp_path),
+            },
+            profile=profile.name,
+        )
+    assert result.injected_files is not None
+    assert [(item.key, item.whole) for item in result.injected_files] == [
+        ("input", True),
+        ("against", True),
+    ]
+    markdown = format_review_markdown(result, "tasks", project_name="demo")
+    assert 'path: "tasks.md"' in markdown and 'path: "design.md"' in markdown
+    # The mock agent stamps no tool-call record, and the file says so.
+    assert "readRecord: unreported" in markdown
