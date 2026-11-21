@@ -282,6 +282,11 @@ async def one_shot_dispatch_with_telemetry(
         base_url=profile.base_url,
         cwd=None if is_sdk else cwd,
         setting_sources=setting_sources,
+        claude_settings=(
+            get_typed_config("pipeline.claude_settings", str, cwd=config_cwd) or None
+            if is_sdk
+            else None
+        ),
         auto_memory=auto_memory,
         allowed_tools=allowed_tools,
         requires_writes=requires_writes,

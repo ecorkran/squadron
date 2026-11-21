@@ -87,6 +87,8 @@ class AgentConfig(BaseModel):
     # caller (slice 382, design D1).
     convention_root: str | None = None
     setting_sources: list[str] | None = None  # SDK agents: e.g. ["project"]
+    # SDK agents: inline settings JSON passed as `--settings` (pipeline.claude_settings).
+    claude_settings: str | None = None
     # SDK agents: True only on pipeline paths (pipeline.auto_memory)
     auto_memory: bool = False
     # SDK and API agents: tool whitelist. Note the vocabularies differ — SDK names

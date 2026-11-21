@@ -1163,7 +1163,13 @@ class TestPipelineSessionSettings:
         with (
             patch(
                 f"{_MOD}.get_typed_config",
-                typed_config({"pipeline.auto_memory": auto_memory, "pipeline.user_settings": False}),
+                typed_config(
+                    {
+                        "pipeline.auto_memory": auto_memory,
+                        "pipeline.user_settings": False,
+                        "pipeline.claude_settings": "",
+                    }
+                ),
             ),
             patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as ctor,
         ):
@@ -1174,6 +1180,28 @@ class TestPipelineSessionSettings:
         assert ("CLAUDE_CODE_DISABLE_AUTO_MEMORY" in options.env) is (not auto_memory)
         assert session.setting_sources == ["project"]
         assert session.auto_memory is auto_memory
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("configured", "expected"), [('{"sandbox":{}}', '{"sandbox":{}}'), ("", None)]
+    )
+    async def test_claude_settings_reach_the_session_only_when_set(
+        self, configured: str, expected: str | None
+    ) -> None:
+        from squadron.pipeline.sdk_session import open_pipeline_session
+
+        values: dict[str, object] = {
+            "pipeline.auto_memory": False,
+            "pipeline.user_settings": False,
+            "pipeline.claude_settings": configured,
+        }
+        with (
+            patch(f"{_MOD}.get_typed_config", typed_config(values)),
+            patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as ctor,
+        ):
+            await open_pipeline_session()
+
+        assert ctor.call_args.kwargs["options"].settings == expected
 
     @pytest.mark.asyncio
     async def test_settings_survive_rotation(self) -> None:

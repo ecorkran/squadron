@@ -259,6 +259,25 @@ class TestProducerEnv:
             assert env["HOME"] == str(sandbox.home)
             assert "GH_TOKEN" not in env
 
+    def test_the_producer_is_confined_to_the_sandbox_through_its_home_config(
+        self, tmp_path: Path, real_home: Path
+    ) -> None:
+        import json
+        import tomllib
+
+        from squadron.benchmark.confinement import CLAUDE_SETTINGS_KEY
+        from squadron.providers.base import ProfileName
+
+        with self._sandbox(tmp_path, real_home) as sandbox:
+            sandbox.producer_env(ProfileName.SDK)
+            config = sandbox.home / ".config" / "squadron" / "config.toml"
+            with config.open("rb") as handle:
+                settings = json.loads(tomllib.load(handle)[CLAUDE_SETTINGS_KEY])
+
+        filesystem = settings["sandbox"]["filesystem"]
+        assert filesystem["denyRead"] == [str(real_home.resolve())]
+        assert filesystem["allowRead"][:2] == [str(sandbox.tree.resolve()), str(sandbox.home.resolve())]
+
     def test_api_key_profile_gets_its_variable(self, tmp_path: Path, real_home: Path) -> None:
         from squadron.providers.base import ProfileName
 

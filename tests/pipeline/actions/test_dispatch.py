@@ -784,17 +784,22 @@ class TestDispatchStepFeedback:
 
 
 async def _config_with_profile(
-    action: DispatchAction, profile: ProviderProfile, auto_memory: bool = True
+    action: DispatchAction,
+    profile: ProviderProfile,
+    auto_memory: bool = True,
+    claude_settings: str = "",
 ) -> AgentConfig:
     mock_registry = _make_registry(_make_agent_mock("ok"))
+    values: dict[str, object] = {
+        "pipeline.auto_memory": auto_memory,
+        "pipeline.user_settings": False,
+        "pipeline.claude_settings": claude_settings,
+    }
     with (
         patch(f"{_P}.get_registry", return_value=mock_registry),
         patch(f"{_P}.get_profile", return_value=profile),
         patch(f"{_P}.ensure_provider_loaded"),
-        patch(
-            f"{_P}.get_typed_config",
-            typed_config({"pipeline.auto_memory": auto_memory, "pipeline.user_settings": False}),
-        ),
+        patch(f"{_P}.get_typed_config", typed_config(values)),
     ):
         await action.execute(_make_context())
     return mock_registry.spawn.call_args[0][0]
@@ -810,9 +815,19 @@ async def test_sdk_dispatch_uses_pipeline_settings(action: DispatchAction, auto_
 
 @pytest.mark.asyncio
 async def test_non_sdk_dispatch_leaves_settings_unset(action: DispatchAction) -> None:
-    config = await _config_with_profile(action, _openrouter_profile())
+    config = await _config_with_profile(action, _openrouter_profile(), claude_settings="{}")
     assert config.setting_sources is None
     assert config.auto_memory is False
+    assert config.claude_settings is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("configured", "expected"), [('{"sandbox":{}}', '{"sandbox":{}}'), ("", None)])
+async def test_sdk_dispatch_carries_claude_settings(
+    action: DispatchAction, configured: str, expected: str | None
+) -> None:
+    config = await _config_with_profile(action, _sdk_profile(), claude_settings=configured)
+    assert config.claude_settings == expected
 
 
 @pytest.mark.asyncio
@@ -830,7 +845,13 @@ async def test_sdk_one_shot_records_prompt_and_settings(
         patch(f"{_P}.ensure_provider_loaded"),
         patch(
             f"{_P}.get_typed_config",
-            typed_config({"pipeline.auto_memory": auto_memory, "pipeline.user_settings": False}),
+            typed_config(
+                {
+                    "pipeline.auto_memory": auto_memory,
+                    "pipeline.user_settings": False,
+                    "pipeline.claude_settings": "",
+                }
+            ),
         ),
     ):
         result = await action.execute(ctx)

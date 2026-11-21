@@ -137,7 +137,13 @@ async def test_open_pipeline_session_asks_the_cli_for_state_frames() -> None:
     with (
         patch(
             f"{_MOD}.get_typed_config",
-            typed_config({"pipeline.auto_memory": False, "pipeline.user_settings": False}),
+            typed_config(
+                {
+                    "pipeline.auto_memory": False,
+                    "pipeline.user_settings": False,
+                    "pipeline.claude_settings": "",
+                }
+            ),
         ),
         patch(f"{_MOD}.ClaudeSDKClient", return_value=AsyncMock()) as ctor,
     ):

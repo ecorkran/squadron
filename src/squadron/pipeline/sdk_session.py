@@ -692,6 +692,7 @@ async def open_pipeline_session(
         ),
         auto_memory=get_typed_config("pipeline.auto_memory", bool, cwd=cwd),
     )
+    claude_settings = get_typed_config("pipeline.claude_settings", str, cwd=cwd)
     base = ClaudeAgentOptions(
         cwd=cwd,
         permission_mode="bypassPermissions",
@@ -703,6 +704,7 @@ async def open_pipeline_session(
         max_buffer_size=SDK_MAX_BUFFER_BYTES,
         **sdk_effort_options(effort),  # pyright: ignore[reportArgumentType]
         **({} if max_budget_usd is None else {"max_budget_usd": max_budget_usd}),
+        **({"settings": claude_settings} if claude_settings else {}),
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))
     session = SDKExecutionSession(

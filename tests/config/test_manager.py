@@ -192,3 +192,15 @@ class TestBoolConfigValues:
         (patch_config_paths["user"]).write_text('"pipeline.auto_memory" = 1\n')
         with pytest.raises(ValueError, match="must be a boolean"):
             get_typed_config("pipeline.auto_memory", bool)
+
+    def test_typed_read_returns_str_and_rejects_non_str(
+        self, patch_config_paths: dict[str, Path]
+    ) -> None:
+        from squadron.config.manager import get_typed_config
+
+        assert get_typed_config("pipeline.claude_settings", str) == ""
+        set_config("pipeline.claude_settings", '{"sandbox":{}}')
+        assert get_typed_config("pipeline.claude_settings", str) == '{"sandbox":{}}'
+        (patch_config_paths["user"]).write_text('"pipeline.claude_settings" = 1\n')
+        with pytest.raises(ValueError, match="must be a string"):
+            get_typed_config("pipeline.claude_settings", str)

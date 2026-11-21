@@ -189,7 +189,11 @@ def test_dispatch_run_sdk_system_prompt_appends_to_preset(tmp_path: Path) -> Non
     with (
         patch(f"{dispatch_mod}.get_registry", return_value=registry),
         patch(f"{dispatch_mod}.ensure_provider_loaded"),
-        patch(f"{dispatch_mod}.get_typed_config", return_value=True),
+        # Bool keys on; the one string key (pipeline.claude_settings) empty.
+        patch(
+            f"{dispatch_mod}.get_typed_config",
+            side_effect=lambda key, type_, cwd=".": "" if type_ is str else True,  # type: ignore[misc]
+        ),
     ):
         result = _invoke(
             "--prompt-file",

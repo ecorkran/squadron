@@ -117,6 +117,8 @@ class ClaudeSDKProvider:
         kwargs["env"] = settings["env"]
         if config.setting_sources is not None:
             kwargs["setting_sources"] = settings["setting_sources"]
+        if config.claude_settings:
+            kwargs["settings"] = config.claude_settings
 
         # A tool-less step is not auto-approved (#299): the default mode asks
         # `can_use_tool` about every call, and that callback denies them all.

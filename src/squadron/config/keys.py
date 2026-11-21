@@ -153,6 +153,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "same whoever starts it. Reviews always load project settings only."
         ),
     ),
+    "pipeline.claude_settings": ConfigKey(
+        name="pipeline.claude_settings",
+        type_=str,
+        default="",
+        description=(
+            "Claude Code settings as inline JSON, passed like `claude --settings` to "
+            "pipeline sessions and pipeline dispatch on SDK models. Empty passes none. "
+            "Benchmark sandboxes set it to confine the producer to its sandbox."
+        ),
+    ),
     "pipeline.background_idle_timeout_s": ConfigKey(
         name="pipeline.background_idle_timeout_s",
         type_=int,

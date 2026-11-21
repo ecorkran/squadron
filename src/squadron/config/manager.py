@@ -121,9 +121,11 @@ def get_typed_config(key: str, type_: type[bool], cwd: str = ".") -> bool: ...
 def get_typed_config(key: str, type_: type[int], cwd: str = ".") -> int: ...
 @overload
 def get_typed_config(key: str, type_: type[float], cwd: str = ".") -> float: ...
+@overload
+def get_typed_config(key: str, type_: type[str], cwd: str = ".") -> str: ...
 def get_typed_config(
-    key: str, type_: type[bool] | type[int] | type[float], cwd: str = "."
-) -> bool | int | float:
+    key: str, type_: type[bool] | type[int] | type[float] | type[str], cwd: str = "."
+) -> bool | int | float | str:
     """Get a single config value, validated against ``type_``.
 
     Raises ``ValueError`` on a type mismatch so both core and CLI callers
@@ -132,6 +134,10 @@ def get_typed_config(
     raise metrology-specific error types.
     """
     value = get_config(key, cwd=cwd)
+    if type_ is str:
+        if not isinstance(value, str):
+            raise ValueError(f"{key} must be a string, got {value!r}")
+        return value
     # bool before int: bool is a subclass of int.
     if type_ is bool:
         if not isinstance(value, bool):

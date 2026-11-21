@@ -23,6 +23,11 @@ from squadron.benchmark.adapter import (
     SuiteRun,
     SuiteSelection,
 )
+from squadron.benchmark.confinement import (
+    confinement_settings,
+    toolchain_paths,
+    write_confinement,
+)
 from squadron.benchmark.scrubbed_env import CredentialGrant, ScrubbedEnvironment
 from squadron.core.process_runner import ProcessRunner
 from squadron.providers.base import ProfileName
@@ -185,7 +190,21 @@ class BenchmarkSandbox:
         ).with_tools(tools)
         environment.grant_carryover_into_home()
         environment.link_extra_tools_into_home()
+        self._confine_producer()
         return environment.variables(self._adapter.path_entries(self._context()))
+
+    def _confine_producer(self) -> None:
+        """Write the Claude Code confinement for this sandbox into its home's config."""
+        real_home = Path(self._harness_env["HOME"]).resolve()
+        # The linked tools, and the interpreters the tree's environment points at.
+        entry_points = [*(self.home / "bin").iterdir(), *(self.tree / ".venv" / "bin").glob("python*")]
+        settings = confinement_settings(
+            real_home=real_home,
+            tree=self.tree.resolve(),
+            home=self.home.resolve(),
+            readable=toolchain_paths(sorted(entry_points), real_home),
+        )
+        write_confinement(self.home, settings)
 
     def _context(self) -> SandboxContext:
         return SandboxContext(

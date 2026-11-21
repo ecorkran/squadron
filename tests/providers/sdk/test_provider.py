@@ -428,6 +428,24 @@ class TestAutoMemory:
         assert ("CLAUDE_CODE_DISABLE_AUTO_MEMORY" in opts.env) is disabled
 
 
+class TestClaudeSettings:
+    """``AgentConfig.claude_settings`` reaches the CLI as ``--settings`` (benchmark confinement)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("given", "expected"), [('{"sandbox":{}}', '{"sandbox":{}}'), (None, None)]
+    )
+    async def test_settings_pass_through_only_when_given(
+        self, provider: ClaudeSDKProvider, given: str | None, expected: str | None
+    ) -> None:
+        config = AgentConfig(name="s", agent_type="sdk", provider="sdk", claude_settings=given)
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+        assert mock_cls.call_args.kwargs["options"].settings == expected
+
+
 # ---------------------------------------------------------------------------
 # effort (slice 931 D1, D4)
 # ---------------------------------------------------------------------------
