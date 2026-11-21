@@ -184,3 +184,11 @@ async def test_the_review_file_records_what_was_injected(tmp_path: Path) -> None
     assert 'path: "tasks.md"' in markdown and 'path: "design.md"' in markdown
     # The mock agent stamps no tool-call record, and the file says so.
     assert "readRecord: unreported" in markdown
+
+
+@pytest.mark.parametrize("name", ["tasks", "slice"])
+def test_plan_and_design_reviews_check_what_the_document_breaks_in_existing_code(name: str) -> None:
+    prompt = load_template(_BUILT_IN / f"{name}.yaml").system_prompt
+
+    assert "open the existing code and tests that depend on it" in prompt
+    assert "would break" in prompt

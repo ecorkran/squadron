@@ -193,7 +193,7 @@ Part 3 (per-finding outcomes) stays open on #374.
 
 ### Part C: the review checks the plan against the code, and covers every section
 
-- [ ] `tasks.yaml` and `slice.yaml` criteria: for each file, table, test, CLI path or error type a task or design section changes, open the existing code and tests that depend on it and report what breaks
+- [x] `tasks.yaml` and `slice.yaml` criteria: for each file, table, test, CLI path or error type a task or design section changes, open the existing code and tests that depend on it and report what breaks
 - [ ] Output gains a `## Coverage` section: one line per task (tasks review) or per second-level section (slice, arch), naming what was checked. Squadron compares it with the headings of the reviewed document; a missing heading makes the review incomplete, which cannot pass a gate, and the review file lists the headings not covered
 - [x] Tests: heading extraction on real task and slice files in this repo; a review missing a heading is incomplete; a full one is not
 - **Commit**: `fix: require code-impact checks and per-section coverage in document reviews (#382)`
