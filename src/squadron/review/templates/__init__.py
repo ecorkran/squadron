@@ -70,6 +70,8 @@ class ReviewTemplate:
     # The `input` and `against` documents are the subject of the review: always injected
     # whole, whatever the run can read for itself (#382). Document templates set it.
     inject_documents: bool = False
+    # The output must carry a Coverage section naming every heading of `input` (#382).
+    require_coverage: bool = False
     output: TemplateOutput = TemplateOutput.REVIEW
 
     # Prompt construction — exactly one of these is set (validated at load time)
@@ -215,6 +217,7 @@ def load_template(path: Path) -> ReviewTemplate:
         judge=dict(judge_raw) if isinstance(judge_raw, dict) else None,  # type: ignore[arg-type]
         normalize_categories=_resolve_bool("normalize_categories", data.get("normalize_categories")),
         inject_documents=_resolve_bool("inject_documents", data.get("inject_documents")),
+        require_coverage=_resolve_bool("require_coverage", data.get("require_coverage")),
         output=_resolve_output(data.get("output")),
         prompt_template=(str(data["prompt_template"]) if "prompt_template" in data else None),
         prompt_builder=builder,

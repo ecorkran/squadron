@@ -29,6 +29,7 @@ from squadron.review.models import ReviewResult, Verdict, VerdictSource
 from squadron.review.parts import part_stem
 from squadron.review.read_record import read_record_lines
 from squadron.review.run_cost import NOT_COMPUTED, RunCost
+from squadron.review.section_coverage import section_coverage_lines
 from squadron.review.turn_capture import describe_budget, describe_effort, ended_mid_task
 
 _logger = logging.getLogger(__name__)
@@ -658,9 +659,12 @@ def format_review_markdown(
         tools_given=result.tools_given,
         tool_calls_made=result.tool_calls_made,
         tools_suppressed_reason=result.tools_suppressed_reason,
-        read_record=read_record_lines(
-            result.injected_files, result.tool_calls, result.input_files.get("cwd", ".")
-        ),
+        read_record=[
+            *read_record_lines(
+                result.injected_files, result.tool_calls, result.input_files.get("cwd", ".")
+            ),
+            *section_coverage_lines(result.section_coverage),
+        ],
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
         diff_cut_files=(
             [f.path for f in result.diff_injection.cut_files] if result.diff_injection else None

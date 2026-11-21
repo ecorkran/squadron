@@ -119,12 +119,20 @@ system_prompt: |
   Description with specific references to document sections.
   ```
 
+  After the findings, add a `## Coverage` section with one line for every section
+  of the architecture document (each `##` and `###` heading), in document order, written as
+  `- <heading text as it appears in the file>: <what you checked there, in a few words>`.
+  Every heading must appear, including those with no findings. Examine a section
+  before you list it.
+
 allowed_tools: [read_file, list_files, grep]
 permission_mode: bypassPermissions
 model: fable-medium
 
 # The documents under review are injected whole for every provider and tool set (#382).
 inject_documents: true
+# The review must account for every section of the document (#382).
+require_coverage: true
 setting_sources: [project]
 
 inputs:

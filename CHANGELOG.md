@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq metrology ingest-reviews` also ingests slice, tasks and arch reviews, keeping their own finding categories and blob stamps.
 
 ### Fixed
+- Tasks and slice reviews now check the plan against the existing code: what each task or design section would break in code and tests that already exist, whether its claims about that code are true, and whether every state a step can leave behind has a command that ends it (#382).
+- Slice, tasks and arch reviews must account for every section of the document in a `## Coverage` section. A PASS that leaves a section out becomes CONCERNS and names the sections; the review file records `sectionsInDocument`, `sectionsCovered` and `sectionsNotCovered` (#382).
 - Slice, tasks and arch reviews (and the judges that compare those documents) now put the whole document and its parent in the prompt for every model. Before, a model that could read files was given only the paths and decided for itself how much to read, so a review could report on part of a document. Documents under review have no size limit (#382).
 - `sq benchmark run`: slice cases no longer fail before the writer starts, and Claude producers can no longer read files outside their sandbox (your home folder, other repositories). New config key `pipeline.claude_settings` passes Claude Code settings to pipeline sessions.
 - Building fix or slice cases while `sq benchmark recall run` is running no longer deletes the recall run's working folders.

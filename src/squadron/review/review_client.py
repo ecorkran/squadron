@@ -46,6 +46,7 @@ from squadron.review.git_utils import EmptyDiffError
 from squadron.review.injected_file import InjectedFile, injected_file
 from squadron.review.models import DiffInjection, ReviewResult
 from squadron.review.parsers import parse_review_output
+from squadron.review.section_coverage import impose_section_coverage
 from squadron.review.template_inputs import FILE_INPUT_KEYS
 from squadron.review.templates import ReviewTemplate, TemplateOutput
 from squadron.review.tool_support import should_inject_file_bodies
@@ -413,6 +414,13 @@ async def run_review_with_profile(
     impose_diff_coverage(result, load_coverage_limits(inputs.get("cwd", ".")))
     # Slice 196 D12 (#152): a PASS cut off at the output budget lost findings after the cutoff.
     impose_output_coverage(result)
+    # #382: a document review accounts for every section of the document it reviewed.
+    if template.require_coverage:
+        document = next(
+            (text for key, _, text in read_review_documents(inputs) if key == "input"), None
+        )
+        if document is not None:
+            impose_section_coverage(result, document)
 
     # Part C (slice 927 D8, D10-D12): the model that actually answered, not the one
     # squadron asked for. result.model keeps the parser's requested id (D11) when no

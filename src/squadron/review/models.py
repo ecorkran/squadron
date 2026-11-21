@@ -197,6 +197,20 @@ class RecipeReviewInfo:
     stage_section: str
 
 
+@dataclass(frozen=True)
+class SectionCoverage:
+    """How many sections the reviewed document has, and which the review did not cover."""
+
+    sections: int
+    missing: tuple[str, ...]
+    #: False when the review output has no ``## Coverage`` section at all.
+    reported: bool
+
+    @property
+    def complete(self) -> bool:
+        return self.reported and not self.missing
+
+
 @dataclass
 class ReviewResult:
     """Structured output from a review execution."""
@@ -300,6 +314,9 @@ class ReviewResult:
     # Every input file whose text was put in the prompt (#382). None on a hand-built
     # result; a review run always sets it, empty when nothing was injected.
     injected_files: tuple[InjectedFile, ...] | None = None
+    # Whether the review covered every section of the reviewed document (#382). None for
+    # review types that do not check it.
+    section_coverage: SectionCoverage | None = None
     # Language rule files the review was given (slice 935 D7), stamped by the caller that
     # loaded them. None on a hand-built result.
     project_rules: list[str] | None = None
