@@ -13,6 +13,10 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261121
 
+### Release 0.24.37
+
+- **Contents:** a dispatch that leaves its design or tasks artifact without readable frontmatter fails the step (#385); #382 task group closed out.
+
 ### Release 0.24.36
 
 - **Contents:** reviews get the guide's review-marked rule files (`general.md`) as well as the project's; `review.inject_conventions` defaults to false; guide rule files carry `steps`.
