@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.35] - 20261121
+
 ### Added
 - A rule file marked `steps: [review]` with no `paths` is sent to every review, for every provider. Use it for the rules reviewers must check (design rules, core principles).
 - Config key `review.inject_conventions` (default true): set it false to stop putting the whole `AGENTS.md` or `CLAUDE.md` into every review prompt once those rules live in rule files.
