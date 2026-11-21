@@ -16,6 +16,7 @@ from squadron.benchmark.adapter import EnvironmentFailureReason, EnvironmentReso
 from squadron.benchmark.bench_plan import BenchConfig, Caps
 from squadron.benchmark.case_runners import ProducerRun, ReplaySandbox
 from squadron.benchmark.leak_rules import LeakRules, build_leak_rules
+from squadron.benchmark.pause_answer import MAX_PAUSES_ANSWERED, STANDING_PAUSE_ANSWER
 from squadron.benchmark.replay_one import ReplayOneDeps, ReplayStoreError, replay_one
 from squadron.benchmark.replay_outcome import ProducerClassification, classify_producer_run
 from squadron.benchmark.transcripts import ToolCall, TranscriptResult
@@ -39,7 +40,7 @@ from squadron.pipeline.state import RunState
 from squadron.providers.base import ProfileName
 from tests.benchmark.support import Handler, RunnerCall, ScriptedRunner, failed, ok
 from tests.benchmark.test_fix_case_runner import fix_case
-from tests.benchmark.test_replay_outcome import dispatch, fix_context, fix_run
+from tests.benchmark.test_replay_outcome import dispatch, fix_context, fix_run, usage
 from tests.metrology.test_benchmark_models import environment, qualification
 from tests.stats.producer_support import action, prompt_identity
 
@@ -117,6 +118,9 @@ class FakeRunner:
         self._process = process or ProcessResult(("sq",), 0, "", "")
         #: Called with the sandbox just before the producer "runs", to act as the producer.
         self.before_run: Callable[[ReplaySandbox], None] | None = None
+        #: ``(answer, max_cost_usd)`` of each resume, and a hook that acts as the resumed run.
+        self.resumes: list[tuple[str, float]] = []
+        self.on_resume: Callable[[], None] | None = None
 
     def requalify(
         self, case: BenchmarkCase, environment: EnvironmentIdentity
@@ -135,6 +139,19 @@ class FakeRunner:
         self.runs += 1
         if self.before_run is not None:
             self.before_run(sandbox)
+        return self._process
+
+    def resume(
+        self,
+        config: BenchConfig,
+        sandbox: ReplaySandbox,
+        record_id: str,
+        answer: str,
+        max_cost_usd: float,
+    ) -> ProducerRun:
+        self.resumes.append((answer, max_cost_usd))
+        if self.on_resume is not None:
+            self.on_resume()
         return self._process
 
     def classify(
@@ -332,6 +349,8 @@ class TestOutcomes:
         asking["awaits_human"] = True
         record = self._replay_state(world, fix_run([ctx(), asking], status="paused"))
         assert (record.outcome, record.absence) == (ProducerOutcome.BLOCKED, AbsenceClass.CONFIG)
+        assert record.pauses_answered == MAX_PAUSES_ANSWERED
+        assert len(world.runner.resumes) == MAX_PAUSES_ANSWERED
 
     def test_no_commit_via_a_fix_report_refusal(self, world: World) -> None:
         refusal = action(
@@ -378,6 +397,36 @@ class TestOutcomes:
         assert (record.leak, record.diff, record.environment) == (None, None, None)
         assert world.runner.runs == 0
         assert world.store.get_replay(record.run_id) == record
+
+
+def _asking(cost: float) -> dict[str, object]:
+    asking = dispatch(success=False, error="BLOCKED: decide", usage_record=usage(cost=cost))
+    asking["awaits_human"] = True
+    return asking
+
+
+class TestPauseAnswers:
+    def test_a_paused_run_is_resumed_with_the_standing_answer_and_commits(self, world: World) -> None:
+        world.state = fix_run([ctx(), _asking(0.5)], status="paused")
+
+        def finish() -> None:
+            world.state = fix_run([ctx(), _asking(0.5), dispatch(), action("commit")])
+
+        world.runner.on_resume = finish
+        record = committed(world)
+        assert record.outcome == ProducerOutcome.COMMITTED
+        assert record.pauses_answered == 1
+        [(answer, cap)] = world.runner.resumes
+        assert answer == STANDING_PAUSE_ANSWER
+        assert abs(cap - (CAPS.per_replay_cap_usd - 0.5)) < 1e-9
+
+    def test_a_pause_with_the_cap_spent_is_not_answered(self, world: World) -> None:
+        world.state = fix_run([ctx(), _asking(CAPS.per_replay_cap_usd)], status="paused")
+        world.heads = [BEFORE, BEFORE]
+        record = world.replay()
+        assert isinstance(record, ImplementationReplay)
+        assert record.outcome == ProducerOutcome.BLOCKED
+        assert record.pauses_answered == 0 and world.runner.resumes == []
 
 
 class TestLeak:

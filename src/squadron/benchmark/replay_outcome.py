@@ -99,7 +99,7 @@ def _frozen_text_problem(state: RunState, issue_sha256: str) -> str | None:
     return "the run recorded no fix-context outputs"
 
 
-def _awaits_human(state: RunState) -> bool:
+def awaits_human(state: RunState) -> bool:
     return state.status == ExecutionStatus.PAUSED and any(
         action.get(_AWAITS_HUMAN) is True for action in _actions(state)
     )
@@ -169,7 +169,7 @@ def classify_producer_run(
         return _result(
             ProducerOutcome.COST_CAP, _detail(FailureKind.COST_CAP.value, state, process), state
         )
-    if _awaits_human(state):
+    if awaits_human(state):
         return _result(
             ProducerOutcome.BLOCKED, _detail("paused awaiting a human", state, process), state
         )
@@ -182,3 +182,9 @@ def classify_producer_run(
         return _result(ProducerOutcome.NO_COMMIT, _detail(label, state, process), state)
     label = ", ".join(kind.value for kind in kinds) or f"run status {state.status}"
     return _result(ProducerOutcome.PRODUCER_FAILED, _detail(label, state, process), state)
+
+
+def spent_usd(state: RunState) -> float:
+    """Known spend recorded in *state* across every invocation of the run."""
+    cost, _, _, _ = _usage(state)
+    return cost or 0.0

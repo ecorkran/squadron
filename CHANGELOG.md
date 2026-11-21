@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Reviews take a recipe name wherever they take a model (`review-model`, a review step's `model`, `sq review --model`): several reviewers and comb filters run as one review with one verdict and one review file. Three recipes ship; add your own in `project-documents/user/recipes/`.
 - `sq benchmark recall report --real-work`: counts and cost of the recipe reviews your project has run.
+- Benchmark replays that pause for the PM are resumed with one standing answer, up to three times within the replay's cost cap, and the record counts the pauses. Replays no longer start `pipeline.on_pause_command`.
 - `sq benchmark recall run/report/label --recipe` takes a recipe name such as `haiku-sol-opus`; a file path still works.
 - Recipe `haiku-solr-luna-opus`: the D11 recipe with `sol-r` (OpenRouter) in place of `sol`, so it runs without Codex credits.
 - Document review files record the blob of the document they reviewed and of its parent (`reviewedBlob`, `reviewedBlobCurrent`, `parentBlob`, `parentBlobCurrent`), so a review of an uncommitted edit can be traced to the text it read.

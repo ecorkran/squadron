@@ -23,8 +23,13 @@ from squadron.benchmark.bench_plan import BenchConfig, config_key, replay_record
 from squadron.benchmark.case_runners import CaseKindRunner, ReplaySandbox
 from squadron.benchmark.instruction_files import instruction_files
 from squadron.benchmark.leak_scan import scan
+from squadron.benchmark.pause_answer import MAX_PAUSES_ANSWERED, STANDING_PAUSE_ANSWER
 from squadron.benchmark.replay_deps import ReplayOneDeps, ReplayStoreError, store_failure
-from squadron.benchmark.replay_outcome import ProducerClassification
+from squadron.benchmark.replay_outcome import (
+    ProducerClassification,
+    awaits_human,
+    spent_usd,
+)
 from squadron.benchmark.replay_records import (
     ReplayFields,
     absence_and_detail,
@@ -66,6 +71,7 @@ class _ProducerRun:
     head_before: str
     head_after: str
     wall_seconds: float
+    pauses_answered: int
 
 
 def _git(deps: ReplayOneDeps, tree: Path, *args: str) -> ProcessResult | str:
@@ -142,13 +148,24 @@ def _produce(
         return "cannot read HEAD in the sandbox before the producer"
     began = time.monotonic()
     process = runner.run(case, config, sandbox, deps.caps, record_id)
+    state = _read_state(deps, sandbox, record_id)
+    answered = 0
+    while state is not None and awaits_human(state) and answered < MAX_PAUSES_ANSWERED:
+        # The cap is per ``sq run`` invocation, so a resume gets what is left of the replay's.
+        remaining = deps.caps.per_replay_cap_usd - spent_usd(state)
+        if remaining <= 0:
+            _logger.warning("replay %s paused with its cap spent; not answering", record_id)
+            break
+        answered += 1
+        _logger.info("replay %s paused for the PM; answering (%d)", record_id, answered)
+        process = runner.resume(config, sandbox, record_id, STANDING_PAUSE_ANSWER, remaining)
+        state = _read_state(deps, sandbox, record_id)
     wall_seconds = time.monotonic() - began
     head_after = _head(deps, sandbox.tree)
     if head_after is None:
         raise store_failure(sandbox, "cannot read HEAD in the sandbox after the producer")
-    state = _read_state(deps, sandbox, record_id)
     classification = runner.classify(case, process, state, head_before, head_after)
-    return _ProducerRun(classification, head_before, head_after, wall_seconds)
+    return _ProducerRun(classification, head_before, head_after, wall_seconds, answered)
 
 
 def _leak_result(
@@ -193,6 +210,7 @@ def _finish(
         cost_usd=classification.cost_usd,
         turns=classification.turns,
         wall_seconds=produced.wall_seconds,
+        pauses_answered=produced.pauses_answered,
     )
     record = build_record(deps, runner, case, sample, record_id, fields)
     write_record(deps, record_id, record, sandbox)

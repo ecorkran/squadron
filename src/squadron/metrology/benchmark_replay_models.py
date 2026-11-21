@@ -104,6 +104,8 @@ class ImplementationReplay(BaseModel):
     cost_usd: float | None
     turns: int | None
     wall_seconds: float
+    #: Pauses the benchmark answered with its standing answer before the run ended.
+    pauses_answered: int = 0
     squadron_version: str
     created_at: datetime
 

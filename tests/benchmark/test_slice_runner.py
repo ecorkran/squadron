@@ -76,7 +76,7 @@ def test_the_producer_runs_with_the_exact_argv_cwd_and_scrubbed_env(
     ((argv, cwd, env),) = invoker.calls
     assert argv == [
         SQ_PATH, "run", "P6", str(SLICE_INDEX), "-m", "opus", "--producer-only",
-        "--max-cost", "8.0", "--run-id", "implreplay-r1",
+        "--max-cost", "8.0", "--run-id", "implreplay-r1", "--no-pause-hook",
     ]  # fmt: skip
     assert cwd == sandbox.tree
     assert env is not None

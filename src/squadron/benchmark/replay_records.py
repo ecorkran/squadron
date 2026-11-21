@@ -48,6 +48,7 @@ class ReplayFields:
     cost_usd: float | None
     turns: int | None
     wall_seconds: float
+    pauses_answered: int = 0
 
 
 def build_record(
@@ -81,6 +82,7 @@ def build_record(
         cost_usd=fields.cost_usd,
         turns=fields.turns,
         wall_seconds=fields.wall_seconds,
+        pauses_answered=fields.pauses_answered,
         squadron_version=squadron.__version__,
         created_at=deps.clock(),
     )

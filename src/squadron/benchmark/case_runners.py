@@ -37,6 +37,20 @@ COMMIT_TO_PARAM = "commit-to"
 COMMIT_TO_CURRENT = "current"
 #: The branch a producer commits to in its sandbox: the start commit's tree is detached.
 PRODUCER_BRANCH = "benchmark-replay"
+#: Every producer run skips ``pipeline.on_pause_command``: the benchmark answers its own pauses.
+NO_PAUSE_HOOK = "--no-pause-hook"
+
+
+def resume_argv(sq_path: str, record_id: str, answer: str, max_cost_usd: float) -> list[str]:
+    """``sq run --resume`` for a paused producer run; its other params persist in its state."""
+    return [
+        sq_path, "run", "--resume", record_id,
+        "--instructions", answer,
+        "--max-cost", f"{max_cost_usd:.2f}",
+        NO_PAUSE_HOOK,
+    ]  # fmt: skip
+
+
 #: The one step of a producer-only ``fix`` run; the replay record names it.
 FIX_PRODUCER_STEP = "fix"
 
@@ -97,6 +111,17 @@ class CaseKindRunner(Protocol):
         record_id: str,
     ) -> ProducerRun:
         """Run the producer for *case* in *sandbox* under *config*; never grades."""
+        ...
+
+    def resume(
+        self,
+        config: BenchConfig,
+        sandbox: ReplaySandbox,
+        record_id: str,
+        answer: str,
+        max_cost_usd: float,
+    ) -> ProducerRun:
+        """Resume paused run *record_id* with *answer* as the PM's instructions, capped."""
         ...
 
     @property
@@ -190,9 +215,26 @@ class FixCaseRunner:
             "-p", f"{COMMIT_TO_PARAM}={COMMIT_TO_CURRENT}",
             "--io-dir", str(sandbox.output_dir),
             "--run-id", record_id,
+            NO_PAUSE_HOOK,
         ]  # fmt: skip
-        env = sandbox.producer_env(ProfileName(config.profile))
-        return self._invoker(argv, cwd=sandbox.tree, env=env)
+        return self._invoker(argv, cwd=sandbox.tree, env=self._env(config, sandbox))
+
+    def resume(
+        self,
+        config: BenchConfig,
+        sandbox: ReplaySandbox,
+        record_id: str,
+        answer: str,
+        max_cost_usd: float,
+    ) -> ProducerRun:
+        argv = resume_argv(self._sq_path, record_id, answer, max_cost_usd)
+        return self._invoker(argv, cwd=sandbox.tree, env=self._env(config, sandbox))
+
+    @staticmethod
+    def _env(config: BenchConfig, sandbox: ReplaySandbox) -> dict[str, str]:
+        if config.profile is None:
+            raise ValueError(f"model alias '{config.alias}' resolves to no provider profile")
+        return sandbox.producer_env(ProfileName(config.profile))
 
     def classify(
         self,

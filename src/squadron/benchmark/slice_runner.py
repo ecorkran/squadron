@@ -14,7 +14,14 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from squadron.benchmark.bench_plan import BenchConfig, Caps
-from squadron.benchmark.case_runners import ProducerRun, ReplaySandbox, Requalification, SqInvoker
+from squadron.benchmark.case_runners import (
+    NO_PAUSE_HOOK,
+    ProducerRun,
+    ReplaySandbox,
+    Requalification,
+    SqInvoker,
+    resume_argv,
+)
 from squadron.benchmark.replay_outcome import ProducerClassification, classify_producer_run
 from squadron.benchmark.slice_discovery import SliceCandidate, SliceRangeSource
 from squadron.benchmark.slice_git import SliceHarnessError, run_git
@@ -122,7 +129,22 @@ class SliceCaseRunner:
             "--producer-only",
             "--max-cost", str(caps.per_replay_cap_usd),
             "--run-id", record_id,
+            NO_PAUSE_HOOK,
         ]  # fmt: skip
+        return self._invoker(argv, cwd=sandbox.tree, env=env)
+
+    def resume(
+        self,
+        config: BenchConfig,
+        sandbox: ReplaySandbox,
+        record_id: str,
+        answer: str,
+        max_cost_usd: float,
+    ) -> ProducerRun:
+        if config.profile is None:
+            raise ValueError(f"model alias '{config.alias}' resolves to no provider profile")
+        env = sandbox.producer_env(ProfileName(config.profile), CF_TOOLS)
+        argv = resume_argv(self._sq_path, record_id, answer, max_cost_usd)
         return self._invoker(argv, cwd=sandbox.tree, env=env)
 
     def classify(

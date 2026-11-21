@@ -125,6 +125,17 @@ class TestRun:
             "-p", "commit-to=current",
             "--io-dir", str(sandbox.output_dir),
             "--run-id", RECORD_ID,
+            "--no-pause-hook",
+        ]  # fmt: skip
+
+    def test_resume_answers_with_the_remaining_cap_and_no_hook(self, tmp_path: Path) -> None:
+        sandbox, invoker = FakeSandbox(tmp_path), RecordingInvoker()
+        _runner(invoker).resume(CONFIG, sandbox, RECORD_ID, "decide it", 0.75)
+        assert invoker.calls[0]["argv"] == [
+            SQ_PATH, "run", "--resume", RECORD_ID,
+            "--instructions", "decide it",
+            "--max-cost", "0.75",
+            "--no-pause-hook",
         ]  # fmt: skip
 
     def test_the_tree_is_on_the_producer_branch_before_sq_starts(self, tmp_path: Path) -> None:
