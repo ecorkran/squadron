@@ -4,7 +4,7 @@ layer: project
 reviewType: tasks
 slice: sq-skills-uninstall-and-sq-doctor-integration
 project: squadron
-verdict: RESOLVED
+verdict: CONCERNS
 sourceDocument: project-documents/user/tasks/343-tasks.sq-skills-uninstall-and-sq-doctor-integration.md
 aiModel: minimax/minimax-m2.7
 status: complete
