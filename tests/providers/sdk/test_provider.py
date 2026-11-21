@@ -257,6 +257,33 @@ class TestCreateAgent:
             assert opts.can_use_tool is None
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("allowed_tools", [["read_file", "grep"], []])
+    async def test_a_declared_tool_list_shuts_out_ambient_tool_servers(
+        self, provider: ClaudeSDKProvider, allowed_tools: list[str]
+    ) -> None:
+        """A declared list is everything the agent has: no connector or MCP tools."""
+        config = AgentConfig(
+            name="tooled", agent_type="sdk", provider="sdk", allowed_tools=allowed_tools
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+            opts = mock_cls.call_args.kwargs["options"]
+            assert opts.extra_args == {"strict-mcp-config": None}
+
+    @pytest.mark.asyncio
+    async def test_no_declared_tool_list_keeps_ambient_tool_servers(
+        self, provider: ClaudeSDKProvider
+    ) -> None:
+        config = AgentConfig(name="open", agent_type="sdk", provider="sdk")
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+            assert mock_cls.call_args.kwargs["options"].extra_args == {}
+
+    @pytest.mark.asyncio
     async def test_mode_from_credentials(self, provider: ClaudeSDKProvider) -> None:
         config = AgentConfig(
             name="client-mode",

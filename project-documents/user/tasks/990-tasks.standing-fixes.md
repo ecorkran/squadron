@@ -171,3 +171,35 @@ Part 3 (per-finding outcomes) stays open on #374.
 - [x] Tests: the arch fixture ingests with its categories and verdict; blob keys carried when present and None when absent; slice index from `sourceDocument`; an unrecognized verdict on a tasks review fails; an unknown review type is skipped
 - [x] CHANGELOG bullet
 - **Commit**: `feat: ingest slice, tasks and arch reviews into the metrology store (#374)`
+
+## #382 Document reviews review the whole document, and every review records what was read
+
+### Part A: the whole document is always in the prompt
+
+- [x] Template key `inject_documents: true` on `slice.yaml`, `tasks.yaml` and `arch.yaml`: the `input` and `against` documents are injected in full whatever tools or provider the run has. Tools stay for checking claims against code
+- [x] A document injected this way is never truncated or dropped: no per-file cap and no total cap, and it does not count against `review.max_total_injection_bytes`. A missing or unreadable document fails the review with an error naming the file
+- [x] Template prompts say the documents are included in full below; no "read both documents" instruction that leaves reading to the model
+- [x] `tools/guidance.py`: the "do not read files a claim does not depend on" sentence no longer applies to the documents under review
+- [x] Tests: SDK profile and tool-enabled non-SDK profile both get both bodies; a document larger than both size caps is injected whole; a missing document fails the review; code reviews inject as before
+- **Commit**: `fix: put the whole document in the prompt for slice, tasks and arch reviews (#382)`
+
+### Part B: every review records what was read
+
+- [x] Both agents (SDK, OpenAI-compatible) record each tool call: tool name and its path or pattern argument, and whether it failed. The record rides message metadata beside `tool_calls_made`
+- [ ] `ReviewResult` and review frontmatter carry `injected` (path, bytes, sha256, whole or cut) and `filesRead` (distinct paths opened by tool, in first-read order), plus `searches` (grep and list calls). A review with no record says so; none is invented
+- [ ] Pipeline dispatch steps store the same tool-call record in run state
+- [x] Tests: both agents' records; frontmatter round trip; an unreported record is absent, not empty
+- **Commit**: `feat: record injected documents and files read in every review and dispatch (#382)`
+
+### Part C: the review checks the plan against the code, and covers every section
+
+- [ ] `tasks.yaml` and `slice.yaml` criteria: for each file, table, test, CLI path or error type a task or design section changes, open the existing code and tests that depend on it and report what breaks
+- [ ] Output gains a `## Coverage` section: one line per task (tasks review) or per second-level section (slice, arch), naming what was checked. Squadron compares it with the headings of the reviewed document; a missing heading makes the review incomplete, which cannot pass a gate, and the review file lists the headings not covered
+- [x] Tests: heading extraction on real task and slice files in this repo; a review missing a heading is incomplete; a full one is not
+- **Commit**: `fix: require code-impact checks and per-section coverage in document reviews (#382)`
+
+### Part D: measured on a real case
+
+- [x] Fixture: amoeba slice 260's task file and design as they entered review round 3, with the valid defects of rounds 3 and 4 as the answer key
+- [x] Run the review before and after Parts A–C on the fixture, 3 samples each, same model; record defects found per round in the issue
+- [ ] If one round does not find the answer key, split the review by task group and by focus (slices 435/436 shapes) and measure again

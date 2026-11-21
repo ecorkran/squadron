@@ -21,6 +21,9 @@ _log = get_logger("squadron.providers.sdk.provider")
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
 # Asks `can_use_tool` about every tool call; used for a step that declared no tools (#299).
 _TOOL_LESS_PERMISSION_MODE = "default"
+# CLI flag (no value): use only MCP servers passed with --mcp-config, and squadron
+# passes none. Applied whenever a step declares its tool list.
+_NO_AMBIENT_TOOL_SERVERS: dict[str, str | None] = {"strict-mcp-config": None}
 
 
 async def deny_every_tool(
@@ -105,6 +108,11 @@ class ClaudeSDKProvider:
             # grow, and drifts silently when nobody does.
             kwargs["tools"] = translated
             kwargs["allowed_tools"] = translated
+            # `tools` only limits the built-in set. Without this the CLI still loads
+            # every MCP server and claude.ai connector the user has (mail, drive,
+            # calendar), which a bypass-permissions step could call, and whose
+            # definitions cost about 55k tokens of context on every turn.
+            kwargs["extra_args"] = dict(_NO_AMBIENT_TOOL_SERVERS)
         if config.cwd is not None:
             kwargs["cwd"] = config.cwd
         # Auto-memory is an explicit per-path choice (slice 932 D11), always
