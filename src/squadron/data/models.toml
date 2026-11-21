@@ -253,6 +253,22 @@ output = 12.00
 cache_read = 0.20
 cache_write = 2.00
 
+# No effort is set: Google's default for this model is high. Prices are the standard
+# tier from the Gemini API pricing page, read 20261121; caching is implicit only, so a
+# cache write is billed as input.
+[aliases.neon]
+profile = "gemini"
+model = "gemini-4-neon"
+private = true
+cost_tier = "expensive"
+notes = "Thinks at high by default"
+
+[aliases.neon.pricing]
+input = 3.00
+output = 15.00
+cache_read = 0.15
+cache_write = 3.00
+
 [aliases.gemini-flash]
 profile = "gemini"
 model = "gemini-3.8-flash"
