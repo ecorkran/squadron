@@ -8,7 +8,7 @@ dependencies: []
 projectState: Standing container for multi-step fixes. Add a task group per issue.
 status: complete
 dateCreated: 20261011
-dateUpdated: 20261021
+dateUpdated: 20261121
 ---
 
 # Tasks: Standing Fixes
@@ -186,15 +186,15 @@ Part 3 (per-finding outcomes) stays open on #374.
 ### Part B: every review records what was read
 
 - [x] Both agents (SDK, OpenAI-compatible) record each tool call: tool name and its path or pattern argument, and whether it failed. The record rides message metadata beside `tool_calls_made`
-- [ ] `ReviewResult` and review frontmatter carry `injected` (path, bytes, sha256, whole or cut) and `filesRead` (distinct paths opened by tool, in first-read order), plus `searches` (grep and list calls). A review with no record says so; none is invented
-- [ ] Pipeline dispatch steps store the same tool-call record in run state
+- [x] `ReviewResult` and review frontmatter carry `injected` (path, chars, sha256, whole or cut) and `filesRead` (distinct paths opened by tool, in first-read order), plus `searches` (grep and list calls). A review with no record says so; none is invented
+- [x] Pipeline dispatch steps store `files_read` and `searches` in run state. Per-call records in run state were dropped 20261121: the two lists already say what was read
 - [x] Tests: both agents' records; frontmatter round trip; an unreported record is absent, not empty
 - **Commit**: `feat: record injected documents and files read in every review and dispatch (#382)`
 
 ### Part C: the review checks the plan against the code, and covers every section
 
 - [x] `tasks.yaml` and `slice.yaml` criteria: for each file, table, test, CLI path or error type a task or design section changes, open the existing code and tests that depend on it and report what breaks
-- [ ] Output gains a `## Coverage` section: one line per task (tasks review) or per second-level section (slice, arch), naming what was checked. Squadron compares it with the headings of the reviewed document; a missing heading makes the review incomplete, which cannot pass a gate, and the review file lists the headings not covered
+- [x] Output gains a `## Coverage` section: one line per task (tasks review) or per second-level section (slice, arch), naming what was checked. Squadron compares it with the second- and third-level headings of the reviewed document; a PASS that leaves a heading out becomes CONCERNS, with a finding that names the headings not covered. A CONCERNS or FAIL review is left as it is
 - [x] Tests: heading extraction on real task and slice files in this repo; a review missing a heading is incomplete; a full one is not
 - **Commit**: `fix: require code-impact checks and per-section coverage in document reviews (#382)`
 
@@ -202,4 +202,4 @@ Part 3 (per-finding outcomes) stays open on #374.
 
 - [x] Fixture: amoeba slice 260's task file and design as they entered review round 3, with the valid defects of rounds 3 and 4 as the answer key
 - [x] Run the review before and after Parts A–C on the fixture, 3 samples each, same model; record defects found per round in the issue
-- [ ] If one round does not find the answer key, split the review by task group and by focus (slices 435/436 shapes) and measure again
+- [x] If one round does not find the answer key, split the review by task group and by focus (slices 435/436 shapes) and measure again. Done 20261121 with six reviewers by section (7 of 17) and by focus (10 of 17); table in #383
