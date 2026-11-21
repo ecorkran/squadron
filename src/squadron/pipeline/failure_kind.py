@@ -27,6 +27,7 @@ class FailureKind(StrEnum):
     PROVIDER_ERROR = "provider_error"  # a dispatch's provider raised
     STALL = "stall"  # a dispatch produced no output within the stall bound (slice 174)
     ARTIFACT_MISSING = "artifact_missing"  # a phase dispatch wrote no artifact (slice 909/945)
+    ARTIFACT_INVALID = "artifact_invalid"  # the artifact's frontmatter no longer parses (#385)
     COST_CAP = "cost_cap"  # the run's known spend crossed pipeline.max_cost_usd (slice 947)
     USAGE_LIMIT = "usage_limit"  # the account's usage limit is used up; the run pauses (#248)
     AGENT_QUESTION = "agent_question"  # the agent ended on a question, no artifact; pauses (#249)

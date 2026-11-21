@@ -15,7 +15,12 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.sdk_session import SDKExecutionSession
-from tests.pipeline.conftest import FIXTURE_PIPELINES_DIR, phase_artifact_cf_client, session_reply
+from tests.pipeline.conftest import (
+    FIXTURE_PIPELINES_DIR,
+    STUB_FRONTMATTER,
+    phase_artifact_cf_client,
+    session_reply,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -85,9 +90,9 @@ def _write_phase_artifacts(tmp_path: Path, slice_index: int) -> None:
     """
     design_path = tmp_path / f"{slice_index}-slice.stub.md"
     task_path = tmp_path / f"project-documents/user/tasks/{slice_index}-tasks.stub.md"
-    design_path.write_text("# stub design")
+    design_path.write_text(f"{STUB_FRONTMATTER}# stub design")
     task_path.parent.mkdir(parents=True, exist_ok=True)
-    task_path.write_text("# stub tasks")
+    task_path.write_text(f"{STUB_FRONTMATTER}# stub tasks")
 
 
 def _make_full_registry(

@@ -138,6 +138,7 @@ def test_a_summary_failure_does_not_undo_an_accepted_artifact() -> None:
         (FailureKind.STALL, FailureClass.STALL),
         (FailureKind.PROVIDER_ERROR, FailureClass.DISPATCH_ERROR),
         (FailureKind.ARTIFACT_MISSING, FailureClass.NO_ARTIFACT),
+        (FailureKind.ARTIFACT_INVALID, FailureClass.INVALID_ARTIFACT),
         (FailureKind.COST_CAP, FailureClass.COST_CAP),
         (FailureKind.TOOL_ISOLATION, FailureClass.TOOL_ISOLATION),
     ],

@@ -15,6 +15,7 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
 from tests.pipeline.conftest import (
+    STUB_FRONTMATTER,
     artifact_writing_action,
     load_fixture_pipeline,
     phase_artifact_cf_client,
@@ -239,7 +240,9 @@ class TestDesignPlanIntegration:
             if ctx.params.get("feedback") == "review":
                 revise_calls.append(str(ctx.params["slice"].get("index")))  # type: ignore[union-attr]
             elif slice_index != "928":
-                (tmp_path / f"{slice_index}-slice.stub.md").write_text("# stub design")
+                (tmp_path / f"{slice_index}-slice.stub.md").write_text(
+                    f"{STUB_FRONTMATTER}# stub design"
+                )
             return ActionResult(success=True, action_type="dispatch", outputs={})
 
         # The item-reset summary step (#148): one per item, before its design.

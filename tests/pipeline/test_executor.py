@@ -736,7 +736,7 @@ class TestDispatchArtifactPostCondition:
         cf_client = self._cf_client(200, "200-slice.stub.md", "200-tasks.stub.md")
 
         async def dispatch_execute(ctx: object) -> ActionResult:
-            (tmp_path / "200-slice.stub.md").write_text("# design")
+            (tmp_path / "200-slice.stub.md").write_text("---\ndocType: slice-design\n---\n\n# design")
             return make_action_result(True, "dispatch")
 
         dispatch_mock = MagicMock()
@@ -1272,9 +1272,10 @@ class TestRevisionNumberStamping:
         assert frontmatter["revision_number"] == 5
 
     @pytest.mark.asyncio
-    async def test_malformed_target_logs_warning_and_dispatch_still_succeeds(
+    async def test_a_target_without_frontmatter_fails_the_dispatch_and_is_not_stamped(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
+        """#385: the damaged artifact stops the step; it never reaches the stamp or a review."""
         from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 
         run_id = self._init_run(tmp_path, 216)
@@ -1295,8 +1296,10 @@ class TestRevisionNumberStamping:
                 _action_registry=phase_action_registry(dispatch_mock),
             )
 
-        assert result.status == ExecutionStatus.COMPLETED
-        assert any("revision_number stamp failed" in rec.message for rec in caplog.records)
+        assert result.status == ExecutionStatus.FAILED
+        assert any("no readable YAML frontmatter" in rec.message for rec in caplog.records)
+        assert not any("revision_number stamp" in rec.message for rec in caplog.records)
+        assert design_path.read_text() == "# just a design doc, no frontmatter\n"
 
     @pytest.mark.asyncio
     async def test_cf_client_error_logs_warning_and_dispatch_still_succeeds(

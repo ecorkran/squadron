@@ -20,7 +20,7 @@ from squadron.pipeline.state import StateManager
 from squadron.review.persistence import archive_existing_review
 from squadron.review.templates import BuiltinReviewTemplate
 from tests.conftest import run_test_git
-from tests.pipeline.conftest import phase_artifact_cf_client
+from tests.pipeline.conftest import STUB_FRONTMATTER, phase_artifact_cf_client
 from tests.pipeline.observer_support import RecordingObserver
 
 SLICE = 105
@@ -46,7 +46,7 @@ async def _run(repo: Path, verdicts: list[str]) -> tuple[PipelineResult, Recordi
     verdict_iter = iter(verdicts)
 
     async def revise(_ctx: ActionContext) -> ActionResult:
-        _write(repo, DESIGN, f"design v{next(revisions)}\n")
+        _write(repo, DESIGN, f"{STUB_FRONTMATTER}design v{next(revisions)}\n")
         return ActionResult(success=True, action_type="dispatch", outputs={})
 
     async def review(_ctx: ActionContext) -> ActionResult:
@@ -110,7 +110,7 @@ async def test_two_rounds_concerns_then_pass(repo_with_design: Path) -> None:
     assert len(subjects) == 3
     assert (repo_with_design / "project-documents/user/reviews/archive" / Path(REVIEW).name).exists()
     assert "verdict: PASS" in (repo_with_design / REVIEW).read_text()
-    assert (repo_with_design / DESIGN).read_text() == "design v3\n"
+    assert (repo_with_design / DESIGN).read_text().endswith("\n\ndesign v3\n")
 
 
 @pytest.mark.asyncio

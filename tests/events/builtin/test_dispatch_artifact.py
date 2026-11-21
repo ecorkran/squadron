@@ -35,7 +35,7 @@ _ARCH = Path("project-documents/user/architecture/100-arch.tally-core.md")
 
 
 def _check(cwd: Path, started: datetime) -> str | None:
-    return _dispatch_artifact_post_condition_error(
+    failure = _dispatch_artifact_post_condition_error(
         kind=ArtifactKind.DESIGN,
         slice_param=None,
         plan_param="100",
@@ -44,12 +44,13 @@ def _check(cwd: Path, started: datetime) -> str | None:
         run_started_at=started,
         run_state_error=None,
     )
+    return None if failure is None else failure.message
 
 
 def _write_arch(cwd: Path, mtime: datetime) -> None:
     path = cwd / _ARCH
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("# Architecture\n")
+    path.write_text("---\ndocType: architecture\n---\n\n# Architecture\n")
     os.utime(path, (mtime.timestamp(), mtime.timestamp()))
 
 
@@ -232,6 +233,62 @@ async def test_a_dispatch_step_without_an_artifact_is_not_checked_for_questions(
     outcome = await _run_binding(
         _QUESTION_BINDING, _implement_context("Which one?", step_type="dispatch"), 5
     )
+
+    assert outcome.result is not None
+    assert outcome.result.success is True
+
+
+# --- an artifact written with frontmatter that no longer parses fails the dispatch (#385) ---
+
+_VALID_ARCH = "---\ndocType: architecture\nstatus: in_progress\n---\n\n# Architecture\n"
+# What a revise round left behind in amoeba's 261 task file: the closing fence dropped.
+_UNCLOSED_ARCH = "---\ndocType: architecture\nrevision_number: 1\n\n# Architecture\n"
+
+
+def _plan_context(cwd: Path) -> PostActionContext:
+    return PostActionContext(
+        event=EventType.POST_ACTION,
+        cwd=str(cwd),
+        params={"plan": "100"},
+        action_type="dispatch",
+        result=ActionResult(success=True, action_type="dispatch", outputs={"response": "Revised."}),
+        run_id="run-1",
+        run_started_at=datetime.now(tz=UTC) - timedelta(minutes=1),
+        run_state_error=None,
+        step_name="design",
+        step_type="design",
+        expected_artifact_kind=ArtifactKind.DESIGN,
+        iteration=1,
+        cf_client=MagicMock(),
+    )
+
+
+def _write_arch_text(cwd: Path, text: str) -> None:
+    path = cwd / _ARCH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+async def test_an_artifact_whose_frontmatter_is_not_closed_fails_the_dispatch(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    _write_arch_text(tmp_path, _UNCLOSED_ARCH)
+
+    with caplog.at_level(logging.WARNING):
+        outcome = await _run_binding(_QUESTION_BINDING, _plan_context(tmp_path), 5)
+
+    assert outcome.result is not None
+    assert outcome.result.success is False
+    assert outcome.result.metadata[FAILURE_KIND_KEY] == FailureKind.ARTIFACT_INVALID.value
+    assert str(_ARCH) in (outcome.result.error or "")
+    assert "frontmatter" in (outcome.result.error or "")
+    assert any("dispatch post-condition" in r.getMessage() for r in caplog.records)
+
+
+async def test_an_artifact_with_readable_frontmatter_passes(tmp_path: Path) -> None:
+    _write_arch_text(tmp_path, _VALID_ARCH)
+
+    outcome = await _run_binding(_QUESTION_BINDING, _plan_context(tmp_path), 5)
 
     assert outcome.result is not None
     assert outcome.result.success is True

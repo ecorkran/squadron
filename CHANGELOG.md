@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A design or tasks step whose agent leaves the document without readable frontmatter (for example a revise round that drops the closing `---`) now fails with an error naming the file. Before, the run printed two "stamp failed" warnings, committed the damaged file and reviewed it (#385).
+
 ## [0.24.36] - 20261121
 
 ### Changed

@@ -82,6 +82,10 @@ def write_checked_task_file(repo: Path, file_name: str) -> None:
     path.write_text("- [x] done\n")
 
 
+#: The least a written artifact needs to pass the dispatch post-condition (#385).
+STUB_FRONTMATTER = "---\ndocType: stub\n---\n\n"
+
+
 def artifact_writing_action(cwd: Path, slice_index: int) -> MagicMock:
     """A dispatch-style mock action that writes the expected phase artifact.
 
@@ -93,9 +97,9 @@ def artifact_writing_action(cwd: Path, slice_index: int) -> MagicMock:
     task_path = cwd / f"project-documents/user/tasks/{slice_index}-tasks.stub.md"
 
     async def dispatch_execute(ctx: object) -> ActionResult:
-        design_path.write_text("# stub design")
+        design_path.write_text(f"{STUB_FRONTMATTER}# stub design")
         task_path.parent.mkdir(parents=True, exist_ok=True)
-        task_path.write_text("# stub tasks")
+        task_path.write_text(f"{STUB_FRONTMATTER}# stub tasks")
         return ActionResult(success=True, action_type="dispatch", outputs={})
 
     dispatch_mock = MagicMock()

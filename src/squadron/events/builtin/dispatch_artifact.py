@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from squadron.documents.frontmatter import read_frontmatter
 from squadron.events import EventType, register_event_action
 from squadron.events.builtin.artifact_paths import dispatch_artifact_paths, dispatch_scope
 from squadron.events.contexts import EventContext, PostActionContext
@@ -33,6 +35,41 @@ from squadron.pipeline.text_tail import FINAL_TEXT_TAIL_CHARS, tail_text
 from squadron.review.persistence import CfClientProtocol
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _PostConditionFailure:
+    """Why the post-condition failed. ``kind`` is None when the agent's final text decides it."""
+
+    message: str
+    kind: FailureKind | None = None
+
+
+def _fail(msg: str, kind: FailureKind | None = None) -> _PostConditionFailure:
+    _logger.warning("dispatch post-condition: %s", msg)
+    return _PostConditionFailure(msg, kind)
+
+
+def _frontmatter_failure(
+    kind: ArtifactKind, rel_path: str, full_path: Path
+) -> _PostConditionFailure | None:
+    """The failure when the artifact just written has no readable frontmatter block (#385).
+
+    A producer that rewrites a document can drop the closing ``---``. Everything that reads
+    the document afterwards (the stamps, ``cf``, the next round) depends on that block, so
+    the dispatch fails here and the damaged file is not committed or reviewed.
+    """
+    try:
+        readable = read_frontmatter(full_path) is not None
+    except (OSError, UnicodeDecodeError) as exc:
+        return _fail(f"could not read {kind.value} artifact at {rel_path}: {exc}")
+    if readable:
+        return None
+    return _fail(
+        f"{kind.value} artifact at {rel_path} has no readable YAML frontmatter: the block "
+        "must open and close with a `---` line and parse to a mapping",
+        FailureKind.ARTIFACT_INVALID,
+    )
 
 
 def _resolve_paths(kind: ArtifactKind, scope: str, resolve: Callable[[], list[str]]) -> list[str] | str:
@@ -65,12 +102,11 @@ def _check_dispatch_artifact_written(
     paths: list[str],
     cwd: str,
     run_started_at: datetime,
-) -> str | None:
-    """Verify one of *paths* was written this run.
+) -> _PostConditionFailure | None:
+    """Verify one of *paths* was written this run with frontmatter that still parses.
 
-    Returns None if the post-condition is satisfied, else an error message
-    naming the failure mode. Every failure mode fails closed (returns a
-    message) and is logged at WARNING — never a silent pass.
+    Returns None if the post-condition is satisfied, else the failure. Every failure
+    mode fails closed and is logged at WARNING — never a silent pass.
     """
 
     base_dir = Path(cwd) if cwd else Path(".")
@@ -80,19 +116,15 @@ def _check_dispatch_artifact_written(
             if not full_path.exists():
                 continue
             mtime = datetime.fromtimestamp(full_path.stat().st_mtime, tz=UTC)
-            if mtime >= run_started_at:
-                return None
         except OSError as exc:
-            msg = f"could not verify {kind.value} artifact at {rel_path}: {exc}"
-            _logger.warning("dispatch post-condition: %s", msg)
-            return msg
+            return _fail(f"could not verify {kind.value} artifact at {rel_path}: {exc}")
+        if mtime >= run_started_at:
+            return _frontmatter_failure(kind, rel_path, full_path)
 
-    msg = (
+    return _fail(
         f"phase dispatch completed but no {kind.value} artifact was written "
         f"for {scope} (expected one of: {', '.join(paths)})"
     )
-    _logger.warning("dispatch post-condition: %s", msg)
-    return msg
 
 
 def _dispatch_artifact_post_condition_error(
@@ -104,7 +136,7 @@ def _dispatch_artifact_post_condition_error(
     cwd: str,
     run_started_at: datetime | None,
     run_state_error: str | None,
-) -> str | None:
+) -> _PostConditionFailure | None:
     """Resolve the dispatch artifact post-condition for one dispatch action.
 
     Returns None if satisfied, else the failure message. Every branch fails
@@ -112,24 +144,20 @@ def _dispatch_artifact_post_condition_error(
     helpers it calls).
     """
     if run_state_error is not None:
-        return run_state_error
+        return _PostConditionFailure(run_state_error)
     if run_started_at is None:
         # Only reachable if a future caller sets expected_kind without also
         # resolving run_started_at/run_state_error — guards the invariant.
-        msg = "run start time unavailable"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
+        return _fail("run start time unavailable")
     try:
         scope = dispatch_scope(slice_param, plan_param).label
     except ValueError as exc:
-        msg = f"could not resolve expected {kind.value} artifact path: {exc}"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
+        return _fail(f"could not resolve expected {kind.value} artifact path: {exc}")
     paths = _resolve_paths(
         kind, scope, lambda: dispatch_artifact_paths(kind, slice_param, plan_param, cf_client, cwd)
     )
     if isinstance(paths, str):
-        return paths
+        return _PostConditionFailure(paths)
     return _check_dispatch_artifact_written(
         kind=kind, scope=scope, paths=paths, cwd=cwd, run_started_at=run_started_at
     )
@@ -207,7 +235,7 @@ class DispatchArtifactAction:
         if context.expected_artifact_kind is None:
             return _implement_question_check(context, self.name)
 
-        error = _dispatch_artifact_post_condition_error(
+        failure = _dispatch_artifact_post_condition_error(
             kind=context.expected_artifact_kind,
             slice_param=context.params.get(SLICE_PARAM),
             plan_param=context.params.get(PLAN_PARAM),
@@ -216,17 +244,24 @@ class DispatchArtifactAction:
             run_started_at=context.run_started_at,
             run_state_error=context.run_state_error,
         )
-        if error is not None:
-            # The agent's last words say why no artifact exists (D7). Appended
-            # here, once, so every failure branch carries it.
-            response = str(context.result.outputs.get("response", ""))
-            final_text = tail_text(response)
-            error = f'{error}; agent\'s final text: "{final_text}"'
+        if failure is not None and failure.kind is not None:
             return ActionResult(
                 success=False,
                 action_type=self.name,
                 outputs={},
-                error=error,
+                error=failure.message,
+                metadata={FAILURE_KIND_KEY: failure.kind.value},
+            )
+        if failure is not None:
+            # The agent's last words say why no artifact exists (D7). Appended
+            # here, once, so every such failure carries it.
+            response = str(context.result.outputs.get("response", ""))
+            final_text = tail_text(response)
+            return ActionResult(
+                success=False,
+                action_type=self.name,
+                outputs={},
+                error=f'{failure.message}; agent\'s final text: "{final_text}"',
                 metadata=_failure_metadata(response, final_text),
             )
         return ActionResult(success=True, action_type=self.name, outputs={})

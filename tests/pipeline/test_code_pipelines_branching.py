@@ -18,7 +18,7 @@ from squadron.review.git_utils import (
     resolve_slice_diff_range,
 )
 from tests.conftest import run_test_git
-from tests.pipeline.conftest import phase_artifact_cf_client, write_checked_task_file
+from tests.pipeline.conftest import STUB_FRONTMATTER, phase_artifact_cf_client, write_checked_task_file
 
 _CODE_PIPELINES = ("P6", "implement", "P456", "P56")
 _SLICE = 105
@@ -200,7 +200,7 @@ async def test_a_non_pass_code_review_pauses_without_merging(
     repo = temp_git_repo
     monkeypatch.setenv("SQUADRON_NO_INTERACTIVE", "1")
     (repo / "DEVLOG.md").write_text("# devlog\n")
-    (repo / _ROOT_DESIGN).write_text("# stub design\n")
+    (repo / _ROOT_DESIGN).write_text(f"{STUB_FRONTMATTER}# stub design\n")
     run_test_git(repo, "add", "-A")
     run_test_git(repo, "commit", "-q", "-m", "devlog")
 
@@ -213,10 +213,10 @@ async def test_a_non_pass_code_review_pauses_without_merging(
 
     async def dispatch(ctx: ActionContext) -> ActionResult:
         # Design and tasks steps need their artifacts; implement commits code.
-        (repo / _ROOT_DESIGN).write_text("# stub design\n")
+        (repo / _ROOT_DESIGN).write_text(f"{STUB_FRONTMATTER}# stub design\n")
         tasks = repo / f"project-documents/user/tasks/{_SLICE}-tasks.stub.md"
         tasks.parent.mkdir(parents=True, exist_ok=True)
-        tasks.write_text("# stub tasks\n")
+        tasks.write_text(f"{STUB_FRONTMATTER}# stub tasks\n")
         if run_test_git(repo, "branch", "--show-current").strip() == _BRANCH:
             (repo / "feature.py").write_text(f"# {ctx.step_name}\n")
             run_test_git(repo, "add", "-A")
@@ -276,7 +276,7 @@ async def test_a_second_p6_run_keeps_the_branch_work(temp_git_repo: Path, tmp_pa
 
     repo = temp_git_repo
     (repo / "DEVLOG.md").write_text("# devlog\n")
-    (repo / _ROOT_DESIGN).write_text("# stub design\n")
+    (repo / _ROOT_DESIGN).write_text(f"{STUB_FRONTMATTER}# stub design\n")
     write_checked_task_file(repo, "105-tasks.stub.md")
     run_test_git(repo, "add", "-A")
     run_test_git(repo, "commit", "-q", "-m", "setup")

@@ -39,6 +39,7 @@ class FailureClass(StrEnum):
     DISPATCH_ERROR = "dispatch_error"
     STALL = "stall"
     NO_ARTIFACT = "no_artifact"
+    INVALID_ARTIFACT = "invalid_artifact"
     COST_CAP = "cost_cap"
     USAGE_LIMIT = "usage_limit"
     AGENT_QUESTION = "agent_question"
@@ -53,6 +54,7 @@ _CLASS_OF_KIND: dict[FailureKind, FailureClass] = {
     FailureKind.PROVIDER_ERROR: FailureClass.DISPATCH_ERROR,
     FailureKind.STALL: FailureClass.STALL,
     FailureKind.ARTIFACT_MISSING: FailureClass.NO_ARTIFACT,
+    FailureKind.ARTIFACT_INVALID: FailureClass.INVALID_ARTIFACT,
     FailureKind.COST_CAP: FailureClass.COST_CAP,
     FailureKind.USAGE_LIMIT: FailureClass.USAGE_LIMIT,
     FailureKind.AGENT_QUESTION: FailureClass.AGENT_QUESTION,
