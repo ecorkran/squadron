@@ -13,6 +13,10 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261121
 
+### Release 0.24.36
+
+- **Contents:** reviews get the guide's review-marked rule files (`general.md`) as well as the project's; `review.inject_conventions` defaults to false; guide rule files carry `steps`.
+
 ### Release 0.24.35
 
 - **Contents:** slice 434 (recipe reviews in pipelines); document reviews get the whole document, a read record, code-impact checks and section coverage (#382); review blob stamps and slice, tasks and arch ingest (#374); ingest category and path fixes (#338); standalone review defaults (#378); benchmark sandbox, confinement, leak-scan and pause-answer fixes; Claude reviewers no longer load connector tools or project settings; review-marked rule files and `review.inject_conventions`.

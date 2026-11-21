@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.36] - 20261121
+
 ### Changed
 - Reviews get the guide's rule files marked for review (`general.md`) from `project-documents/ai-project-guide/project-guides/rules`, as well as the project's own. A project rule file of the same name replaces the guide's.
 - `review.inject_conventions` now defaults to false: the whole `AGENTS.md` or `CLAUDE.md` is no longer put into every review prompt. Move project rules reviewers must check into a rule file marked `steps: [review]`, or set the key true.
