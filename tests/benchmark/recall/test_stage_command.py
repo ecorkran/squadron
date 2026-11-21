@@ -112,11 +112,17 @@ def test_no_output_file_when_the_call_raises(
     assert not output.exists()
 
 
+def _without_setting_sources(lines: list[str]) -> list[str]:
+    return [line for line in lines if not line.startswith("setting_sources:")]
+
+
 def test_comb_template_is_the_hand_run_prompt_with_decisions_output() -> None:
     builtin = data_dir() / "templates" / "comb.yaml"
     body = [line for line in builtin.read_text().splitlines() if not line.startswith("#")]
     hand_run = (RESULTS_DIR / "20261113-comb" / "comb.yaml").read_text().splitlines()
-    assert body == hand_run
+    # The prompt is pinned to the measured one. The settings line is not: reviews stopped
+    # loading Claude Code settings after that run, and the recorded file is left as it was.
+    assert _without_setting_sources(body) == _without_setting_sources(hand_run)
     template = load_template(builtin)
     assert template.name == "comb" and template.output is TemplateOutput.DECISIONS
 
