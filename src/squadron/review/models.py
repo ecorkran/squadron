@@ -431,6 +431,16 @@ class ReviewResult:
             "tools_given": self.tools_given,
             "tool_calls_made": self.tool_calls_made,
             **read_record_dict(self.injected_files, self.tool_calls, self.input_files.get("cwd", ".")),
+            # #382: present only for review types that check section coverage.
+            **(
+                {
+                    "sections_in_document": self.section_coverage.sections,
+                    "sections_not_covered": list(self.section_coverage.missing),
+                    "coverage_reported": self.section_coverage.reported,
+                }
+                if self.section_coverage is not None
+                else {}
+            ),
             "categories_normalized": self.categories_normalized,
             # Slice 918: additive and always present, null when the provider stamped
             # nothing, exactly as the two telemetry keys above behave. Emitted
