@@ -12,6 +12,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.20] - 2026-11-21
+
+### Changed
+- Task-breakdown guide, "What to Avoid": fallbacks are plain text under the task, never `[ ]` items (a condition that normally never fires leaves its box open forever); and no task may depend on an outcome a later step produces, so each success-criterion check sits next to the work that makes it true and the final validation task only confirms those checks passed. Requested by trading-data slice 174.
+
+## [0.22.19] - 2026-11-14
+
+### Added
+- Agent-facing surfaces rule (`project-guides/rules/agent-facing-surfaces.md`, always-on): every MCP server ships the optional `instructions` field, and every public website ships `llms.txt` in llmstxt.org format. Pointers added to the MCP tool overview and the Astro and Next.js intro guides. Closes #50.
+
+## [0.22.18] - 2026-11-06
+
+### Changed
+- Devlog archive docs: `devlog.target_bytes` behavior (newest section always kept, sections never split, `cf check` warning stays if still over the maximum) and the accepted section-heading forms, including month-only `## YYYY-MM` headings and undated headings that move with the section above.
+
+## [0.22.17] - 2026-11-06
+
+### Changed
+- Devlog format: YAML frontmatter on `DEVLOG.md` and on archive files is now required, in one canonical shape (`docType: devlog`, `project`, `dateCreated`, `dateUpdated`), replacing the old `scope`/`description` shape. `file-naming-conventions` gains the `devlog` docType and schema. Both `## YYYYMMDD` and `## YYYY-MM-DD` headings are accepted.
+
+### Added
+- Devlog archive convention (cf slice 936): size-triggered, archives at `project-documents/user/archive/devlog/DEVLOG-YYYY-Qn.md`, newest first, with devlog frontmatter. Config keys `devlog.max_bytes` and `devlog.target_bytes`; `cf check` warns over the maximum and `cf devlog archive` rolls over. Needs a cf release that includes slice 936.
+
 ## [0.22.16] - 2026-11-03
 
 ### Changed
