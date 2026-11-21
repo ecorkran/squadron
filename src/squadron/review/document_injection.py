@@ -15,7 +15,10 @@ from squadron.review.template_inputs import FILE_INPUT_KEYS
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ["ReviewDocumentError", "read_review_documents"]
+__all__ = ["NUMBERED_NOTE", "ReviewDocumentError", "number_lines", "read_review_documents"]
+
+#: Said in the label of a numbered document, so the model knows what the prefix is.
+NUMBERED_NOTE = "each line prefixed with its line number"
 
 
 class ReviewDocumentError(Exception):
@@ -54,3 +57,14 @@ def read_review_documents(inputs: dict[str, str]) -> list[tuple[str, Path, str]]
             ) from exc
         documents.append((key, path, text))
     return documents
+
+
+def number_lines(text: str) -> str:
+    """*text* with each line prefixed by its 1-based number and a tab.
+
+    A reviewer cites ``path:line``. Without numbers in the prompt it opens the file again
+    with a tool to find them, which puts the whole document in context twice.
+    """
+    lines = text.splitlines()
+    width = len(str(len(lines)))
+    return "\n".join(f"{number:>{width}}\t{line}" for number, line in enumerate(lines, 1))

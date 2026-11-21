@@ -99,8 +99,10 @@ prompt_template: |
   {against}
   </slice_design>
 
-  Both documents are included in full under "File Contents" below. Review all of
-  each; do not sample. Use your tools to open the code and tests they refer to.
+  Both documents are included in full under "File Contents" below, each line
+  prefixed with its line number. Review all of each; do not sample. Cite those line
+  numbers. Do not open these two files with your tools: they are complete here.
+  Use your tools on the code and tests they refer to.
   Cross-reference success criteria from the slice design
   against the tasks. Identify gaps, scope creep, sequencing issues, and tasks that
   are too large or too granular.

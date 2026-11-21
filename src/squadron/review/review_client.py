@@ -41,7 +41,11 @@ from squadron.review.coverage import (
     load_coverage_limits,
 )
 from squadron.review.diff_files import cap_sections, describe_cut_files, omit_all, split_diff_by_file
-from squadron.review.document_injection import read_review_documents
+from squadron.review.document_injection import (
+    NUMBERED_NOTE,
+    number_lines,
+    read_review_documents,
+)
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.injected_file import InjectedFile, injected_file
 from squadron.review.models import DiffInjection, ReviewResult
@@ -641,7 +645,10 @@ def _inject_file_contents(
         # No size limit and no charge against the total: a document under review is never
         # cut or skipped, and its size never crowds out the diff or the conventions file.
         for key, doc_path, content in read_review_documents(inputs):
-            injections.append(f"### {key}: {doc_path.name}\n\n```\n{content}\n```")
+            injections.append(
+                f"### {key}: {doc_path.name} (complete, {NUMBERED_NOTE})\n\n"
+                f"```\n{number_lines(content)}\n```"
+            )
             injected_files.append(
                 injected_file(key, str(doc_path), content, injected_chars=len(content))
             )

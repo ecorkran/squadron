@@ -11,7 +11,7 @@ import pytest
 import squadron
 from squadron.providers.base import AuthType, ProfileName, ProviderType
 from squadron.providers.profiles import ProviderProfile
-from squadron.review.document_injection import ReviewDocumentError
+from squadron.review.document_injection import ReviewDocumentError, number_lines
 from squadron.review.persistence import format_review_markdown
 from squadron.review.review_client import (
     _inject_file_contents,  # pyright: ignore[reportPrivateUsage]
@@ -99,8 +99,14 @@ def test_a_document_over_both_size_caps_is_injected_whole(tmp_path: Path) -> Non
     inputs = {"input": str(tmp_path / "tasks.md"), "cwd": str(tmp_path)}
     with patch(f"{_P}.get_config", side_effect=_tiny_caps):
         result = _inject_file_contents("Review", inputs, include_bodies=False, whole_documents=True)
-    assert body in result.prompt
+    assert result.prompt.count("line of the document") == 500
+    assert "500\tline of the document" in result.prompt
     assert "truncated" not in result.prompt
+
+
+def test_documents_are_injected_with_line_numbers() -> None:
+    assert number_lines("first\n\nthird") == "1\tfirst\n2\t\n3\tthird"
+    assert number_lines("\n".join("x" * 1 for _ in range(10))).splitlines()[0] == " 1\tx"
 
 
 def test_the_injection_is_recorded_with_its_size_and_hash(tmp_path: Path) -> None:

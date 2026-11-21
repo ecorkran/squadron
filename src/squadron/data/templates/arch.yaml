@@ -152,8 +152,9 @@ prompt_template: |
   {input}
   </architecture_document>
 
-  The document is included in full under "File Contents" below. Review all of it;
-  do not sample. Follow any referenced files if they help you understand the design.
+  The document is included in full under "File Contents" below, each line prefixed
+  with its line number. Review all of it; do not sample. Cite those line numbers. Do
+  not open this file with your tools: it is complete here. Follow any referenced files if they help you understand the design.
   Then evaluate for internal consistency, completeness,
   feasibility, technology fitness, abstraction quality, extension point design,
   dependency correctness, and antipatterns.

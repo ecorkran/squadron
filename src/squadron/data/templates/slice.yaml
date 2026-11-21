@@ -106,8 +106,10 @@ prompt_template: |
   {against}
   </architecture_document>
 
-  Both documents are included in full under "File Contents" below. Review all of
-  each; do not sample. Use your tools to open the code and tests they refer to.
+  Both documents are included in full under "File Contents" below, each line
+  prefixed with its line number. Review all of each; do not sample. Cite those line
+  numbers. Do not open these two files with your tools: they are complete here.
+  Use your tools on the code and tests they refer to.
   Evaluate the input against the architecture.
   Follow referenced files as needed to understand dependencies and integration points.
   Report your findings using the severity format described in your instructions.
