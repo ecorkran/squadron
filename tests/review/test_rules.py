@@ -225,6 +225,40 @@ class TestLoadReviewRulesSteps:
         assert loaded.content is not None
         assert "Python rule body." in loaded.content
 
+    def test_a_review_rule_with_no_paths_goes_to_every_review(self, tmp_path: Path) -> None:
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "design-rules.md").write_text(
+            "---\nsteps: [design, review]\n---\nEvery state has an exit.\n"
+        )
+
+        with_no_files = load_review_rules("tasks", rules_dir)
+        with_files = load_review_rules("code", rules_dir, file_paths=["src/a.py"])
+
+        assert with_no_files.language_rules == ["design-rules.md"]
+        assert "Every state has an exit." in (with_no_files.content or "")
+        assert with_files.language_rules == ["design-rules.md"]
+
+    def test_a_rule_with_no_paths_and_no_steps_is_not_sent_to_every_review(
+        self, tmp_path: Path
+    ) -> None:
+        """Always-on is opt-in: a bare file (workflow notes, say) stays out of reviews."""
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "bug-fixes.md").write_text("How fixes are committed.\n")
+
+        assert load_review_rules("tasks", rules_dir).language_rules == []
+
+    def test_an_always_on_rule_is_sent_once_when_its_name_also_matches_a_file(
+        self, tmp_path: Path
+    ) -> None:
+        rules_dir = self._rules_dir(tmp_path, "steps: [review]")
+
+        loaded = load_review_rules("code", rules_dir, file_paths=["src/a.py"])
+
+        assert loaded.language_rules == ["python.md"]
+        assert (loaded.content or "").count("Python rule body.") == 1
+
     def test_no_steps_behaves_as_before(self, tmp_path: Path) -> None:
         rules_dir = self._rules_dir(tmp_path, 'paths: ["**/*.py"]')
         loaded = load_review_rules("code", rules_dir, file_paths=["src/a.py"])

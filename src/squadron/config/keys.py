@@ -239,6 +239,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "directly. Content beyond this is truncated with a marker."
         ),
     ),
+    "review.inject_conventions": ConfigKey(
+        name="review.inject_conventions",
+        type_=bool,
+        default=True,
+        description=(
+            "Put the project's conventions file (AGENTS.md, else CLAUDE.md) whole into "
+            "every review prompt. Set false when the rules reviewers need are in rule "
+            "files marked `steps: [review]`, so they are not sent twice."
+        ),
+    ),
     "review.max_total_injection_bytes": ConfigKey(
         name="review.max_total_injection_bytes",
         type_=int,

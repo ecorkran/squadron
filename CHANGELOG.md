@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A rule file marked `steps: [review]` with no `paths` is sent to every review, for every provider. Use it for the rules reviewers must check (design rules, core principles).
+- Config key `review.inject_conventions` (default true): set it false to stop putting the whole `AGENTS.md` or `CLAUDE.md` into every review prompt once those rules live in rule files.
 - Every review file records what the reviewer was given and what it opened: `injected` (each file put in the prompt, with size, hash and whether it was whole), `filesRead` and `searches` (from the model's tool calls). A provider that reports no tool-call record gets `readRecord: unreported`. Pipeline run state stores `files_read` and `searches` for dispatch and review steps (#382).
 - Reviews take a recipe name wherever they take a model (`review-model`, a review step's `model`, `sq review --model`): several reviewers and comb filters run as one review with one verdict and one review file. Three recipes ship; add your own in `project-documents/user/recipes/`.
 - `sq benchmark recall report --real-work`: counts and cost of the recipe reviews your project has run.

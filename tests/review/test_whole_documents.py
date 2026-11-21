@@ -205,3 +205,18 @@ def test_the_conventions_file_is_in_the_read_record(tmp_path: Path) -> None:
     assert conventions.path == str(tmp_path / "AGENTS.md")
     assert conventions.whole is True
     assert conventions.sha256 == hashlib.sha256(b"# Rules\n\nNo silent fallbacks.\n").hexdigest()
+
+
+def test_the_conventions_file_is_left_out_when_the_project_turns_it_off(tmp_path: Path) -> None:
+    (tmp_path / "tasks.md").write_text(TASKS_BODY)
+    (tmp_path / "AGENTS.md").write_text("CONVENTIONS SENTINEL\n")
+    inputs = {"input": str(tmp_path / "tasks.md"), "cwd": str(tmp_path)}
+
+    def config(key: str, cwd: str = ".") -> object:
+        return False if key == "review.inject_conventions" else 500_000
+
+    with patch(f"{_P}.get_config", side_effect=config):
+        injected = _inject_file_contents("Review", inputs, whole_documents=True)
+
+    assert "CONVENTIONS SENTINEL" not in injected.prompt
+    assert [record.key for record in injected.files] == ["input"]

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from squadron.config.manager import get_config
 from squadron.project_rules.frontmatter import (
+    RuleFrontmatter,
     RuleStep,
     effective_steps,
     load_rules_frontmatter,
@@ -16,6 +17,7 @@ from squadron.project_rules.frontmatter import (
     path_globs,
 )
 from squadron.project_rules.render import RULES_SEPARATOR
+from squadron.project_rules.selection import is_review_template_rule
 from squadron.review.git_utils import run_git
 from squadron.review.templates import user_templates_dir
 
@@ -165,14 +167,29 @@ def extract_diff_paths(
 
 @dataclass(frozen=True)
 class ReviewRules:
-    """Assembled review rules and the language rule files among them.
+    """Assembled review rules and the project rule files among them.
 
-    ``language_rules`` is written to review frontmatter as ``projectRules``
+    ``language_rules`` names the rule files sent to every review and those matched to
+    the files under review. It is written to review frontmatter as ``projectRules``
     (slice 935 D7).
     """
 
     content: str | None
     language_rules: list[str] = field(default_factory=list[str])
+
+
+def _is_always_on(name: str, fm: RuleFrontmatter) -> bool:
+    """Whether a rule file goes to every review: ``steps`` names review and it has no ``paths``.
+
+    It is opt-in. A file with neither key (workflow notes, or a language file matched by
+    its name) is not sent to every review.
+    """
+    return (
+        fm.paths is None
+        and fm.steps is not None
+        and RuleStep.REVIEW in fm.steps
+        and not is_review_template_rule(name)
+    )
 
 
 def load_review_rules(
@@ -187,7 +204,9 @@ def load_review_rules(
     Combines, in order:
       1. Template rules (``review.md`` and ``review-{template_name}.md``)
       2. Manual override rules supplied by caller
-      3. Language-auto-detected rules matched against *file_paths*, limited to
+      3. Project rules sent to every review: ``steps`` names ``review`` and the
+         file has no ``paths``
+      4. Language-auto-detected rules matched against *file_paths*, limited to
          rules whose ``steps`` include ``review`` (slice 935 D3)
 
     ``content`` is ``None`` if no source produced anything. Single source of
@@ -204,23 +223,27 @@ def load_review_rules(
                 else f"{template_rules}\n\n---\n\n{rules_content}"
             )
 
-    # Language auto-detection from changed/target files
-    language_rules: list[str] = []
-    if rules_dir is not None and file_paths:
-        relevant = {
-            name: fm
-            for name, fm in load_rules_frontmatter(rules_dir).items()
-            if RuleStep.REVIEW in effective_steps(fm)
-        }
-        auto_files = match_rules_files(file_paths, rules_dir, path_globs(relevant), cwd)
-        loaded = _read_rules(auto_files)
-        language_rules = [path.name for path, _ in loaded]
-        auto_content = RULES_SEPARATOR.join(content for _, content in loaded)
-        if auto_content:
+    # Project rules: those sent to every review, then those matching the files under review.
+    project_rules: list[str] = []
+    if rules_dir is not None:
+        frontmatter = load_rules_frontmatter(rules_dir)
+        always = sorted(name for name, fm in frontmatter.items() if _is_always_on(name, fm))
+        selected = [rules_dir / name for name in always]
+        if file_paths:
+            relevant = {
+                name: fm
+                for name, fm in frontmatter.items()
+                if name not in always and RuleStep.REVIEW in effective_steps(fm)
+            }
+            selected += match_rules_files(file_paths, rules_dir, path_globs(relevant), cwd)
+        loaded = _read_rules(selected)
+        project_rules = [path.name for path, _ in loaded]
+        project_content = RULES_SEPARATOR.join(content for _, content in loaded)
+        if project_content:
             rules_content = (
-                auto_content
+                project_content
                 if rules_content is None
-                else f"{rules_content}{RULES_SEPARATOR}{auto_content}"
+                else f"{rules_content}{RULES_SEPARATOR}{project_content}"
             )
 
-    return ReviewRules(content=rules_content, language_rules=language_rules)
+    return ReviewRules(content=rules_content, language_rules=project_rules)

@@ -552,6 +552,7 @@ def _log_budget_skip(
 _SKIP_KEYS = {"cwd", "diff", "files", "pr"}
 #: The ``key`` an injected conventions file is recorded under in the read record.
 CONVENTIONS_KEY = "conventions"
+INJECT_CONVENTIONS_KEY = "review.inject_conventions"
 
 
 def _truncate(content: str, label: str, max_file_size: int) -> str:
@@ -721,8 +722,12 @@ def _inject_file_contents(
     # Headings are demoted (H1→H3, H2→H4, etc.) so they fit the same visual
     # hierarchy as the injected rules content and don't dominate the prompt.
     conventions_root = Path(convention_root if convention_root is not None else inputs.get("cwd", "."))
-    chosen = find_conventions(conventions_root).chosen
-    if chosen is None:
+    wanted = get_config(INJECT_CONVENTIONS_KEY, cwd=cwd_for_config)
+    chosen = find_conventions(conventions_root).chosen if wanted else None
+    if not wanted:
+        _logger.info("%s is off; review runs without the conventions file", INJECT_CONVENTIONS_KEY)
+        conventions = ConventionsSource.NONE
+    elif chosen is None:
         _logger.info("No conventions file under %s; review runs without one", conventions_root)
         conventions = ConventionsSource.NONE
     else:
