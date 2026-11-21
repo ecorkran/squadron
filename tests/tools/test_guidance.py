@@ -72,6 +72,7 @@ def test_block_asks_for_batched_reads_without_naming_a_tool() -> None:
 
     assert composed is not None
     assert _BATCHING in composed
-    assert "Do not read files a\nclaim does not depend on" in composed
+    assert "do not read files no claim depends on" in composed
+    assert "examine all of it" in composed
     for name in ("read_file", "grep", "write_file"):
         assert name not in composed.split("\n", 2)[2].replace("list_files", "")

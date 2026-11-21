@@ -11,6 +11,7 @@ from squadron.core.models import Effort, SystemPromptMode
 from squadron.core.usage import CostBasis, TokenUsage
 from squadron.models.snapshot import answers_as_requested
 from squadron.project_rules.conventions import ConventionsSource
+from squadron.review.injected_file import InjectedFile
 from squadron.review.run_cost import RunCost
 
 
@@ -291,6 +292,9 @@ class ReviewResult:
     # Which conventions file the review injected (slice 935 D7). None on a hand-built
     # result; a review run always sets it, to NONE when no file was found.
     conventions_source: ConventionsSource | None = None
+    # Every input file whose text was put in the prompt (#382). None on a hand-built
+    # result; a review run always sets it, empty when nothing was injected.
+    injected_files: tuple[InjectedFile, ...] | None = None
     # Language rule files the review was given (slice 935 D7), stamped by the caller that
     # loaded them. None on a hand-built result.
     project_rules: list[str] | None = None

@@ -122,6 +122,9 @@ system_prompt: |
 allowed_tools: [read_file, list_files, grep]
 permission_mode: bypassPermissions
 model: fable-medium
+
+# The documents under review are injected whole for every provider and tool set (#382).
+inject_documents: true
 setting_sources: [project]
 
 inputs:
@@ -141,8 +144,9 @@ prompt_template: |
   {input}
   </architecture_document>
 
-  Read the document thoroughly. Follow any referenced files if they help you
-  understand the design. Then evaluate for internal consistency, completeness,
+  The document is included in full under "File Contents" below. Review all of it;
+  do not sample. Follow any referenced files if they help you understand the design.
+  Then evaluate for internal consistency, completeness,
   feasibility, technology fitness, abstraction quality, extension point design,
   dependency correctness, and antipatterns.
 

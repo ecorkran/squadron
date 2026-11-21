@@ -41,7 +41,9 @@ from squadron.review.coverage import (
     load_coverage_limits,
 )
 from squadron.review.diff_files import cap_sections, describe_cut_files, omit_all, split_diff_by_file
+from squadron.review.document_injection import read_review_documents
 from squadron.review.git_utils import EmptyDiffError
+from squadron.review.injected_file import InjectedFile, injected_file
 from squadron.review.models import DiffInjection, ReviewResult
 from squadron.review.parsers import parse_review_output
 from squadron.review.template_inputs import FILE_INPUT_KEYS
@@ -248,16 +250,19 @@ async def run_review_with_profile(
         allowed_tools=resolved_allowed_tools,
         provider=provider_profile.provider,
     )
-    prompt, diff_injection, conventions_source = _inject_file_contents(
+    reads_files = not include_bodies
+    prompt, diff_injection, conventions_source, injected_files = _inject_file_contents(
         prompt,
         inputs,
         exclude_patterns,
         include_bodies=include_bodies,
         convention_root=convention_root,
+        # The documents under review are in the prompt whole for every run (#382).
+        whole_documents=template.inject_documents,
     )
     # A model that reads files follows document references literally; cf writes them
     # relative to its docs root, so without this a `user/slices/...` lookup misses.
-    if not include_bodies:
+    if reads_files:
         system_prompt += _docs_root_note(inputs.get("cwd", "."))
 
     # Debug output at -vvv (verbosity >= 3)
@@ -400,6 +405,7 @@ async def run_review_with_profile(
     result.failed_tool_calls = capture.failed_tool_calls
     result.diff_injection = diff_injection
     result.conventions_source = conventions_source
+    result.injected_files = injected_files
 
     # Part B (slice 927 D4): a truncated diff with no successful tool call turns a
     # stated PASS into CONCERNS. Must run after tool_calls_made/failed_tool_calls above.
@@ -551,6 +557,8 @@ class InjectedPrompt(NamedTuple):
     prompt: str
     diff: DiffInjection | None
     conventions: ConventionsSource
+    #: Every input file whose text went into the prompt (#382): proof of what was given.
+    files: tuple[InjectedFile, ...] = ()
 
 
 def _inject_file_contents(
@@ -560,6 +568,7 @@ def _inject_file_contents(
     *,
     include_bodies: bool = True,
     convention_root: str | None = None,
+    whole_documents: bool = False,
 ) -> InjectedPrompt:
     """Inject file contents into the prompt for providers that can't read files.
 
@@ -577,6 +586,10 @@ def _inject_file_contents(
     PR review's scratch worktree holds the code under review, but conventions
     must still come from the trusted checkout. None (the default) reads from
     inputs["cwd"]. A conventions file that exists but can't be read raises.
+
+    ``whole_documents`` (#382) is for document reviews: the ``input`` and ``against``
+    files are injected in full regardless of ``include_bodies``, with no size limit of any
+    kind. A document that is missing or unreadable raises ``ReviewDocumentError``.
     """
     cwd_for_config = inputs.get("cwd", ".")
     max_file_size = get_config("review.max_file_size_bytes", cwd=cwd_for_config)
@@ -589,6 +602,7 @@ def _inject_file_contents(
         )
 
     injections: list[str] = []
+    injected_files: list[InjectedFile] = []
     total_size = 0
 
     def _add_injection(label: str, content: str, *, cap: bool = True) -> bool:
@@ -614,8 +628,17 @@ def _inject_file_contents(
     # Inject file contents for regular input keys. Skipped when the run has a reader
     # tool: the model fetches bodies on demand. The diff below is injected either way —
     # it is not a file body, and no read-only tool can reconstruct it (issue #81).
+    if whole_documents:
+        # No size limit and no charge against the total: a document under review is never
+        # cut or skipped, and its size never crowds out the diff or the conventions file.
+        for key, doc_path, content in read_review_documents(inputs):
+            injections.append(f"### {key}: {doc_path.name}\n\n```\n{content}\n```")
+            injected_files.append(
+                injected_file(key, str(doc_path), content, injected_chars=len(content))
+            )
+
     for key, value in inputs.items() if include_bodies else ():
-        if key in _SKIP_KEYS:
+        if key in _SKIP_KEYS or (whole_documents and key in FILE_INPUT_KEYS):
             continue
 
         path = Path(value)
@@ -640,6 +663,9 @@ def _inject_file_contents(
 
         if not _add_injection(f"{key}: {path.name}", content):
             break
+        injected_files.append(
+            injected_file(key, str(path), content, injected_chars=min(len(content), max_file_size))
+        )
 
     # Handle diff input — run git diff locally
     diff_ref = inputs.get("diff")
@@ -693,11 +719,12 @@ def _inject_file_contents(
     if cut_notice:
         injections.insert(0, cut_notice)
 
+    files = tuple(injected_files)
     if not injections:
-        return InjectedPrompt(prompt, diff_injection, conventions)
+        return InjectedPrompt(prompt, diff_injection, conventions, files)
 
     file_section = "\n\n## File Contents\n\n" + "\n\n".join(injections)
-    return InjectedPrompt(prompt + file_section, diff_injection, conventions)
+    return InjectedPrompt(prompt + file_section, diff_injection, conventions, files)
 
 
 def _run_git_diff_filenames(

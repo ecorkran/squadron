@@ -69,6 +69,9 @@ permission_mode: bypassPermissions
 model: opus
 setting_sources: [project]
 
+# The documents under review are injected whole for every provider and tool set (#382).
+inject_documents: true
+
 judge:
   pass_floor: 78
   concerns_floor: 55
@@ -96,7 +99,9 @@ prompt_template: |
   {against}
   </slice_design>
 
-  Read both documents, then cross-reference success criteria from the slice design
+  Both documents are included in full under "File Contents" below. Review all of
+  each; do not sample. Use your tools to open the code and tests they refer to.
+  Cross-reference success criteria from the slice design
   against the tasks. Identify gaps, scope creep, sequencing issues, and tasks that
   are too large or too granular.
 

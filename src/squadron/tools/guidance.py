@@ -27,8 +27,9 @@ Before asserting that something is missing, undefined, unhandled, unnarrowed, or
 unjustified, open the relevant file with the tools and confirm it. If you cannot confirm
 it, say so explicitly — mark the point unverified rather than asserting it.
 
-Use a tool when a claim depends on code that is not in front of you. Do not read files a
-claim does not depend on; reading everything is as wrong as reading nothing. The number of
+Use a tool when a claim depends on code that is not in front of you. A document you were
+asked to review is the subject of the work: examine all of it. Beyond that subject, open
+the files your claims depend on, and do not read files no claim depends on. The number of
 tool calls is not a measure of quality.
 
 When you already know several files you need, request them together — in one call if the

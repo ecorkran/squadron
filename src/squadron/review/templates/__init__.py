@@ -67,6 +67,9 @@ class ReviewTemplate:
     judge: dict[str, object] | None = None
     # Opt-in write-time category normalization (402 D3). Only the code template sets it.
     normalize_categories: bool = False
+    # The `input` and `against` documents are the subject of the review: always injected
+    # whole, whatever the run can read for itself (#382). Document templates set it.
+    inject_documents: bool = False
     output: TemplateOutput = TemplateOutput.REVIEW
 
     # Prompt construction — exactly one of these is set (validated at load time)
@@ -128,12 +131,12 @@ def _resolve_setting_sources(raw: object) -> list[str]:
     return [str(source) for source in cast(list[object], raw)]
 
 
-def _resolve_normalize_categories(raw: object) -> bool:
+def _resolve_bool(key: str, raw: object) -> bool:
     """Absent → False; anything but a YAML bool is an error, never coerced."""
     if raw is None:
         return False
     if not isinstance(raw, bool):
-        raise TemplateValidationError(f"normalize_categories must be true or false, got {raw!r}")
+        raise TemplateValidationError(f"{key} must be true or false, got {raw!r}")
     return raw
 
 
@@ -210,7 +213,8 @@ def load_template(path: Path) -> ReviewTemplate:
             else None
         ),
         judge=dict(judge_raw) if isinstance(judge_raw, dict) else None,  # type: ignore[arg-type]
-        normalize_categories=_resolve_normalize_categories(data.get("normalize_categories")),
+        normalize_categories=_resolve_bool("normalize_categories", data.get("normalize_categories")),
+        inject_documents=_resolve_bool("inject_documents", data.get("inject_documents")),
         output=_resolve_output(data.get("output")),
         prompt_template=(str(data["prompt_template"]) if "prompt_template" in data else None),
         prompt_builder=builder,
