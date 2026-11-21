@@ -46,6 +46,10 @@ class LeakRules:
     distribution_name: str
     host_owner: str
     host_repo: str
+    #: Roots the producer's OS sandbox denies reads under, apart from paths it allows on
+    #: purpose (its toolchain). A path under one was refused or was permitted, so it is not
+    #: a leak. Empty for a producer that runs unconfined.
+    confined_roots: tuple[Path, ...] = ()
 
 
 def build_leak_rules(

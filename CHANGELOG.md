@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq metrology ingest-reviews` also ingests slice, tasks and arch reviews, keeping their own finding categories and blob stamps.
 
 ### Fixed
+- Claude agents with a declared tool list no longer load your MCP servers and claude.ai connectors (mail, drive, calendar). A review could have called them, and their definitions added about 55k tokens to every turn.
+- Benchmark leak scan: a confined Claude producer is no longer marked `leaked` for reads its sandbox denied or for running its own toolchain. Leak rules version is now 3.
 - Tasks and slice reviews now check the plan against the existing code: what each task or design section would break in code and tests that already exist, whether its claims about that code are true, and whether every state a step can leave behind has a command that ends it (#382).
 - Slice, tasks and arch reviews must account for every section of the document in a `## Coverage` section. A PASS that leaves a section out becomes CONCERNS and names the sections; the review file records `sectionsInDocument`, `sectionsCovered` and `sectionsNotCovered` (#382).
 - Slice, tasks and arch reviews (and the judges that compare those documents) now put the whole document and its parent in the prompt for every model. Before, a model that could read files was given only the paths and decided for itself how much to read, so a review could report on part of a document. Documents under review have no size limit (#382).

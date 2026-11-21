@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -46,6 +48,9 @@ class Layout:
 @pytest.fixture
 def layout(tmp_path: Path) -> Layout:
     return Layout(tmp_path)
+
+
+Build = Callable[[Layout], ToolCall]
 
 
 def bash(command: str) -> ToolCall:
@@ -135,3 +140,31 @@ class TestTokens:
 
     def test_rules_version_is_an_int(self) -> None:
         assert isinstance(LEAK_RULES_VERSION, int)
+
+
+class TestConfinedProducer:
+    """Under confinement the OS denies reads below the real home, so a path there is no leak."""
+
+    def confined(self, layout: Layout) -> LeakRules:
+        return replace(layout.rules(), confined_roots=(layout.real_home,))
+
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda x: bash(f"ls {x.bench}"),  # the sandbox's parent: denied
+            lambda x: bash("ls ../context-forge"),  # a sibling the model looked for: denied
+            lambda x: read(f"{x.repo_root}/src/x.py"),  # the checkout: denied
+            lambda x: bash(f"{x.real_home}/.local/share/fnm/bin/node -v"),  # allowed toolchain
+            lambda x: bash("cat ~/.ssh/config"),
+        ],
+    )
+    def test_a_path_under_the_denied_home_is_not_a_hit(self, layout: Layout, build: Build) -> None:
+        call = build(layout)
+
+        assert path_hits(call, layout.rules()) != []  # unconfined, the same call is a hit
+        assert path_hits(call, self.confined(layout)) == []
+
+    def test_a_protected_path_outside_the_denied_home_is_still_a_hit(self, layout: Layout) -> None:
+        call = bash(f"cat {layout.install}/squadron/cli.py")
+
+        assert path_hits(call, self.confined(layout)) == [f"{layout.install}/squadron/cli.py"]

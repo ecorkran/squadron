@@ -12,10 +12,14 @@ from squadron.benchmark.confinement import (
     CLAUDE_SETTINGS_KEY,
     SymlinkLoopError,
     confinement_settings,
+    denied_read_roots,
     toolchain_paths,
+    under_confinement,
     write_confinement,
 )
+from squadron.benchmark.leak_rules import LeakRules, build_leak_rules
 from squadron.config.keys import CONFIG_KEYS
+from squadron.providers.base import ProfileName
 
 
 def test_the_settings_deny_the_real_home_but_allow_the_sandbox_and_tools(tmp_path: Path) -> None:
@@ -82,3 +86,43 @@ def test_writing_keeps_the_seeded_config_and_names_a_declared_key(tmp_path: Path
         stored = tomllib.load(handle)
     assert stored == {"pipeline.auto_memory": False, CLAUDE_SETTINGS_KEY: '{"sandbox":{}}'}
     assert CLAUDE_SETTINGS_KEY in CONFIG_KEYS
+
+
+def test_the_denied_roots_are_read_back_from_the_settings_the_home_was_given(tmp_path: Path) -> None:
+    real, home = tmp_path / "real", tmp_path / "home"
+    write_confinement(
+        home, confinement_settings(real_home=real, tree=home / "t", home=home, readable=[])
+    )
+
+    assert denied_read_roots(home) == (real,)
+
+
+def test_a_home_with_no_confinement_has_no_denied_roots(tmp_path: Path) -> None:
+    assert denied_read_roots(tmp_path) == ()
+
+
+def _rules(base: Path) -> LeakRules:
+    return build_leak_rules(
+        tree=base / "tree",
+        home=base / "home",
+        output_dir=base / "out",
+        real_home=base / "real",
+        repo_root=base / "real" / "checkout",
+        install_location=base / "site",
+        uv_cache=base / "uvcache",
+        distribution_name="squadron-ai",
+        host_owner="owner",
+        host_repo="repo",
+    )
+
+
+def test_only_a_confined_profile_gets_the_denied_roots(tmp_path: Path) -> None:
+    real, home = tmp_path / "real", tmp_path / "home"
+    write_confinement(
+        home, confinement_settings(real_home=real, tree=home / "t", home=home, readable=[])
+    )
+    rules = _rules(tmp_path)
+
+    assert under_confinement(rules, ProfileName.SDK, home).confined_roots == (real,)
+    # Codex ignores the settings key, so its producer ran free and is judged as before.
+    assert under_confinement(rules, ProfileName.OPENAI_OAUTH, home) == rules

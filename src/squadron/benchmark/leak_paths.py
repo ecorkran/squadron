@@ -67,8 +67,13 @@ def is_under(path: Path, roots: tuple[Path, ...]) -> bool:
 
 
 def is_leaked_path(path: Path, rules: LeakRules) -> bool:
-    """Under the user's home, checkout, install location or uv cache, and outside the sandbox."""
-    return is_under(path, rules.protected_roots) and not is_under(path, rules.sandbox_roots)
+    """Under the user's home, checkout, install location or uv cache, and outside the sandbox.
+
+    A path the producer's confinement covers is not a leak: the read was denied.
+    """
+    return is_under(path, rules.protected_roots) and not is_under(
+        path, (*rules.sandbox_roots, *rules.confined_roots)
+    )
 
 
 def _field_values(call: ToolCall) -> Iterator[str]:

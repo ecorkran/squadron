@@ -21,6 +21,7 @@ from pathlib import Path
 from squadron.benchmark.adapter import EnvironmentResolutionError
 from squadron.benchmark.bench_plan import BenchConfig, config_key, replay_record_id
 from squadron.benchmark.case_runners import CaseKindRunner, ReplaySandbox
+from squadron.benchmark.confinement import under_confinement
 from squadron.benchmark.instruction_files import instruction_files
 from squadron.benchmark.leak_scan import scan
 from squadron.benchmark.pause_answer import MAX_PAUSES_ANSWERED, STANDING_PAUSE_ANSWER
@@ -176,7 +177,10 @@ def _leak_result(
     source = deps.transcript_sources(ProfileName(config.profile))
     if source is None:
         raise RuntimeError(f"profile {config.profile} has no transcript source; planning refuses it")
-    return scan(source, sandbox.home, deps.leak_rules_for(sandbox, case))
+    rules = under_confinement(
+        deps.leak_rules_for(sandbox, case), ProfileName(config.profile), sandbox.home
+    )
+    return scan(source, sandbox.home, rules)
 
 
 def _finish(

@@ -94,7 +94,7 @@ def _git_hits(invocation: Invocation, rules: LeakRules) -> list[str]:
     hits = [
         f"git {value}"
         for value in aimed
-        if not is_under(resolve_in_tree(value, rules), rules.tree_roots)
+        if not is_under(resolve_in_tree(value, rules), (*rules.tree_roots, *rules.confined_roots))
     ]
     subcommand, rest = git_subcommand(invocation.args)
     if subcommand in GIT_NETWORK_SUBCOMMANDS:

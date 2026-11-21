@@ -19,12 +19,18 @@ import json
 import os
 import tomllib
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 
 import tomli_w
 
+from squadron.benchmark.leak_rules import LeakRules
+from squadron.providers.base import ProfileName
+
 CLAUDE_SETTINGS_KEY = "pipeline.claude_settings"
 _USER_CONFIG = Path(".config") / "squadron" / "config.toml"
+#: Profiles whose producer runs under these settings; every other runtime ignores the key.
+CONFINED_PROFILES = frozenset({ProfileName.SDK})
 
 
 #: More symlinks than this while resolving one path is a loop.
@@ -109,3 +115,27 @@ def write_confinement(home: Path, settings: str) -> None:
     existing[CLAUDE_SETTINGS_KEY] = settings
     with path.open("wb") as handle:
         tomli_w.dump(existing, handle)
+
+
+def denied_read_roots(home: Path) -> tuple[Path, ...]:
+    """The roots the confinement written into *home* denies reads under; none when unconfined.
+
+    Read from the settings the producer was actually given, so the leak scan judges
+    against what was enforced.
+    """
+    path = home / _USER_CONFIG
+    if not path.is_file():
+        return ()
+    with path.open("rb") as handle:
+        settings = tomllib.load(handle).get(CLAUDE_SETTINGS_KEY)
+    if not isinstance(settings, str):
+        return ()
+    denied: list[str] = json.loads(settings)["sandbox"]["filesystem"]["denyRead"]
+    return tuple(Path(root) for root in denied)
+
+
+def under_confinement(rules: LeakRules, profile: ProfileName, home: Path) -> LeakRules:
+    """*rules* for a producer of *profile* whose home is *home*: confined when it was."""
+    if profile not in CONFINED_PROFILES:
+        return rules
+    return replace(rules, confined_roots=denied_read_roots(home))

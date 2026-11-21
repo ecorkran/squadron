@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -190,3 +191,11 @@ class TestOwnPackage:
 
     def test_call_without_a_command_field_is_not_a_hit(self, rules: LeakRules) -> None:
         assert own_package_hits(ToolCall("Read", {"file_path": DISTRIBUTION}), rules) == []
+
+
+def test_git_aimed_at_a_directory_confinement_denies_is_not_a_hit(rules: LeakRules) -> None:
+    confined = replace(rules, confined_roots=(rules.real_home,))
+    call = bash(f"git -C {rules.real_home}/other log")
+
+    assert git_host_hits(call, rules) == [f"git {rules.real_home}/other"]
+    assert git_host_hits(call, confined) == []
