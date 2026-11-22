@@ -13,6 +13,17 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261121
 
+### Slice 432: Document Review Recall from Real Corrections — Design Complete
+
+- **Document:** `project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md`; `cf validate design` passes. Not reviewed yet.
+- **Shape:** three case kinds (arch, slice, tasks) behind 430's kind seam, one case set per kind; the 43 mined cases as YAML; import of `20261116-mined/` (1,281 outputs, five grading passes); a new `sq benchmark recall match` command that matches findings to flaws with a model, blind and capped; more arch cases mined by hand for #373.
+- **Found in the data while designing:**
+  - 161 of 1,074 flaw hits rest only on NOTE findings, so document kinds score NOTE (430 scores CONCERN and FAIL only).
+  - Section 16 reproduces when the first pass to grade a review wins (38/29/35 arch, 42/48/41 slice, 59/54/52 tasks bug-hits for fable-medium, haiku-xhigh, opus-high); regrades disagree on 11 of 574 flaw decisions.
+  - 70 outputs are task-gate FAILs with no model call (squadron-197-tasks, squadron-917-tasks); they import as `gate_only`.
+  - Every case tree holds saved reviews at its commit, so the sandbox rebuilds the repo without them. Three case commits are on no ref.
+- **Left to the PM:** the matcher alias, the matcher check (walkthrough step 5) and the #373 arch comparison (step 6).
+
 ### Release 0.24.37
 
 - **Contents:** a dispatch that leaves its design or tasks artifact without readable frontmatter fails the step (#385); #382 task group closed out.
