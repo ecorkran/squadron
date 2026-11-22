@@ -1,0 +1,36 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "RPCs no longer check shutdown state and can access the backend after Stop cancels only the server context."
+  ],
+  "F2": [
+   "KEEP",
+   "Builds for the same key can overlap, colliding on disk or replacing a cached index that another caller is using."
+  ],
+  "F3": [
+   "KEEP",
+   "The new startup TotalDocs call iterates the cache without locking after starting a goroutine that can modify it."
+  ],
+  "F4": [
+   "DROP",
+   "The shared error and counter races are in unchanged worker code and predate this change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.033262299999999995
+}

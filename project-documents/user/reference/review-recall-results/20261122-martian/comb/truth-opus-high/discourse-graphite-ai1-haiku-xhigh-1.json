@@ -1,0 +1,43 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The second `downsize(from, to, dimensions, opts={})` replaces the first, so the 5-argument call at `resize_emoji.rb:14` now raises ArgumentError."
+  ],
+  "F2": [
+   "KEEP",
+   "The client limit and the 413 message are now a fixed 10 MB that ignores `max_image_size_kb`/`max_attachment_size_kb`, so client checks and messages no longer match the configured limits."
+  ],
+  "F3": [
+   "KEEP",
+   "The `downsize` return value is thrown away; a failed convert (nonzero exit, not logged) is retried 5 times and the untouched file goes on with no record of the failure."
+  ],
+  "F4": [
+   "KEEP",
+   "FileHelper.download` quietly stops writing at the cap, and the cap is now a fixed 10 MB, so a truncated image can go through the new downsize loop and pass size validation where it was rejected before."
+  ],
+  "F5": [
+   "KEEP",
+   "When `allow_animated_thumbnails` is off, `downsize_instructions` uses `#{from}[0]`, so stored oversized GIF originals keep only the first frame; when it is on, `--resize-fit 80%` is not a valid WxH size for gifsicle."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.1761233
+}

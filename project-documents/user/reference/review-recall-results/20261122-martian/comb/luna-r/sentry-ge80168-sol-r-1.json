@@ -1,0 +1,25 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The registered metric-alert handler is abstract, so accessing it raises `TypeError` before detector processing can continue."
+  ],
+  "F2": [
+   "KEEP",
+   "Reusing an occurrence ID makes equality-based assertions pass despite mismatched fingerprints, leaving the changed tests unable to catch incorrect occurrence contents."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00212096
+}

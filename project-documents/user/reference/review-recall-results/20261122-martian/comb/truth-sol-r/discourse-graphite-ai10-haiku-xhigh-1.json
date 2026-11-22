@@ -1,0 +1,82 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 8,
+  "F9": 10,
+  "F10": 11,
+  "F11": 12,
+  "F12": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The migration unconditionally indexes the category query result, so a missing `embed_category` row aborts migration."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw SQL preserves URL-form entries, but host lookup compares only the parsed hostname."
+  ],
+  "F3": [
+   "KEEP",
+   "Host strings are interpolated without SQL quoting, allowing apostrophes to break or alter the insert."
+  ],
+  "F4": [
+   "KEEP",
+   "A missing host reaches `sub!` on nil before validation and raises an exception."
+  ],
+  "F5": [
+   "KEEP",
+   "Validation accepts ports that lookup cannot match and rejects valid TLDs longer than five characters."
+  ],
+  "F6": [
+   "DROP",
+   "ActiveRecord\u2019s `first` implicitly orders by primary key, so duplicate matches are not selected nondeterministically."
+  ],
+  "F7": [
+   "DROP",
+   "Topic\u2019s before-save callback assigns the uncategorized category when the category is nil."
+  ],
+  "F8": [
+   "KEEP",
+   "Unknown IDs and missing parameters are dereferenced without checks, producing server errors."
+  ],
+  "F9": [
+   "KEEP",
+   "The plural-ID branch calls `map` on null and replaces unresolved IDs with undefined entries."
+  ],
+  "F10": [
+   "KEEP",
+   "Successful saves update the record but leave buffered input intact, so reopening editing displays stale values."
+  ],
+  "F11": [
+   "KEEP",
+   "Delete rejections have no error handler, leaving users without failure feedback."
+  ],
+  "F12": [
+   "DROP",
+   "The swapped fabricator filenames do not change behavior because the definitions still load."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  8,
+  10,
+  11,
+  12
+ ],
+ "cost_usd": 0.0888497
+}

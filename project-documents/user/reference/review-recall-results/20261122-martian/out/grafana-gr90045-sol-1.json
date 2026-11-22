@@ -1,0 +1,167 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Background writes inherit request cancellation",
+      "description": "The timeout context still inherits cancellation from the request. Once the handler returns, pending legacy writes can be canceled despite their ten-second timeout. This affects Create, Update, Delete, and DeleteCollection, leaving legacy storage unsynchronized. Detach cancellation while preserving context values, then apply the timeout.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:50-56"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Independent goroutines can reorder legacy mutations",
+      "description": "There is no ordering between background writes. A successful Create followed immediately by Update or Delete can execute against legacy storage in reverse order. Playlist legacy Update first fetches the existing object, so it can fail before Create completes; a delayed Create can likewise recreate a deleted object. Preserve per-resource mutation ordering.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:134-141"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Update no longer mirrors the authoritative result",
+      "description": "Passing the original `objInfo` re-evaluates the update against legacy state instead of copying the successful storage result. Playlist legacy storage calls `UpdatedObject(ctx, old)` using its own existing object. For patches, divergent legacy fields can therefore survive, and transformations can execute twice. Restore the wrapper around the authoritative `res`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duration metrics use incorrect collectors and labels",
+      "description": "Successful deletes use the object name as the `kind` label, creating per-object histogram cardinality. Create and Update failures also record legacy duration instead of storage duration (lines 45 and 129), while legacy DeleteCollection records storage duration (line 166). Correct these assignments so failure rates and latency remain meaningful.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:106"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integration cases do not activate mode 3",
+      "description": "Setting `DualWriterDesiredModes` does not establish the effective mode. `InstallAPIs` uses the result of `SetDualWritingMode`, which initializes an unset mode to Mode1 and implements only transitions between Mode1 and Mode2. These new cases therefore exercise Mode1 on fresh state. Arrange effective Mode3 explicitly and assert it before running CRUD checks.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/tests/apis/playlist/playlist_test.go:132-144"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shared mocks cannot verify dual-write behavior",
+      "description": "Both backends share the same mock and method names, so storage expectations also satisfy legacy calls. The tests neither await background completion nor assert separate backend invocations; they can pass with legacy writes missing entirely. Use independent mocks and deterministic synchronization, covering cancellation, ordering, and propagation of the authoritative update result.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:51-54"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Background writes inherit request cancellation",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:50-56",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Independent goroutines can reorder legacy mutations",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:134-141",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Update no longer mirrors the authoritative result",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:139",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Duration metrics use incorrect collectors and labels",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:106",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Integration cases do not activate mode 3",
+      "location": "pkg/tests/apis/playlist/playlist_test.go:132-144",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Shared mocks cannot verify dual-write behavior",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:51-54",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045",
+    "diff": "77572e87ff64663c748ff103d92d3d53650d37dd...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:48:33.029996",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32103,
+  "diff_chars_injected": 32103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 73169,
+  "cached_tokens": 71808,
+  "cache_write_tokens": null,
+  "completion_tokens": 628,
+  "reasoning_tokens": 0,
+  "duration_seconds": 55.11060449993238,
+  "cost_usd": 0.0161828,
+  "cost_basis": "alias_pricing"
+}

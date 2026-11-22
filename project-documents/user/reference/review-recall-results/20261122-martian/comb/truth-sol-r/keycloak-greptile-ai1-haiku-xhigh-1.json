@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "UsernameForm calls a no-argument helper, but the only declaration requires a UserModel argument, causing compilation to fail."
+  ],
+  "F2": [
+   "KEEP",
+   "The helper rejects null users, so initial username/password login pages omit the conditional passkey UI."
+  ],
+  "F3": [
+   "DROP",
+   "Both password-page templates ignore the conditional-UI attributes, so filling them on errors does not display passkey UI."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0463824
+}

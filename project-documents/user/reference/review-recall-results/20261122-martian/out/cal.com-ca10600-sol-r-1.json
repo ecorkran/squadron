@@ -1,0 +1,185 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "A backup code can authenticate without the account password",
+      "description": "Password verification above this branch is skipped whenever `credentials.totpCode` is nonempty. The new backup-code branch then accepts a valid backup code without validating that TOTP value. Consequently, submitting a valid backup code together with an arbitrary nonempty `totpCode` bypasses password verification.\n\nEnforce first-factor verification independently of client-supplied second-factor fields. If external-provider authentication needs a separate path, require verified server-side proof of that authentication rather than using the presence of `totpCode`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/features/auth/lib/next-auth-options.ts:131-145"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Backup-code consumption is not atomic",
+      "description": "The code checks a previously read encrypted array and then updates the user by ID alone. Two concurrent requests can read the same unused code, both validate it, and both successfully authenticate. Concurrent requests using different codes can also overwrite each other\u2019s changes, restoring a consumed code.\n\nConsume codes atomically\u2014for example, with a conditional update matching the previously read ciphertext and rejecting unsuccessful updates, or with separately stored code records consumed transactionally. Add concurrency tests verifying that exactly one request can redeem a code.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/features/auth/lib/next-auth-options.ts:148-157"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dismissing the backup-code dialog leaves the security status stale",
+      "description": "After the enable endpoint succeeds, the component only changes the displayed step. The parent\u2019s `onEnable` callback, which invalidates `viewer.me`, runs only when the explicit backup-codes Close button is clicked.\n\nThe dialog still permits dismissal through Escape or an outside click via the unchanged `onOpenChange` handler. Taking either route leaves the settings switch displaying disabled even though two-factor authentication is enabled on the server. Synchronize the parent state immediately after successful enablement, independently of how the backup-code dialog closes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Copy confirmation is shown before recovery codes reach the clipboard",
+      "description": "`navigator.clipboard.writeText()` returns a promise, but the handler neither awaits it nor handles rejection before displaying a success toast. If clipboard access is denied, users receive confirmation that their recovery codes were copied when they were not, potentially leaving them without a saved recovery method.\n\nAwait the write, show success only after fulfillment, and provide an actionable error or download fallback when clipboard access fails or is unavailable.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:278-279"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Password visibility is no longer keyboard-accessible",
+      "description": "Adding `tabIndex={-1}` removes the password-visibility button from sequential keyboard navigation across every `PasswordField`. Keyboard-only users can no longer reach and activate this control normally.\n\nKeep the button keyboard-focusable. If this change is intended to control initial modal focus, configure focus at the modal level rather than removing a shared interactive control from the tab order.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/ui/components/form/inputs/Input.tsx:49"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "A backup code can authenticate without the account password",
+      "location": "packages/features/auth/lib/next-auth-options.ts:131-145",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Backup-code consumption is not atomic",
+      "location": "packages/features/auth/lib/next-auth-options.ts:148-157",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dismissing the backup-code dialog leaves the security status stale",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:135",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Copy confirmation is shown before recovery codes reach the clipboard",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:278-279",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Password visibility is no longer keyboard-accessible",
+      "location": "packages/ui/components/form/inputs/Input.tsx:49",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600",
+    "diff": "a23cab01b20e33a0a8dee9c5d42f07da237335a7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:48:09.366448",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "injected": [],
+  "files_read": [
+    "apps/web/pages/auth/login.tsx",
+    "packages/features/auth/lib/next-auth-options.ts",
+    "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "apps/web/components/settings/DisableTwoFactorModal.tsx",
+    "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "apps/web/pages/api/auth/two-factor/totp/setup.ts",
+    "apps/web/components/auth/BackupCode.tsx",
+    "apps/web/components/auth/TwoFactor.tsx",
+    "apps/web/components/settings/TwoFactorAuthAPI.ts",
+    "apps/web/playwright/login.2fa.e2e.ts",
+    "packages/features/auth/lib/ErrorCode.ts",
+    "packages/lib/test/builder.ts",
+    "packages/prisma/migrations/20230804153419_add_backup_codes/migration.sql",
+    "packages/prisma/schema.prisma",
+    "packages/ui/components/form/inputs/Input.tsx",
+    "apps/web/pages/settings/security/two-factor-auth.tsx",
+    "packages/ui/components/dialog/Dialog.tsx",
+    "packages/ui/components/button/Button.tsx"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep EnableTwoFactorModal|onEnable=|setTwoFactorEnabled in apps/web",
+    "grep backupCode|backup-codes in packages/features/auth",
+    "list_files *Dialog* in packages/ui/components",
+    "grep Additional Review|Review Rules in .github",
+    "grep credentials.backupCode|backupCodes\\[index\\]|await prisma.user.update|if \\(user.password in packages/features/auth/lib/next-auth-options.ts",
+    "grep setStep\\(SetupStep.DisplayBackupCodes\\)|onOpenChange=|clipboard.writeText|showToast in apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "grep tabIndex in packages/ui/components/form/inputs/Input.tsx",
+    "list_files *review* in ."
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1530,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 28845,
+  "diff_chars_injected": 28845,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 7,
+  "prompt_tokens": 194394,
+  "cached_tokens": 153994,
+  "cache_write_tokens": null,
+  "completion_tokens": 1649,
+  "reasoning_tokens": 334,
+  "duration_seconds": 30.560196625068784,
+  "cost_usd": 0.1126894,
+  "cost_basis": "alias_pricing"
+}

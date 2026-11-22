@@ -1,0 +1,186 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Topic-meta link light and dark values are both inverted",
+      "description": "The `.topic-meta-data h5 a` rule used `scale-color($primary, $lightness: 30%)`. The light branch is now 70%, which is roughly 2.1:1 contrast on white, so these links become hard to read on the default theme. The dark branch is `scale-color($secondary, $lightness: 30%)`, a dim gray on a dark background. The mirror of the original 30% is 70%, the same pairing `common/base/user.scss` uses for `.username a` (30/70). Restore 30% for light and use 70% for dark.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/desktop/topic-post.scss:291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mobile topic heading light value changed from 20% to 50%",
+      "description": "The mobile `h3` changed from 20% to a light value of 50%. That is about 4:1 contrast on white, which is below the 4.5:1 AA threshold for normal-weight text. The dark branch is 50% where the mirror would be 80%. The desktop equivalent at `desktop/topic-post.scss:321` is 20/80. The mobile `h4` at line 190 is also 50/50, so `h3` and `h4` now share a color and lose their hierarchy. Restore 20% light and 80% dark.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mobile custom-message hint is inverted and inconsistent with desktop",
+      "description": "`.custom-message-length` changed from 70% to a light value of 30%, with dark at 70%. The desktop rule at `desktop/modal.scss:94` keeps the original 70/30 pairing, so the same hint renders darker on mobile than on desktop. The dark branch is also inverted, so the hint becomes bright gray on dark instead of dim. Restore 70% for light and 30% for dark to match desktop.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/mobile/modal.scss:102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Group member name loses its hierarchy and has the wrong dark value",
+      "description": "`.group-member-info .name` changed from 30% to a light value of 50%, with dark at 50%. The sibling `.title` in the same block is also 50/50 at line 527, so name and title are now the same color. The `.name` rule in `common/base/user.scss` uses 30/70 for the same kind of element. The mobile copy at `app/assets/stylesheets/mobile/user.scss:497` has the identical change. Restore 30% light and 70% dark in both files.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/desktop/user.scss:522"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hand-typed mirrored color pairs are already producing errors",
+      "description": "The mirror rule (light X% \u2194 dark (100\u2212X)%) is typed by hand at over 100 sites in this diff. Five of the changed sites already break it, which suggests the rule is too easy to get wrong by hand. A helper beside `dark-light-choose` would encode it once:\n\n```scss\n@function dark-light-mirror($lightness) {\n  @return dark-light-choose(scale-color($primary, $lightness: $lightness), scale-color($secondary, $lightness: 100% - $lightness));\n}\n```\n\nConverting the sites to this helper would have prevented the four mis-pairings above.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/variables.scss:46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Coldmap comment describes only the light default",
+      "description": "The comment says the topic-list table-cell default \"is scale-color($primary, $lightness: 50%)\". That is still the light value, but the default is now `dark-light-choose(...)` in `common/base/_topic-list.scss`, and the comment does not mention the dark branch. Update the comment to describe the light/dark pairing, or drop the specific value.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/discourse.scss:72-73"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Topic-meta link light and dark values are both inverted",
+      "location": "app/assets/stylesheets/desktop/topic-post.scss:291",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mobile topic heading light value changed from 20% to 50%",
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:182",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mobile custom-message hint is inverted and inconsistent with desktop",
+      "location": "app/assets/stylesheets/mobile/modal.scss:102",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Group member name loses its hierarchy and has the wrong dark value",
+      "location": "app/assets/stylesheets/desktop/user.scss:522",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Hand-typed mirrored color pairs are already producing errors",
+      "location": "app/assets/stylesheets/common/foundation/variables.scss:46",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Coldmap comment describes only the light default",
+      "location": "app/assets/stylesheets/common/base/discourse.scss:72-73",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7",
+    "diff": "1e6fee6c7bc61eedeba48dccd25886ba7e31cfe3...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:59:29.380796",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "injected": [],
+  "files_read": [
+    "app/assets/stylesheets/desktop/topic-post.scss",
+    "app/assets/stylesheets/mobile/topic-post.scss",
+    "app/assets/stylesheets/desktop/user.scss",
+    "app/assets/stylesheets/mobile/user.scss",
+    "app/assets/stylesheets/mobile/modal.scss",
+    "app/assets/stylesheets/common/base/discourse.scss",
+    "app/assets/stylesheets/common/foundation/variables.scss",
+    "app/assets/stylesheets/desktop/modal.scss"
+  ],
+  "searches": [
+    "grep dark-light-choose|dark-light-diff in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7/app/assets/stylesheets/common",
+    "grep @function dark-light-(choose|diff) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 41052,
+  "diff_chars_injected": 41052,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 13,
+  "prompt_tokens": 175334,
+  "cached_tokens": 130252,
+  "cache_write_tokens": 45072,
+  "completion_tokens": 27739,
+  "reasoning_tokens": null,
+  "duration_seconds": 120.81818804098293,
+  "cost_usd": 0.02624312,
+  "cost_basis": "provider"
+}

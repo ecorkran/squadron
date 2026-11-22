@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "include_website_name` has no trailing `?`, so the serializer never calls it, and `website_name` is missing from `untrusted_attributes`. As a result, `/users/:username.json` sends a TL0 user's website host and path to anonymous visitors even though `website` itself is hidden from them."
+  ],
+  "F2": [
+   "KEEP",
+   "The change removed the computed `websiteName`, which followed `model.website`. Now `website_name` is set only when user details load, and `save()` copies back only `bio_excerpt` from the response. After a website edit, the header link points to the new URL but shows the old label, or shows nothing if the website was previously empty, until the page is reloaded."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.0901084
+}

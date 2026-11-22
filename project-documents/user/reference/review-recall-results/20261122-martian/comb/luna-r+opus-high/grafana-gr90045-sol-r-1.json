@@ -1,0 +1,37 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The background goroutines take their timeout from the request's `ctx` (`dualwriter_mode3.go:51,110,135,163`), and Go cancels that context once the handler returns, so legacy writes can be cancelled before they finish."
+  ],
+  "F2": [
+   "KEEP",
+   "Legacy `Update` now gets the raw `objInfo` instead of an `updateWrapper` holding the storage result, so the playlist legacy storage reruns `UpdatedObject` against its own possibly stale object (`legacy_storage.go:147`) and can end up different from the main storage."
+  ],
+  "F3": [
+   "KEEP",
+   "Each write starts its own goroutine with no ordering, so back-to-back create/update/delete calls can reach legacy storage out of order and leave it with wrong data."
+  ],
+  "F4": [
+   "KEEP",
+   "In changed code, Create/Update record storage failures as legacy durations, Delete puts `name` in the kind label (unbounded label values), and DeleteCollection records the legacy call as a storage duration, so the metrics are wrong."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.130734
+}

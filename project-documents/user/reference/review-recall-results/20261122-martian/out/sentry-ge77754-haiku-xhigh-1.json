@@ -1,0 +1,234 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`AssignmentSource.queued` is evaluated once at import time",
+      "description": "`queued: datetime = timezone.now()` is a dataclass field default, so it runs when the class body executes (module import), not when an instance is created. Every `AssignmentSource` built in a process carries that process's startup time, including the ones from `from_integration` (assignment_source.py:21-25). Nothing reads `queued` today: a repo-wide search for `AssignmentSource` and `assignment_source` finds no reader. The impact is latent, but the field is serialized into every task payload through `to_dict()`, and the name suggests it should record when the assignment was queued. `test_to_dict` only asserts `queued is not None`, so the bug is not caught. Use `field(default_factory=timezone.now)` or set the value explicitly in `from_integration`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/services/assignment_source.py:18"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Status-sync contract gained an `assignment_source` parameter that no caller supplies",
+      "description": "The abstract `sync_status_outbound` now declares `assignment_source`, but its only caller, src/sentry/integrations/tasks/sync_status_outbound.py:43-46, never passes it. That caller also invokes `should_sync(\"outbound_status\")` without a source, so the loop guard does not apply to status sync. `ExampleIntegration.sync_status_outbound` (src/sentry/integrations/example/integration.py:161) no longer matches the abstract signature because it has no `**kwargs` and no `assignment_source`. On the assignee side, `assignment_source` is forwarded to `installation.sync_assignee_outbound` (src/sentry/integrations/tasks/sync_assignee_outbound.py:59-61), but the Jira, Jira Server, and VSTS implementations absorb it through `**kwargs` and never read it. Either remove the unused status parameter or wire it up, and state in the PR whether status loops are a follow-up.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/integrations/mixins/issues.py:411"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test covers the \"other integration still propagates\" path or the task's source parsing",
+      "description": "The new test covers only the same-integration case and asserts `assert_not_called`. That assertion is meaningful because the sibling `test_assignee_sync_outbound_assign` uses the same setup and does enqueue a sync. However, the comment at src/sentry/integrations/mixins/issues.py:387-389 says other integrations should still propagate, and no test checks that. There is no case where `sync_source.integration_id` differs from this installation's id and the sync runs. `should_sync(attr, sync_source)` and the `assignment_source_dict` parsing at src/sentry/integrations/tasks/sync_assignee_outbound.py:53-61 have no direct tests. Add a positive case with a second integration as the source.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/models/test_groupassignee.py:179"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The wire format changes for every outbound assignee sync, not only inbound-originated ones",
+      "description": "`sync_group_assignee_outbound` always includes `assignment_source_dict` in the task kwargs, set to `None` when there is no source. A worker still running the old three-argument task signature would raise `TypeError` on each such message during a rolling deploy. The `retry` wrapper (src/sentry/tasks/base.py:163-172) re-queues on `Exception`, so the effect is delayed syncs. Work is lost only if old workers outlive the retry budget. Omitting the key when it is `None` avoids the mismatch for the common case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/utils/sync.py:141"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`from_dict` silently returns `None` on bad input",
+      "description": "When the payload does not match, `from_dict` returns `None`, and the caller at src/sentry/integrations/tasks/sync_assignee_outbound.py:53-56 treats that the same as \"no source\". The loop guard then turns off with no log. Only schema drift should trigger this, so the risk is low, but a log line in that branch would make the failure visible. Also, `from_dict` does no type checking (`integration_id=\"abc\"` is accepted), and the `ValueError` in the except clause cannot come from a dataclass constructor, which raises only `TypeError`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/integrations/services/assignment_source.py:30"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Naming and small consistency drift",
+      "description": "The parameter is `sync_source` in `should_sync` but `assignment_source` everywhere else. `from_integration` calls `AssignmentSource(...)` directly (assignment_source.py:22) while `from_dict` uses `cls(...)`. The test name `test_from_dict_inalid_data` (tests/sentry/integrations/services/test_assignment_source.py:13) has a typo.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/integrations/mixins/issues.py:382"
+    },
+    {
+      "severity": "PASS",
+      "title": "The loop guard compares the correct identifiers",
+      "description": "The check `sync_source.integration_id == self.org_integration.integration_id` uses fields that exist. `RpcIntegration` has `id` and `name` (src/sentry/integrations/services/integration/model.py:20-24), and `RpcOrganizationIntegration` has `integration_id` (model.py:57). The check runs after the `key is None` and `org_integration is None` guards, so it cannot dereference `None`. Both the inbound assign and deassign paths pass a source (src/sentry/integrations/utils/sync.py:94-116).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/mixins/issues.py:390"
+    },
+    {
+      "severity": "PASS",
+      "title": "Task kwargs and imports are compatible with existing code",
+      "description": "Example (example/integration.py:152), Jira (jira/integration.py:936), Jira Server (jira_server/integration.py:1038), and VSTS (vsts/issues.py:217) all accept `**kwargs`, so the new keyword is accepted. The Celery serializer is pickle (src/sentry/conf/server.py:739-741), so the `datetime` inside `to_dict()` serializes without error. Every `should_sync` call outside the new code passes a single argument. The module-level import in src/sentry/models/groupassignee.py:15 does not create a cycle, because `src/sentry/integrations/services/__init__.py` is empty.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/tasks/sync_assignee_outbound.py:59"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`AssignmentSource.queued` is evaluated once at import time",
+      "location": "src/sentry/integrations/services/assignment_source.py:18",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Status-sync contract gained an `assignment_source` parameter that no caller supplies",
+      "location": "src/sentry/integrations/mixins/issues.py:411",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test covers the \"other integration still propagates\" path or the task's source parsing",
+      "location": "tests/sentry/models/test_groupassignee.py:179",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The wire format changes for every outbound assignee sync, not only inbound-originated ones",
+      "location": "src/sentry/integrations/utils/sync.py:141",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`from_dict` silently returns `None` on bad input",
+      "location": "src/sentry/integrations/services/assignment_source.py:30",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Naming and small consistency drift",
+      "location": "src/sentry/integrations/mixins/issues.py:382",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The loop guard compares the correct identifiers",
+      "location": "src/sentry/integrations/mixins/issues.py:390",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task kwargs and imports are compatible with existing code",
+      "location": "src/sentry/integrations/tasks/sync_assignee_outbound.py:59",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "diff": "06c700a98875e34e9df100fea94d322611e118d0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:48:44.436820",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "injected": [],
+  "files_read": [
+    "src/sentry/integrations/services/assignment_source.py",
+    "src/sentry/integrations/tasks/sync_assignee_outbound.py",
+    "src/sentry/integrations/utils/sync.py",
+    "src/sentry/integrations/mixins/issues.py",
+    "src/sentry/integrations/example/integration.py",
+    "src/sentry/integrations/jira/integration.py",
+    "src/sentry/integrations/vsts/issues.py",
+    "src/sentry/integrations/tasks/sync_status_outbound.py",
+    "src/sentry/models/groupassignee.py",
+    "tests/sentry/models/test_groupassignee.py"
+  ],
+  "searches": [
+    "grep (task_serializer|CELERY_TASK_SERIALIZER|accept_content|result_serializer|CELERY_ACCEPT_CONTENT|task_always_eager|CELERY_ALWAYS_EAGER) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src",
+    "grep def should_sync\\(|def sync_status_outbound\\(|def sync_assignee_outbound\\(|\\.should_sync\\(|\\.sync_status_outbound\\(|\\.sync_assignee_outbound\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src",
+    "grep AssignmentSource|assignment_source in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "grep sync_assignee_outbound|sync_group_assignee_outbound|assignment_source_dict in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/tests",
+    "grep \\bqueued\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry/integrations",
+    "grep class RpcIntegration\\b|class RpcOrganizationIntegration\\b|^    name: str|^    integration_id: int|^    id: int in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry/integrations/services/integration/model.py",
+    "grep ^from .* import .*Integration\\b|^    \\\"Integration\\\",|import Integration in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry/integrations/models/__init__.py",
+    "grep def sync_assignee_outbound\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry/integrations/jira_server/integration.py",
+    "grep . in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry/integrations/services/__init__.py",
+    "grep def retry\\(|exclude|except|task\\.retry|raise in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry/tasks/base.py",
+    "grep (objects\\.assign|objects\\.deassign|GroupAssignee\\.objects\\.assign|GroupAssignee\\.objects\\.deassign|\"sentry\\.models\\.groupassignee\\.GroupAssigneeManager\\.(assign|deassign)\") in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/tests",
+    "grep (assign|deassign)[a-z_]*\\.assert_called|assert_called[a-z_]*\\(.*assign= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/tests"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17215,
+  "diff_chars_injected": 17215,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 25,
+  "prompt_tokens": 479839,
+  "cached_tokens": 419151,
+  "cache_write_tokens": 60668,
+  "completion_tokens": 36136,
+  "reasoning_tokens": null,
+  "duration_seconds": 159.63397704204544,
+  "cost_usd": 0.03522031,
+  "cost_basis": "provider"
+}

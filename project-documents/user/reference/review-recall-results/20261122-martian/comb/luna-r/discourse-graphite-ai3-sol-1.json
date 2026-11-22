@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The exact email lookup is case-sensitive, so a differently cased domain bypasses a matching block."
+  ],
+  "F2": [
+   "KEEP",
+   "Concurrent read-modify-save operations can overwrite each other and undercount blocked-email matches."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0014102100000000003
+}

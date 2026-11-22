@@ -1,0 +1,51 @@
+repo|row|severity|greptile|copilot|coderabbit|bugbot|graphite|pr_title|bug_summary
+sentry|1|High|1|0|0|0|0|Enhanced Pagination Performance for High-Volume Audit Logs|Importing non-existent OptimizedCursorPaginator
+sentry|2|Critical|0|0|1|1|0|Optimize spans buffer insertion with eviction during insert|Negative offset cursor manipulation bypasses pagination boundaries
+sentry|3|Low|1|0|0|0|0|Support upsampled error count with performance optimizations|sample_rate = 0.0 is falsy and skipped
+sentry|4|Critical|0|1|0|1|0|GitHub OAuth Security Enhancement|Null reference if github_authenticated_user state is missing
+sentry|5|Critical|1|0|0|0|0|Replays Self-Serve Bulk Delete System|Breaking changes in error response format
+sentry|6|Medium|1|1|0|0|0|Span Buffer Multiprocess Enhancement with Health Monitoring|Inconsistent metric tagging with 'shard' and 'shards'
+sentry|7|Medium|1|1|1|1|0|Implement cross-system issue synchronization|Shared mutable default in dataclass timestamp
+sentry|8|High|1|0|1|0|0|Reorganize incident creation / issue occurrence logic|Using stale config variable instead of updated one
+sentry|9|High|1|1|0|0|0|Add ability to use queues to manage parallelism|Invalid queue.ShutDown exception handling
+sentry|10|High|1|0|0|1|0|Add hook for producing occurrences from the stateful detector|Incomplete implementation (only contains pass)
+cal.com|1|Low|1|1|1|1|0|Async import of the appStore packages|Async callbacks in forEach creates unhandled promise rejections
+cal.com|2|Critical|0|0|1|0|0|feat: 2fa backup codes|Backup codes not invalidated after use
+cal.com|3|Medium|1|1|0|1|0|fix: handle collective multiple host on destinationCalendar|Null reference error if array is empty
+cal.com|4|Critical|1|1|0|0|0|feat: convert InsightsBookingService to use Prisma.sql raw queries|Potential SQL injection risk in raw SQL query construction
+cal.com|5|High|1|0|0|1|0|Comprehensive workflow reminder management for booking lifecycle events|Missing database cleanup when immediateDelete is true
+cal.com|6|Medium|1|1|1|0|0|Advanced date override handling and timezone compatibility improvements|Incorrect end time calculation using slotStartTime instead of slotEndTime
+cal.com|7|Critical|1|0|0|0|0|OAuth credential sync and app integration enhancements|Timing attack vulnerability using direct string comparison
+cal.com|8|High|0|1|1|1|0|SMS workflow reminder retry count tracking|OR condition causes deletion of all workflow reminders
+cal.com|9|High|1|1|0|0|0|Add guest management functionality to existing bookings|Case sensitivity bypass in email blacklist
+cal.com|10|Low|1|0|0|1|0|feat: add calendar cache status and actions (#22532)|Inaccurate cache status tracking due to unreliable updatedAt field
+grafana|1|High|1|0|0|0|0|Anonymous: Add configurable device limit|Race condition in CreateOrUpdateDevice method
+grafana|2|High|0|0|0|1|0|AuthZService: improve authz caching|Cache entries without expiration causing permanent permission denials
+grafana|3|Critical|1|0|0|0|0|Plugins: Chore: Renamed instrumentation middleware to metrics middleware|Undefined endpoint constants causing compilation errors
+grafana|4|Critical|0|1|0|1|0|Advanced Query Processing Architecture|Double interpolation risk
+grafana|5|Medium|1|0|1|1|0|Notification Rule Processing Engine|Missing key prop causing React rendering issues
+grafana|6|Medium|1|1|1|1|1|Dual Storage Architecture|Incorrect metrics recording methods causing misleading performance tracking
+grafana|7|Low|1|1|1|0|1|Database Performance Optimizations|Incorrect error level logging
+grafana|8|High|1|1|1|1|0|Frontend Asset Optimization|Deadlock potential during concurrent annotation deletion operations
+grafana|9|Critical|1|1|1|1|1|Advanced SQL Analytics Framework|enableSqlExpressions function always returns false, disabling SQL functionality
+grafana|10|High|1|0|0|1|0|Unified Storage Performance Optimizations|Race condition in cache locking
+keycloak|1|Medium|1|0|0|0|0|Fixing Re-authentication with passkeys|ConditionalPasskeysEnabled() called without UserModel parameter
+keycloak|2|Critical|1|0|0|0|0|Add caching support for IdentityProviderStorageProvider .getForLogin operations|Recursive caching call using session instead of delegate
+keycloak|3|High|1|0|1|0|0|Add AuthzClientCryptoProvider for authorization client cryptographic operations|Returns wrong provider (default keystore instead of BouncyCastle)
+keycloak|4|Medium|0|0|0|0|0|Add rolling-updates feature flag and compatibility framework|Incorrect method call for exit codes
+keycloak|5|High|0|0|0|1|0|Add Client resource type and scopes to authorization schema|Inconsistent feature flag bug causing orphaned permissions
+keycloak|6|High|1|1|1|1|0|Add Groups resource type and scopes to authorization schema|Incorrect permission check in canManage() method
+keycloak|7|Low|1|1|1|1|0|Add HTML sanitizer for translated message resources|Lithuanian translation files contain Italian text
+keycloak|8|Critical|1|1|1|1|0|Implement access token context encoding framework|Wrong parameter in null check (grantType vs. rawTokenId)
+keycloak|9|Medium|1|0|1|1|0|Implement recovery key support for user storage providers|Unsafe raw List deserialization without type safety
+keycloak|10|Critical|1|1|0|1|0|Fix concurrent group access to prevent NullPointerException|Missing null check causing NullPointerException
+discourse|1|Medium|1|1|1|1|0|FEATURE: automatically downsize large images|Method overwriting causing parameter mismatch
+discourse|2|High|1|1|1|1|0|FEATURE: per-topic unsubscribe option in emails|Nil reference non-existent TopicUser
+discourse|3|Critical|1|0|0|1|0|Add comprehensive email validation for blocked users|BlockedEmail.should_block? modifies DB during read
+discourse|4|Critical|1|1|1|1|0|Enhance embed URL handling and validation system|SSRF vulnerability using open(url) without validation
+discourse|5|Low|0|0|1|0|0|Optimize header layout performance with flexbox mixins|Mixing float: left with flexbox causes layout issues
+discourse|6|Medium|1|1|0|1|0|UX: show complete URL path if website domain is same as instance domain|String mutation with << operator
+discourse|7|Low|1|1|1|1|0|scale-color $lightness must use $secondary for dark themes|Inconsistent theme color lightness affects visibility
+discourse|8|High|1|0|0|0|0|FIX: proper handling of group memberships|Race conditions in async member loading
+discourse|9|High|1|1|0|0|0|FEATURE: Localization fallbacks (server-side)|Thread-safety issue with lazy @loaded_locales
+discourse|10|Critical|1|1|0|1|0|FEATURE: Can edit category/host relationships for embedding|NoMethodError before_validation in EmbeddableHost

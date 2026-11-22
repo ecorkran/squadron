@@ -1,0 +1,24 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Closing a strategy permanently shuts down the factory\u2019s shared pool, so subsequent strategies mark rejected, unprocessed messages complete."
+  ],
+  "F2": [
+   "DROP",
+   "The finding establishes documentation mismatches and bounded shutdown delays, but acknowledges queued messages remain uncommitted and replayable."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.057648700000000004
+}

@@ -1,0 +1,24 @@
+{
+ "case": "grafana-gr90939",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Concurrent cold-cache and dev-mode calls serialize and reload because the write lock is not followed by a cache re-check."
+  ],
+  "F2": [
+   "DROP",
+   "Missing test coverage is not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00029559000000000003
+}

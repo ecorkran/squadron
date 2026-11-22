@@ -1,0 +1,95 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Regenerating federated recovery codes leaves old local codes valid",
+      "description": "When user storage accepts the new codes, existing locally stored recovery credentials are not deleted. `UserCredentialManager.isValid` falls back to local validation when federated validation fails, so previously issued local codes remain usable after regeneration. Remove superseded local credentials after successful external creation and test this migration scenario.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:125-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Federated test provider never consumes recovery codes",
+      "description": "Validation accepts any matching code without removing it. Furthermore, `getCredentials()` reconstructs the complete original set on every read, so the displayed code number never advances and exhaustion never occurs. The new integration test checks only one successful login, masking these failures. Implement consumption and test replay rejection, progression, and exhaustion.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:332-340"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Regenerating federated recovery codes leaves old local codes valid",
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:125-129",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Federated test provider never consumes recovery codes",
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:332-340",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "diff": "77c379efc3a0bcadb2c7dc035c8a0bc1ce524fe6...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:34:50.132285",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33382,
+  "diff_chars_injected": 33382,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 67262,
+  "cached_tokens": 64768,
+  "cache_write_tokens": null,
+  "completion_tokens": 244,
+  "reasoning_tokens": 0,
+  "duration_seconds": 51.75781670818105,
+  "cost_usd": 0.0139048,
+  "cost_basis": "alias_pricing"
+}

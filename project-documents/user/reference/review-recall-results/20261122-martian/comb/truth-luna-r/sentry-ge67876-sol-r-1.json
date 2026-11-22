@@ -1,0 +1,31 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The OAuth callback accepts a pipeline-wide constant as state, so it does not bind the authorization code to a specific attempt."
+  ],
+  "F2": [
+   "KEEP",
+   "When no local integration exists, the pipeline advances without checking whether the authenticated GitHub user can access the installation."
+  ],
+  "F3": [
+   "KEEP",
+   "An existing unassociated integration without `metadata[\"sender\"][\"login\"]` raises `KeyError` instead of returning a controlled error."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0022103000000000005
+}

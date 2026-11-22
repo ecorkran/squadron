@@ -1,0 +1,63 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The date-override early return accepts slots before checking busy times, allowing conflicts on override days."
+  ],
+  "F2": [
+   "KEEP",
+   "With multiple working-hour rows for a weekday, an out-of-range row can reject a slot that fits another row."
+  ],
+  "F3": [
+   "KEEP",
+   "The override search can reject a slot that fits one override because another same-day override does not contain it."
+  ],
+  "F4": [
+   "DROP",
+   "This is a refactoring recommendation; the substantive behavior defects are covered by other findings."
+  ],
+  "F5": [
+   "KEEP",
+   "Formatting the shifted override date in server-local time can miscompare it with the UTC slot date on non-UTC servers."
+  ],
+  "F6": [
+   "DROP",
+   "Slot generation already bounds slots to working-hour intervals, so this redundant end check does not cause incorrect availability."
+  ],
+  "F7": [
+   "KEEP",
+   "The override\u2019s shifted minutes can cross midnight while its invitee-day assignment remains unchanged, placing availability on the wrong day."
+  ],
+  "F8": [
+   "DROP",
+   "The reported missing timezone is not established on the active override path, and the optional type alone does not demonstrate a defect."
+  ],
+  "F9": [
+   "DROP",
+   "The test\u2019s duplication and fixture mismatch are low-value coverage issues, not defects in changed production behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  6
+ ],
+ "cost_usd": 0.00401492
+}

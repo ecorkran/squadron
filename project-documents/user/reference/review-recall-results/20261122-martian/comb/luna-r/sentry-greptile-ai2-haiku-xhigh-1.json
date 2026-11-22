@@ -1,0 +1,75 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The paginator applies `math.floor` to `AuditLogEntry.datetime`, so a non-empty optimized page raises `TypeError`."
+  ],
+  "F2": [
+   "KEEP",
+   "API-key callers can have no organization member, making the unconditional `member.has_global_access` dereference raise `AttributeError`."
+  ],
+  "F3": [
+   "KEEP",
+   "Reusing the old Redis keys with ZSET commands causes WRONGTYPE errors while legacy SET keys remain."
+  ],
+  "F4": [
+   "KEEP",
+   "The Lua script drops spans above 1000 without reporting the truncation, creating an invisible data-loss path."
+  ],
+  "F5": [
+   "DROP",
+   "This is dead configuration and duplicated-limit cleanup, not a demonstrated defect in current callers."
+  ],
+  "F6": [
+   "KEEP",
+   "A negative next-cursor offset is silently clamped to zero, returning the wrong page instead of rejecting the cursor."
+  ],
+  "F7": [
+   "KEEP",
+   "Django rejects negative queryset slice bounds, so the advanced negative-offset branch crashes for such cursors."
+  ],
+  "F8": [
+   "DROP",
+   "Duplicated paginator logic is a maintainability concern, not a defect that warrants blocking the merge."
+  ],
+  "F9": [
+   "KEEP",
+   "Default SUM aggregation can distort duplicate spans\u2019 scores and cause the trim step to discard the wrong members."
+  ],
+  "F10": [
+   "DROP",
+   "Missing tests alone do not establish a defect in changed behavior."
+  ],
+  "F11": [
+   "DROP",
+   "Formatting and whitespace violations are not merge-blocking behavioral defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5,
+  6,
+  8
+ ],
+ "cost_usd": 0.0057376
+}

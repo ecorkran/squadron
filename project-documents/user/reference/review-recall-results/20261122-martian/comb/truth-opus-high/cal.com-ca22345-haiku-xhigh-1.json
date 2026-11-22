@@ -1,0 +1,22 @@
+{
+ "case": "cal.com-ca22345",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Prisma does inline an unparenthesized OR fragment, but nothing in the repo combines `getBaseConditions()` with another predicate. Used as the only predicate, the result is correct, so the scope leak is hypothetical."
+  ],
+  "F2": [
+   "DROP",
+   "The looser type is a compile-time design choice. At runtime the code deliberately falls back to `1=0` when `safeParse` fails, so it fails closed and returns no rows rather than wrong data."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.07261780000000001
+}

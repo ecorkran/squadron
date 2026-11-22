@@ -1,0 +1,228 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`queued` default is evaluated once at import time, not per instance",
+      "description": "`queued: datetime = timezone.now()` runs once when the class body executes. Every `AssignmentSource` built without an explicit `queued` (both `from_integration` at line 22 and the call sites in `src/sentry/integrations/utils/sync.py:98` and `:115`) carries the process start time, not the time the assignment was queued. Nothing reads `queued` today, so there is no behavioural effect yet, but the field is wrong for any future staleness check or log. Use `field(default_factory=timezone.now)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/services/assignment_source.py:18"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`from_dict` swallows parse failures, silently disabling the cycle guard",
+      "description": "`from_dict` returns `None` on any `TypeError`/`ValueError`, and `src/sentry/integrations/tasks/sync_assignee_outbound.py:53-56` treats `None` as \"no source\". A malformed payload therefore falls through to a normal outbound sync, which is exactly the sync cycle this change exists to prevent, with no log or metric.\n- **Unknown keys:** `cls(**input_dict)` rejects any extra key. If a field is later added to the dataclass, older workers will drop the whole source during a rolling deploy.\n- **No type validation:** `{\"source_name\": 1, \"integration_id\": \"abc\"}` builds an instance, and the `integration_id` comparison in `should_sync` then never matches.\n\nLog a warning when a non-empty dict fails to parse, filter to known fields, and validate that `integration_id` is an int.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/integrations/services/assignment_source.py:31-35"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sync_status_outbound` gains an `assignment_source` parameter that nothing passes or implements",
+      "description": "The abstract `sync_status_outbound` now declares `assignment_source`, but the only caller, `src/sentry/integrations/tasks/sync_status_outbound.py:43-46`, passes neither it nor a `sync_source` to `should_sync(\"outbound_status\")`. No concrete override was updated:\n- `src/sentry/integrations/jira/integration.py:990`, `src/sentry/integrations/jira_server/integration.py:1090` and `src/sentry/integrations/vsts/issues.py:266` would absorb it via `**kwargs`.\n- `src/sentry/integrations/example/integration.py:161` has no `**kwargs`, so passing the argument would raise `TypeError`, and its signature no longer matches the base.\n\nAn \"assignment\" source on a status method is also a semantic mismatch. Either drop the parameter from this change or wire it through the status task and the overrides.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/integrations/mixins/issues.py:411-418"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests cover only one branch of the new behaviour",
+      "description": "The only new behavioural test is assign with a matching source. Missing:\n- **Different source integration:** no test that a source from another integration still syncs outbound. This is the property the comment at `src/sentry/integrations/mixins/issues.py:387-389` promises, and a regression would silently stop all cross-integration sync.\n- **Deassign with matching source:** the new `assignment_source` path in `deassign` (`src/sentry/models/groupassignee.py:238-240`) is untested.\n- **Inbound attaches the source:** nothing asserts that `sync_group_assignee_inbound` passes a source (`src/sentry/integrations/utils/sync.py:96-99`, `:112-116`). The existing inbound tests would pass if those arguments were removed.\n- **`should_sync` directly:** no unit test of `IssueSyncIntegration.should_sync` with a `sync_source`.\n- **Round trip:** `tests/sentry/integrations/services/test_assignment_source.py` has no `from_dict(to_dict())` test, which is the path production uses. `test_to_dict` (lines 29-38) only checks `queued is not None`, so it cannot catch the import-time default.\n\nMinor, same file: `test_from_dict_inalid_data` is a typo (line 13), `test_from_dict_empty_array` tests a dict, and the DB-backed `TestCase` is unnecessary for a pure dataclass.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/models/test_groupassignee.py:179-236"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Same concept named `sync_source` and `assignment_source`",
+      "description": "`should_sync` calls the parameter `sync_source` (lines 66 and 382); everywhere else it is `assignment_source` or `assignment_source_dict`. Pick one name, since `should_sync` is also used for comment and status attributes where \"assignment\" does not fit.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/integrations/mixins/issues.py:382"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`from_integration` hardcodes the class instead of using `cls`",
+      "description": "`from_integration` is a `@classmethod` but constructs `AssignmentSource(...)` directly, while `from_dict` at line 33 uses `cls(...)`. Use `cls` in both.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/integrations/services/assignment_source.py:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task payload depends on the pickle serializer for the `datetime` field",
+      "description": "`to_dict()` puts a `datetime` into the Celery kwargs. This works because `CELERY_TASK_SERIALIZER = \"pickle\"` (`src/sentry/conf/server.py:739`), and a plain dict passes the bad-pickle check in `src/sentry/celery.py:55`. Under a JSON serializer `queued` would come back as a string and `from_dict` would accept it unconverted. Serializing `queued` as ISO-8601 and parsing it in `from_dict` would make the contract explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/sentry/integrations/utils/sync.py:141-143"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cycle guard logic and task backward compatibility are sound",
+      "description": "`should_sync` compares `sync_source.integration_id` with `self.org_integration.integration_id` after the `org_integration is None` guard at line 384, so only the originating integration is suppressed. The new `assignment_source_dict` task argument defaults to `None` (`src/sentry/integrations/tasks/sync_assignee_outbound.py:34`), so tasks already in the queue still run. All concrete `sync_assignee_outbound` overrides (jira, jira_server, vsts, example) accept `**kwargs`, so the new keyword at line 59-61 is safe. The module-level import in `src/sentry/models/groupassignee.py:15` adds no import cycle: `assignment_source.py` imports only Django at runtime and `src/sentry/integrations/services/__init__.py` is empty.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/mixins/issues.py:387-391"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`queued` default is evaluated once at import time, not per instance",
+      "location": "src/sentry/integrations/services/assignment_source.py:18",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`from_dict` swallows parse failures, silently disabling the cycle guard",
+      "location": "src/sentry/integrations/services/assignment_source.py:31-35",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`sync_status_outbound` gains an `assignment_source` parameter that nothing passes or implements",
+      "location": "src/sentry/integrations/mixins/issues.py:411-418",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests cover only one branch of the new behaviour",
+      "location": "tests/sentry/models/test_groupassignee.py:179-236",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Same concept named `sync_source` and `assignment_source`",
+      "location": "src/sentry/integrations/mixins/issues.py:382",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`from_integration` hardcodes the class instead of using `cls`",
+      "location": "src/sentry/integrations/services/assignment_source.py:22",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Task payload depends on the pickle serializer for the `datetime` field",
+      "location": "src/sentry/integrations/utils/sync.py:141-143",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cycle guard logic and task backward compatibility are sound",
+      "location": "src/sentry/integrations/mixins/issues.py:387-391",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "diff": "06c700a98875e34e9df100fea94d322611e118d0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:32:33.596200",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "injected": [],
+  "files_read": [
+    "src/sentry/integrations/services/assignment_source.py",
+    "src/sentry/integrations/tasks/sync_assignee_outbound.py",
+    "src/sentry/integrations/utils/sync.py",
+    "src/sentry/integrations/mixins/issues.py",
+    "src/sentry/models/groupassignee.py",
+    "src/sentry/integrations/tasks/sync_status_outbound.py",
+    "tests/sentry/models/test_groupassignee.py",
+    "src/sentry/integrations/services/__init__.py"
+  ],
+  "searches": [
+    "grep def (should_sync|sync_assignee_outbound|sync_status_outbound)\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src",
+    "grep should_sync\\(|sync_group_assignee_outbound\\(|assignment_source|AssignmentSource in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "grep CELERY_TASK_SERIALIZER|CELERY_ACCEPT_CONTENT|CELERY_RESULT_SERIALIZER|CELERY_ALWAYS_EAGER|CELERY_COMPLAIN_ABOUT_BAD_USE_OF_PICKLE|CELERY_PICKLE_ERROR in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry",
+    "list_files src/sentry/integrations/services/*.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "grep good_use_of_pickle|bad_use_of_pickle|pickle in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754/src/sentry/celery.py",
+    "list_files src/sentry/integrations/__init__.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "list_files src/sentry/integrations/models/__init__.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "list_files tests/sentry/integrations/services/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17215,
+  "diff_chars_injected": 17215,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 17,
+  "prompt_tokens": 137227,
+  "cached_tokens": 98815,
+  "cache_write_tokens": 38404,
+  "completion_tokens": 7070,
+  "reasoning_tokens": null,
+  "duration_seconds": 63.48422912508249,
+  "cost_usd": 0.9179167000000001,
+  "cost_basis": "provider"
+}

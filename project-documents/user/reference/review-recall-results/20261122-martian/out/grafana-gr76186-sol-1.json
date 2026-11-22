@@ -1,0 +1,77 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Contextual logging changes lack regression tests",
+      "description": "Request completion logs now depend on the new contextual middleware and `FromContext` wrapper to preserve plugin, endpoint, datasource, user, and trace fields. The changed tests cover metrics only; none verify this logging contract. Add tests covering all four instrumented endpoints, optional fields, existing context attributes, and completion-log output through the middleware chain.\n\nTests could not execute because the read-only sandbox prevented Go from creating its build directory.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:58"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Contextual logging changes lack regression tests",
+      "location": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:58",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186",
+    "diff": "b29f69288de1f9c8d7ecadb882b85ba44f379789...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:51:03.072309",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21622,
+  "diff_chars_injected": 21622,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 59645,
+  "cached_tokens": 57344,
+  "cache_write_tokens": null,
+  "completion_tokens": 213,
+  "reasoning_tokens": 0,
+  "duration_seconds": 47.641358708031476,
+  "cost_usd": 0.0124664,
+  "cost_basis": "alias_pricing"
+}

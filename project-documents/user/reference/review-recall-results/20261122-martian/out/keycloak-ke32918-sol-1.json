@@ -1,0 +1,95 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Wrapped enabled state can suppress required login-cache invalidation",
+      "description": "`update()` obtains `original` through `getById()`, whose organization-aware wrapper reports disabled when the organization is disabled. If a previously cached public IDP becomes private during that period, both predicates return false and invalidation is skipped. Re-enabling the organization leaves the private IDP in login results: organization updates do not invalidate these login caches, and the login bean only rechecks `isEnabled()`.\n\nCompare persisted IDP eligibility rather than organization-dependent enabled state, and add a regression covering public-to-private updates while the organization is disabled.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:405-406"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cleanup targets a literal alias instead of created providers",
+      "description": "The cleanup here and at line 425 removes `\"alias\"`, not the created `idp-alias-*` provider. `TestCleanup.executeCleanup()` executes these callbacks without catching `NotFoundException`, so teardown can fail immediately and leave fixtures behind. Register the actual aliases, accounting for the provider explicitly removed during the test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:381"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Wrapped enabled state can suppress required login-cache invalidation",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:405-406",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Cleanup targets a literal alias instead of created providers",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:381",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "diff": "d7fe6b4e11d37a69fbabd9be670162f59430de44...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:46:47.677002",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23352,
+  "diff_chars_injected": 23352,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 66200,
+  "cached_tokens": 64000,
+  "cache_write_tokens": null,
+  "completion_tokens": 380,
+  "reasoning_tokens": 0,
+  "duration_seconds": 72.43891804199666,
+  "cost_usd": 0.014600000000000002,
+  "cost_basis": "alias_pricing"
+}

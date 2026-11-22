@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` is missing from `untrusted_attributes`, and its `include_website_name` method has no `?`, so nothing guards it; anonymous viewers get the hostname (and sometimes the path) of a TL0 user's website even though `website` itself is hidden from them."
+  ],
+  "F2": [
+   "KEEP",
+   "User#save` only copies `bio_excerpt` from the PUT response and the preferences route reuses the parent user model, so the profile shows a stale `website_name` (or none at all) after the website is changed, until the page is reloaded."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.10389759999999999
+}

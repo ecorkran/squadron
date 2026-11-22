@@ -1,0 +1,359 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Legacy writes run on the caller's request context and can be cancelled",
+      "description": "Create, Delete, Update and DeleteCollection each start a goroutine whose context is built from the caller's `ctx` (lines 51, 110, 135, 163) with `context.WithTimeoutCause`. That context is never detached from cancellation. The apiserver's handler context is the HTTP request context, and net/http cancels that context when `ServeHTTP` returns, which happens right after the response is written. Storage has already returned by the time the goroutine starts, so the legacy write races the response and will often begin with a cancelled context. Its error is then reduced to a metric, so the write is lost without a trace. This defeats the purpose of mode 3, which is to keep legacy current.\n\nFix: detach first, for example `ctx = context.WithoutCancel(ctx)` before the timeout. Go is 1.22.4, so this is available, and `pkg/services/authn/authnimpl/sync/user_sync.go:171` already does it before spawning a goroutine.\n\nVerification gap: the k8s handler source is not in the module cache here, so the request-context link rests on net/http's documented behaviour. A test that cancels the parent context after `Create` returns and asserts the legacy mock still sees a live context would settle it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:50-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Legacy errors in the goroutines are discarded without logging",
+      "description": "Each goroutine reduces the legacy error to a boolean for the histogram and never logs it. Lines 112-113, 139-140 and 165-166 do the same. Before this diff, all four paths logged legacy failures (lines 45, 113, 140 and 166 of the old file, as shown in the removed hunks). A failed legacy write now leaves no log line, so store divergence shows up only as an aggregated `is_error=true` bucket.\n\nThe goroutines also have no panic recovery. net/http recovers panics only on the handler's own goroutine, so a panic inside a legacy call now crashes the process.\n\nFix: log with the `log` already in scope in each method before recording the metric. The variable `errObjectSt` (lines 55 and 139) is named as a storage error but holds a legacy error. Rename it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:55-56"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Storage-side failures are recorded in the legacy histogram, and a legacy call is recorded in the storage histogram",
+      "description": "Line 45 (Create) and line 129 (Update) call `recordLegacyDuration(true, ...)` on the storage error path, where the failing call was `d.Storage`. Line 166 (DeleteCollection's goroutine) calls `recordStorageDuration` for a legacy call. Dashboards comparing `dual_writer_storage_duration_seconds` with `dual_writer_legacy_duration_seconds` will be wrong.\n\nFix: lines 45 and 129 should use `recordStorageDuration`, and line 166 should use `recordLegacyDuration`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delete records the object name in the `kind` label",
+      "description": "`recordStorageDuration(false, mode3Str, name, method, startStorage)` passes the object name where the metric's `kind` label goes. The labels are `is_error, mode, kind, method` (`metrics.go:23` and `:31`). Each deleted object creates a new histogram series, which is unbounded cardinality. Every other call in this file uses `options.Kind`. `dualwriter_mode1.go:155` has the same mistake. That one predates this diff, but this diff adds a new copy.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:106"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delete no longer deletes from legacy when storage returns NotFound",
+      "description": "The removed code tolerated `apierrors.IsNotFound` from storage and still deleted from legacy. The new code returns on any storage error, so legacy is never touched in that case. If legacy holds rows that storage lacks (for example, rows not yet backfilled), a mode 3 DELETE now returns NotFound and leaves the legacy row behind. If the instance later switches to mode 1 or 2, which read legacy, the object comes back.\n\nFix: keep the old tolerance. On NotFound, still run the legacy delete, then return the storage error. The mocks already have a `not-found-legacy` hook (`storage_mocks_test.go:70`), but no mode 3 test uses it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:100-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Update now hands legacy the raw `objInfo` instead of the object storage persisted",
+      "description": "Legacy now calls `UpdatedObject` on its own copy of the old object and persists that result. The removed code gave legacy an `updateWrapper` holding `obj`, the object storage had just written (the old line 'updated: obj'). Mode 3 reads from Storage, so Storage is the authority, and the two stores can now persist different results for PATCH and merge requests. Any `objInfo` whose `UpdatedObject` is not idempotent will also run twice.\n\nMode 1 passes the raw `objInfo` to legacy, but mode 1 writes legacy first, so that is consistent with mode 1. It is not the right model here.\n\nFix: `&updateWrapper{upstream: objInfo, updated: res}`. That is the type defined at `dualwriter.go:128-144`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dry-run requests still run the legacy write",
+      "description": "Nothing in the dual-writer package inspects `options.DryRun` (grep finds no matches). Assuming Storage honours dry-run as the generic registry store does, a dry-run DELETE does not persist in storage, but the goroutine still calls `d.Legacy.Delete(ctx, name, deleteValidation, options)` with the same options, so legacy really deletes. The same applies to Create (line 55) and DeleteCollection (line 165). This predates the diff, since the removed code also passed `options` to legacy unconditionally. The diff rewrites these calls, so it is worth fixing now: skip the legacy call when `len(options.DryRun) > 0`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The tests cannot tell which store was called and never check the legacy write",
+      "description": "`legacyStoreMock` and `storageMock` share one `*mock.Mock` (`m`), so testify answers a storage call with a legacy expectation when one matches first. In the error case of `TestMode3_Create` (lines 37-44), only a legacy expectation is registered, yet the failure comes from the storage side through that same expectation. No test calls `m.AssertExpectations(t)`, and the legacy calls run in goroutines the tests never wait on. The tests therefore pass whether or not legacy is called at all, and the core mode 3 behaviour (writes to both stores) is untested.\n\nThe new integration tests in `pkg/tests/apis/playlist/playlist_test.go` read through the API, which in mode 3 reads only Storage. They cannot observe legacy writes either.\n\nAlso, `assert.NotEqual(t, obj, anotherObj)` (lines 75, 130, 238, 292, 353) is close to vacuous. `assert.Equal(t, acc.GetResourceVersion(), \"1\")` (line 74) has expected and actual swapped.\n\nFix: give each store its own mock. Make the goroutine signal completion (a channel or injected hook) so the test can wait and assert. Add cases for legacy failure (logged, not returned), storage NotFound on Delete, and Update passing the storage result to legacy.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:17-78"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two test case names no longer match what they test",
+      "description": "\"creating an object only in the unified store\" (line 28) also registers a legacy expectation. \"error when listing an object in the unified store is not implemented\" (line 145) describes behaviour this diff just implemented. Rename both.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`p` is shared across test files, and one test shadows it",
+      "description": "Four Mode 3 tests use the package-level `p` declared in `dualwriter_mode1_test.go:27`, which couples two test files. Sharing one registry is safe because `metrics.init` uses `Register`, not `MustRegister`, so repeat registrations are only logged. `TestMode3_Get` instead declares a local `p := prometheus.NewRegistry()` at line 119, shadowing the package variable. Move `p` into `storage_mocks_test.go` or a shared helper, and use it everywhere.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:119"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Get` logs ordinary NotFound results at error level",
+      "description": "Every error from `Get` is logged at Error, including NotFound, which is a normal result for create-if-missing flows. Mode 2 checks `!apierrors.IsNotFound(err)` before logging (`dualwriter_mode2.go:83-89`). The duration metric also counts NotFound as `is_error=true`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:70-72"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Doc comments describe the old synchronous, ordered writes",
+      "description": "The Update comment says it \"writes first to Storage and then to LegacyStorage\". The legacy write is now asynchronous and its failure is never reported. The Create comment (line 35) does not mention the async behaviour. The interface comment at `dualwriter.go:59-62` says writes go to LegacyStorage first and skip Storage on failure, which is the opposite of mode 3. Update the mode 3 comments to say legacy is written asynchronously and its errors are not returned.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:119"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Delete's context drops the fields that `log` carries",
+      "description": "`log` is built with `name`, `kind` and `method`, but line 97 puts `d.Log` into the context. Every other method puts `log` into the context, so downstream logs for the storage call lose those fields. Use `klog.NewContext(ctx, log)`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:96-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor inconsistencies in the new Mode 3 code",
+      "description": "`const mode3Str` sits between methods, whereas modes 1 and 2 declare their constant directly after the struct. Create's success path ends with `return created, err` (line 59), where `err` is always nil there. Returning `nil` makes the intent clear.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated checksum churn in go.work.sum",
+      "description": "The diff adds about 15 checksum lines for modules (grafana-azure-sdk-go/v2, the prometheus-alertmanager fork, the OTel exporter and proto modules) that have no `go.mod` change in this range. They look like side effects of running Go tooling. Unless this change needs them, revert them so the diff stays on the dual-writer work.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "go.work.sum"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Legacy writes run on the caller's request context and can be cancelled",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:50-57",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Legacy errors in the goroutines are discarded without logging",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:55-56",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Storage-side failures are recorded in the legacy histogram, and a legacy call is recorded in the storage histogram",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:45",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Delete records the object name in the `kind` label",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:106",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delete no longer deletes from legacy when storage returns NotFound",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:100-105",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Update now hands legacy the raw `objInfo` instead of the object storage persisted",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:139",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dry-run requests still run the legacy write",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:112",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The tests cannot tell which store was called and never check the legacy write",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:17-78",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Two test case names no longer match what they test",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:28",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`p` is shared across test files, and one test shadows it",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go:119",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`Get` logs ordinary NotFound results at error level",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:70-72",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Doc comments describe the old synchronous, ordered writes",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:119",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Delete's context drops the fields that `log` carries",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:96-97",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Minor inconsistencies in the new Mode 3 code",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:33",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Unrelated checksum churn in go.work.sum",
+      "location": "go.work.sum",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045",
+    "diff": "77572e87ff64663c748ff103d92d3d53650d37dd...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:57:23.540924",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "injected": [],
+  "files_read": [
+    "pkg/apiserver/rest/dualwriter_mode3.go",
+    "pkg/apiserver/rest/dualwriter_mode3_test.go",
+    "pkg/apiserver/rest/dualwriter_mode1_test.go",
+    "pkg/apiserver/rest/dualwriter.go",
+    "pkg/apiserver/rest/dualwriter_mode1.go",
+    "pkg/apiserver/rest/storage_mocks_test.go",
+    "pkg/apiserver/rest/dualwriter_mode2.go",
+    "pkg/apiserver/rest/metrics.go",
+    "pkg/tests/apis/playlist/playlist_test.go"
+  ],
+  "searches": [
+    "grep updateWrapper|updatedObjInfoObj|legacyStoreMock|storageMock|exampleObj\\s*=|failingObj|anotherObj|exampleList|anotherList|^var p\\b|\\bp\\s*=\\s*prometheus|func (\\(d \\*DualWriter\\w*\\) )?record\\w*Duration|recordLegacyDuration|recordStorageDuration|mode2Str|mode1Str|mode3Str in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver/rest",
+    "grep ^var p\\b|p\\s*=\\s*prometheus\\.|exampleList\\s*=|anotherObj\\s*=|failingObj\\s*=|type legacyStoreMock|type storageMock|type updatedObjInfoObj|func \\(d \\*dualWriterMetrics\\) record|func \\(d \\*dualWriterMetrics\\)|func (\\w+ )?record\\w*\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver/rest",
+    "grep func \\(d? ?\\*?dualWriterMetrics\\) |func \\(m \\*dualWriterMetrics\\)|recordLegacyDuration\\(|recordStorageDuration\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver/rest",
+    "grep ^go \\d|^go [0-9]|^toolchain in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/go.mod",
+    "grep featuremgmt|grafanarest|playlistv0alpha1|gvr\\b|\"github.com/stretchr/testify/require\"|func TestIntegrationPlaylist|with dual write \\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/tests/apis/playlist/playlist_test.go",
+    "grep WithoutCancel|context\\.Background\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver",
+    "grep [Ll]egacy|dual_writer|DualWriter|mode 3|Mode3 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/tests/apis/playlist/playlist_test.go",
+    "list_files **/k8s.io/apiserver@*/pkg/endpoints/handlers/create.go in /Users/manta/go/pkg/mod",
+    "grep WithoutCancel in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg",
+    "grep WithoutCancel in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/services/authn/authnimpl/sync",
+    "grep anotherList\\s*=|var anotherList|anotherList\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver/rest",
+    "grep DryRun|dryrun in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver/rest"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32103,
+  "diff_chars_injected": 32103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 23,
+  "prompt_tokens": 860316,
+  "cached_tokens": 758696,
+  "cache_write_tokens": 101598,
+  "completion_tokens": 53167,
+  "reasoning_tokens": null,
+  "duration_seconds": 243.2212187089026,
+  "cost_usd": 0.1251945,
+  "cost_basis": "provider"
+}

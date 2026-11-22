@@ -1,0 +1,37 @@
+{
+ "case": "keycloak-ke37634",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The matcher checks the wrong substring and rejects equality, so incorrect grant IDs can pass."
+  ],
+  "F2": [
+   "KEEP",
+   "Shortcuts of other lengths can be encoded but are rejected by the decoder\u2019s six-character context check."
+  ],
+  "F3": [
+   "KEEP",
+   "The constructor checks `grantType` twice, allowing a null `rawTokenId` to be encoded as `\"null\"`."
+  ],
+  "F4": [
+   "KEEP",
+   "The test catches the `NullPointerException` from its uninitialized factory lookup, so it passes without verifying the intended invalid-grant exception."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0018885199999999999
+}

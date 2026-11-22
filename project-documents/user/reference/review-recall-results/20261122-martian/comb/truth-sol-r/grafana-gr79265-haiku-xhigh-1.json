@@ -1,0 +1,36 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 4,
+  "F4": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Failed writes leave the device cached, so subsequent requests bypass limit enforcement and authenticate successfully."
+  ],
+  "F2": [
+   "KEEP",
+   "Counting and inserting are separate, unsynchronized operations, allowing concurrent new devices to exceed the configured limit."
+  ],
+  "F3": [
+   "DROP",
+   "Duplicate constants and inconsistent names do not cause a behavior defect when their values match."
+  ],
+  "F4": [
+   "KEEP",
+   "The exported class infers an undefined-only field, incorrectly rejecting numeric values supplied by the backend contract."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  6
+ ],
+ "cost_usd": 0.0397206
+}

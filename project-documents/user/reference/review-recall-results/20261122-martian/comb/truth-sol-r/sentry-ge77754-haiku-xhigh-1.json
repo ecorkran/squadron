@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "timezone.now()` runs at class definition, so new instances serialize an import-time timestamp rather than their actual queue time."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.006537599999999999
+}

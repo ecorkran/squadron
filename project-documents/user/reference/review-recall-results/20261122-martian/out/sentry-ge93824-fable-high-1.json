@@ -1,0 +1,283 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Hung flusher processes are never killed before being replaced",
+      "description": "The new guard `isinstance(process, multiprocessing.Process)` is always false for the real processes.\n- **Why:** they are created with `self.mp_context.Process` from `get_context(\"spawn\")` (line 53, 105), which is `SpawnProcess`. In CPython, `SpawnProcess` and `multiprocessing.Process` are sibling subclasses of `BaseProcess`, not parent and child. The file's own annotation on line 68 says `SpawnProcess`.\n- **Regression:** the base code called `self.process.kill()` unconditionally. Now, on `cause = \"hang\"`, `kill()` is skipped and line 259 spawns a replacement for the same shards while the hung process stays alive.\n- **Impact:** if the old process recovers, two flushers work the same Redis queues and can produce duplicate segments to `buffered-segments`. Up to `MAX_PROCESS_RESTARTS` processes can leak per slot.\n- **Fix:** check `isinstance(process, multiprocessing.process.BaseProcess)`, or `not isinstance(process, threading.Thread)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:253-257"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`join()` never terminates processes and skips the rest once the deadline passes",
+      "description": "- **Same `isinstance` problem:** line 346 uses the same always-false check, so `process.terminate()` is never reached. This existed in the base for one process; the diff copies it into the loop.\n- **New early exit:** the `break` at line 341 leaves the loop when the deadline expires. Even with the check fixed, every process after that point would be neither waited on nor terminated.\n- **Impact:** on a rebalance the parent keeps running, so a stuck flusher survives alongside those created for the next assignment.\n- **Fix:** wait against the shared deadline, then terminate all remaining processes in a separate pass. `process_index` is unused in this loop.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:336-347"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Added `time.sleep(0.1)` in `test_basic` is a no-op",
+      "description": "`test_basic` patches `time.sleep` to `lambda _: None` at line 15, so the new `time.sleep(0.1)` returns immediately. The comment \"Give flusher threads time to process after drift change\" is therefore untrue. The race between the flusher thread seeing the new drift and `step.join()` setting `stopped` is still open, so `(msg,) = messages` can flake. `test_flusher.py:2` avoids this by binding `from time import sleep` before the patch; do the same here or poll for `messages` with a deadline.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:60-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New test asserts internal state only; restart and multi-process paths are untested",
+      "description": "- **What it checks:** `test_flusher_processes_limit` asserts only on `flusher.processes`, `max_processes`, `num_processes` and the size of `process_to_shards_map`. It submits no spans, so it does not show that segments from all four shards are flushed when processes share shards.\n- **What nothing checks:** `_ensure_processes_alive` (dead/hang detection, per-process restart counter, the `RuntimeError` threshold) and the multi-process `join()`.\n- **Why the FAIL slipped through:** both tests pass `produce_to_pipe`, which selects `threading.Thread`, so the `SpawnProcess` branch is never exercised.\n- **Minor:** `commits` and `add_commit` in the new test are unused boilerplate.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:84-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parent queries Redis once per flusher process for identical data",
+      "description": "- **Memory check:** `submit()` calls `get_memory_info()` on every entry in `self.buffers`. That call runs `INFO` on the whole span-buffer cluster regardless of the buffer's shards (`src/sentry/processing/backpressure/memory.py:82-105`).\n- **Effect:** with N flusher processes, the same cluster is polled N times per `submit()`. `used` and `available` are both inflated N-fold, so the ratio is unchanged and the extra round trips buy nothing.\n- **Queue sizes:** `record_stored_segments()` at lines 269-270 likewise becomes N pipelines instead of one.\n- **Fix:** keep the `buffer` passed to `__init__` (the diff drops `self.buffer`) and use it for both calls. `self.buffers` then has no purpose in the parent.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:299-303"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--flusher-processes` accepts zero and negative values",
+      "description": "- **Negative:** the option is `type=int` with no range. With `--flusher-processes -1`, `num_processes` becomes `-1` at `flusher.py:60`, the map is empty, and `i % -1 == 0` raises `KeyError` at line 66 on partition assignment.\n- **Zero:** `max_processes or len(...)` at line 51 treats `0` as \"one per shard\", the opposite of what the operator typed.\n- **Fix:** use `click.IntRange(min=1)`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/sentry/consumers/__init__.py:432-437"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dead code: `_create_process_for_shard` and `if not process`",
+      "description": "`_create_process_for_shard` has no callers anywhere in the repo; the restart path calls `_create_process_for_shards` directly. The `if not process: continue` guard at lines 222-223 cannot trigger, since `self.processes` only ever holds started process or thread objects. Remove both.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:127-132"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Inconsistent metric tag keys and values for shards",
+      "description": "- **Key drift:** `spans.buffer.flusher.wait_produce` uses the key `shards`, while `flusher.produce` and `segment_size_bytes` (lines 185, 195) use `shard`.\n- **Value drift:** in `main` the value is a comma-joined list such as `\"0,2\"`; `flusher_unhealthy` (line 244) tags `shard` with a single int; `SpansBuffer` uses `shard_i` for the same concept (`src/sentry/spans/buffer.py:372`, `447`).\n- **Impact:** dashboards cannot group across these.\n- **Fix:** pick one key, and use a different one (e.g. a process index) where the value is a group of shards.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:199"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Docstring contradicts the actual process model",
+      "description": "- **Process model:** the class docstring says \"Creates one process per shard\", but processes are capped by `max_processes` with shards assigned round-robin, and the CLI default is 1 process for all shards.\n- **Parameters:** `max_processes` is undocumented, and the existing `:param topic:` refers to a parameter that does not exist.\n- **Defaults:** the constructor default (`None`, one per shard) differs from the CLI default (`1`); say so explicitly.\n- **Stale comments:** line 178 (\"for all shards\") and line 235 (\"Check if any shard\u2026\") describe per-shard logic the code does not have.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:30-41"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`spans.buffer.max-flush-segments` now applies per flusher process",
+      "description": "Each process gets its own `SpansBuffer(shards)`, and `flush_segments` divides `max-flush-segments` by `len(self.assigned_shards)` (`src/sentry/spans/buffer.py:382-384`). The cap therefore applies per process: total segments per cycle, and the `any_shard_at_limit` backpressure threshold, scale with `--flusher-processes`. Nothing changes at the default of 1, but operators raising the flag should know.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:93"
+    },
+    {
+      "severity": "PASS",
+      "title": "Shard partitioning and factory/CLI plumbing",
+      "description": "- **Plumbing:** `flusher_processes` flows from the click option through `ProcessSpansStrategyFactory.__init__` into `SpanFlusher(max_processes=...)`.\n- **Partitioning:** the round-robin split in `flusher.py:61-66` puts each assigned shard in exactly one process.\n- **Restart loop:** replacing `self.processes[process_index]` while iterating in `_ensure_processes_alive` does not change the dict's size, so it is safe.\n- **Shared state:** `stopped` and `current_drift` are correctly shared across processes; health and backpressure values are per process.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/factory.py:71-76"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Hung flusher processes are never killed before being replaced",
+      "location": "src/sentry/spans/consumers/process/flusher.py:253-257",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`join()` never terminates processes and skips the rest once the deadline passes",
+      "location": "src/sentry/spans/consumers/process/flusher.py:336-347",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Added `time.sleep(0.1)` in `test_basic` is a no-op",
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:60-62",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New test asserts internal state only; restart and multi-process paths are untested",
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:84-123",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Parent queries Redis once per flusher process for identical data",
+      "location": "src/sentry/spans/consumers/process/flusher.py:299-303",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`--flusher-processes` accepts zero and negative values",
+      "location": "src/sentry/consumers/__init__.py:432-437",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead code: `_create_process_for_shard` and `if not process`",
+      "location": "src/sentry/spans/consumers/process/flusher.py:127-132",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Inconsistent metric tag keys and values for shards",
+      "location": "src/sentry/spans/consumers/process/flusher.py:199",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Docstring contradicts the actual process model",
+      "location": "src/sentry/spans/consumers/process/flusher.py:30-41",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`spans.buffer.max-flush-segments` now applies per flusher process",
+      "location": "src/sentry/spans/consumers/process/flusher.py:93",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shard partitioning and factory/CLI plumbing",
+      "location": "src/sentry/spans/consumers/process/factory.py:71-76",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "diff": "c1449270812b3fd722c26d64b8530922be72789e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:29:36.545979",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "injected": [],
+  "files_read": [
+    "src/sentry/spans/consumers/process/flusher.py",
+    "src/sentry/spans/consumers/process/factory.py",
+    "tests/sentry/spans/consumers/process/test_flusher.py",
+    "tests/sentry/spans/consumers/process/test_consumer.py",
+    "src/sentry/spans/buffer.py",
+    "src/sentry/consumers/__init__.py",
+    "/opt/homebrew/Cellar/python@3.15/3.15.1/Frameworks/Python.framework/Versions/3.15/lib/python3.15/multiprocessing/context.py"
+  ],
+  "searches": [
+    "grep assigned_shards|def __init__|def record_stored_segments|def get_memory_info|def flush_segments|def done_flush_segments|def __reduce__|cached_property|def client|slice_id|any_shard_at_limit in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/spans/buffer.py",
+    "grep flusher_processes|flusher-processes|SpanFlusher\\(|\\.backpressure_since|\\.healthy_since|_create_process_for_shard\\b|\\.process\\b|flusher\\.buffer\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "grep flusher_processes|flusher-processes|SpanFlusher\\(|backpressure_since|healthy_since|_create_process_for_shard\\(|spans\\.buffer\\.flusher|flusher_unhealthy in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "grep def run_with_initialized_sentry in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/utils/arroyo.py",
+    "grep def get_redis_client in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/spans/buffer.py",
+    "grep def iter_cluster_memory_usage in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/processing/backpressure/memory.py",
+    "list_files **/lib/python3*/multiprocessing/context.py in /opt/homebrew/Cellar",
+    "list_files tests/sentry/spans/consumers/process/*.py in .",
+    "grep ^class (Process|SpawnProcess|ForkProcess|ForkServerProcess)\\(|^    Process = |_start_method =  in /opt/homebrew/Cellar/python@3.15/3.15.1/Frameworks/Python.framework/Versions/3.15/lib/python3.15/multiprocessing/context.py",
+    "grep Process\\b in /opt/homebrew/Cellar/python@3.15/3.15.1/Frameworks/Python.framework/Versions/3.15/lib/python3.15/multiprocessing/__init__.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19169,
+  "diff_chars_injected": 19169,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 211658,
+  "cached_tokens": 174458,
+  "cache_write_tokens": 37188,
+  "completion_tokens": 11697,
+  "reasoning_tokens": null,
+  "duration_seconds": 108.37610724987462,
+  "cost_usd": 1.0987727999999999,
+  "cost_basis": "provider"
+}

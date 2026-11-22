@@ -1,0 +1,30 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In Rails 3.2.12, the validator's `record.errors[attribute]` lookup leaves an empty `email: []` entry in `to_hash`. JS treats `[]` as true, so a valid email gets added to `rejectedEmails` whenever signup fails on a different field."
+  ],
+  "F2": [
+   "KEEP",
+   "should_block?` looks up the email by exact match, and `new_from_params` stores the email exactly as typed, so changing the domain's letter case gets past the block."
+  ],
+  "F3": [
+   "DROP",
+   "If two checks run at once, `match_count` can miss an increment, but it's only a statistics counter and the blocking decision stays correct."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1269892
+}

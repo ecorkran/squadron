@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Split requests retain filters and undergo additional interpolation passes, duplicating pipeline predicates and potentially re-expanding variable values."
+  ],
+  "F2": [
+   "KEEP",
+   "A target interpolated to empty reaches an empty request group, throwing inside an uncaught promise callback and leaving the observable unfinished."
+  ],
+  "F3": [
+   "DROP",
+   "Backend interpolation is explicitly intended, and a possible change in interpolation timing alone does not establish incorrect behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1011737
+}

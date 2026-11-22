@@ -1,0 +1,30 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 5,
+  "F3": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "SpawnProcess` is not a subclass of `multiprocessing.Process`, so the `isinstance` guard at flusher.py:254 is False in production and `kill()` never runs. A hung process keeps running next to its replacement."
+  ],
+  "F2": [
+   "KEEP",
+   "flusher-processes` is a plain `type=int`. A value of 0 silently becomes one process per shard. A negative value makes `range(num_processes)` empty, so `process_to_shards_map[process_index]` raises `KeyError` while the flusher is being built."
+  ],
+  "F3": [
+   "DROP",
+   "This is about inconsistent metric tag names and values, which is an observability naming concern, not a defect in how the code behaves."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  5
+ ],
+ "cost_usd": 0.16911659999999998
+}

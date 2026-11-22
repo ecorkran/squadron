@@ -1,0 +1,43 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The feature-flagged renderer always receives empty columns, data, and metadata, so dashboard tables render without query results."
+  ],
+  "F2": [
+   "KEEP",
+   "The query key omits the organization even though the request URL is organization-specific, allowing cached attributes to cross organizations."
+  ],
+  "F3": [
+   "KEEP",
+   "Error timestamps are in seconds while recording-event timestamps can be in milliseconds, so the merged logs can be chronologically misordered."
+  ],
+  "F4": [
+   "KEEP",
+   "The code reads a top-level message instead of the nested logentry fields, losing stored error-message context."
+  ],
+  "F5": [
+   "KEEP",
+   "Truthiness checks discard valid custom renderer results such as `null` and `0` instead of falling back only on `undefined`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00489833
+}

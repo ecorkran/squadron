@@ -1,0 +1,78 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 11,
+  "F11": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Feed HTML reaches raw-HTML cooking and unescaped rendering without sanitization."
+  ],
+  "F2": [
+   "KEEP",
+   "Unescaped quotes in URLs can inject attributes into the appended anchor, which is not sanitized."
+  ],
+  "F3": [
+   "KEEP",
+   "The trailing conditionless `if` makes the embed template invalid Ruby."
+  ],
+  "F4": [
+   "KEEP",
+   "An item exception aborts the remaining imports, and concurrent imports can violate the unique URL index."
+  ],
+  "F5": [
+   "KEEP",
+   "An unsaved post is still present, allowing creation of a mapping with a null post ID."
+  ],
+  "F6": [
+   "KEEP",
+   "Remote responses are read without a size limit, allowing an oversized response to exhaust worker memory."
+  ],
+  "F7": [
+   "KEEP",
+   "Protocol-relative URLs are incorrectly rewritten as paths on the source article\u2019s host."
+  ],
+  "F8": [
+   "KEEP",
+   "The substring comparison accepts origins other than the forum\u2019s actual origin."
+  ],
+  "F9": [
+   "DROP",
+   "Returning 404 for a deleted topic preserves deletion; automatic re-import is not an established contract."
+  ],
+  "F10": [
+   "KEEP",
+   "Imported topics lose their original creation dates, and an unhandled fetch failure aborts the remaining threads."
+  ],
+  "F11": [
+   "KEEP",
+   "Forced table creation silently drops existing tables and their data if the migration runs against them."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  7,
+  8,
+  9,
+  11,
+  13
+ ],
+ "cost_usd": 0.0870368
+}

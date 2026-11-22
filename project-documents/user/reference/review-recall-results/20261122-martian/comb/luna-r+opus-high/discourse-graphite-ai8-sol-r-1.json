@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The public members route makes one `findMembers()` call that now defaults to 50 members, and `group/members.hbs` has no paging or load-more, so anyone past the first 50 can't be reached."
+  ],
+  "F2": [
+   "KEEP",
+   "remove_member` calls `group.users.delete(user_id)` and never clears `primary_group_id`, which the old cleanup in `destroy_deletions` did, so a removed user can keep the group as their primary group."
+  ],
+  "F3": [
+   "KEEP",
+   "Math.floor(user_count/limit)+1` gives 2 pages for exactly 50 members, so Next is enabled and asks for offset 50, which returns an empty list."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.10441270000000001
+}

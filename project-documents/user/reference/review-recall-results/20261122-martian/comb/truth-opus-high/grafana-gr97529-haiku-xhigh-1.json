@@ -1,0 +1,36 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Init` is now called only from the constructor (server.go:258), so the \"service is stopped\" error that `Stop` stores in `initErr` no longer blocks any RPC."
+  ],
+  "F2": [
+   "KEEP",
+   "BuildIndex` now locks only around the cache write (bleve.go:137-139), and `getOrCreateIndex` has no per-key guard, so the same key can be built twice at once and the later build replaces the first without closing it."
+  ],
+  "F3": [
+   "KEEP",
+   "TotalDocs` loops over `b.cache` without the lock, and the new startup log call (search.go:216) runs after the event goroutine starts, so it can overlap a `BuildIndex` map write."
+  ],
+  "F4": [
+   "DROP",
+   "the reviewer says this race on `err` and the counter is outside the hunk and predates the diff; the change did not touch that code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.1258875
+}

@@ -1,0 +1,241 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`TestEvaluateGroupKeyValue.test_dedupe` builds its expected occurrence with the wrong group key",
+      "description": "The expected occurrence is built with group key `\"val1\"`, but the handler is evaluated with group key `\"group_key\"`, so the first assertion at lines 546-560 should fail.\n\n- **Expected side:** `build_mock_occurrence_and_event(handler, \"val1\", ...)` gives a fingerprint of `[\"<id>:val1\"]` (via `build_fingerprint`, `src/sentry/workflow_engine/processors/detector.py:172-176`).\n- **Actual side:** `evaluate_group_key_value(\"group_key\", ...)` calls `build_occurrence_and_event_data(\"group_key\", ...)` at `detector.py:299-301`, giving `[\"<id>:group_key\"]`.\n- **Why they can't compare equal:** `IssueOccurrence` is a plain `@dataclass(frozen=True)` (`src/sentry/issues/issue_occurrence.py:66-67`) with field-wise equality. Only `StatusChangeMessage.__eq__` is patched in `setUp`.\n\nFix: pass `\"group_key\"` to `build_mock_occurrence_and_event` on line 537.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:536-545"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`MetricAlertDetectorHandler` is now an uninstantiable abstract class registered on a production group type",
+      "description": "The handler now subclasses `StatefulDetectorHandler` with a body of `pass`, leaving four abstract members unimplemented: `counter_names`, `get_dedupe_value`, `get_group_key_values` and `build_occurrence_and_event_data` (`processors/detector.py:142-170`).\n\n- **Effect:** `Detector.detector_handler` runs `group_type.detector_handler(self)` (`src/sentry/workflow_engine/models/detector.py:86`), which raises `TypeError` for any detector of type `metric_alert_fire`. Before this change the handler instantiated and returned `[]`.\n- **Blast radius:** `process_detectors` has no guard around handler construction (`detector.py:52-58`), so one such detector aborts the whole batch.\n- **Why not FAIL:** `process_detectors` has no callers under `src/` yet, so this is latent.\n\nEither add stub implementations or leave `detector_handler` unset on `MetricAlertFire` until the handler is real. The TODO on line 10 (\"This will be a stateful detector when we build that abstraction\") is also stale now.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/incidents/grouptype.py:11-12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Expected occurrences are built with values that do not match the evaluated input",
+      "description": "Several tests build the expected occurrence with `value=6` while evaluating a different value:\n\n- `test_state_results_multi_group`: `group_2` is evaluated with 10 (line 177).\n- `test_results_on_change`: evaluated with 100 (lines 488-491).\n- `TestEvaluate.test_dedupe`: evaluated with 8 (lines 508-511).\n\nThese pass only because the mock ignores `value`. As a result, no test verifies that `evaluate_group_key_value` forwards the right `value` to the new hook. Have the mock record `value` (for example in `evidence_data`) and pass the real values.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:190-192"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No `process_detectors` test covers the resolve path",
+      "description": "The new `process_detectors` tests only assert `PayloadType.OCCURRENCE` production. Nothing exercises the path where a stateful detector goes back to OK and `create_issue_occurrence_from_result` (`detector.py:73-87`) sends a `StatusChangeMessage` as `PayloadType.STATUS_CHANGE`.\n\nSeparately, `test_state_results_multi_group` uses `assert_has_calls(..., any_order=True)` without checking `call_count == 2`, so extra produces would go unnoticed.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:145-222"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Docstrings drift from the new return type and the new hook is undocumented",
+      "description": "- `StatefulDetectorHandler.evaluate` still says it \"returns a list of `DetectorEvaluationResult`\"; it now returns a dict keyed by group key.\n- `build_occurrence_and_event_data` (lines 166-170) is the only abstract member of the class without a docstring. It should state what `value` and `new_status` mean, and that it is only called for non-OK statuses.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/workflow_engine/processors/detector.py:229-233"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplicate-key guard removed with no check that dict key matches `result.group_key`",
+      "description": "Returning a dict makes duplicate group keys structurally impossible, so dropping the logged-error branch is reasonable. `StatefulDetectorHandler.evaluate` keeps key and `result.group_key` in sync at line 243. A custom `DetectorHandler.evaluate` could still return mismatched keys, and nothing would notice.\n\nRelated: `get_group_key_values` is annotated `dict[str, int]` (line 159), but a `None` key is used in `test_state_results` (test file line 148). The annotation should be `dict[DetectorGroupKey, int]`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/sentry/workflow_engine/processors/detector.py:58-65"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor test-scaffolding leftovers",
+      "description": "- `TestProcessDetectors.setUp` only calls `super().setUp()` and can be deleted.\n- `build_handler(detector_type=...)` (lines 101-106) has no caller passing that argument.\n- `create_detector_and_conditions(type=...)` shadows the builtin and hardcodes `\"handler_with_state\"` instead of using `self.handler_state_type.slug`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:125-126"
+    },
+    {
+      "severity": "PASS",
+      "title": "`PriorityLevel(new_status)` conversion is safe",
+      "description": "`DetectorPriorityLevel` is `OK=0` plus `LOW`/`MEDIUM`/`HIGH` aliased to the `PriorityLevel` values (`src/sentry/workflow_engine/types.py:8-12`). The conversion only runs in the `else` branch after `OK` is excluded, so it cannot raise `ValueError`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/workflow_engine/processors/detector.py:298-301"
+    },
+    {
+      "severity": "PASS",
+      "title": "`Detector.group_type` extraction is correct",
+      "description": "`builtins.type[GroupType]` is the right annotation, since the model's `type` field shadows the builtin in class scope. `detector_handler` reuses the property with unchanged behaviour and logging, and the return type matches `GroupTypeRegistry.get_by_slug` (`src/sentry/issues/grouptype.py:104-107`).",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/workflow_engine/models/detector.py:58-64"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`TestEvaluateGroupKeyValue.test_dedupe` builds its expected occurrence with the wrong group key",
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:536-545",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`MetricAlertDetectorHandler` is now an uninstantiable abstract class registered on a production group type",
+      "location": "src/sentry/incidents/grouptype.py:11-12",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Expected occurrences are built with values that do not match the evaluated input",
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:190-192",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No `process_detectors` test covers the resolve path",
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:145-222",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Docstrings drift from the new return type and the new hook is undocumented",
+      "location": "src/sentry/workflow_engine/processors/detector.py:229-233",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Duplicate-key guard removed with no check that dict key matches `result.group_key`",
+      "location": "src/sentry/workflow_engine/processors/detector.py:58-65",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Minor test-scaffolding leftovers",
+      "location": "tests/sentry/workflow_engine/processors/test_detector.py:125-126",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`PriorityLevel(new_status)` conversion is safe",
+      "location": "src/sentry/workflow_engine/processors/detector.py:298-301",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`Detector.group_type` extraction is correct",
+      "location": "src/sentry/workflow_engine/models/detector.py:58-64",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+    "diff": "feafc4b297275021a56ba865840b8849899b3f3e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:30:59.723438",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "injected": [],
+  "files_read": [
+    "src/sentry/workflow_engine/processors/detector.py",
+    "src/sentry/workflow_engine/models/detector.py",
+    "src/sentry/incidents/grouptype.py",
+    "tests/sentry/workflow_engine/processors/test_detector.py",
+    "src/sentry/issues/issue_occurrence.py"
+  ],
+  "searches": [
+    "grep MetricAlertDetectorHandler|process_detectors\\(|DetectorEvaluationResult|StatefulDetectorHandler|\\.evaluate\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+    "grep class DetectorPriorityLevel|DetectorGroupKey\\s*=|class PriorityLevel in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry",
+    "grep metric_alert_fire|MetricAlertFire|MetricAlertDetectorHandler|detector_handler in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+    "grep process_detectors|workflow_engine\\.processors in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src",
+    "grep class BaseGroupTypeTest in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/tests/sentry/issues/test_grouptype.py",
+    "grep def get_by_slug in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry/issues/grouptype.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 29492,
+  "diff_chars_injected": 29492,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 162702,
+  "cached_tokens": 118131,
+  "cache_write_tokens": 44563,
+  "completion_tokens": 8875,
+  "reasoning_tokens": null,
+  "duration_seconds": 80.36564270826057,
+  "cost_usd": 1.0930491999999998,
+  "cost_basis": "provider"
+}

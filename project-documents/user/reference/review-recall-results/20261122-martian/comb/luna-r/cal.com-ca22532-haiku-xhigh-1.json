@@ -1,0 +1,59 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler bypasses the feature-gated mock, so cached status can appear while calendar caching is disabled."
+  ],
+  "F2": [
+   "DROP",
+   "The extra write and selected-calendar fields have no identified user-visible effect, making this a low-value performance concern."
+  ],
+  "F3": [
+   "KEEP",
+   "Throwing a plain error turns an ownership or missing-credential denial into an internal-server-error response."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests alone are not a defect when no failing behavior is demonstrated."
+  ],
+  "F5": [
+   "KEEP",
+   "Hardcoding `en-US` formats the cache timestamp incorrectly for users with other locales."
+  ],
+  "F6": [
+   "KEEP",
+   "The unconditional fixed-width wrapper reserves empty space when delegated credentials render no dropdown."
+  ],
+  "F7": [
+   "KEEP",
+   "A relative `.env` path targets the caller\u2019s working directory and can create or update the wrong file."
+  ],
+  "F8": [
+   "KEEP",
+   "The cleanup function exits successfully even when setup fails, causing the script to report failure paths as success."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.007818130000000001
+}

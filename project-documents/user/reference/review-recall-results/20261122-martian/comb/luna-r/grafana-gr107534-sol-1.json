@@ -1,0 +1,19 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Pre-interpolated targets are interpolated again by `runQuery()`, so literal variable references in substituted values can be replaced and change query results."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00380184
+}

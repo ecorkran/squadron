@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "MetricAlertDetectorHandler` (`grouptype.py:11-12`) is now an empty subclass of `StatefulDetectorHandler`, which has four abstract members, including the newly added `build_occurrence_and_event_data`, so calling `Detector.detector_handler` (`models/detector.py:86`) on a `metric_alert_fire` detector raises `TypeError` where the old code returned no results."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0992203
+}

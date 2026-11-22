@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The cited example sanitizes to `<p></p>`, whose matching prefix and suffix do not overlap, so the claimed exception is not demonstrated."
+  ],
+  "F2": [
+   "KEEP",
+   "Choice expressions are replaced wholesale before sanitization, allowing prohibited tags in their alternatives to evade validation."
+  ],
+  "F3": [
+   "KEEP",
+   "Both Lithuanian OTP instruction values are Italian rather than Lithuanian."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2
+ ],
+ "cost_usd": 0.00207838
+}

@@ -1,0 +1,52 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Group#add` is a bare `users.push`, and `group_users` has a unique `(group_id, user_id)` index, so adding someone who is already a member raises `RecordNotUnique` and returns a 500, leaving earlier names in the list already added."
+  ],
+  "F2": [
+   "KEEP",
+   "group.users.delete(user_id)` skips `Group#remove` and `destroy_deletions`, so a removed user keeps `primary_group_id` (which still shows on their posts), and the `user_count` counter cache is likely left stale."
+  ],
+  "F3": [
+   "KEEP",
+   "Math.floor(user_count/limit)+1` reports one page too many at exact multiples, and \"next\" then moves the offset to `user_count`, which is an empty page."
+  ],
+  "F4": [
+   "DROP",
+   "Removing the only member on the last page leaves an empty page, but \"previous\" is still enabled so the admin can go back; minor edge case."
+  ],
+  "F5": [
+   "KEEP",
+   "The public members route now loads only the first 50 members and `members.hbs` has no pager, so larger groups that used to show in full are now cut off."
+  ],
+  "F6": [
+   "DROP",
+   "A negative limit or offset only causes a 500 on a hand-crafted request, and the missing cap on limit was already there before this change."
+  ],
+  "F7": [
+   "DROP",
+   "The template hides the add box for automatic groups and `remove_member` never returns 404, so the only real failure is F1's 500, which F1's fix removes; the missing alert is a UX nicety."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4
+ ],
+ "cost_usd": 0.21186660000000002
+}

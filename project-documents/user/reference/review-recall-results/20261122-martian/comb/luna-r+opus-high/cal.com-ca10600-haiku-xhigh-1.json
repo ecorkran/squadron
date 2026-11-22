@@ -1,0 +1,66 @@
+{
+ "case": "cal.com-ca10600",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 9,
+  "F9": 10,
+  "F10": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "When any non-empty `totpCode` is posted, the password check at line 121 is skipped, and the new backup-code branch never checks the password either, so a crafted request logs in with just the email and a backup code."
+  ],
+  "F2": [
+   "DROP",
+   "The race needs the same user to log in with backup codes at the same moment, which is unlikely and rate-limited, so this is hardening rather than a defect worth blocking the merge."
+  ],
+  "F3": [
+   "DROP",
+   "A non-string body only turns a 400 into a 500, and the UI shows the codes in lowercase, so the case and whitespace concerns are minor hardening."
+  ],
+  "F4": [
+   "KEEP",
+   "2FA is now turned on before the backup-codes step, and closing that step with Escape or an outside click goes through `onOpenChange`, which never calls `onEnable`, so `viewer.me` is not refreshed and the switch wrongly shows 2FA as off."
+  ],
+  "F5": [
+   "KEEP",
+   "PasswordField` spreads `{...props}` after its own `type`, so the caller's `type=\"password\"` overrides it and the reveal toggle never shows the password."
+  ],
+  "F6": [
+   "DROP",
+   "Submitting an empty backup code just does nothing visible, which is a small UX issue, and the nested ternary comment is style."
+  ],
+  "F7": [
+   "DROP",
+   "An unhandled clipboard rejection with a misleading toast is a minor UX issue, not a real defect."
+  ],
+  "F8": [
+   "DROP",
+   "It's a weak e2e assertion that the code already flags with a FIXME, and it doesn't change how the product behaves."
+  ],
+  "F9": [
+   "DROP",
+   "tabIndex={-1}` on the reveal button looks like a deliberate tab-order choice, and the accessibility concern doesn't cause a functional failure."
+  ],
+  "F10": [
+   "DROP",
+   "The component name and the missing label `htmlFor` are naming and accessibility polish, not bugs."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  4,
+  5
+ ],
+ "cost_usd": 0.19647540000000002
+}

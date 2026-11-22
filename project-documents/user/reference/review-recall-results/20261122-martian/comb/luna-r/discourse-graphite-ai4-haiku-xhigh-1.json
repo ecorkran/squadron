@@ -1,0 +1,105 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Feed HTML bypasses cooking and sanitization, allowing untrusted markup to execute when rendered."
+  ],
+  "F2": [
+   "KEEP",
+   "A quote in a URL can break out of the generated `href` and inject markup into stored content."
+  ],
+  "F3": [
+   "KEEP",
+   "The trailing conditional has no condition, so the template raises a syntax error when compiled."
+  ],
+  "F4": [
+   "KEEP",
+   "Neither embed asset is explicitly precompiled, so production pages cannot load them with asset compilation disabled."
+  ],
+  "F5": [
+   "KEEP",
+   "A failing item prevents later feed items from importing, and concurrent imports can violate the unique URL index."
+  ],
+  "F6": [
+   "KEEP",
+   "A failed post save can still return a present but unpersisted post, leading to a mapping insert with a null `post_id`."
+  ],
+  "F7": [
+   "KEEP",
+   "Varying the URL bypasses the per-URL throttle and can trigger repeated retrieval work."
+  ],
+  "F8": [
+   "DROP",
+   "The local-file case requires a blank host setting, which the public controller rejects before enqueueing retrieval."
+  ],
+  "F9": [
+   "KEEP",
+   "Protocol-relative image and link URLs are incorrectly rewritten as paths on the source host."
+  ],
+  "F10": [
+   "KEEP",
+   "The substring check accepts origins that merely prefix the forum URL, allowing them to resize the iframe."
+  ],
+  "F11": [
+   "DROP",
+   "Hiding trashed topics from anonymous embeds is consistent with deletion and does not establish a defect."
+  ],
+  "F12": [
+   "KEEP",
+   "A remote fetch error aborts the import loop, preventing later Disqus threads from being imported."
+  ],
+  "F13": [
+   "KEEP",
+   "The Rails 3 lockfile lacks the newly added gems, breaking dependency checks when that supported mode uses it."
+  ],
+  "F14": [
+   "DROP",
+   "The alleged data loss requires rerunning a migration in a state where the migration\u2019s table already exists, while redo already drops that table."
+  ],
+  "F15": [
+   "KEEP",
+   "On older PostgreSQL versions, adding this non-null default column can rewrite and lock a large posts table."
+  ],
+  "F16": [
+   "DROP",
+   "Missing test coverage and an imprecise assertion are not defects in the changed runtime behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  8,
+  9,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 0.00907558
+}

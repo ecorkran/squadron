@@ -1,0 +1,31 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Successful and empty cleanup batches are logged as errors, producing false alerts and potentially noisy ID dumps."
+  ],
+  "F2": [
+   "KEEP",
+   "Repeatedly formatting the accumulated SQLite ID list causes quadratic copying for the large batches this change supports."
+  ],
+  "F3": [
+   "KEEP",
+   "The one-minute ticker makes every cleanup job run more often, increasing cleanup work beyond annotations."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00154479
+}

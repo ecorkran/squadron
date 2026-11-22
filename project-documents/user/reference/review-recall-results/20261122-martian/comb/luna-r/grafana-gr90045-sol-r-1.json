@@ -1,0 +1,42 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The timeout context inherits request cancellation, so the asynchronous legacy write can be canceled after the primary write succeeds."
+  ],
+  "F2": [
+   "KEEP",
+   "Legacy Update reapplies the original update transformation to its own potentially stale object instead of using the primary storage result."
+  ],
+  "F3": [
+   "KEEP",
+   "Independent goroutines can apply same-resource writes out of order and leave legacy storage inconsistent with primary storage."
+  ],
+  "F4": [
+   "KEEP",
+   "The changed metric calls misattribute backend failures and use the object name as a kind label, making observations inaccurate and high-cardinality."
+  ],
+  "F5": [
+   "DROP",
+   "The shared mocks weaken test coverage, but this is a test-quality gap rather than a defect in changed production behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.01231674
+}

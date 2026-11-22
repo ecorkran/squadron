@@ -1,0 +1,31 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Pause and Delete are gated on `rulerRule`, which the Prometheus-only list does not provide."
+  ],
+  "F2": [
+   "KEEP",
+   "The Silence drawer only renders when `rule` contains Ruler data, so selecting Silence in the Prometheus-only list does nothing."
+  ],
+  "F3": [
+   "KEEP",
+   "Combined-rule abilities now hardcode federated status to false, allowing mutation of federated rules when permissions otherwise permit it."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00284184
+}

@@ -1,0 +1,42 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "self.key` is `\"datetime\"`, so `math.floor`/`math.ceil` on a datetime raises TypeError the first time `build_cursor` reads a key from a non-empty page, which means the optimized path returns a 500."
+  ],
+  "F2": [
+   "KEEP",
+   "organization_context.member` is None for callers that aren't members of the org (for example legacy API keys with `org:write`, which go through `ApiKeyAuthentication`), and `enable_advanced` is evaluated on every request, so the default path now fails with AttributeError."
+  ],
+  "F3": [
+   "KEEP",
+   "a negative offset from the client goes straight into `queryset[start_offset:stop]`, Django rejects negative slicing with an error, and the new branch exists only to allow that case."
+  ],
+  "F4": [
+   "KEEP",
+   "value_from_cursor` returns the raw epoch-ms integer, which `build_queryset` compares against the timestamp column; a client can reach this today by sending an existing cursor with `optimized_pagination=true`, and the database rejects the timestamp-vs-integer comparison."
+  ],
+  "F5": [
+   "DROP",
+   "this repeats the negative-offset defect from F3 with a security framing, and it admits org scoping still holds, so no separate exploitable issue exists."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4
+ ],
+ "cost_usd": 0.1472572
+}

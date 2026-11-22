@@ -1,0 +1,22 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The claim concerns inaccurate documentation, not a behavior defect in changed code."
+  ],
+  "F2": [
+   "DROP",
+   "Missing exit-code assertions are a test-coverage gap, not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0024023100000000004
+}

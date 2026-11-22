@@ -1,0 +1,167 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Pause and Delete disappear from Grafana list menus",
+      "description": "The new list supplies only `promRule`, but `AlertRuleMenu` still requires a Grafana `rulerRule` to render Pause/Resume and any `rulerRule` to render Delete. Both actions therefore disappear even for authorized users. Adapt the rendering and handlers to accept Prometheus-backed identifiers.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:47"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Silence notifications becomes a no-op",
+      "description": "Clicking Silence sets `showSilenceDrawer`, but the drawer still requires `rulerRuleType.grafana.alertingRule(rule)`. The new Grafana list never supplies `rule`, so the visible action opens nothing. Support opening the drawer using the Prometheus rule UID, and test the click outcome.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:100-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skipped Grafana abilities can enable external-rule duplication",
+      "description": "`skipToken` becomes `undefined`, yet the hook still marks Duplicate supported and checks Grafana create permission. `AlertRuleMenu` ORs this result with ruler abilities. Consequently, Grafana create permission can expose Duplicate for external rules whose own ability denies it, or for plugin-provided rules. Return unsupported abilities when skipped.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:308-318"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Legacy ability checks lose federated-group immutability",
+      "description": "Delegating `useAllAlertRuleAbilities` discards `rule.group`; its replacement hardcodes `isFederated = false`. Previously, `isFederatedRuleGroup(rule.group)` disabled editing and removal. Existing consumers, including the legacy action buttons, now receive mutable abilities for federated groups. Preserve the group-level restriction.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:222-228"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Grafana recording rules lose Export",
+      "description": "ModifyExport now requires an alerting rule, whereas the ruler-backed implementation supports all Grafana rules, including recording rules. Since the new list supplies no ruler rule, authorized users lose Export for recording rules. Base export support on Grafana ownership rather than alerting type.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Filtered Grafana rows lose stable React keys",
+      "description": "The replacement removes `key={key}` from the Grafana branch of `rules.map`. React consequently reconciles these stateful rows by position, risking preservation of action/drawer state against a different rule when results change. Restore the existing stable key.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/rule-list/FilterView.tsx:157-162"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Pause and Delete disappear from Grafana list menus",
+      "location": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Silence notifications becomes a no-op",
+      "location": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:100-105",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Skipped Grafana abilities can enable external-rule duplication",
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:308-318",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Legacy ability checks lose federated-group immutability",
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:222-228",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Grafana recording rules lose Export",
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:324",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Filtered Grafana rows lose stable React keys",
+      "location": "public/app/features/alerting/unified/rule-list/FilterView.tsx:157-162",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778",
+    "diff": "5e9d2108d0b700e58f104fd97a35a805e38e0397...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:49:18.724287",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61662,
+  "diff_chars_injected": 61662,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 87346,
+  "cached_tokens": 83968,
+  "cache_write_tokens": null,
+  "completion_tokens": 707,
+  "reasoning_tokens": 0,
+  "duration_seconds": 85.89538687514141,
+  "cost_usd": 0.0222228,
+  "cost_basis": "alias_pricing"
+}

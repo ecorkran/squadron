@@ -1,0 +1,49 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The timeout contexts inherit request cancellation, so asynchronous legacy writes can be canceled when the request ends."
+  ],
+  "F2": [
+   "KEEP",
+   "Independent goroutines can apply mutations to legacy storage out of order and leave it inconsistent with storage."
+  ],
+  "F3": [
+   "KEEP",
+   "Passing the original update info recomputes updates against legacy state instead of mirroring storage\u2019s successful result."
+  ],
+  "F4": [
+   "KEEP",
+   "The incorrect collectors and labels misreport latency and errors, and using object names as `kind` creates high-cardinality metrics."
+  ],
+  "F5": [
+   "KEEP",
+   "An unset mode initializes to Mode1, and the mode-setting code does not transition from Mode1 to Mode3."
+  ],
+  "F6": [
+   "KEEP",
+   "The shared mock lets storage calls satisfy legacy expectations, so these tests can pass without verifying legacy writes."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.0068282
+}

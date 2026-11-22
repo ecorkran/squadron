@@ -1,0 +1,52 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The user-storage branch persists the raw recovery codes instead of the hashed secret data used by local storage."
+  ],
+  "F2": [
+   "KEEP",
+   "The changed federation fixture accepts recovery codes without consuming them, allowing successful codes to be replayed."
+  ],
+  "F3": [
+   "KEEP",
+   "Successful user-storage updates skip local cleanup, leaving old local recovery codes valid as a fallback."
+  ],
+  "F4": [
+   "KEEP",
+   "Exhaustion handling removes only a local credential, so it cannot remove the exhausted federated credential."
+  ],
+  "F5": [
+   "DROP",
+   "The package dependency cycle is an architectural concern, not a demonstrated behavioral defect."
+  ],
+  "F6": [
+   "DROP",
+   "The null lookup requires a stale or mismatched user not ordinarily returned by this provider; the deserialization failure is logged."
+  ],
+  "F7": [
+   "DROP",
+   "Missing test coverage alone is not a defect when no broken behavior is established."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0028353600000000003
+}

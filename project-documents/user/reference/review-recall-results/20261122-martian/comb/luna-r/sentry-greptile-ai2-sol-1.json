@@ -1,0 +1,37 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies `floor`/`ceil` to datetime values and does not convert cursor values back to datetimes."
+  ],
+  "F2": [
+   "KEEP",
+   "organization_context.member` is optional, so this unconditional access can raise `AttributeError`."
+  ],
+  "F3": [
+   "KEEP",
+   "Existing set-valued Redis keys are now accessed as sorted sets, causing `WRONGTYPE` errors while those buffers remain."
+  ],
+  "F4": [
+   "KEEP",
+   "Django querysets reject negative slice offsets, so the advanced branch can crash on a negative cursor offset."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0035681000000000003
+}

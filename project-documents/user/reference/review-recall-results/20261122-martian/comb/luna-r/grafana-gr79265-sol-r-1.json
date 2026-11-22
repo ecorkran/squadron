@@ -1,0 +1,31 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache entry is set before persistence, so a rejected device can succeed on a later cached request."
+  ],
+  "F2": [
+   "KEEP",
+   "Requests without a device ID skip tagging and therefore bypass the configured device limit."
+  ],
+  "F3": [
+   "KEEP",
+   "Separate count and insert operations allow concurrent admissions to exceed the configured limit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0009220200000000001
+}

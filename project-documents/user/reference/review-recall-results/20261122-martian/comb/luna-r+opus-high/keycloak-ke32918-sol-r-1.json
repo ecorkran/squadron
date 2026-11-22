@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "getById()` returns the org-aware model, whose `isEnabled()` is false while the org is disabled. If you hide a provider on login while its org is disabled, both checks return false and the login cache is not invalidated; nothing else ever clears it, so the hidden provider shows up again on the login page once the org is re-enabled."
+  ],
+  "F2": [
+   "DROP",
+   "The `\"alias\"` cleanup really is wrong, but it only affects test teardown and nothing shows it breaking other tests, so it is test cleanup rather than a defect that must be fixed before merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.2780397
+}

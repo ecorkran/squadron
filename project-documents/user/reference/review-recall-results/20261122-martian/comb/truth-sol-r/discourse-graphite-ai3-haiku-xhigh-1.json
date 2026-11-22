@@ -1,0 +1,36 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The exact, case-sensitive lookup and unnormalized signup email allow mixed-case addresses to bypass blocking."
+  ],
+  "F2": [
+   "KEEP",
+   "Although failed-save rollback prevents persistent double-counting, the non-atomic counter update can lose concurrent increments."
+  ],
+  "F3": [
+   "DROP",
+   "The finding explicitly identifies unchanged whitelist behavior moved from the existing User implementation."
+  ],
+  "F4": [
+   "KEEP",
+   "The prototype-level array is shared, so rejections in one controller instance incorrectly affect another."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  4
+ ],
+ "cost_usd": 0.0359046
+}

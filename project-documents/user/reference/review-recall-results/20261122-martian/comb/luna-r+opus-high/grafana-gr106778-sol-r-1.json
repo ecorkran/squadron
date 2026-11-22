@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "GrafanaRuleListItem` now passes only `promRule`, so the Pause item, which needs `rulerRuleType.grafana.rule(rulerRule)`, and the Delete item, which needs `rulerRule`, never show in the new list even when the user has permission; the test grants delete permission yet expects only 4 items."
+  ],
+  "F2": [
+   "KEEP",
+   "The menu now shows \"Silence notifications\" based on Prometheus-rule permissions, but the drawer only renders when `rulerRuleType.grafana.alertingRule(rule)` is true, and `rule` is never passed, so clicking it silently does nothing."
+  ],
+  "F3": [
+   "DROP",
+   "The change did not add the hardcoded `isFederated = false` with its TODO or the step that hands `useAllAlertRuleAbilities` off to `useAllRulerRuleAbilities`; that code was there before, so this is not a regression from the change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2209504
+}

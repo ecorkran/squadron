@@ -1,0 +1,41 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "V2 collects resource UUIDs instead of group IDs, so group-scoped user counts and searches use an empty or incorrect group filter."
+  ],
+  "F2": [
+   "KEEP",
+   "canManage()` accepts VIEW grants, allowing a view-only caller to pass the check for creating top-level groups."
+  ],
+  "F3": [
+   "KEEP",
+   "requireList()` admits view-only callers, but `/groups/count` returns unfiltered realm-wide counts."
+  ],
+  "F4": [
+   "DROP",
+   "This is a performance concern without demonstrated impact beyond additional per-group permission checks."
+  ],
+  "F5": [
+   "DROP",
+   "Missing test coverage alone is not a defect, and the actionable behaviors are addressed by the other findings."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00362935
+}

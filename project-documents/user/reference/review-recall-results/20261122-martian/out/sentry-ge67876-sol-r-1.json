@@ -1,0 +1,139 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "OAuth state is predictable and shared across sessions",
+      "description": "`pipeline.signature` is an MD5 of the pipeline view class names, as confirmed in `src/sentry/pipeline/base.py`. It is identical for every user running this pipeline, not a session-specific OAuth nonce. An attacker can therefore supply their own authorization code with the known state to a victim\u2019s active installation flow, authenticating that flow as the attacker\u2019s GitHub account.\n\nGenerate a cryptographically random state per authorization attempt, store it in the pipeline, and validate the callback against that stored value. The existing implementation in `src/sentry/identity/oauth2.py` provides this pattern.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:402-412"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Missing integration records bypass installation ownership verification",
+      "description": "When the installation has no local `Integration` record, this branch immediately finishes the pipeline without comparing the authenticated GitHub user to the installer. `build_integration()` then retrieves the supplied installation ID using app credentials, and `IntegrationPipeline` creates and associates the integration without an additional user-access check.\n\nConsequently, any authenticated GitHub account can claim an otherwise valid installation whose local record is absent\u2014for example, before its installation webhook arrives. OAuth authentication alone does not establish access to that installation. Fail closed until trusted installer metadata is available, or verify the authenticated user\u2019s access through GitHub before advancing. Add a regression test for an unrelated authenticated user supplying an installation ID with no local record.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:481-482"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Installer metadata is assumed to exist on every orphaned integration",
+      "description": "The direct `integration.metadata[\"sender\"][\"login\"]` lookup raises `KeyError` when an existing integration lacks installer metadata. This is a supported metadata shape: `build_integration()` includes `sender` only when it is present in pipeline state, and normal installation completion calls `ensure_integration()`, which replaces metadata with that result.\n\nIf such an integration subsequently has no organization association, attempting to connect it produces a server error instead of the intended invalid-installation response. Validate the metadata shape and either return the controlled error or verify ownership through GitHub. Cover an existing, unassociated integration without `sender` in the tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:503"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "OAuth state is predictable and shared across sessions",
+      "location": "src/sentry/integrations/github/integration.py:402-412",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Missing integration records bypass installation ownership verification",
+      "location": "src/sentry/integrations/github/integration.py:481-482",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Installer metadata is assumed to exist on every orphaned integration",
+      "location": "src/sentry/integrations/github/integration.py:503",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "diff": "11980b40faffa3631be5733d29650675f30d54b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:43:39.762500",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "injected": [],
+  "files_read": [
+    "src/sentry/integrations/github/integration.py",
+    "src/sentry/web/frontend/pipeline_advancer.py",
+    "tests/sentry/integrations/github/test_integration.py",
+    "src/sentry/identity/github.py",
+    "src/sentry/integrations/github/webhook.py",
+    "src/sentry/identity/github/__init__.py",
+    "src/sentry/integrations/pipeline.py",
+    "src/sentry/pipeline/base.py",
+    "src/sentry/pipeline/views/oauth2.py",
+    "src/sentry/identity/github/provider.py",
+    "src/sentry/pipeline/views/oauth2_callback.py",
+    "src/sentry/pipeline/views/oauth2_login.py",
+    "src/sentry/pipeline/store.py",
+    "src/sentry/identity/oauth2.py"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep class OAuth2(Login|Callback)View|oauth_state|bind_state\\(\"state\" in src/sentry",
+    "grep state = pipeline.signature|request.GET.get\\(\"state\"\\) !=|except Integration.DoesNotExist|integration.metadata\\[\"sender\"\\]|req = safe_urlopen|authenticated_user_info = in src/sentry/integrations/github/integration.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1486,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19901,
+  "diff_chars_injected": 19901,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 198111,
+  "cached_tokens": 165205,
+  "cache_write_tokens": null,
+  "completion_tokens": 1426,
+  "reasoning_tokens": 517,
+  "duration_seconds": 37.571849167346954,
+  "cost_usd": 0.0965925,
+  "cost_basis": "alias_pricing"
+}

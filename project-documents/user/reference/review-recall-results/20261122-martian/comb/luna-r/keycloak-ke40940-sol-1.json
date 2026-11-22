@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The deleted-group branch returns null despite the interface contract requiring a non-null count."
+  ],
+  "F2": [
+   "KEEP",
+   "The test can assert before the reader finishes or before it performs any read."
+  ],
+  "F3": [
+   "KEEP",
+   "If deletion throws, the stop flag is never set and the reader thread can loop indefinitely."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0016705200000000002
+}

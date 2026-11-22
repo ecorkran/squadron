@@ -1,0 +1,95 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "View-only permission authorizes group creation and movement",
+      "description": "`canManage()` accepts either `VIEW` or `MANAGE`. Consequently, an administrator granted only all-groups view permission passes `GroupsResource.addTopLevelGroup()`\u2019s `requireManage()` check and can create groups or move existing groups to the top level. Require `MANAGE` only and add a regression test denying these operations to view-only administrators.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:65-70"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Group enumeration uses authorization resource IDs instead of group IDs",
+      "description": "`groupResource.getId()` is an independently generated authorization-resource ID; the group ID is stored in its name. Passing this ID to `hasPermission()` misses the group-specific resource, while returning it causes user membership queries to match nonexistent groups. With all-groups `VIEW_MEMBERS`, this can make user searches and counts return zero despite access being granted.\n\nAdditionally, `AdminPermissionsSchema.getOrCreateResource()` does not assign individual group resources a type, so `findByType(\"Groups\")` skips them entirely. Correct resource discovery and ID mapping, handle the all-groups resource separately, and test both search and count behavior for individual and all-groups member permissions.\n\nSource review only; tests were not executed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121-125"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "View-only permission authorizes group creation and movement",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:65-70",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Group enumeration uses authorization resource IDs instead of group IDs",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121-125",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "diff": "adbf7e325f79be3b8e5cfa54483c962fd3f5683d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:36:32.115097",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 66033,
+  "diff_chars_injected": 66033,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 84543,
+  "cached_tokens": 77824,
+  "cache_write_tokens": null,
+  "completion_tokens": 320,
+  "reasoning_tokens": 0,
+  "duration_seconds": 68.86786154191941,
+  "cost_usd": 0.024420400000000002,
+  "cost_basis": "alias_pricing"
+}

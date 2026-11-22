@@ -1,0 +1,41 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "event.type:error\" in query` is a plain substring test, so `!event.type:error` also matches and turns on `upsampled_count()` for discover queries meant to exclude errors."
+  ],
+  "F2": [
+   "KEEP",
+   "the builder stores `upsampled_count() as count` as the function's field and renames the result key to it when the flag is set, but `resolve_axis_column` looks up the original `count()`, so `r.get(column, 0)` returns 0 for every bucket."
+  ],
+  "F3": [
+   "KEEP",
+   "the eligibility check gets the outer `dataset` and `request.GET[\"query\"]`, not `scoped_dataset`/`split_dataset` and the rewritten query, so discover error queries on the metrics split path are never upsampled."
+  ],
+  "F4": [
+   "DROP",
+   "rewriting only the exact `count()` is a deliberate scope limit, and the finding asks to decide and document that scope rather than naming a definite wrong result."
+  ],
+  "F5": [
+   "DROP",
+   "the bare `except Exception: pass` blocks are in a test-factory helper; this is code quality, not a product behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.2994179
+}

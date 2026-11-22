@@ -1,0 +1,17 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The change deliberately strips out the experimental, flag-gated DuckDB backend, and the reader says so with an explicit \"sqlExpressions is not implemented\" error. What's left is a less clear error message on the legacy path, which isn't a defect worth blocking the merge for."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.1049398
+}

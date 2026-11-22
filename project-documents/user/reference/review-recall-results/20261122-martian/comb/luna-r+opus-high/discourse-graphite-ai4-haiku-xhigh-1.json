@@ -1,0 +1,79 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 8,
+  "F9": 9,
+  "F10": 11,
+  "F11": 12,
+  "F12": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Post#cook` returns the feed HTML unsanitized for `raw_html` posts, and both the topic view and the embed view render it unescaped; `CGI.unescapeHTML` can turn escaped text inside CDATA into live markup, so outside content can run script on the forum origin."
+  ],
+  "F2": [
+   "KEEP",
+   "The URL goes into a single-quoted `href` with no escaping, and an anonymous `embed_url` on the embeddable host (for example one with a `'` in the query string) can add an attribute that survives into `cooked`, which is rendered raw."
+  ],
+  "F3": [
+   "DROP",
+   "end if` followed by a newline is valid Ruby, because the parser carries the modifier `if` over to the next expression in the compiled ERB, so the template does not raise a SyntaxError."
+  ],
+  "F4": [
+   "KEEP",
+   "config/application.rb:61` does not list `embed.css` or `embed.js`, so in production, where assets are not compiled on demand, the stylesheet and the host-page script will fail to load."
+  ],
+  "F5": [
+   "DROP",
+   "This is a robustness point: Sidekiq still logs the exception, and the unique-index race is a rare edge case."
+  ],
+  "F6": [
+   "KEEP",
+   "PostCreator#create` returns the unsaved `@post` after a swallowed Rollback (for example, host-spam detection on a low-trust embed user with many same-host links), so `TopicEmbed.create!` runs with a nil `post_id` and fails on the NOT NULL constraint."
+  ],
+  "F7": [
+   "DROP",
+   "A separate throttle per distinct URL is how the feature is designed, and the gap between `setnx` and `expire` is a negligible edge case."
+  ],
+  "F8": [
+   "KEEP",
+   "cdn.host/x.png` passes `start_with?('/')`, and stripping the leading slashes rewrites it to the forum host, which breaks images and links."
+  ],
+  "F9": [
+   "DROP",
+   "The handler only sets the iframe height, so the loose origin check has almost no impact."
+  ],
+  "F10": [
+   "KEEP",
+   "The thread `created_at` is still parsed (line 60) but no longer passed when the topic is created, so imported topics are dated at import time, after their own replies, which is wrong data."
+  ],
+  "F11": [
+   "DROP",
+   "Rails 4 is the default and uses `Gemfile_rails4.lock`, which was updated; `Gemfile.lock` is only used when the `RAILS3` env var is set."
+  ],
+  "F12": [
+   "DROP",
+   "Adding a column with a default is the normal migration pattern for this codebase, so the lock concern is generic operational hardening, not a defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  5,
+  8,
+  11
+ ],
+ "cost_usd": 0.30927099999999996
+}

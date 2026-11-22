@@ -1,0 +1,106 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The `&&` allows only team owners, incorrectly rejecting admins."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw guest addresses bypass case-insensitive and plus-address blacklist matching."
+  ],
+  "F3": [
+   "KEEP",
+   "Calendar update failures are swallowed, so the handler can report success without updating the calendar."
+  ],
+  "F4": [
+   "DROP",
+   "Omitting the caught error reduces diagnostics but does not cause a functional failure."
+  ],
+  "F5": [
+   "KEEP",
+   "The server neither deduplicates guests nor compares existing attendees case-insensitively, allowing duplicate rows."
+  ],
+  "F6": [
+   "KEEP",
+   "Passing raw input can classify an existing attendee as new and send them a booking confirmation."
+  ],
+  "F7": [
+   "KEEP",
+   "Add-guests emails are sent without honoring event-type email-disable settings."
+  ],
+  "F8": [
+   "KEEP",
+   "The handler accepts cancelled bookings and can add attendees and send invitations for them."
+  ],
+  "F9": [
+   "KEEP",
+   "Unbounded guest input permits an authenticated attendee to trigger arbitrarily large email and calendar-invite batches."
+  ],
+  "F10": [
+   "KEEP",
+   "The permission error uses a missing translation key, so users see the raw key in the toast."
+  ],
+  "F11": [
+   "KEEP",
+   "The templates pass the raw subject key to the email title instead of the computed translation."
+  ],
+  "F12": [
+   "KEEP",
+   "The organizer email ignores `EMAIL_FROM_NAME` when that deployment setting is configured."
+  ],
+  "F13": [
+   "KEEP",
+   "The validation error can persist after closing or succeeding, and the fallback is unreachable."
+  ],
+  "F14": [
+   "DROP",
+   "Duplicated implementations and divergence are maintainability concerns, not functional defects."
+  ],
+  "F15": [
+   "KEEP",
+   "The removal tooltip remains English in otherwise localized UI."
+  ],
+  "F16": [
+   "DROP",
+   "Missing tests are a coverage gap, not a defect in code paths that otherwise work."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 0.012728330000000001
+}

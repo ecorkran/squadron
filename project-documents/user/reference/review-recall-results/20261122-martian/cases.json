@@ -1,0 +1,402 @@
+{
+ "https://github.com/keycloak/keycloak/pull/37429": {
+  "name": "keycloak-ke37429",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+  "base_local": "ea94b5d50e6de265cb7ddcd13f76a1cff31232cf",
+  "merge_base": "f3c8e8f3487112f2c99aa78400430cce2d30be39",
+  "head_sha": "02f48f776f43734d1ac8914d3ad6a7115acdcb33",
+  "diffstat": "48 files changed, 343 insertions(+), 105 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/37634": {
+  "name": "keycloak-ke37634",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+  "base_local": "fbd9543bab513d8f2124cf583d1b9388ec492635",
+  "merge_base": "c22f76867f595f0f7c327376a66a08dca01949e8",
+  "head_sha": "daffb05b5ad091d3ec09933c3c99c2b54f448696",
+  "diffstat": "28 files changed, 722 insertions(+), 26 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/38446": {
+  "name": "keycloak-ke38446",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+  "base_local": "77c379efc3a0bcadb2c7dc035c8a0bc1ce524fe6",
+  "merge_base": "85737f52b59aa2e3403c9b8e48acf71ccc5bfae3",
+  "head_sha": "ce2dcc537b4b1f98a335e88cfe8e0b804483252a",
+  "diffstat": "8 files changed, 256 insertions(+), 31 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/36882": {
+  "name": "keycloak-ke36882",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+  "base_local": "bb4a51ac32539ad0d8b9f72bfd201ade75e95361",
+  "merge_base": "1b28ac610dc16e0de14199f9ca5d2acdf7f3cc16",
+  "head_sha": "62bf98939eda58f0d0a1a41a58aa6d4ecdc24dba",
+  "diffstat": "11 files changed, 70 insertions(+), 18 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/36880": {
+  "name": "keycloak-ke36880",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+  "base_local": "d59c0fbb0ca50c9e9c54e7deec77bb7cbbb212d5",
+  "merge_base": "b7b84d75d16e91d3f56ec527a260c53c5dd4396c",
+  "head_sha": "1950a511026d520a7329c7b6b9ee60a4af8f8b55",
+  "diffstat": "10 files changed, 866 insertions(+), 138 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/37038": {
+  "name": "keycloak-ke37038",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+  "base_local": "adbf7e325f79be3b8e5cfa54483c962fd3f5683d",
+  "merge_base": "7ea067aae9be56cb2622bce6563864817c3dfeaf",
+  "head_sha": "7355f05e6aafe2a7acc6434fb40c686665416606",
+  "diffstat": "19 files changed, 831 insertions(+), 126 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/33832": {
+  "name": "keycloak-ke33832",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+  "base_local": "9e01551928c12485c55ca9e77d60d663de9966f9",
+  "merge_base": "10aca5552314d6e5c9226f3c6d0107861c38c693",
+  "head_sha": "79d11c4890cc4792e3dc3535af59e4e5f7a2739d",
+  "diffstat": "12 files changed, 673 insertions(+), 9 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/40940": {
+  "name": "keycloak-ke40940",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+  "base_local": "7fdb3b9b6b815577e65cb19ce2f2646e9a688e7a",
+  "merge_base": "7fd37690c44c7068cb19ecee3aa6ff99c46a821d",
+  "head_sha": "4def149a50c4b9b2c24fbb753ac60fe4f4df0cac",
+  "diffstat": "4 files changed, 51 insertions(+), 11 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/keycloak-greptile/pull/1": {
+  "name": "keycloak-greptile-ai1",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+  "base_local": "c851f7883d229dd2a940a77cd49220ecb126ec84",
+  "merge_base": "30f804af450dec523909a52f2a4b97302d27f5cc",
+  "head_sha": "3214b188de808fdb0fff335556b686f1b0a63218",
+  "diffstat": "9 files changed, 407 insertions(+), 24 deletions(-)"
+ },
+ "https://github.com/getsentry/sentry/pull/93824": {
+  "name": "sentry-ge93824",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+  "base_local": "c1449270812b3fd722c26d64b8530922be72789e",
+  "merge_base": "de11fb0166a7244115bb066edd65ec0d6b7e365c",
+  "head_sha": "3162ad68a5c87666788b27a44eb31235025091a9",
+  "diffstat": "6 files changed, 199 insertions(+), 50 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/5": {
+  "name": "sentry-greptile-ai5",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+  "base_local": "0b1504e563dc2ce5648b38af85faf3ed1cb30472",
+  "merge_base": "49a275847631e231672d01b5dcd66558c069d25b",
+  "head_sha": "ea188e2d736fd6ed27c1dba8aae63b7268e2a7a9",
+  "diffstat": "106 files changed, 2312 insertions(+), 981 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/1": {
+  "name": "sentry-greptile-ai1",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai1",
+  "base_local": "e9f0e34e92a1bd2c6b6a98206cc3672299bfbe0f",
+  "merge_base": "74618671bff8114fcec8fe77c6260c9a2bc2864a",
+  "head_sha": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "diffstat": "3 files changed, 128 insertions(+), 10 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/97529": {
+  "name": "grafana-gr97529",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+  "base_local": "d6b412dc9d6b98231d88be94ff5ae1f1dfa6877c",
+  "merge_base": "871af07203177ce59a24e742107119409274f48a",
+  "head_sha": "26fed312840cd76b766cbd2158e17a7e6c0ec548",
+  "diffstat": "5 files changed, 25 insertions(+), 57 deletions(-)"
+ },
+ "https://github.com/getsentry/sentry/pull/80168": {
+  "name": "sentry-ge80168",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+  "base_local": "feafc4b297275021a56ba865840b8849899b3f3e",
+  "merge_base": "bdd229e3f22e307fe40b30ef99e92ff3f6723da4",
+  "head_sha": "8422030ef456e3a898415e96475b4d8ddfc7640f",
+  "diffstat": "4 files changed, 249 insertions(+), 151 deletions(-)"
+ },
+ "https://github.com/getsentry/sentry/pull/80528": {
+  "name": "sentry-ge80528",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+  "base_local": "b695d416e601becddb96a381968cc3b5c8f1bd40",
+  "merge_base": "0cfc28e76ddc986d2d89dd9b9f63ee916a18a5f9",
+  "head_sha": "dcdcadb771128e79259cc9eff9c70c38fc597976",
+  "diffstat": "4 files changed, 289 insertions(+), 264 deletions(-)"
+ },
+ "https://github.com/getsentry/sentry/pull/77754": {
+  "name": "sentry-ge77754",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+  "base_local": "06c700a98875e34e9df100fea94d322611e118d0",
+  "merge_base": "bb5a6837cb5b3d8d3b174e17d42ec14486ef8738",
+  "head_sha": "9501091c52ae94e8d916f79b35d21975b3f9cadb",
+  "diffstat": "7 files changed, 212 insertions(+), 15 deletions(-)"
+ },
+ "https://github.com/getsentry/sentry/pull/95633": {
+  "name": "sentry-ge95633",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+  "base_local": "f438c4be9d36953d2bc72e0cce4c7eeb5e0b4016",
+  "merge_base": "fd358e8a388939959369f08f616e29552cdaf96e",
+  "head_sha": "9966ec5a13e331659c3ea00981f9b11b0faf821f",
+  "diffstat": "7 files changed, 1276 insertions(+), 6 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/2": {
+  "name": "sentry-greptile-ai2",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+  "base_local": "3d039fbc693b2bb64ea222c34d0599f33e73bdd9",
+  "merge_base": "28e3db2520d4ea28c57b08da57b83917ba7b2e15",
+  "head_sha": "8ab88145113dd23a930e23b9cbbcf8b30e4c0b17",
+  "diffstat": "9 files changed, 183 insertions(+), 29 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/3": {
+  "name": "sentry-greptile-ai3",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+  "base_local": "6ed572a59d2f51323f982a2cd7330cbaf12f890a",
+  "merge_base": "83f40559985e1365a43f35ba3febb7ea4fabb5d5",
+  "head_sha": "6ad6fe3899f630ccf922ce7ac681147dc7987435",
+  "diffstat": "7 files changed, 479 insertions(+), 6 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/103633": {
+  "name": "grafana-gr103633",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633",
+  "base_local": "e1285b747878f75e0e1248bec2e80263ab046fbe",
+  "merge_base": "5634ca44f799a82161f0401dadc286452f3bdbf8",
+  "head_sha": "7562f37880367411a62304bcdcdc178bced23906",
+  "diffstat": "4 files changed, 240 insertions(+), 33 deletions(-)"
+ },
+ "https://github.com/getsentry/sentry/pull/67876": {
+  "name": "sentry-ge67876",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+  "base_local": "11980b40faffa3631be5733d29650675f30d54b1",
+  "merge_base": "f3b740199ef0b8057c2c68a377fd3b4d42346deb",
+  "head_sha": "bb75657fc8f13923c1d7983f422290908a1e7310",
+  "diffstat": "3 files changed, 247 insertions(+), 50 deletions(-)"
+ },
+ "https://github.com/keycloak/keycloak/pull/32918": {
+  "name": "keycloak-ke32918",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+  "base_local": "d7fe6b4e11d37a69fbabd9be670162f59430de44",
+  "merge_base": "272cfc68dcc88615396ae62ed1571918e9c58ad3",
+  "head_sha": "e944e2acf1e64421860a8e827f93ad06c169621b",
+  "diffstat": "4 files changed, 268 insertions(+), 3 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/94942": {
+  "name": "grafana-gr94942",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+  "base_local": "00101eef1aa1d1acd93e97289a309b348a657d7d",
+  "merge_base": "cbe1e7d63f098e306058c0fbcab2f5c30602fa7d",
+  "head_sha": "f3317b329b4eb8fd96f99dd86525bc4a22d20248",
+  "diffstat": "7 files changed, 47 insertions(+), 34 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/90939": {
+  "name": "grafana-gr90939",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+  "base_local": "bdd7e6ed4882870360dbca20ece7a8d430ecc35d",
+  "merge_base": "cca9dee702ac4338ddc38aa56257273b8143e32e",
+  "head_sha": "b1613e320acff00623e6efc59f00ee68c7684a97",
+  "diffstat": "1 file changed, 13 insertions(+), 3 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/80329": {
+  "name": "grafana-gr80329",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329",
+  "base_local": "2eb6310b796e3ca92bf2ad7de13cdecacb7c3469",
+  "merge_base": "a886bd3c79a417a70b51509384d1f1ec3e87e96b",
+  "head_sha": "04cfa3bfd469c035ff8b35f9a66867c4e8d5dcf4",
+  "diffstat": "3 files changed, 199 insertions(+), 62 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/90045": {
+  "name": "grafana-gr90045",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045",
+  "base_local": "77572e87ff64663c748ff103d92d3d53650d37dd",
+  "merge_base": "66c4dff17e9147b11fb9b14c6ed63089a599da65",
+  "head_sha": "e369f24665ec70e1e3700f457d25ef83301d931a",
+  "diffstat": "5 files changed, 524 insertions(+), 131 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/106778": {
+  "name": "grafana-gr106778",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778",
+  "base_local": "5e9d2108d0b700e58f104fd97a35a805e38e0397",
+  "merge_base": "15e1aa88551d925a80796a966e52f2b7a178203b",
+  "head_sha": "8df850371034b73dc4dd9908cc30fa09f12a1f97",
+  "diffstat": "14 files changed, 542 insertions(+), 418 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/107534": {
+  "name": "grafana-gr107534",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534",
+  "base_local": "73393963d5aa54c83f0935cfd4408cab16d12e8f",
+  "merge_base": "d9a8253640464014aa3662c91131278990cfb828",
+  "head_sha": "1cab4143d443c33079566f6ca36931eb8468159f",
+  "diffstat": "4 files changed, 48 insertions(+), 15 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/79265": {
+  "name": "grafana-gr79265",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+  "base_local": "6eaae19a37e6ac5d60f9e1a278019416fd5c60b1",
+  "merge_base": "7ddcd0c9611882858701f4f876fb8e449fe73980",
+  "head_sha": "bbd8c507cdf56f6b884373809e0b24abd4a2353d",
+  "diffstat": "11 files changed, 105 insertions(+), 37 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/9": {
+  "name": "discourse-graphite-ai9",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+  "base_local": "3bf663a6c4c82bf9a92dadde7cf9de567813f102",
+  "merge_base": "728845d008f06828630a632e5c7d67e11bf15deb",
+  "head_sha": "ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+  "diffstat": "7 files changed, 31 insertions(+), 15 deletions(-)"
+ },
+ "https://github.com/grafana/grafana/pull/76186": {
+  "name": "grafana-gr76186",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186",
+  "base_local": "b29f69288de1f9c8d7ecadb882b85ba44f379789",
+  "merge_base": "58ba11ecbd60863e2bfc6e32f0399ed4feb3927a",
+  "head_sha": "303cdc2caf256aa5df660611120c2e3f7392365d",
+  "diffstat": "8 files changed, 137 insertions(+), 78 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/10": {
+  "name": "discourse-graphite-ai10",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+  "base_local": "7922902c7f148c6ed71d530b47565a9c106175f1",
+  "merge_base": "913c3d6f636d02b3dd6c2c022ca1af2bec95d752",
+  "head_sha": "d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+  "diffstat": "36 files changed, 449 insertions(+), 127 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/7": {
+  "name": "discourse-graphite-ai7",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7",
+  "base_local": "1e6fee6c7bc61eedeba48dccd25886ba7e31cfe3",
+  "merge_base": "7554b5e3c458dc79b591d5e874e79ab10cf30c2f",
+  "head_sha": "d38c4d5f7443223c81529c22470293771baf9f38",
+  "diffstat": "32 files changed, 115 insertions(+), 115 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/8": {
+  "name": "discourse-graphite-ai8",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+  "base_local": "a9bdd78c37b33118c148364396308b8bba632563",
+  "merge_base": "4975fc28903a84418f546b2809370f19abf10e08",
+  "head_sha": "060cda77729cb1c4a827560e09e89a7b22078ba9",
+  "diffstat": "16 files changed, 389 insertions(+), 283 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/3": {
+  "name": "discourse-graphite-ai3",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+  "base_local": "2ff4f3124a6dab409f1cb60714c0fc7bbae546db",
+  "merge_base": "e25638dab0d4b98f99c8fe8976ccaae8f4fb9db3",
+  "head_sha": "5f8a130277dbddc95d133cd2832be639baf89213",
+  "diffstat": "10 files changed, 155 insertions(+), 23 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/5": {
+  "name": "discourse-graphite-ai5",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+  "base_local": "53963048419d79170560938c003ae9ed1172f8ee",
+  "merge_base": "98fa098e6fade3097a11fe7f99a98a4e6ffb4728",
+  "head_sha": "5b229316ee4c661836ed1161139692a3e8527444",
+  "diffstat": "5 files changed, 54 insertions(+), 13 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/6": {
+  "name": "discourse-graphite-ai6",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+  "base_local": "c49ca5ea63ffedcf975193b44ad65232e521badc",
+  "merge_base": "7a5fbae060bd0d3e29f3a4b5c6f2bfd8b2914dc7",
+  "head_sha": "267d8be1f556ed59639ced396c885bb44586da19",
+  "diffstat": "5 files changed, 44 insertions(+), 12 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/4": {
+  "name": "discourse-graphite-ai4",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+  "base_local": "40c0c041eef5dc44025770d153a3608edf852aed",
+  "merge_base": "62db063e1e1abe691313ab42682a68f796d63769",
+  "head_sha": "4f8aed295a29954023b2849c060ef4fb299d1b5d",
+  "diffstat": "28 files changed, 653 insertions(+), 13 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/1": {
+  "name": "discourse-graphite-ai1",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1",
+  "base_local": "c3290c1d85eabd86f9f839931bdf2a043474f844",
+  "merge_base": "3f71fa15c93bb0b751bb92abae1b5dc9a21bd4ca",
+  "head_sha": "ffbaf8c54269df2ce510de91245760fddce09896",
+  "diffstat": "3 files changed, 20 insertions(+), 12 deletions(-)"
+ },
+ "https://github.com/ai-code-review-evaluation/discourse-graphite/pull/2": {
+  "name": "discourse-graphite-ai2",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+  "base_local": "8ed1eef2746ad2b5bc996a74233852e5d83a765d",
+  "merge_base": "56abd247e1829cb6de82dfcc8ce04deb5f0d1e91",
+  "head_sha": "6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+  "diffstat": "18 files changed, 156 insertions(+), 69 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/22532": {
+  "name": "cal.com-ca22532",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+  "base_local": "74608dcfae2592562c1b07b0b24a783d6f80659a",
+  "merge_base": "30a92a4d66b417f7c19dee2b343099adc6e88aa6",
+  "head_sha": "5fd11f9faa79c4aefd39975d1b0e963e5034f793",
+  "diffstat": "17 files changed, 379 insertions(+), 31 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/8330": {
+  "name": "cal.com-ca8330",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+  "base_local": "4b23bcf8914b88da2d69aa44331baa835529f278",
+  "merge_base": "93cb21f55a2a40d9116c014741f5679fbeff5fd9",
+  "head_sha": "ee38fd295fd294b9fc787eba482bde24bbfea69b",
+  "diffstat": "4 files changed, 111 insertions(+), 10 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/14943": {
+  "name": "cal.com-ca14943",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+  "base_local": "b521f3a8ec35ec1e90b28075046b369b6eff5554",
+  "merge_base": "917c7b0764f4c6bfdca95db2c5f73dbfdbe11757",
+  "head_sha": "c790227e0cda780e6fea9bb03af27948d9e286b9",
+  "diffstat": "3 files changed, 38 insertions(+), 6 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/22345": {
+  "name": "cal.com-ca22345",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+  "base_local": "ef0d5fb0fd4d6be99f3fc203a367d6f9957c1489",
+  "merge_base": "c9a47dd0cebd121ff73f24e1f8c1829579daf8e3",
+  "head_sha": "da09bc0808e7c6df1bc10e00d5acf764d94c7cc7",
+  "diffstat": "2 files changed, 114 insertions(+), 231 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/11059": {
+  "name": "cal.com-ca11059",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+  "base_local": "9a840be7da9c94c1ca453cf0c63bebebe835ab53",
+  "merge_base": "bc89fe00ea84d20bedcec782f0701b9711dc8201",
+  "head_sha": "9fde0e906897cc0f4f71793f647dd629faba3317",
+  "diffstat": "40 files changed, 375 insertions(+), 119 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/7232": {
+  "name": "cal.com-ca7232",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+  "base_local": "d0130224f54c3d53c3255d8006c6141da09e3f62",
+  "merge_base": "d1440bb5d2f2190ad7ae1d26c165f970055b5370",
+  "head_sha": "6048e2a86b50e81e1e3b1b467dfea5a895add3dc",
+  "diffstat": "10 files changed, 241 insertions(+), 203 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/14740": {
+  "name": "cal.com-ca14740",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+  "base_local": "727ce43337184249d174cc06314c8cd7209320be",
+  "merge_base": "b004587262e8221083bafbe9a0c515e7becaa7b3",
+  "head_sha": "92f44dcea7ff19e9123a30c63c167a2938df5a55",
+  "diffstat": "15 files changed, 555 insertions(+)"
+ },
+ "https://github.com/calcom/cal.com/pull/10600": {
+  "name": "cal.com-ca10600",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600",
+  "base_local": "a23cab01b20e33a0a8dee9c5d42f07da237335a7",
+  "merge_base": "efa6d464a38e60ceeeb88f40668c1c4ac4bfaf54",
+  "head_sha": "54486a059cd2032042189bb565646ba4e0f6bd61",
+  "diffstat": "16 files changed, 280 insertions(+), 36 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/10967": {
+  "name": "cal.com-ca10967",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967",
+  "base_local": "57d246df47d552209a38d3fcba638b19a91fb909",
+  "merge_base": "a308075bc39b77ed7059b0cae9d443d669a7bf98",
+  "head_sha": "de628295646d0848226618108a52f2f1e5d04ac0",
+  "diffstat": "22 files changed, 368 insertions(+), 216 deletions(-)"
+ },
+ "https://github.com/calcom/cal.com/pull/8087": {
+  "name": "cal.com-ca8087",
+  "sandbox": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+  "base_local": "9246bad445bbd2085138c9b707f0c54eededc4d9",
+  "merge_base": "ba9688a04a8398c9a8332ee7061bfae2f2efd524",
+  "head_sha": "820d7fa87e0c824c5dee8082a33efadb1a2566f7",
+  "diffstat": "12 files changed, 82 insertions(+), 107 deletions(-)"
+ }
+}

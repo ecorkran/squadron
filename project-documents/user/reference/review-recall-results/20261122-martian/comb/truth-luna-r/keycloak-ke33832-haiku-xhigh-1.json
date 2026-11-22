@@ -1,0 +1,42 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "detectProvider` takes the first provider on an equal-order tie, so auto-detection can select a non-FIPS provider."
+  ],
+  "F2": [
+   "KEEP",
+   "Malformed DER can trigger unchecked exceptions, and the decoder and conversion code accept out-of-bounds or oversized values."
+  ],
+  "F3": [
+   "KEEP",
+   "The implementation returns a keystore provider rather than a BouncyCastle provider, contrary to the SPI contract."
+  ],
+  "F4": [
+   "KEEP",
+   "Adding abstract `order()` breaks compatibility for external implementations that do not implement it."
+  ],
+  "F5": [
+   "DROP",
+   "The finding identifies test-coverage gaps, not a behavior defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00270969
+}

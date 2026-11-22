@@ -1,0 +1,57 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "SpawnProcess is not an instance of multiprocessing.Process, so the hang restart skips killing the old process."
+  ],
+  "F2": [
+   "KEEP",
+   "The patched time.sleep makes the added wait immediate, leaving the test able to join before the flusher emits its message."
+  ],
+  "F3": [
+   "DROP",
+   "This identifies a test-coverage gap, not a demonstrated behavior defect."
+  ],
+  "F4": [
+   "DROP",
+   "The repeated cluster-wide memory queries are a performance concern without a named behavior failure."
+  ],
+  "F5": [
+   "DROP",
+   "The unused method is a code-structure concern, not a behavior defect."
+  ],
+  "F6": [
+   "KEEP",
+   "Zero silently selects the shard count, while a negative value can cause a KeyError during process construction."
+  ],
+  "F7": [
+   "KEEP",
+   "The inconsistent shard tag values make per-shard metric filters miss produce metrics."
+  ],
+  "F8": [
+   "DROP",
+   "The docstring and default mismatch is documentation-only."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5,
+  6
+ ],
+ "cost_usd": 0.0024044900000000004
+}

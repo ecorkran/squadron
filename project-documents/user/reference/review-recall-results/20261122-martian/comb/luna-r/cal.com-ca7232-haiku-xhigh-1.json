@@ -1,0 +1,57 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Prisma` is unused in the workflows router and triggers the configured unused-import error."
+  ],
+  "F2": [
+   "KEEP",
+   "These imported names are used only as types, violating the configured `consistent-type-imports` rule."
+  ],
+  "F3": [
+   "KEEP",
+   "A SendGrid failure aborts the cancellation loop before lazy database deletes run, leaving reminders flagged and other cancellations unprocessed."
+  ],
+  "F4": [
+   "KEEP",
+   "A failed reminder flag write is swallowed, so a cancelled booking can still have its reminder sent."
+  ],
+  "F5": [
+   "DROP",
+   "The differing helper behavior and naming are design concerns, not defects by themselves."
+  ],
+  "F6": [
+   "DROP",
+   "The stale email rows are eventually removed after their scheduled date, and the claimed accumulation does not establish a merge-blocking failure."
+  ],
+  "F7": [
+   "DROP",
+   "The outer catch is ineffective for asynchronous errors, but the called helpers already catch and log their own failures."
+  ],
+  "F8": [
+   "DROP",
+   "Consolidating repeated dispatch logic is a maintainability suggestion, not a demonstrated behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00514486
+}

@@ -1,0 +1,59 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Each legacy-write goroutine derives its timeout context from the caller context, so caller cancellation can cancel the legacy write."
+  ],
+  "F2": [
+   "KEEP",
+   "Legacy errors are only recorded as metrics, and an unhandled panic in a goroutine can crash the process."
+  ],
+  "F3": [
+   "KEEP",
+   "Create and Update record storage failures as legacy duration, while DeleteCollection records a legacy call as storage duration."
+  ],
+  "F4": [
+   "KEEP",
+   "Delete passes the object name as the metric\u2019s kind label, causing unbounded series cardinality."
+  ],
+  "F5": [
+   "KEEP",
+   "Delete returns on any storage error, including NotFound, without attempting the legacy delete."
+  ],
+  "F6": [
+   "KEEP",
+   "Legacy Update receives the raw objInfo rather than a wrapper containing the object returned by storage."
+  ],
+  "F7": [
+   "DROP",
+   "The unconditional dry-run legacy writes predate this change, so the finding does not identify a newly changed behavior."
+  ],
+  "F8": [
+   "DROP",
+   "This identifies test coverage and assertion weaknesses, not a behavior defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.00388637
+}

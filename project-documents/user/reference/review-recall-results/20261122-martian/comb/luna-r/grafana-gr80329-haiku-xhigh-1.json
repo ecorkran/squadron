@@ -1,0 +1,36 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Successful cleanup batches log at ERROR level with full ID lists, creating noisy error logs on every configured run."
+  ],
+  "F2": [
+   "KEEP",
+   "Repeatedly formatting the growing ID string causes excessive copying for large SQLite batches."
+  ],
+  "F3": [
+   "KEEP",
+   "Large batches can exceed non-SQLite bind-parameter limits and make cleanup fail."
+  ],
+  "F4": [
+   "DROP",
+   "The broader cadence change is real, but the finding does not establish that running these jobs more often causes a defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00202641
+}

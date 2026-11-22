@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Lines 122-123 use `groupResource.getId()`, which is the authz resource's UUID, not the group ID (the group ID is stored as the resource name, as V1 does with `getName()`), so the set fed to the user search and count filters holds the wrong IDs."
+  ],
+  "F2": [
+   "KEEP",
+   "canManage()` accepts a VIEW scope, so an admin with only an all-groups VIEW grant passes `requireManage()` in `addTopLevelGroup` and can create groups; the javadoc describing this does not make a VIEW grant allowing writes correct."
+  ],
+  "F3": [
+   "DROP",
+   "V2's no-argument `canView()` calls `hasPermission(null, \u2026)`, which only checks the all-groups resource, so a caller with VIEW on a single group cannot reach `/groups/count`, and an all-groups VIEW holder may see every group anyway."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.24415889999999998
+}

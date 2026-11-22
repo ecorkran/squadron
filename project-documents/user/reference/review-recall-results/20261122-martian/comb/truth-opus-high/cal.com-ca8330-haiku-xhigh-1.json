@@ -1,0 +1,50 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The early return on a date-override day was already there before this change; the change only added the timezone offset to the override date comparison."
+  ],
+  "F2": [
+   "DROP",
+   "The `workingHours.find` check was not touched by this change; whatever is wrong with it was already there."
+  ],
+  "F3": [
+   "DROP",
+   "Rejecting a slot because the first `find` match fails is old behaviour; the change only added the `utcOffset` shift inside the callback."
+  ],
+  "F4": [
+   "KEEP",
+   "The changed lines still compare dayjs objects with `===`, which is never true, and they format the override date in server-local time while the slot is in UTC, so near midnight the day match is wrong on servers not running in UTC."
+  ],
+  "F5": [
+   "DROP",
+   "The duplicated `start` line in the working-hours block is old code that this change did not touch."
+  ],
+  "F6": [
+   "KEEP",
+   "The new offset code drops the day change when it reduces times to `hour()*60+minute()`, while the day filter still uses the unshifted UTC label, so an override that shifts across the invitee's midnight lands on the wrong day."
+  ],
+  "F7": [
+   "DROP",
+   "The only path that passes date overrides into `getSlots` always sets `timeZone` (slots.ts:413), and the selected-slots call passes no overrides, so the optional type alone causes no failure."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  4,
+  6
+ ],
+ "cost_usd": 0.23737970000000003
+}

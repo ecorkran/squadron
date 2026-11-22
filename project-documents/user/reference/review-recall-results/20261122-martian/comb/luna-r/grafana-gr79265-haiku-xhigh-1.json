@@ -1,0 +1,55 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache key is set before the store call, so a rejected device\u2019s retry skips the limit check and succeeds."
+  ],
+  "F2": [
+   "KEEP",
+   "The separate count and insert allow concurrent new devices to exceed the configured limit."
+  ],
+  "F3": [
+   "DROP",
+   "This identifies a possible latency cost but establishes no concrete blocking defect that warrants a merge fix."
+  ],
+  "F4": [
+   "DROP",
+   "The stale store provider is unused by the current Wire dependency graph, so its missing `int64` dependency does not break construction."
+  ],
+  "F5": [
+   "DROP",
+   "The duplicated duration constants currently agree; consolidating them is a maintenance improvement, not a present defect."
+  ],
+  "F6": [
+   "DROP",
+   "Missing configuration documentation does not cause incorrect runtime behavior."
+  ],
+  "F7": [
+   "DROP",
+   "The narrower frontend typing is inconvenient, but no current consumer is shown to misbehave or fail to compile."
+  ],
+  "F8": [
+   "DROP",
+   "Missing branch tests do not establish a defect, and the retry behavior is covered by F1."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.01105136
+}

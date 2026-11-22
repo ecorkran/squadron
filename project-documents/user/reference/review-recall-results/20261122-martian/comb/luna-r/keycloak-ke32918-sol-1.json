@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Organization-dependent `isEnabled()` makes both predicates false, so the private IDP can remain in login-cache results after the organization is re-enabled."
+  ],
+  "F2": [
+   "KEEP",
+   "Cleanup targets the literal `\"alias\"` rather than the created providers, leaving test fixtures behind even though cleanup exceptions are caught."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0027070500000000003
+}

@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` is not filtered for anonymous visitors, so it can expose a TL0 user\u2019s withheld website."
+  ],
+  "F2": [
+   "KEEP",
+   "URI parsing rejects Unicode paths, causing valid website names to be omitted from the profile."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00250375
+}

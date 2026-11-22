@@ -1,0 +1,19 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The SQL DB methods always error, so command construction rejects SQL, and the new reader also always disables SQL expressions."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00169011
+}

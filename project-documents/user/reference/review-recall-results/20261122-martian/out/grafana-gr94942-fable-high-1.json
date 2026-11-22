@@ -1,0 +1,192 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`enableSqlExpressions` always returns false and ignores the feature flag it reads",
+      "description": "Both branches return `false`, so the `IsEnabledGlobally(featuremgmt.FlagSqlExpressions)` lookup has no effect. The local `enabled` is assigned the negation of the flag, so it actually means \"disabled\", which makes the function read as if it honours the toggle.\n\nConsequences:\n- The `sqlExpressions` toggle is now a no-op for this path, though it is still registered in `pkg/services/featuremgmt/registry.go:1083` as \"Enables using SQL and DuckDB functions as Expressions.\"\n- The rest of the `QueryTypeSQL` case in `pkg/expr/reader.go:133-138` is unreachable.\n\nIf SQL expressions are meant to be unconditionally off while the backend is a stub, say so directly: return the error in the case and drop the helper, or reduce it to `return false` with a comment. If the flag is meant to gate it, the function should be `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`.\n\nMinor style points: the helper takes the receiver as a parameter rather than being a method, and Go initialism convention would be `enableSQLExpressions`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/expr/reader.go:194-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Legacy parse path is not gated and reports \"not implemented\" as an invalid-SQL 400",
+      "description": "The new gate only covers `ReadQuery`, which `buildCMDNode` reaches only when `FlagExpressionParser` is on (`pkg/expr/nodes.go:123`). With that flag off, `TypeSQL` still goes through `UnmarshalSQLCommand` \u2192 `NewSQLCommand` \u2192 `sql.TablesList`.\n\n`TablesList` now always fails, because the stub `RunCommands` returns `errors.New(\"not implemented\")` (`pkg/expr/sql/db.go:16-18`). `NewSQLCommand` then maps that failure to `errutil.BadRequest(\"sql-invalid-sql\", \"error reading SQL command\")` and logs \"invalid sql query\" at Warn (`pkg/expr/sql_command.go:30-35`).\n\nSo the same disabled feature produces two different errors:\n- **Parser path:** a plain `fmt.Errorf(\"sqlExpressions is not implemented\")`.\n- **Legacy path:** a 400 that blames the user's SQL, plus a log line per request that misdescribes the cause.\n\nGate once, at a point both paths share (for example in `NewSQLCommand`), with a single typed error. A package-level sentinel in `pkg/expr/sql` in place of the three duplicated `errors.New(\"not implemented\")` strings would let callers distinguish it via `errors.Is`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/expr/nodes.go:159-160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests cover the new gating or stub behaviour",
+      "description": "The change adds a new error path in `ReadQuery` and a new `DB` type, with no tests for either.\n- `pkg/expr/reader_test.go` has no SQL case.\n- Every test in `pkg/expr/sql/parser_test.go` starts with `t.Skip()`.\n- `TestNewCommand` in `pkg/expr/sql_command_test.go:9` is also skipped, and its fallback matches the string \"feature is not enabled\", which nothing in the code emits.\n\nA table case in `reader_test.go` asserting that a `type: \"sql\"` query returns the not-implemented error, with the flag both on and off, would pin the intended behaviour. It would also have exposed the always-false gate above.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/expr/reader.go:128-132"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stub `DB` has an unused method, no doc comments, and DuckDB-specific code left around it",
+      "description": "- `(*DB).TablesList` at `pkg/expr/sql/db.go:12-14` has no callers; every call site uses the package-level `sql.TablesList` in `parser.go`. It is dead on arrival and duplicates that function's name.\n- The exported `DB`, its methods and `NewInMemoryDB` have no doc comments, so nothing says this is a deliberate placeholder for the removed engine.\n- `pkg/expr/sql/parser.go:23-26` still names the variable `duckDB` and builds a DuckDB-only `SELECT json_serialize_sql('\u2026')` command for a backend that cannot run it.\n- `SQLCommand.Execute` (`pkg/expr/sql_command.go:96-105`) still builds frames and calls `QueryFramesInto`, which can only fail.\n\nEither trim the stub to what is called and document it as a placeholder, or put a small interface in front of it so a real implementation can be swapped in.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/expr/sql/db.go:9-26"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale `go-duck` checksum remains in `go.work.sum`",
+      "description": "`github.com/scottlepp/go-duck v0.3.1` entries are still in `go.work.sum`, although no `go.mod` or Go source in the tree references the module. They are harmless and outside this diff, but could be dropped for a complete removal.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "go.work.sum:891-892"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency removal is consistent with the source changes",
+      "description": "The `github.com/scottlepp/go-duck` requirement and the indirect-only entries (`apache/thrift`, `JohnCGriffin/overflow`, `klauspost/asmfmt`, `minio/asm2plan9s`, `minio/c2goasm`, `hairyhenderson/go-which`, `iancoleman/orderedmap`) are removed from `go.mod`, with matching `go.sum` edits. `pkg/expr/sql/parser.go` and `pkg/expr/sql_command.go` no longer import the `duck` package. The stub signatures in `pkg/expr/sql/db.go` match their call sites (`RunCommands([]string) (string, error)` and `QueryFramesInto(string, string, []*data.Frame, *data.Frame) error`).",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "go.mod:142"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`enableSqlExpressions` always returns false and ignores the feature flag it reads",
+      "location": "pkg/expr/reader.go:194-200",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Legacy parse path is not gated and reports \"not implemented\" as an invalid-SQL 400",
+      "location": "pkg/expr/nodes.go:159-160",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests cover the new gating or stub behaviour",
+      "location": "pkg/expr/reader.go:128-132",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Stub `DB` has an unused method, no doc comments, and DuckDB-specific code left around it",
+      "location": "pkg/expr/sql/db.go:9-26",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Stale `go-duck` checksum remains in `go.work.sum`",
+      "location": "go.work.sum:891-892",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Dependency removal is consistent with the source changes",
+      "location": "go.mod:142",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "diff": "00101eef1aa1d1acd93e97289a309b348a657d7d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:37:00.429586",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "injected": [],
+  "files_read": [
+    "pkg/expr/reader.go",
+    "pkg/expr/sql/parser.go",
+    "pkg/expr/sql_command.go",
+    "pkg/expr/sql/db.go",
+    "pkg/expr/sql/parser_test.go",
+    "pkg/expr/sql_command_test.go",
+    "pkg/expr/nodes.go",
+    "pkg/expr/graph.go",
+    "pkg/expr/query_test.go"
+  ],
+  "searches": [
+    "list_files pkg/expr/sql/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep go-duck|scottlepp|NewInMemoryDB|enableSqlExpressions|FlagSqlExpressions|TablesList\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep TypeSQL|QueryTypeSQL|UnmarshalSQLCommand|NewSQLCommand|SQLCommand\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg",
+    "grep go-duck|JohnCGriffin/overflow|apache/thrift|klauspost/asmfmt|minio/asm2plan9s|minio/c2goasm|hairyhenderson/go-which|iancoleman/orderedmap|araddon/dateparse|gotest.tools/v3 v3.5.1 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep sqlExpressions|SqlExpressions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg",
+    "grep NewExpressionQueryReader\\(|ExpressionQueryReader\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg",
+    "grep (?i)sql in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg/expr"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19087,
+  "diff_chars_injected": 19087,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 17,
+  "prompt_tokens": 184537,
+  "cached_tokens": 144063,
+  "cache_write_tokens": 40464,
+  "completion_tokens": 7392,
+  "reasoning_tokens": null,
+  "duration_seconds": 66.34007716691121,
+  "cost_usd": 0.9734894000000001,
+  "cost_basis": "provider"
+}

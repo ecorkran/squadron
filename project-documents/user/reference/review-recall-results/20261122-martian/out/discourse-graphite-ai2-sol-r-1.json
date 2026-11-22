@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Unprotected GET requests change notification preferences",
+      "description": "Both new GET routes invoke `TopicsController#unsubscribe`, which immediately saves changes using the logged-in user's session. Rails' CSRF protection does not protect GET requests, and this action explicitly bypasses `check_xhr`. An attacker can therefore direct a logged-in browser to a predictable topic URL and change its notification settings without authorization from the user.\n\nMake GET display the unsubscribe page and perform the change through a CSRF-protected POST, or use a securely scoped unsubscribe token rather than relying solely on session cookies.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "config/routes.rb:441-442"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Missing topic-user records cause an unsubscribe error",
+      "description": "`TopicUser.find_by` can return `nil`, but the next statement unconditionally calls `notification_level`. Inspecting `TopicView` confirms that constructing a topic view does not create this record. A logged-in user following a forwarded unsubscribe link for a topic they have not visited can consequently receive a server error.\n\nHandle an absent record and create the required muted preference, preferably through the existing `TopicUser.change` mechanism.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:106-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Direct saves allow automatic tracking to undo an unsubscribe",
+      "description": "The endpoint changes `notification_level` directly without setting `notifications_reason_id` or `notifications_changed_at`. In contrast, `TopicUser.change` records an explicit `user_changed` reason and publishes the notification-level change.\n\nThis omission affects behavior: `TopicUser.update_last_read` automatically promotes topics to tracking when `notifications_reason_id` is null and the reading-time threshold is exceeded. For an automatically tracked topic, unsubscribing leaves that reason null, so subsequent reading can undo the user's choice. Use the established notification-change API so explicit unsubscribe decisions remain persistent and are propagated consistently.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:108-114"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Unprotected GET requests change notification preferences",
+      "location": "config/routes.rb:441-442",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Missing topic-user records cause an unsubscribe error",
+      "location": "app/controllers/topics_controller.rb:106-108",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Direct saves allow automatic tracking to undo an unsubscribe",
+      "location": "app/controllers/topics_controller.rb:108-114",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "diff": "8ed1eef2746ad2b5bc996a74233852e5d83a765d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:46:42.249454",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "injected": [],
+  "files_read": [
+    "app/controllers/topics_controller.rb",
+    "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6",
+    "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+    "app/models/topic_user.rb",
+    "lib/email/message_builder.rb",
+    "app/assets/javascripts/discourse/routes/app-route-map.js.es6",
+    "app/assets/javascripts/discourse/components/dropdown-button.js.es6",
+    "app/assets/javascripts/discourse/routes/topic-from-params.js.es6",
+    "app/assets/javascripts/discourse/views/topic-unsubscribe.js.es6",
+    "app/assets/stylesheets/common/base/topic.scss",
+    "app/mailers/user_notifications.rb",
+    "app/models/topic.rb",
+    "app/views/email/notification.html.erb",
+    "config/routes.rb",
+    "spec/components/email/message_builder_spec.rb",
+    "lib/topic_view.rb",
+    "app/assets/javascripts/discourse/models/post-stream.js.es6",
+    "app/assets/javascripts/discourse/models/topic-details.js.es6",
+    "app/assets/javascripts/discourse/components/topic-notifications-button.js.es6",
+    "app/assets/javascripts/discourse/models/topic.js.es6",
+    "app/controllers/application_controller.rb",
+    "app/assets/javascripts/discourse/ember/resolver.js.es6",
+    "lib/topic_notifier.rb"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep unsubscribe|TopicUser\\.|notification_level in lib/topic_view.rb",
+    "grep loadTopicView|notificationReasonText|fancyTitle in app/assets/javascripts/discourse",
+    "grep unsubscribe in config/locales",
+    "grep templateName|renderTemplate|normalizeTemplateName|topic/unsubscribe|topicUnsubscribe|underscore|decamelize in app/assets/javascripts/discourse",
+    "grep protect_from_forgery|check_xhr|verify_authenticity in app/controllers/application_controller.rb",
+    "grep unsubscribe in spec/controllers/topics_controller_spec.rb"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 842,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19364,
+  "diff_chars_injected": 19364,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 185805,
+  "cached_tokens": 112844,
+  "cache_write_tokens": null,
+  "completion_tokens": 1288,
+  "reasoning_tokens": 222,
+  "duration_seconds": 25.742052000015974,
+  "cost_usd": 0.1700864,
+  "cost_basis": "alias_pricing"
+}

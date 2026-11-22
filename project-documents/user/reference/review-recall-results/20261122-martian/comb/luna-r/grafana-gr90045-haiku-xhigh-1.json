@@ -1,0 +1,60 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The goroutines inherit the request context, so cancellation can prevent best-effort legacy writes after storage succeeds."
+  ],
+  "F2": [
+   "KEEP",
+   "Legacy write failures are reduced to metrics, leaving store divergence without an actionable log."
+  ],
+  "F3": [
+   "KEEP",
+   "The mislabeled metric calls report storage failures as legacy failures and a legacy call as storage."
+  ],
+  "F4": [
+   "KEEP",
+   "Delete labels the storage histogram with the object name, creating unbounded metric cardinality."
+  ],
+  "F5": [
+   "KEEP",
+   "Returning on storage NotFound skips deleting a potentially stale legacy record."
+  ],
+  "F6": [
+   "KEEP",
+   "Passing raw update info lets legacy compute from its own old object instead of persisting storage\u2019s result."
+  ],
+  "F7": [
+   "KEEP",
+   "Dry-run writes can persist in legacy even when storage correctly avoids persisting the request."
+  ],
+  "F8": [
+   "DROP",
+   "This describes inadequate test coverage, not a defect in the changed runtime behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.00464798
+}

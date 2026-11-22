@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The `ORG_ONLY` query with a null org matches realm-level IDPs on `BROKER_PUBLIC=true` alone, but the update shortcut sees both models as eligible with null org IDs and returns early. Toggling that flag on a realm-level IDP therefore leaves the cached `ORG_ONLY` list stale."
+  ],
+  "F2": [
+   "KEEP",
+   "original` comes from `getById()`, which wraps it so `isEnabled()` returns false when the linked org is disabled. Hiding or link-only-ing the IDP while its org is disabled skips invalidation, and org changes never invalidate the login keys, so the hidden IDP is served from cache once the org is re-enabled."
+  ],
+  "F3": [
+   "DROP",
+   "This is a test-only cleanup leak copied from an existing pattern, and it does not cause wrong behavior in production code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2880395
+}

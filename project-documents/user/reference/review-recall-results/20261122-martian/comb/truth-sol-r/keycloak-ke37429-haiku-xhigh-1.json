@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Both Lithuanian bundles contain Italian TOTP setup instructions, displaying the wrong language to Lithuanian users."
+  ],
+  "F2": [
+   "KEEP",
+   "The Simplified Chinese account bundle contains Traditional Chinese wording for the TOTP instruction."
+  ],
+  "F3": [
+   "KEEP",
+   "The regex also matches non-anchor tags and removes English-identical matches before HTML validation, allowing disallowed markup to pass."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0321302
+}

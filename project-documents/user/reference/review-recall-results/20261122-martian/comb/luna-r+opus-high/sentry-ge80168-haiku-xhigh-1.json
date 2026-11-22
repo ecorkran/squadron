@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The change made `MetricAlertDetectorHandler` subclass `StatefulDetectorHandler` but implemented none of its four abstract members, so it can't be instantiated. Any `metric_alert_fire` detector would raise `TypeError` at `Detector.detector_handler` and crash `process_detectors`, even though no code creates such detectors yet."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.14187709999999998
+}

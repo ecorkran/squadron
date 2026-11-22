@@ -1,0 +1,35 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Split requests retain filters and are interpolated again by `runQuery`, duplicating ad-hoc filters and variable substitution."
+  ],
+  "F2": [
+   "KEEP",
+   "A target interpolated to an empty expression can leave `runSplitQuery` with no requests, causing `runSplitGroupedQueries` to throw."
+  ],
+  "F3": [
+   "DROP",
+   "This describes a behavior change but does not establish that resolving `$__auto` per chunk causes incorrect behavior."
+  ],
+  "F4": [
+   "DROP",
+   "Missing coverage and an assertion that codifies redundant interpolation are test issues, not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.005476
+}

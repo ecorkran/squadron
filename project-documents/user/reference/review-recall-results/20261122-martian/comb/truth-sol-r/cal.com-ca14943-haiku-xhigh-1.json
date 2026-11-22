@@ -1,0 +1,41 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A failure in the new catch-block update escapes the loop, aborting processing of all remaining reminders."
+  ],
+  "F2": [
+   "KEEP",
+   "Locked accounts consume retries without sending, causing pending reminders to be deleted on cleanup after two attempts."
+  ],
+  "F3": [
+   "DROP",
+   "These unchanged skip paths predate the change, and repeated processing alone establishes no new behavior defect."
+  ],
+  "F4": [
+   "DROP",
+   "The cross-channel deletion claim depends on hypothetical future writers; the comment and magic-number concerns are nonfunctional."
+  ],
+  "F5": [
+   "KEEP",
+   "Overlapping invocations can overwrite each other\u2019s retry increments, allowing attempts beyond the intended limit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5
+ ],
+ "cost_usd": 0.023107999999999997
+}

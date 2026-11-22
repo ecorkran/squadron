@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke37634",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 1,
+  "F2": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "ClientCredentialsGrantType builds its token with `responseBuilder(...).generateAccessToken()` and never goes through `createTokenResponse`, so nothing sets `Constants.GRANT_TYPE`; the new `initToken` (TokenManager.java:1052-1054) then encodes the grant as `na`, and the `cc`/`pg` shortcuts are never emitted for these tokens."
+  ],
+  "F2": [
+   "KEEP",
+   "Line 73 of AccessTokenContext.java calls `requireNonNull(grantType, \"Null rawTokenId not allowed\")`, so a null `rawTokenId` passes the check and gets encoded as `...:null`, which breaks the constructor's stated contract."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  5
+ ],
+ "cost_usd": 0.2606078
+}

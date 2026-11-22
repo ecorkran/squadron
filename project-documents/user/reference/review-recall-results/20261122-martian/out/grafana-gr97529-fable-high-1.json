@@ -1,0 +1,247 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`Stop()` no longer rejects requests after the per-RPC `Init` guards were removed",
+      "description": "`Stop()` sets `s.initErr` to \"service is stopping\" / \"service is stopped\". Before this diff every RPC began with `if err := s.Init(ctx); err != nil { return nil, err }`, so those values made a stopped server refuse work. All of those guards are gone and the only remaining caller of `Init` is `NewResourceServer` (server.go:258). The `initErr` writes in `Stop()` are now dead state, and Create/Update/Delete/Read/List/Watch run against a backend whose lifecycle `Stop` has already been called. Either add an explicit stopped check (e.g. an atomic flag or `s.ctx.Err()`) or remove the dead assignments and document that the gRPC layer must drain first.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:320-342"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New `TotalDocs()` call reads the bleve cache map without a lock while the event goroutine can write it",
+      "description": "The diff adds `s.search.TotalDocs()` to the init log line at pkg/storage/unified/resource/search.go:216. `TotalDocs` ranges over `b.cache` without taking `cacheMu`. That line runs after the event goroutine is started at search.go:207-213, and that goroutine can reach `BuildIndex`, which writes `b.cache[key]` (bleve.go:137-139). A concurrent map iteration and write is a fatal runtime error in Go, not a recoverable panic. The same unlocked read is already reachable from the metrics collector (bleve_index_metrics.go:96). Since this diff reworks `cacheMu` usage in the same file, take `b.cacheMu.RLock()` in `TotalDocs`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/search/bleve.go:144-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Postgres run of the storage-server integration test is skipped rather than fixed",
+      "description": "`TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer` starts the `StorageServer` target, which runs `service.start` \u2192 `sql.NewResourceServer` \u2192 `resource.NewResourceServer`. That is exactly the path this diff changes to initialise eagerly. The test is now skipped for postgres with \"not working with postgres in Drone. Works locally.\" and a TODO with no issue reference. With sqlite already skipped, only MySQL covers the path. A test that starts failing in CI alongside a startup-ordering change is evidence of a regression or timing dependency: the test relies on a fixed 500 ms sleep at line 56, and startup now does DB init and index build synchronously. No tests were added for eager init, the init order, or the `BuildIndex` locking change.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/server/module_server_test.go:35-38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shared `err` and counter are written from concurrent errgroup workers in `searchSupport.init`",
+      "description": "This predates the diff, but it sits in the function the diff modifies. Each `group.Go` closure assigns to the outer `err` (`_, _, err = s.build(...)`) and increments `totalBatchesIndexed` with no synchronisation. With `initWorkers > 1`, one worker's failure can be overwritten by another's `nil` before `return err` executes. That swallows an index-build error which the function comment says must block startup. Removing the global lock in `BuildIndex` means builds now genuinely overlap, widening the window. Use a closure-local `err` and an atomic counter (or use `len(stats)`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/search.go:186-193"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removing the `BuildIndex` lock lets same-key builds run in parallel",
+      "description": "Narrowing `cacheMu` to the map write is right for letting `WorkerThreads` do something. But `getOrCreateIndex` (pkg/storage/unified/resource/search.go:287-307) is check-then-act with no per-key guard, as its own TODO admits. Two concurrent searches, or a search and a watch event, for an uncached key both build an index. The last writer wins in `b.cache`, the loser is never closed, and writes to it are lost. `IndexTenants` and `IndexedKinds` are also double-counted. Previously these duplicate builds ran one after another; now they overlap, including a possible concurrent `bleve.New(dir, \u2026)` on the same directory for file-backed indexes. Re-checking the cache under the lock, or a per-key `singleflight`, would close this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/search/bleve.go:88-140"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Failure path of eager `Init` leaks resources and logs the error twice",
+      "description": "If `s.Init(ctx)` fails, `NewResourceServer` returns without calling `cancel()` or `s.lifecycle.Stop`. A backend whose DB was opened in `lifecycle.Init` is therefore left running, along with any poller or watch goroutine started by `search.init`. The same error is logged with the same message at line 314 inside `Init` and again at line 260.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:258-262"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Eager init uses the server's internal context and blocks construction",
+      "description": "`Init` runs with the long-lived \"watcher\" service-account context built at lines 229-235. Callers such as `sql.NewResourceServer(ctx, \u2026)` (pkg/storage/unified/sql/server.go:77) cannot cancel or bound startup, and the `unified_search.Init` span has no parent. The whole index build now also runs synchronously inside the constructor, including the dependency-injection-time path in pkg/storage/unified/client.go:101. That matches the \"any failure will block startup\" intent but deserves a comment on `NewResourceServer`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:258"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tracing context propagation and logger fix",
+      "description": "Replacing `_, span :=` with `ctx, span :=` in `searchSupport.init` (search.go:173), `searchSupport.build` (search.go:310) and `backend.GetResourceStats` (pkg/storage/unified/sql/backend.go:126) correctly parents downstream spans. In each case the derived `ctx` is used afterwards (`GetResourceStats`, `builders.get`/`ListIterator`, `db.WithTx`). Swapping the `grafana-cli` `logger.Warn` for `s.log.Warn` at search.go:280 removes an inappropriate CLI-package dependency from the storage layer.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/search.go:173"
+    },
+    {
+      "severity": "PASS",
+      "title": "Init ordering: search index before watcher",
+      "description": "Building the search index before `initWatcher()` is consistent with the eager-init design. `initWatcher` uses only `s.ctx` and `s.backend`, and the lifecycle hook still runs first, so the reorder introduces no dependency problem.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:303-311"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`Stop()` no longer rejects requests after the per-RPC `Init` guards were removed",
+      "location": "pkg/storage/unified/resource/server.go:320-342",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "New `TotalDocs()` call reads the bleve cache map without a lock while the event goroutine can write it",
+      "location": "pkg/storage/unified/search/bleve.go:144-154",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Postgres run of the storage-server integration test is skipped rather than fixed",
+      "location": "pkg/server/module_server_test.go:35-38",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shared `err` and counter are written from concurrent errgroup workers in `searchSupport.init`",
+      "location": "pkg/storage/unified/resource/search.go:186-193",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Removing the `BuildIndex` lock lets same-key builds run in parallel",
+      "location": "pkg/storage/unified/search/bleve.go:88-140",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Failure path of eager `Init` leaks resources and logs the error twice",
+      "location": "pkg/storage/unified/resource/server.go:258-262",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Eager init uses the server's internal context and blocks construction",
+      "location": "pkg/storage/unified/resource/server.go:258",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Tracing context propagation and logger fix",
+      "location": "pkg/storage/unified/resource/search.go:173",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Init ordering: search index before watcher",
+      "location": "pkg/storage/unified/resource/server.go:303-311",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+    "diff": "d6b412dc9d6b98231d88be94ff5ae1f1dfa6877c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:31:28.390543",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "injected": [],
+  "files_read": [
+    "pkg/storage/unified/resource/server.go",
+    "pkg/storage/unified/resource/search.go",
+    "pkg/storage/unified/search/bleve.go",
+    "pkg/storage/unified/sql/server.go",
+    "pkg/storage/unified/sql/backend.go",
+    "pkg/server/module_server_test.go",
+    "pkg/storage/unified/sql/service.go",
+    "pkg/storage/unified/client.go",
+    "pkg/storage/unified/resource/server_test.go"
+  ],
+  "searches": [
+    "grep \\.Init\\(|NewResourceServer\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage",
+    "grep IndexMetrics\\s*(=|\\*)|func NewIndexMetrics|TotalDocs\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg",
+    "grep Init\\(|LifecycleHooks in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/resource",
+    "grep func \\(b \\*backend\\) (WatchWriteEvents|poller|ListIterator) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/sql/backend.go",
+    "grep NewResourceServer|\\.Init\\(|search|Search in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/resource/server_test.go",
+    "list_files pkg/storage/unified/{resource,search}/*_test.go in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+    "grep type ResourceServer interface in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/resource",
+    "grep func NewBroadcaster in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/resource/broadcaster.go"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9480,
+  "diff_chars_injected": 9480,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 21,
+  "prompt_tokens": 168182,
+  "cached_tokens": 128267,
+  "cache_write_tokens": 39905,
+  "completion_tokens": 12034,
+  "reasoning_tokens": null,
+  "duration_seconds": 119.22679520817474,
+  "cost_usd": 1.1462231,
+  "cost_basis": "provider"
+}

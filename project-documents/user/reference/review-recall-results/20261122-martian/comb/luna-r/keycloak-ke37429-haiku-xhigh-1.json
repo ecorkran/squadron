@@ -1,0 +1,41 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The Lithuanian account TOTP instruction is Italian, so users see the wrong language."
+  ],
+  "F2": [
+   "KEEP",
+   "The Simplified Chinese bundle uses Traditional Chinese characters in the new TOTP instruction."
+  ],
+  "F3": [
+   "KEEP",
+   "The broad pattern can treat non-anchor tags as anchors and bypass the HTML sanitizer."
+  ],
+  "F4": [
+   "DROP",
+   "This weakens a test assertion but does not establish a defect in the changed code."
+  ],
+  "F5": [
+   "DROP",
+   "Missing coverage alone is not a defect when no failing behavior is shown."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00260567
+}

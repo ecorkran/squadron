@@ -1,0 +1,31 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Successful batches and empty results are logged at error level, producing false failure signals and potentially large log entries."
+  ],
+  "F2": [
+   "KEEP",
+   "Repeatedly formatting the accumulated ID string causes quadratic copying for large SQLite cleanup batches."
+  ],
+  "F3": [
+   "KEEP",
+   "The one-minute ticker runs every cleanup job ten times as often and can trigger another run immediately after a long cleanup."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0014773800000000001
+}

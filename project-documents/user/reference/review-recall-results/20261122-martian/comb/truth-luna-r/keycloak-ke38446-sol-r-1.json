@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Successful external updates leave the old local credential available for fallback validation."
+  ],
+  "F2": [
+   "KEEP",
+   "Successful validation never changes the test provider\u2019s stored codes, so codes remain reusable and the displayed number never advances."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00264527
+}

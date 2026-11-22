@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The component\u2019s outer flex item retains its min-content width, preventing long titles from shrinking and pushing header controls offscreen."
+  ],
+  "F2": [
+   "KEEP",
+   "The retained negative margin pulls custom messages into the avatar column after the common layout\u2019s padding and flex changes."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.05352540000000001
+}

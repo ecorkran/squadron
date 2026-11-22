@@ -1,0 +1,25 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "close()` calls `queue_pool.shutdown()` on the factory's single shared pool, but `factory.queue_pool` is only cleared in `factory.shutdown()`. So the next strategy gets a dead pool: `put` raises `ShutDown`, and `submit` then marks that offset complete and commits past a message that was never processed."
+  ],
+  "F2": [
+   "KEEP",
+   "Workers get `shutdown=True` before the queues are shut down with `immediate=False`, so each worker exits after its current item. Items still queued are never processed, which defeats the drain that `immediate=False` is meant to give and breaks the \"graceful\" contract."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  6
+ ],
+ "cost_usd": 0.15744940000000002
+}

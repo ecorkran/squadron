@@ -1,0 +1,37 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The kill guard does not recognize spawned workers, so unhealthy workers are not killed by this path."
+  ],
+  "F2": [
+   "KEEP",
+   "An expired deadline breaks the loop before remaining workers receive shutdown cleanup."
+  ],
+  "F3": [
+   "KEEP",
+   "Each buffer queries cluster-wide memory, duplicating the same Redis work for every worker."
+  ],
+  "F4": [
+   "KEEP",
+   "The patched sleep is a no-op, so the test has no synchronization before joining the flusher."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0025540999999999997
+}

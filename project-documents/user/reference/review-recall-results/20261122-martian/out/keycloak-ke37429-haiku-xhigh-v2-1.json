@@ -1,0 +1,200 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The anchor regex also matches `<abbr>`, `<article>`, `<audio>` and other non-anchor tags, so the sanitizer skips them whenever the English source contains the same tag",
+      "description": "`ANCHOR_PATTERN` is `</?a[^>]*>`, which matches any tag whose name starts with `a`, not only `<a>`. `santizeAnchors` (lines 150-162) removes every match that is identical to the English tag at the same position (line 155), so those tags never reach the sanitizer. Example: the English value `Some <abbr title=\"x\">text</abbr>` is verified against itself. Both tags match and are removed, leaving `Some text`, which sanitizes to itself, so no message is produced. `POLICY_SOME_HTML` (lines 58-61) does not allow `abbr`, so this should be flagged. A translation that reuses the same tag also passes. No shipped bundle currently contains such a tag (grep found none), so the bypass is latent, but it is a false negative in the gate.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The mismatch-message builder can throw `StringIndexOutOfBoundsException` when the common prefix and suffix overlap",
+      "description": "The prefix loop (lines 102-105) and the suffix loop (lines 106-109) are each bounded only by the two string lengths, not by each other. They can overlap, and then `sanitized.substring(start, sanitized.length() - end)` gets begin greater than end. Input: an English value with no HTML (so `POLICY_NO_HTML`) and a translation `<b><1>`. The sanitizer drops `<b>` and keeps `<1>`, as the comment at line 94 describes. That gives `value = \"<b><1>\"` and `sanitized = \"<1>\"`, so start=1 and end=3, and `sanitized.substring(1, 0)` throws. Nothing catches it in `verifySafeHtml` or `verify()`, which catch only `IOException`. The exception aborts `ThemeVerifierMojo` (`ThemeVerifierMojo.java:51`) with a raw stack trace, so the build fails without the collected messages and the remaining files are not checked.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The admin-ui English bundle now uses MessageFormat placeholders in a file that i18next interpolates with `{{n}}`",
+      "description": "The diff changes `error-invalid-multivalued-size` from `{{0}}`/`{{1}}`/`{{2}}` to `{0}`/`{1}`/`{2}` plus a `{2,choice,...}` clause. The admin UI loads this bundle through i18next (`js/apps/admin-ui/src/i18n/i18n.ts:16-18`), which substitutes only `{{name}}` placeholders. In this file, line 3138 is the only single-brace placeholder (a grep for `[^{]\\{[0-9]\\}[^}]` matches only that line), so the key would render with literal `{0}`, `{1}` and `{2,choice,...}`. The same change appears in `js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:188`. That bundle has 25 `{{n}}` placeholders, and its loader (`js/apps/account-ui/src/i18n.ts:27-29`) is also i18next. The server does not rewrite placeholders when it serves these bundles. MessageFormat syntax is right for the server-rendered bundles, which go through `java.text.MessageFormat`, but not for the JS bundles. I could not trace which UI component renders this key, so the user-visible impact depends on that path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Lithuanian account `totpStep1` now contains Italian text",
+      "description": "The new value `Installa una delle seguenti applicazioni sul tuo cellulare:` is Italian, and it matches the `it` bundle's wording. The neighbouring Lithuanian lines are Lithuanian, so Lithuanian users see Italian in this step. The English source is `Install one of the following applications on your mobile:`, so this line needs a Lithuanian translation of that.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Lithuanian login `loginTotpStep1` now contains Italian text",
+      "description": "This is the same copy-paste error as the account bundle. The new value `Installa una delle seguenti applicazioni sul tuo cellulare:` is Italian. It is rendered by `login-config-totp.ftl:10`, so Lithuanian users see it on the login TOTP setup page.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Simplified Chinese account `totpStep1` uses Traditional characters",
+      "description": "The new value `\u5728\u60a8\u7684\u624b\u6a5f\u4e0a\u5b89\u88dd\u4ee5\u4e0b\u61c9\u7528\u7a0b\u5f0f\u4e4b\u4e00\uff1a` uses Traditional forms (\u624b\u6a5f, \u5b89\u88dd, \u61c9\u7528\u7a0b\u5f0f). The other zh_CN lines are Simplified, for example `loginTotpStep1` at `themes/src/main/resources-community/theme/base/login/messages/messages_zh_CN.properties:123` (`\u5728\u60a8\u7684\u79fb\u52a8\u8bbe\u5907\u4e2d\u5b89\u88c5\u4ee5\u4e0b\u4efb\u610f\u4e00\u4e2a\u5e94\u7528\uff1a`). Simplified-Chinese users see Traditional script in this step. The line should be Simplified, for example `\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The anchor regex also matches `<abbr>`, `<article>`, `<audio>` and other non-anchor tags, so the sanitizer skips them whenever the English source contains the same tag",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The mismatch-message builder can throw `StringIndexOutOfBoundsException` when the common prefix and suffix overlap",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:111",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The admin-ui English bundle now uses MessageFormat placeholders in a file that i18next interpolates with `{{n}}`",
+      "location": "js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties:3138",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The Lithuanian account `totpStep1` now contains Italian text",
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The Lithuanian login `loginTotpStep1` now contains Italian text",
+      "location": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The Simplified Chinese account `totpStep1` uses Traditional characters",
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "diff": "ea94b5d50e6de265cb7ddcd13f76a1cff31232cf...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:47:30.723442",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "injected": [],
+  "files_read": [
+    "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java",
+    "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/MessagePropertiesFilter.java",
+    "js/apps/admin-ui/src/i18n/i18n.ts",
+    "js/apps/account-ui/src/i18n.ts",
+    "services/src/main/java/org/keycloak/theme/PropertiesUtil.java"
+  ],
+  "searches": [
+    "grep VerifyMessageProperties|PropertyResourceBundle|StringEscapeUtils in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep error-invalid-multivalued-size in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep totpStep1|loginTotpStep1 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep MESSAGE_INVALID_SIZE|invalid-multivalued in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/services/src/main/java/org/keycloak/userprofile/validator/MultiValueValidator.java",
+    "grep choice|\\{\\{0\\}\\} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js/apps/admin-ui/src",
+    "grep maven-resources|properties-to-json|propertiesToJson|messages_en|interpolation in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js",
+    "grep [^{]\\{[0-9]\\}[^}] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js/apps/admin-ui/maven-resources/theme/keycloak.v2/admin/messages/messages_en.properties",
+    "grep \\{\\{[0-9]\\}\\} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties",
+    "grep params|t\\(error|t\\(.*message in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js/apps/admin-ui/src/utils",
+    "grep \\.params|errorMessage.*\\bt\\(|t\\(.*\\.message, in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js",
+    "grep ValidationError|MESSAGE_INVALID_SIZE|getMessageParameters|errorMessage in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/services/src/main/java/org/keycloak/userprofile",
+    "grep MessageFormat|getMessage\\(\\s*ValidationError|formatMessage\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/services/src/main/java/org/keycloak",
+    "grep errorMessage|\\.responseData in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js/apps/admin-ui/src/components/alert",
+    "grep \\.responseData\\b|errorMessage in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js/apps/account-ui/src",
+    "grep \"\\{\\{\"|\\\\\\{\\\\\\{|replaceAll\\(\"\\\\\\{|\\.replace\\(\"\\{\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/services/src/main/java/org/keycloak",
+    "grep \\{[0-9]+,choice,[^}]*< in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep </?a(?!>|\\s)[a-z]*[\\s>] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep </?a(bbr|rea|rticle|udio|side|ddress|pplet|cronym)[\\s>] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 77585,
+  "diff_chars_injected": 77585,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 26,
+  "prompt_tokens": 1813106,
+  "cached_tokens": 1675295,
+  "cache_write_tokens": 137779,
+  "completion_tokens": 78939,
+  "reasoning_tokens": null,
+  "duration_seconds": 350.50098983291537,
+  "cost_usd": 0.29000637,
+  "cost_basis": "provider"
+}

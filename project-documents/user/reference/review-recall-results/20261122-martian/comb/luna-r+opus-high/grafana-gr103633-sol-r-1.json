@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The denial key is built from only namespace, UserUID, action, name and folder, so `anonymous:0` and `render:0` share an entry; an anonymous denial then blocks renderer dashboard reads that `getRendererPermissions` would allow."
+  ],
+  "F2": [
+   "KEEP",
+   "userPermDenialCacheKey` joins name and parent with `_`, and nothing stops names or folder UIDs from containing underscores, so `(\"a_b\",\"c\")` and `(\"a\",\"b_c\")` share a key and one denial wrongly denies the other resource until the cache entry expires."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1170615
+}

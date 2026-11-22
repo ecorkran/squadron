@@ -1,0 +1,247 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`enableSqlExpressions` always returns false; the flag check is inverted",
+      "description": "`enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)` is followed by `if enabled { return false }` and then `return false`. Both branches return `false`, so the helper is a constant. When the flag is on, `enabled` is `false` and the function still returns `false`. When it is off, the result is also `false`. The SQL case at reader.go:128-131 therefore returns `\"sqlExpressions is not implemented\"` for every SQL expression, whatever the flag says. The helper reads like a real gate but does nothing. Either delete it and return the stub error directly, or implement the gate as `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`. The error is also a plain `fmt.Errorf`, while the sibling SQL constructor returns `errutil.BadRequest` (sql_command.go:27-36). A client-supplied expression type is a bad request, so that error type should probably match.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/reader.go:194-200"
+    },
+    {
+      "severity": "FAIL",
+      "title": "SQL expressions now fail on every path: a silent regression of working functionality",
+      "description": "Before this diff, `TablesList` and `Execute` ran SQL through `duck.NewInMemoryDB()`. The new `DB` returns `errors.New(\"not implemented\")` from `RunCommands` and `QueryFramesInto`. I traced the paths:\n\n- **Legacy path:** `buildCMDNode` (nodes.go:159-160) calls `UnmarshalSQLCommand`, which calls `NewSQLCommand` (sql_command.go:25-36). That calls `sql.TablesList` (parser.go:22-27), which gets an error from `RunCommands` and returns `BadRequest \"error reading SQL command\"`. The legacy switch does not check any toggle, so this breaks SQL expressions for all users, not only those with the flag on.\n- **New-parser path:** behind `FlagExpressionParser` (nodes.go:123-143), the request fails at reader.go:131.\n- **Execute:** sql_command.go:96-105 is now unreachable, because construction always fails first.\n\nThe changelog records SQL expressions as a shipped feature (CHANGELOG.md:1048). Any stored query or alert rule that uses an SQL expression will start failing. The commit message (\"change under review\") and the diff do not say whether this removal is intended. If it is, it needs an explicit decision and a note of the breaking change before merge. If it is a temporary step (for example, to drop a native dependency), it needs a gate that keeps current behavior for existing users until the replacement lands.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql/db.go:12-22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `sqlExpressions` feature toggle description is now false",
+      "description": "The registry says the flag \"Enables using SQL and DuckDB functions as Expressions.\" After this diff, enabling the flag does nothing (see the reader.go finding above), and no DuckDB code remains. Either update the description and stage, or remove the toggle. Removing it also means regenerating the generated toggle files (`toggles_gen.csv:145`, `toggles_gen.go:582-584`, `toggles_gen.json:2856`), which this diff does not touch.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/services/featuremgmt/registry.go:1083-1084"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No active test covers SQL expressions, so this change is not caught",
+      "description": "Every test in `parser_test.go` (lines 9-216) and `pkg/expr/sql_command_test.go:9` starts with `t.Skip()`. Those test files are not in the diff, so they were already skipped before this change. No test in `pkg/expr/reader_test.go` exercises the SQL branch, and nothing asserts the new stub or gate behavior. The regression above would pass CI. Add at least one test that pins the chosen behavior, for example that `ReadQuery` returns the not-implemented error for a `sql` query type both with and without the flag.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/expr/sql/parser_test.go:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`DB` is a placeholder whose method is dead code and shares a name with the package function",
+      "description": "`DB.TablesList` (db.go:12-14) is never called. The package-level `TablesList` (parser.go:22) calls `RunCommands` directly. Go allows the method and the function to share a name, but a reader will easily confuse them. `DB` is an empty struct with no state, and `QueryFramesInto`'s parameters are unused. The exported identifiers (`DB`, its methods, `NewInMemoryDB`, at db.go:9-24) have no doc comments. Remove the unused method, and if the stub is intentional, say so in a comment on `DB` that it is a placeholder.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/expr/sql/db.go:12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependency removal is unverified; go.work.sum has stale and moved entries",
+      "description": "The go.mod diff drops `go-duck` and its indirect dependencies. I grepped all `*.go` files and `go.mod`: nothing still imports the removed modules, and go.mod has no remaining entries for araddon/dateparse, azblob, go-replayers, or gotest.tools/v3. Those checks pass. Three things remain unverified or untidy:\n\n- `go.sum` drops hash lines for araddon/dateparse, hairyhenderson/go-which, iancoleman/orderedmap, gotest.tools/v3 v3.5.1 h1, and go-duck. `go.work.sum` moves hash lines for thrift, overflow, asmfmt, and minio out of go.sum and into itself, and drops azblob and go-replayers entirely. This looks like a partial tidy, and I could not confirm the module graph resolves.\n- `go.work.sum:891-892` still has `scottlepp/go-duck v0.3.1` entries. Nothing in the repo requires that version any more, so these lines are stale.\n- Please run `go mod tidy` and `GOWORK=off go build ./pkg/expr/...`, and confirm `go mod tidy` leaves no diff.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "go.mod"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tablesFromAST` indexes `ast[0]` without a length check (pre-existing, latent)",
+      "description": "This line predates the diff. If `json.Unmarshal` produces an empty slice, the index panics. It is unreachable today because `RunCommands` always errors. It will panic once a real implementation returns `[]`. Add a `len(ast) == 0` guard when the real implementation returns.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql/parser.go:44"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Execute` overwrites its NoData result unconditionally (pre-existing)",
+      "description": "When `frame.Rows() == 0`, the code sets `rsp.Values` to `NoData`, and then line 116 overwrites it with `TableData` regardless. `NoData` is never returned. This predates the diff, which only touched lines 94-100. It is unreachable today, but it should become an `else` when SQL is re-enabled.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql_command.go:110-118"
+    },
+    {
+      "severity": "PASS",
+      "title": "Mechanical rename from go-duck to the local DB in sql_command.go and parser.go",
+      "description": "I read both files. The `duck` import is removed in each, and no `duck.` references remain in the tree. `sql_command.go` already imported `pkg/expr/sql` (line 13), so the new `sql.NewInMemoryDB()` call compiles by reading. `parser.go:23` switches to the local `NewInMemoryDB()` with no other change. The rename is correct as a rename. The behavior change is covered in the findings above.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql_command.go:96-100"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`enableSqlExpressions` always returns false; the flag check is inverted",
+      "location": "pkg/expr/reader.go:194-200",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "SQL expressions now fail on every path: a silent regression of working functionality",
+      "location": "pkg/expr/sql/db.go:12-22",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "The `sqlExpressions` feature toggle description is now false",
+      "location": "pkg/services/featuremgmt/registry.go:1083-1084",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No active test covers SQL expressions, so this change is not caught",
+      "location": "pkg/expr/sql/parser_test.go:9",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`DB` is a placeholder whose method is dead code and shares a name with the package function",
+      "location": "pkg/expr/sql/db.go:12",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Dependency removal is unverified; go.work.sum has stale and moved entries",
+      "location": "go.mod",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`tablesFromAST` indexes `ast[0]` without a length check (pre-existing, latent)",
+      "location": "pkg/expr/sql/parser.go:44",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`Execute` overwrites its NoData result unconditionally (pre-existing)",
+      "location": "pkg/expr/sql_command.go:110-118",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mechanical rename from go-duck to the local DB in sql_command.go and parser.go",
+      "location": "pkg/expr/sql_command.go:96-100",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "diff": "00101eef1aa1d1acd93e97289a309b348a657d7d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:54:21.732883",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "injected": [],
+  "files_read": [
+    "pkg/expr/reader.go",
+    "pkg/expr/sql/db.go",
+    "pkg/expr/sql/parser.go",
+    "pkg/expr/sql_command.go",
+    "pkg/expr/sql/parser_test.go",
+    "pkg/expr/sql_command_test.go",
+    "pkg/expr/nodes.go",
+    "pkg/services/featuremgmt/registry.go"
+  ],
+  "searches": [
+    "grep go-duck|scottlepp in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep FlagSqlExpressions|sqlExpressions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg",
+    "list_files pkg/expr/**/*_test.go in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep TablesList|NewSQLCommand|UnmarshalSQLCommand|NewInMemoryDB|QueryFramesInto|SQLExpression\\b|QueryTypeSQL in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg",
+    "list_files {AGENTS.md,CLAUDE.md,.cursor/rules/**,contribute/**/*.md,contribute/**/*.md} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep araddon/dateparse|azure-sdk-for-go/sdk/storage/azblob|google/go-replayers|gotest.tools/v3|apache/thrift|minio/asm2plan9s|minio/c2goasm|klauspost/asmfmt|hairyhenderson/go-which|iancoleman/orderedmap|JohnCGriffin/overflow in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/go.mod",
+    "grep \"(github\\.com/apache/thrift|github\\.com/JohnCGriffin/overflow|github\\.com/klauspost/asmfmt|github\\.com/minio/asm2plan9s|github\\.com/minio/c2goasm|github\\.com/hairyhenderson/go-which|github\\.com/iancoleman/orderedmap|github\\.com/araddon/dateparse|github\\.com/google/go-replayers|github\\.com/Azure/azur\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "list_files {go.work,go.work.sum,Makefile} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep (?i)(exported|doc comment|godoc|comment.*exported) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/contribute"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19087,
+  "diff_chars_injected": 19087,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 20,
+  "prompt_tokens": 238494,
+  "cached_tokens": 188339,
+  "cache_write_tokens": 50143,
+  "completion_tokens": 28369,
+  "reasoning_tokens": null,
+  "duration_seconds": 125.99329320900142,
+  "cost_usd": 0.027589989999999995,
+  "cost_basis": "provider"
+}

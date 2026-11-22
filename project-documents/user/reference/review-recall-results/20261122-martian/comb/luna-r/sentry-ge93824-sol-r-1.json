@@ -1,0 +1,37 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "SpawnProcess` does not satisfy the guard, so a hung worker is replaced without being killed."
+  ],
+  "F2": [
+   "KEEP",
+   "An expired deadline breaks out before remaining workers are terminated, allowing them to survive shutdown."
+  ],
+  "F3": [
+   "KEEP",
+   "Each buffer repeats the cluster-wide Redis memory query, multiplying synchronous Redis work by the worker count."
+  ],
+  "F4": [
+   "KEEP",
+   "The patched `time.sleep` makes the added delay a no-op, leaving the assertion dependent on a race with the flusher thread."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00409661
+}

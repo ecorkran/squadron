@@ -1,0 +1,36 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "If `embed_category` isn't set or doesn't match any category, the query returns no rows and `[0]['id']` raises, so the migration crashes before it reaches the uncategorized fallback."
+  ],
+  "F2": [
+   "KEEP",
+   "The old lookup stripped `http(s)://` before comparing, so legacy entries like `https://example.com` used to work; the migration now stores them unchanged while `record_for_host` compares against the bare host, so they stop matching."
+  ],
+  "F3": [
+   "DROP",
+   "Only admins can set these values, the migration runs once, and real hostnames never contain apostrophes, so this hardens against input that won't realistically arrive."
+  ],
+  "F4": [
+   "KEEP",
+   "The new validation's `[a-z]{2,5}` suffix rejects valid longer TLDs such as `.museum` and `.technology`, so admins can't add those hosts through the new interface."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3
+ ],
+ "cost_usd": 0.08063909999999999
+}

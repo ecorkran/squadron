@@ -1,0 +1,97 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The AND requires OWNER membership, rejecting team admins who are neither organizers nor attendees."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw guest comparisons allow case variants and plus-addresses to bypass the blacklist."
+  ],
+  "F3": [
+   "KEEP",
+   "Calendar failure results are discarded after attendees are persisted, so failed updates still report success."
+  ],
+  "F4": [
+   "KEEP",
+   "Email preparation failures are caught without their cause and discarded while the handler reports success."
+  ],
+  "F5": [
+   "KEEP",
+   "Neither validation nor insertion deduplicates requested guests, allowing duplicate attendee rows and emails."
+  ],
+  "F6": [
+   "KEEP",
+   "Passing raw guests misclassifies existing attendees as new whenever the request also adds someone new."
+  ],
+  "F7": [
+   "KEEP",
+   "Add-guests emails are sent unconditionally without respecting event-type email-disable metadata."
+  ],
+  "F8": [
+   "KEEP",
+   "The handler adds attendees and sends confirmation emails without checking booking status or time."
+  ],
+  "F9": [
+   "KEEP",
+   "Authenticated attendees can trigger arbitrary-address email sends without guest-count limits or mutation rate limiting."
+  ],
+  "F10": [
+   "KEEP",
+   "The permission translation key is absent, so the dialog displays the raw key."
+  ],
+  "F11": [
+   "KEEP",
+   "Both new templates pass a translation key that reaches the HTML title untranslated."
+  ],
+  "F12": [
+   "KEEP",
+   "The organizer email uses APP_NAME instead of the configured EMAIL_FROM_NAME."
+  ],
+  "F13": [
+   "KEEP",
+   "Validation errors survive successful submission and dismissal, and the nonempty error string makes the fallback unreachable."
+  ],
+  "F14": [
+   "KEEP",
+   "The hardcoded tooltip remains English when the component is displayed in another locale."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 0.1384274
+}

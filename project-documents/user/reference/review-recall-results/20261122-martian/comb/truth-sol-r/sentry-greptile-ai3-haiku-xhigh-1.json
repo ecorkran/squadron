@@ -1,0 +1,42 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The substring check enables weighted counts for negated or mixed-type queries that are not restricted to errors."
+  ],
+  "F2": [
+   "KEEP",
+   "Alias remapping changes the result key to `upsampled_count() as count`, while serialization looks up `count()` and defaults to zero."
+  ],
+  "F3": [
+   "KEEP",
+   "Split queries executing against discover inherit the outer metrics dataset\u2019s ineligibility and incorrectly retain unweighted counts."
+  ],
+  "F4": [
+   "KEEP",
+   "Equations and aliased counts remain unweighted, producing inconsistent count semantics within eligible charts."
+  ],
+  "F5": [
+   "DROP",
+   "The broad exception handlers are present, but the finding identifies no concrete incorrect behavior from suppressing invalid sampling metadata."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.1814801
+}

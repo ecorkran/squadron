@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "timezone.now()` is evaluated at import time, so instances without an explicit `queued` timestamp reuse a stale value."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00013828
+}

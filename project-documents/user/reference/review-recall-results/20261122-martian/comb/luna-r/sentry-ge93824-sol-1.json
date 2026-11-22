@@ -1,0 +1,30 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Spawned processes fail the `multiprocessing.Process` check, so a hung worker can remain alive when its replacement starts."
+  ],
+  "F2": [
+   "KEEP",
+   "Once the deadline expires, `break` skips termination for every remaining worker."
+  ],
+  "F3": [
+   "DROP",
+   "The repeated cluster scan is a low-impact performance concern on this explicitly non-hot submission path."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0027673500000000005
+}

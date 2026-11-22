@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "runSplitQuery` now runs `applyTemplateVariables` (querySplitting.ts:299), and `DataSourceWithBackend.query` (line 185) runs it again on sub-requests that still carry `filters`. Parsed filters go through `addFilterAsLabelFilter`, which has no duplicate check, so the filter is added twice."
+  ],
+  "F2": [
+   "KEEP",
+   "Filtering on `expr` before interpolating lets a variable that resolves to an empty string through to `runSplitQuery`, which drops it and leaves `requests` empty. `requests.filter(...)[0].partition` (querySplitting.ts:96) then throws inside the `.then` at shardQuerySplitting.ts:213, so the rejection goes unhandled and the observable never emits."
+  ],
+  "F3": [
+   "DROP",
+   "Nothing on the frontend puts `__auto` into `scopedVars` or registers it as a variable, so the old `interpolateVariablesInQueries` also left `$__auto` for the backend; this change does not alter how `$__auto` is resolved."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.4102418
+}

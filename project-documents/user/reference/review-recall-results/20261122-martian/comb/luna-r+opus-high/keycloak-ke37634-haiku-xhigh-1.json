@@ -1,0 +1,35 @@
+{
+ "case": "keycloak-ke37634",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "substring(3, 5)` gives the wrong slice (`ta` for `onrtac`) and the `equals \u2192 return false` check is inverted, so the integration matcher only checks the UUID and never the grant shortcut."
+  ],
+  "F2": [
+   "KEEP",
+   "ClientCredentialsGrantType` never sets `Constants.GRANT_TYPE` before `generateAccessToken()`, so client-credentials tokens are encoded as `na` and the new `cc` shortcut is never emitted."
+  ],
+  "F3": [
+   "DROP",
+   "True that the test passes on an NPE from the null `sessionFactory`, but this is a weak test, not a production defect, and the real decode path works."
+  ],
+  "F4": [
+   "DROP",
+   "The \"3-letters\" Javadoc is a documentation error, and length/null checks guard against custom grant shortcuts that no shipped factory provides."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2611441
+}

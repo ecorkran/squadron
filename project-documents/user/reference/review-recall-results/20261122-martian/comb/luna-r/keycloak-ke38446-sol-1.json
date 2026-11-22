@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Successful federated creation leaves any old local recovery credential available for validation."
+  ],
+  "F2": [
+   "KEEP",
+   "The test provider neither consumes accepted codes nor persists remaining-code state, so replay and exhaustion behave incorrectly."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00370932
+}

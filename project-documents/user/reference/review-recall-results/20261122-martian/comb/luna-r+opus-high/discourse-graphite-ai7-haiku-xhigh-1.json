@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The light value at desktop/topic-post.scss:291 is 70%, which washes the link out on white, and the dark value is 30%, a dim gray on a dark background. Other rules in the change use 30/70 for this (e.g. common/base/user.scss:119), so the two values are swapped."
+  ],
+  "F2": [
+   "KEEP",
+   "mobile/topic-post.scss:182 is 50/50, the same as the `h4` at line 190, so the heading levels look identical. The desktop equivalent is 20/80, so this looks like a botched conversion that lowers contrast."
+  ],
+  "F3": [
+   "KEEP",
+   "name` and `.title` are both 50/50 in desktop/user.scss:522/527 and in mobile/user.scss:497/503, so the name loses its emphasis. The same kind of element elsewhere uses 30/70, so this looks like a conversion error in both files."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3
+ ],
+ "cost_usd": 0.0928398
+}

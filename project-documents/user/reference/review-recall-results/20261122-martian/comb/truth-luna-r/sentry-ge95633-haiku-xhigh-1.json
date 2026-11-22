@@ -1,0 +1,47 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Each strategy closes the factory-shared pool, leaving later strategies with stopped workers and queues."
+  ],
+  "F2": [
+   "KEEP",
+   "The worker completes failed items, but the test checks before the delayed commit tick and can fail if timing changes."
+  ],
+  "F3": [
+   "DROP",
+   "The unit test submits offset 101 before checking the next commit, and the integration assertion normally runs before another commit tick."
+  ],
+  "F4": [
+   "KEEP",
+   "The queues are unbounded, so submission never blocks and queue growth can exhaust memory."
+  ],
+  "F5": [
+   "DROP",
+   "Queued work remains uncommitted and can be redelivered; the remaining claim is about shutdown wording and delay."
+  ],
+  "F6": [
+   "KEEP",
+   "Workers can drain all ten items before `get_stats()`, making the positive queue-depth assertion flaky."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  3,
+  5,
+  7
+ ],
+ "cost_usd": 0.00452617
+}

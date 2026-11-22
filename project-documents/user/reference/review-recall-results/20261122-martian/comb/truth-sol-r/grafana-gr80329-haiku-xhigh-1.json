@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Successful cleanup batches, including empty terminal batches, emit Error-level logs and full fetched ID lists, falsely reporting failures."
+  ],
+  "F2": [
+   "KEEP",
+   "Non-SQLite deletes bind every ID without chunking or a batch-size cap, so sufficiently large batches exceed driver parameter limits and abort cleanup."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.0276036
+}

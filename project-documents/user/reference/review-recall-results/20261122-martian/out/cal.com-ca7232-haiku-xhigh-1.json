@@ -1,0 +1,327 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Unused `Prisma` import and missing trailing comma in workflows router",
+      "description": "The diff removed the only `Prisma.BatchPayload` usage but left `Prisma` in the value import from `@prisma/client`. A search of the file finds no `Prisma.` reference. `unused-imports/no-unused-imports` is `error` in `packages/config/eslint-preset.js:22`, so lint fails. The `Prisma` line also lacks the trailing comma that the rest of the list has. Remove the import.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:1-10"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Type-only names imported as values, violating `consistent-type-imports`",
+      "description": "The diff replaced `import type { App, Credential, EventTypeCustomInput, Prisma }` with a value import. In this file those names are used only in type positions: `App[\"categories\"]` (line 79), `Credential` (line 90), `EventTypeCustomInput` (lines 349, 1289), and `Prisma.UserGetPayload` (line 73). Two other added imports have the same problem: `packages/features/ee/workflows/api/scheduleEmailReminders.ts:10` (`Prisma`, `WorkflowReminder`, used only at line 54) and `packages/trpc/server/routers/viewer/workflows.tsx:2` (`PrismaPromise`, used only at line 342). `@typescript-eslint/consistent-type-imports` is `error` with `prefer: \"type-imports\"` (`eslint-preset.js:35-44`). Restore `import type` for these names.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:1-10"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cron cancel loop has no per-reminder error isolation, and its DB deletes never run on error",
+      "description": "Each iteration awaits a SendGrid cancel, but the DB deletes are `PrismaPromise`s, which are lazy. They run only at `Promise.all` after the loop. If any SendGrid call throws, the catch at line 75 runs and no row is deleted. Rows already cancelled at SendGrid stay flagged and are cancelled again on the next run. The loop is sequential and aborts on the first error, so one reminder that keeps failing blocks the rest of the batch. Those reminders are then sent at their scheduled time, because step 1 (lines 33-41) removes a row only after its `scheduledDate` has passed.\n\nThere is a reachable path. `requestReschedule` flags a row (`bookings.tsx:490`), and `handleNewBooking` then cancels the same batch immediately and leaves the row flagged (`handleNewBooking.ts:968`, `emailReminderManager.ts:213-222`). The cron then cancels an already-cancelled batch. I can't tell from the repo whether SendGrid rejects that. Fix: wrap each iteration in its own try/catch, `await` each delete there, type the array as `PrismaPromise<WorkflowReminder>` instead of the internal `Prisma__WorkflowReminderClient`, and filter on `method: WorkflowMethods.EMAIL`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reminder-cancel DB writes are no longer awaited, and their errors are swallowed",
+      "description": "Before the diff, the reminder `deleteMany` promises went into `prismaPromises` and were awaited, so a DB failure failed the cancellation. Now `deleteScheduledEmailReminder` is called without `await`, catches its own errors, and only logs them (`emailReminderManager.ts:233-235`). If the flag write fails, the handler still returns \"Booking successfully cancelled\", and the reminder is still sent because the cron never sees the flag. The same pattern is in `bookings.tsx:488-494` (the `await Promise.all(remindersToDelete)` was removed) and `workflows.tsx:376-382` and `574-580` (the awaited `deleteMany` calls were removed). The SendGrid cancel was already best-effort before this diff. The regression is the DB flag write. Return a result from the helper and await it, or put the calls into the awaited list.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:485-497"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`deleteScheduledEmailReminder` has three behaviors under a name that says \"delete\"",
+      "description": "With no `referenceId`, the function hard-deletes the row. With `immediateDelete`, it cancels at SendGrid and leaves the row alone. Otherwise it only sets `cancelled = true` and leaves the cron to cancel later. A boolean parameter picks between the last two, and the name hides that. The sibling `deleteScheduledSMSReminder` (`smsReminderManager.ts:177-190`) has the same name but always cancels immediately and always deletes the row. The diff also drops the `DELETE /v3/user/scheduled_sends/{referenceId}` call in every path, without a comment or replacement. Split this into explicitly named functions and make the email and SMS helpers follow the same contract.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reschedule path leaves stale reminder rows that point at cancelled batches",
+      "description": "For email, the immediate cancel sends the SendGrid cancel and returns without touching the row (`emailReminderManager.ts:213-222`). The row keeps `scheduled: true` and a `referenceId` for a batch that is already cancelled, and it is not deleted. For SMS, the same block deletes the row (`smsReminderManager.ts:182-186`). Stale email rows pile up until their `scheduledDate` passes. The two halves of a reschedule also disagree: `requestReschedule` (`bookings.tsx:488-494`) flags the row, and the rebook here cancels immediately without clearing that flag, so the cron cancels the same batch again. Pick one model for cancelled rows and apply it to both email and SMS.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:963-975"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "try/catch around un-awaited async calls catches nothing",
+      "description": "`deleteScheduledEmailReminder` and `deleteScheduledSMSReminder` are called inside `forEach` without `await`, so their promises are outside the `try`. Each function has its own internal try/catch. The outer `log.error` can only fire on a synchronous throw, such as `workflowReminders` being undefined, and the query at line 772 prevents that. The block looks like error handling but isn't. Remove it, or use `await Promise.allSettled(...)` and log the rejections.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:964-975"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Same reminder-cancel dispatch copied seven times, with the immediate flag applied inconsistently",
+      "description": "The email/SMS `if`/`else if` dispatch now appears in `handleCancelBooking.ts:486-493`, `handleNewBooking.ts:966-972`, `bookings.tsx:488-494`, and `workflows.tsx` at lines 212-218, 376-382, 519-525, and 574-580. The `immediateDelete` argument varies with no stated rule. It is `true` at `workflows.tsx:214` and `521`, and omitted at `378` and `576`. It is `true` at `handleNewBooking.ts:968` and omitted at `bookings.tsx:490` and `handleCancelBooking.ts:488`. Move the dispatch into one helper that takes the reminders and an explicit mode, so the policy lives in one place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:212-218"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Whitespace-only reflow of a commented-out block in the workflows router",
+      "description": "The diff strips the indentation from the commented-out `testAction` procedure, adding about 100 lines of noise. Either leave the block alone or delete it. This has no functional effect.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:848-1010"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated UI change and hard-coded strings in WorkflowStepContainer",
+      "description": "Dropping `isSenderIdNeeded` from the phone-section wrapper is a valid cleanup. The sender-ID block at line 463 is a separate sibling that always renders, so the change only removes an empty padded box. It is outside the cancellation work, so call it out in the PR description or split it out. The \"Verification code\" and \"Verify\" labels (lines 439, 456) are hard-coded English while neighbouring labels use `t()`. That predates this diff, but the diff moves those lines.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:390"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cancelled` is a nullable boolean",
+      "description": "`cancelled Boolean?` gives three states, but `null` and `false` mean the same thing in every query here (`where: { cancelled: true }`). `Boolean @default(false)` would remove the ambiguity. The migration adds a nullable column with no default, so a non-null version would need a backfill. Decide before this ships.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/prisma/schema.prisma:644"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cron lookahead fits the 15-minute schedule",
+      "description": "The cron runs every 15 minutes (`.github/workflows/cron-scheduleEmailReminders.yml:8`). Cancelling rows whose `scheduledDate` is within the next hour gives about four runs before send time. The timing works, but only if the SendGrid cancel succeeds (see the loop finding above).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:43-51"
+    },
+    {
+      "severity": "PASS",
+      "title": "Migration and schema agree on the new column",
+      "description": "`ADD COLUMN \"cancelled\" BOOLEAN;` matches `cancelled Boolean?` in `schema.prisma:644`. The timestamp is later than every other 2023 migration in the directory.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/prisma/migrations/20230217230604_add_cancelled_to_workflow_reminder/migration.sql:2"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused `Prisma` import and missing trailing comma in workflows router",
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:1-10",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Type-only names imported as values, violating `consistent-type-imports`",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:1-10",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cron cancel loop has no per-reminder error isolation, and its DB deletes never run on error",
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Reminder-cancel DB writes are no longer awaited, and their errors are swallowed",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:485-497",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`deleteScheduledEmailReminder` has three behaviors under a name that says \"delete\"",
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197-236",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reschedule path leaves stale reminder rows that point at cancelled batches",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:963-975",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "try/catch around un-awaited async calls catches nothing",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:964-975",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Same reminder-cancel dispatch copied seven times, with the immediate flag applied inconsistently",
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:212-218",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Whitespace-only reflow of a commented-out block in the workflows router",
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:848-1010",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unrelated UI change and hard-coded strings in WorkflowStepContainer",
+      "location": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:390",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`cancelled` is a nullable boolean",
+      "location": "packages/prisma/schema.prisma:644",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cron lookahead fits the 15-minute schedule",
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:43-51",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migration and schema agree on the new column",
+      "location": "packages/prisma/migrations/20230217230604_add_cancelled_to_workflow_reminder/migration.sql:2",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "diff": "d0130224f54c3d53c3255d8006c6141da09e3f62...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T15:11:46.273556",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "injected": [],
+  "files_read": [
+    "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts",
+    "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "packages/trpc/server/routers/viewer/workflows.tsx",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/features/ee/workflows/components/WorkflowStepContainer.tsx",
+    "packages/trpc/server/routers/viewer/bookings.tsx",
+    "packages/features/bookings/lib/handleCancelBooking.ts",
+    ".github/workflows/cron-scheduleEmailReminders.yml",
+    "packages/config/eslint-preset.js"
+  ],
+  "searches": [
+    "grep deleteScheduled(Email|SMS)Reminder\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep \\bPrisma\\b[^a-zA-Z_] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/trpc/server/routers/viewer/workflows.tsx",
+    "grep Prisma|PrismaPromise|WorkflowMethods|deleteScheduled|BatchPayload in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/trpc/server/routers/viewer/bookings.tsx",
+    "grep Prisma|PrismaPromise|BatchPayload|prisma\\.|deleteScheduled|WorkflowMethods|workflowReminders|cancelScheduledJobs in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/bookings/lib/handleCancelBooking.ts",
+    "grep \\blog\\b\\s*=|import .*\\blog\\b|const log in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/bookings/lib/handleNewBooking.ts",
+    "grep isSenderIdNeeded|isPhoneNumberNeeded in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/ee/workflows/components/WorkflowStepContainer.tsx",
+    "grep Prisma\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/trpc/server/routers/viewer/workflows.tsx",
+    "grep cancelled|referenceId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/prisma/schema.prisma",
+    "list_files packages/prisma/migrations/2023*/** in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep scheduleEmailReminders|scheduleSMSReminders in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep model WorkflowStep \\{|workflow +Workflow|workflowId +Int in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/prisma/schema.prisma",
+    "grep consistent-type-imports|import/consistent-type|no-unused-vars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep Prisma\\.(?!UserGetPayload|PromiseReturnType|[A-Z][A-Za-z]*WhereInput|[A-Z][A-Za-z]*Select|[A-Z][A-Za-z]*Include|BookingScalarFieldEnum|[A-Z][A-Za-z]*OrderBy)[A-Za-z]+|\\b(App|Credential|EventTypeCustomInput)\\b\\s*[\\.(] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/bookings/lib/handleNewBooking.ts",
+    "grep apiDeletes|Prisma\\.[a-z]|instanceof Prisma|new Prisma|Prisma\\.sql in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/bookings/lib/handleCancelBooking.ts",
+    "grep instanceof Prisma|new Prisma|Prisma\\.sql|Prisma\\.[A-Z][A-Za-z]*Error|Prisma\\.(raw|join|empty)|\\bApp\\[\\]|\\bCredential\\[\\]|: App\\b|: Credential\\b|as App\\b|EventTypeCustomInput\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/bookings/lib/handleNewBooking.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 27759,
+  "diff_chars_injected": 27759,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 31,
+  "prompt_tokens": 749742,
+  "cached_tokens": 651700,
+  "cache_write_tokens": 98020,
+  "completion_tokens": 66874,
+  "reasoning_tokens": null,
+  "duration_seconds": 294.5111117088236,
+  "cost_usd": 0.12950235999999998,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,24 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "MetricAlertDetectorHandler` remains abstract, so accessing `detector_handler` for its registered group type raises `TypeError`."
+  ],
+  "F2": [
+   "DROP",
+   "This identifies a weakness in test assertions, not a behavior defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.001244
+}

@@ -1,0 +1,297 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Denial cache key ignores identity type, so anonymous and renderer requests share denial entries",
+      "description": "The denial lookup runs before identity-type dispatch. Its key (`userPermDenialCacheKey`, cache.go:30-32) is built from namespace, `checkReq.UserUID`, action, name, and folder, with no identity type. The tests use subjects `anonymous:0` (service_test.go:803) and `render:0` (service_test.go:853). Both appear to parse to UID `0`, so their keys are identical for the same action, name, and folder. If an anonymous check for `dashboards:read` on `dash1` is denied, the entry written at service.go:153-155 causes a renderer check for the same dashboard to return `Allowed: false` for up to 30s. Renderer is granted `dashboards:read` through the `\"*\"` path (service.go:446-447), and the existing renderer test expects allow (service_test.go:848-860). The denial cache only denies, so this produces false denies rather than false allows, but it breaks rendering.\n\nFix: include the identity type (or the resolved identity) in the denial key. Add a regression test: deny an anonymous check, then assert a renderer check for the same resource is still allowed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go:116-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Denial key uses an ambiguous `_` delimiter and reuses the user-permission prefix",
+      "description": "The key joins caller-controlled fields with `_` and no escaping. Legacy UIDs may contain `_` (`pkg/util/shortid_generator.go:23,33`). So `name=\"a_b\", folder=\"c\"` and `name=\"a\", folder=\"b_c\"` both produce `\u2026perm_<uid>_dashboards:read_a_b_c`. A denial for one dashboard then blocks the other for 30s, even if it is allowed. The key also uses the `.perm_` prefix from `userPermCacheKey` (cache.go:26-28), so prefix-based inspection or deletion cannot tell them apart. The key also uses the raw `checkReq.UserUID`, which can be a numeric ID (service.go:465), while `permCache` uses the resolved UID (service.go:360). The same user can therefore have two denial entries.\n\nFix: use a distinct prefix and an unambiguous encoding (length-prefixed, JSON array, or hash), and key on the resolved identity.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/cache.go:30-32"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Denial test does not discriminate, and the denial write path has no test",
+      "description": "The comment at line 981 says the allow is set \"to prove this is not checked,\" but line 982 sets the value to `false`. If the denial lookup were removed, `Check` would still deny: the cached map says `false`, the folder lookup returns nothing (`fStore.folders` is nil), and the DB fallthrough returns no permissions (`fakeStore.userPermissions` is nil). The test passes either way.\n\nThe write path (service.go:153-155) is also untested. Nothing checks that a DB denial populates the entry so a second check is served without the store, or that an allow does not write one.\n\nFix: set the permission cache value to `true` so the test fails without the short-circuit. Add a test that repeats a denied check and asserts the store is not called the second time (`fakeStore.calls`).",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service_test.go:973-993"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "In-process client caching is silently disabled",
+      "description": "The old `newRBACClient` gave both paths a 30s local result cache (visible in the removed lines of the diff). The in-process client now uses `&NoopCache{}`, so every `Check` and `List` from in-process callers goes through the inproc channel to the server. Server-side caches now exist, so this may be intentional, but nothing in the code, tests, or diff explains it. Each cached check also calls `GetUserIdentifiers` (service.go:356).\n\nFix: add a comment explaining why client-side caching is off, and measure the cost on the hot path.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac.go:101-105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`NoopCache` is exported, undocumented, and uses a misleading receiver name",
+      "description": "`NoopCache` is exported from package `authz` with no doc comment. All three methods use receiver `lc`, which reads as left over from a local-cache type. It is only used inside `ProvideAuthZClient`, so it could be unexported (`noopCache`). Also check whether authlib already provides a no-op cache. I could not verify this locally.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac.go:239-251"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cacheHit` branches in `TestService_getUserPermissions` are now dead",
+      "description": "The only `cacheHit: true` case was removed. The remaining cases all set `cacheHit: false`, so the field and the two `if tc.cacheHit` blocks (service_test.go:367-369 and 388-392) are unreachable. Remove them.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service_test.go:336-337"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cache-key derivation is duplicated across three functions",
+      "description": "`getCachedIdentityPermissions` repeats the anonymous and user key derivation from `getUserPermissions` (service.go:379) and `getAnonymousPermissions` (service.go:423). If one key changes, the cached path silently never hits. The only symptom is a lower cache-hit metric. Extract a shared key helper, or make one place the source of truth.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go:342-368"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Errors from the cached lookup are dropped without logging",
+      "description": "Any error from `getCachedIdentityPermissions`, including DB errors from `GetUserIdentifiers`, is discarded and the DB path retries the same call. A failing identifier lookup therefore hits the DB twice per request. The DB path logs the error, so the failure is not hidden. Consider a debug log, or skipping the retry for non-`ErrNotFound` errors. The same pattern appears in `List` at service.go:180-181.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go:123-124"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Denial entries can extend how long a new grant is blocked",
+      "description": "The denial entry is checked before the permission cache and is never invalidated. Its 30s TTL starts when the DB denial is read. A newly granted permission can therefore stay blocked for up to 30s after the grant, even when the permission cache would have refreshed sooner. The failure mode is closed, so this is a tradeoff to document rather than a blocker.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go:153-155"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Renderer traffic now counts as a permission cache miss",
+      "description": "`getCachedIdentityPermissions` returns `ErrNotFound` for `TypeRenderService` (service.go:353-354). Every renderer request now increments `permissionCacheUsage(\"false\")`, which was not counted before. Renderer traffic will skew the cache hit ratio. Exclude renderer from the metric or document the change. The same applies to `List` at service.go:184.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go:137"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pre-existing: the cloud-mode error is dropped when Zanzana is enabled",
+      "description": "This is not part of the diff, but it is in a file the change touches. In cloud mode, `rbacClient, err := newRemoteRBACClient(...)` ignores `err` when `FlagZanzana` is on, so `WithShadowClient` receives a possibly nil client with a nil error. Return `err` before wrapping.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac.go:63-69"
+    },
+    {
+      "severity": "PASS",
+      "title": "Stale allow entries fall back to the database, and the tests cover this",
+      "description": "The \"Fallback to the database on outdated cache\" and \"Fallback to the database on cache miss\" subtests would fail if the fallthrough from the cached path were removed. Both store the expected permission only in the DB and assert allow, so they discriminate. The `TestService_CacheList` case is similarly discriminating.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service_test.go#TestService_CacheCheck"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Denial cache key ignores identity type, so anonymous and renderer requests share denial entries",
+      "location": "pkg/services/authz/rbac/service.go:116-121",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Denial key uses an ambiguous `_` delimiter and reuses the user-permission prefix",
+      "location": "pkg/services/authz/rbac/cache.go:30-32",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Denial test does not discriminate, and the denial write path has no test",
+      "location": "pkg/services/authz/rbac/service_test.go:973-993",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "In-process client caching is silently disabled",
+      "location": "pkg/services/authz/rbac.go:101-105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`NoopCache` is exported, undocumented, and uses a misleading receiver name",
+      "location": "pkg/services/authz/rbac.go:239-251",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`cacheHit` branches in `TestService_getUserPermissions` are now dead",
+      "location": "pkg/services/authz/rbac/service_test.go:336-337",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Cache-key derivation is duplicated across three functions",
+      "location": "pkg/services/authz/rbac/service.go:342-368",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Errors from the cached lookup are dropped without logging",
+      "location": "pkg/services/authz/rbac/service.go:123-124",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Denial entries can extend how long a new grant is blocked",
+      "location": "pkg/services/authz/rbac/service.go:153-155",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Renderer traffic now counts as a permission cache miss",
+      "location": "pkg/services/authz/rbac/service.go:137",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Pre-existing: the cloud-mode error is dropped when Zanzana is enabled",
+      "location": "pkg/services/authz/rbac.go:63-69",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Stale allow entries fall back to the database, and the tests cover this",
+      "location": "pkg/services/authz/rbac/service_test.go#TestService_CacheCheck",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633",
+    "diff": "e1285b747878f75e0e1248bec2e80263ab046fbe...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:52:23.530517",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "injected": [],
+  "files_read": [
+    "pkg/services/authz/rbac/service.go",
+    "pkg/services/authz/rbac.go",
+    "pkg/services/authz/rbac/cache.go",
+    "pkg/services/authz/rbac/service_test.go",
+    "pkg/util/shortid_generator.go"
+  ],
+  "searches": [
+    "grep permCache|permDenialCache|cacheHit|NoopCache|\\.Delete\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/services/authz",
+    "grep func \\(f \\*fakeStore\\) (ListFolders|GetUserPermissions)|func \\(f \\*fakeIdentityStore\\) ListUserTeams in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/services/authz/rbac",
+    "grep (?i)uid.*(regexp|MustCompile|\\^\\[)|a-zA-Z0-9.*_ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/apimachinery",
+    "list_files **/grafana/authlib*/cache/*.go in /Users/manta/go/pkg/mod/github.com",
+    "grep func ValidateUID|isValidUID|validUIDRegex|ValidUID|uidRegex|MustCompile\\(.*[Uu][Ii][Dd] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg",
+    "grep grafana/authlib  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/go.mod",
+    "grep TypeRenderService|TypeAnonymous in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/services/authz",
+    "grep Subject:\\s+\"(anonymous|render) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 16281,
+  "diff_chars_injected": 16281,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 536512,
+  "cached_tokens": 466303,
+  "cache_write_tokens": 70189,
+  "completion_tokens": 44566,
+  "reasoning_tokens": null,
+  "duration_seconds": 206.14911474986002,
+  "cost_usd": 0.04197443000000001,
+  "cost_basis": "provider"
+}

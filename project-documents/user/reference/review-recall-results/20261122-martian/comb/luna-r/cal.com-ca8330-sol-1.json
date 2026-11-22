@@ -1,0 +1,37 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Override availability returns before busy-time validation, allowing conflicting bookings and calendar events to remain bookable."
+  ],
+  "F2": [
+   "KEEP",
+   "The predicate rejects a slot outside any one working-hours interval and calculates its end from its start time."
+  ],
+  "F3": [
+   "KEEP",
+   "A same-day override that excludes a slot rejects it even when another override interval contains it."
+  ],
+  "F4": [
+   "KEEP",
+   "Extracting only converted hours and minutes loses midnight rollover, causing cross-day override availability to be dropped."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0022755600000000003
+}

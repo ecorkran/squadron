@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Public member loading requests only 50 records and provides no pagination to access the rest."
+  ],
+  "F2": [
+   "KEEP",
+   "Deleting the join row directly bypasses the callback that clears a matching primary group."
+  ],
+  "F3": [
+   "KEEP",
+   "The page count adds an empty page when the member count is an exact multiple of the limit."
+  ],
+  "F4": [
+   "KEEP",
+   "Re-adding a member can violate the unique join-table index, and the submitted usernames remain selected."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00204362
+}

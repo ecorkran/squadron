@@ -1,0 +1,31 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Normal cleanup batches log at error level and include IDs even when deletion succeeds or finds no rows."
+  ],
+  "F2": [
+   "KEEP",
+   "SQLite ID-list construction repeatedly copies the growing string, causing quadratic work for large batches."
+  ],
+  "F3": [
+   "KEEP",
+   "The one-minute ticker schedules every cleanup job more frequently, and a pending tick can trigger another run after a long cleanup."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00131352
+}

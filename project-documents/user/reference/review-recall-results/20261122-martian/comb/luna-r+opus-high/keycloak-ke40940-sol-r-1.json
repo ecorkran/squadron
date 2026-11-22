@@ -1,0 +1,27 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The `null` does break the \"never null\" Javadoc, but every in-tree caller passes it on to `setSubGroupCount(Long)` without unboxing, so nothing crashes; the old code threw a NullPointerException here."
+  ],
+  "F2": [
+   "DROP",
+   "A request still in flight when the flag flips could be missed, but most deletes overlap with reads, so this only weakens test sensitivity slightly and never causes a false failure."
+  ],
+  "F3": [
+   "DROP",
+   "The reader is left running only after a `remove()` has already failed the test, so this is test cleanup, not a defect in the change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.1287473
+}

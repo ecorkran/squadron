@@ -1,0 +1,24 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "MetricAlertDetectorHandler` now inherits from `StatefulDetectorHandler` with only `pass`, so its four abstract members are missing. `Detector.detector_handler` then calls `group_type.detector_handler(self)`, which raises `TypeError` for any `metric_alert_fire` detector."
+  ],
+  "F2": [
+   "DROP",
+   "It's true that `IssueOccurrence.__eq__` compares only IDs, but this is weak test coverage rather than a production defect, and the `\"val1\"`/`\"group_key\"` mismatch causes no wrong runtime behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.1298397
+}

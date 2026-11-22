@@ -1,0 +1,93 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 7,
+  "F8": 8,
+  "F9": 9,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12,
+  "F13": 13,
+  "F14": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "parseRefreshTokenResponse` returns the `safeParse` result. Google saves that whole object as `key` (lines 97\u2013100), so the row becomes `{success, data}` and `googleCredentialSchema.parse` fails the next time it runs."
+  ],
+  "F2": [
+   "KEEP",
+   "credentialId` (`credential.id`) is passed where `refreshOAuthTokens` expects `userId` (line 93). The sync endpoint gets the wrong ID, and team credentials still take the sync path."
+  ],
+  "F3": [
+   "KEEP",
+   "z.string().toString()` produces a fixed key such as \"[object Object]\" that must hold a number. No real token response has it, so the sync-mode parse always fails, and the default strip mode drops the other fields."
+  ],
+  "F4": [
+   "KEEP",
+   "in sync mode the helper returns a fetch `Response`. Google's `res?.data`, Bigin's `tokenInfo.data.error`, and HubSpot's `expiresIn`/`accessToken` all expect a provider-client shape, so they throw or save NaN/garbage."
+  ],
+  "F5": [
+   "KEEP",
+   "prisma` is never imported in the Salesforce service. `globalThis.prisma` is only set outside production, so the update at line 96 throws a ReferenceError in production."
+  ],
+  "F6": [
+   "DROP",
+   "the HTTP/2 empty-`statusText` failure is speculative because Node fetch uses HTTP/1.1 here, and the dead `.success` branch is not a behaviour defect."
+  ],
+  "F7": [
+   "KEEP",
+   "when the response has no `refresh_token`, the literal \"refresh_token\" is written in. Office 365 spreads it over the stored credential and Zoom assigns it directly, so the real refresh token is overwritten."
+  ],
+  "F8": [
+   "DROP",
+   "the generic error and the removed log are an observability and documentation point, not wrong behaviour."
+  ],
+  "F9": [
+   "KEEP",
+   "Zoom sends `appSlug` \"zoomvideo\", but the app's slug is \"zoom\". The other callers send the real slugs (e.g. \"google-calendar\"), so the sync endpoint gets an inconsistent, wrong slug."
+  ],
+  "F10": [
+   "KEEP",
+   "the webhook checks the shared secret with a plain `!==` string comparison, which is not constant-time and can leak the secret through timing (CWE-208)."
+  ],
+  "F11": [
+   "KEEP",
+   "schema.parse`, `symmetricDecrypt` and `JSON.parse` run without a try/catch, so a malformed request returns 500 instead of a client error."
+  ],
+  "F12": [
+   "DROP",
+   "validating the payload against the app's schema before writing is a design suggestion; readers already validate when they use the credential."
+  ],
+  "F13": [
+   "DROP",
+   "the constant only ever serves as a truthy check, and the server-only env value is not exposed to the client, so behaviour is correct."
+  ],
+  "F14": [
+   "KEEP",
+   "the outbound sync request asks for live access tokens using only `calcomUserId`/`appSlug` and sends no secret, so the receiving endpoint cannot tell whether the caller is Cal.com."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  7,
+  9,
+  10,
+  11,
+  14
+ ],
+ "cost_usd": 0.31757019999999997
+}

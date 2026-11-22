@@ -1,0 +1,53 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The goroutines derive their context from the request `ctx` without `context.WithoutCancel`, so the async legacy writes can be cancelled once the handler returns."
+  ],
+  "F2": [
+   "KEEP",
+   "The async legacy calls only record an error boolean in a histogram and never log the error, so a failed legacy write leaves no log line."
+  ],
+  "F3": [
+   "KEEP",
+   "Verified: lines 45 and 129 record storage failures in the legacy histogram, and line 166 records the legacy DeleteCollection in the storage histogram, so the metrics are wrong."
+  ],
+  "F4": [
+   "KEEP",
+   "Line 106 passes `name` as the `kind` label, which gives the metric unbounded cardinality and wrong data in newly written code."
+  ],
+  "F5": [
+   "DROP",
+   "In mode 3, storage is the read authority, so returning NotFound is a reasonable simplification; the orphaned-legacy-row case is speculative."
+  ],
+  "F6": [
+   "KEEP",
+   "Legacy now re-applies the raw `objInfo` to its own old object instead of persisting the object storage wrote (unlike mode 2's `updateWrapper`), so the two stores can diverge."
+  ],
+  "F7": [
+   "DROP",
+   "The finding itself says the dry-run handling predates this change; the old code also passed `options` to legacy unconditionally."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.2072823
+}

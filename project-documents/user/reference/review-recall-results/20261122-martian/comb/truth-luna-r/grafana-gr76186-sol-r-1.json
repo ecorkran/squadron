@@ -1,0 +1,17 @@
+{
+ "case": "grafana-gr76186",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Missing behavioral tests are a test-coverage concern, not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.00053394
+}

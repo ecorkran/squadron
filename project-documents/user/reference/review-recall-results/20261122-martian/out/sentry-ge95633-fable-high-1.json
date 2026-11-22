@@ -1,0 +1,258 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Strategy close shuts down the factory-owned queue pool, so messages after a rebalance are dropped and committed",
+      "description": "The pool is created once in the factory `__init__` (`result_consumer.py:133`) and the same instance is handed to every strategy built by `create_thread_queue_parallel_worker` (`result_consumer.py:254-259`). But `close()`, `terminate()` and `join()` on the strategy all call `self.queue_pool.shutdown()`, which stops the workers and shuts down every queue (`queue_consumer.py:231-243`). Nothing restarts them.\n\nArroyo closes and joins the strategy on partition revocation, then calls `create_with_partitions` again on assignment. For the new strategy:\n- `FixedQueuePool.submit` registers the offset and then `work_queue.put` raises `queue.ShutDown` (`queue_consumer.py:211-212`).\n- `queue.ShutDown` is an `Exception`, so the blanket handler in `SimpleQueueProcessingStrategy.submit` logs it and marks the offset complete (`queue_consumer.py:317-325`).\n- The commit loop then commits that offset.\n\nThe result is permanent, silent data loss for the rest of the process lifetime. The shared `OffsetTracker` also carries `last_committed` and `outstanding` state for revoked partitions into the next assignment.\n\nFix: give the pool a single owner. Either the factory owns it and the strategy only stops its commit thread and drains, or each strategy creates its own pool and tracker. No test calls `create_with_partitions` twice, which is why this is not caught.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blanket `except Exception` in `submit` turns any enqueue failure into a committed, unprocessed message",
+      "description": "Any failure in decoding, grouping or enqueueing is logged and the offset is marked complete. That is reasonable for a poison payload, but it also covers infrastructure failures such as a shut-down queue, and it is what makes the finding above silent. Limit the skip-and-commit path to decode failures and let the rest propagate so the consumer crashes instead of committing past unprocessed data.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:317-325"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Queues are unbounded, contradicting the documented backpressure guarantee",
+      "description": "The class docstring promises \"Natural backpressure when queues fill up\" (`queue_consumer.py:253`), but each queue is `queue.Queue()` with no `maxsize`, and `submit` never raises `MessageRejected`. If workers are slower than ingest, or one hot subscription stalls a queue, the consumer keeps reading and memory grows without limit, both in the queues and in the tracker's offset sets. Each `WorkItem` also holds the full original `message`, which is never read (`queue_consumer.py:31`). Use bounded queues and raise `MessageRejected` when full, and drop the unused field.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Committable-offset calculation requires contiguous offsets and stalls forever on a gap",
+      "description": "`get_committable_offsets` walks `range(start, max_offset + 1)` and stops at the first offset not in `all_offsets`. Kafka offsets are not guaranteed contiguous (compaction, transaction markers). A single gap means that partition never commits again and `all_offsets` grows unbounded. Because one thread submits each partition in offset order, the contiguity check adds no safety: \"highest seen offset below the smallest outstanding one\" is sufficient and gap-tolerant. The tests lock in the gap-blocking behaviour (`test_offset_gaps_block_commits`, `test_thread_queue_parallel_offset_gaps`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:86-93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shutdown is not graceful and `join` ignores its timeout",
+      "description": "- **No drain:** `shutdown()` sets `worker.shutdown = True` before `q.shutdown(immediate=False)`, so each worker exits after its current item (`queue_consumer.py:129`) and queued items are abandoned despite the \"Gracefully\" docstring.\n- **Late completions uncommitted:** `close()` joins the commit thread before stopping the pool (`queue_consumer.py:336-338`), so anything finishing during shutdown is not committed and will be reprocessed.\n- **Timeout ignored:** `join(timeout)` discards its argument (`queue_consumer.py:344-345`); the worst case is 5s for the commit thread plus 5s per worker, joined sequentially.\n- **Unverified:** the final commit is called without `force=True`, so arroyo's commit policy may throttle it, and `commit` is invoked from a background thread. I could not confirm either behaviour against arroyo's source.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:231-243"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Error-handling test asserts the opposite of its docstring and passes only by timing",
+      "description": "`test_thread_queue_parallel_error_handling` says errors \"don't block offset commits\", then asserts that nothing was committed. Both offsets are in fact completed by the worker's `finally` (`queue_consumer.py:149`) and would be committed on the next one-second tick. The assertion holds only because the test checks about 0.2s after processing; on a slow run it fails. It should wait for the commit and assert offset 102.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py:1922"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New tests are racy or do not assert what their names claim",
+      "description": "- **`test_stats_reporting`:** asserts `total_items > 0` right after enqueueing trivial work to live workers, which can already be drained.\n- **`test_different_groups_distributed` (lines 98-106):** depends on per-process randomized `hash()` hitting all three queues, so it is probabilistically flaky.\n- **`test_preserves_order_within_group` and the \"concurrent\" tests:** in `TestSimpleQueueProcessingStrategy` they assert only counts, not order or concurrency.\n- **`test_thread_queue_parallel_graceful_shutdown`:** asserts only that `queue_pool is None`.\n- **Uptime tests:** they poll `qsize() == 0` with sleeps as a completion signal, and never close the strategy, leaking a commit thread per test.\n- **Kafka test (`ProcessResultThreadQueueParallelKafkaTest`):** guards its main assertion with `if commits_made:` and swallows cleanup errors with `except Exception: pass`.\n- **Missing coverage:** nothing covers rebalance (a second `create_with_partitions`), enqueue failure, or commit-function failure.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:199-200"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Docstrings overstate guarantees",
+      "description": "- \"Only commits offsets after successful processing\" is false: the worker completes the offset in `finally` whether or not processing succeeded.\n- \"Consistent hashing\" (`queue_consumer.py:200`) is plain `hash() % n`; that is stable within a process, which is all that is needed, but the term is wrong.\n- The `--mode` help text still says \"Parallel uses multithreading\" without describing the new mode (`src/sentry/consumers/__init__.py:123`).",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:250-254"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor observability and consistency nits",
+      "description": "- The worker opens a `sentry_sdk` transaction around `result_processor`, which opens its own (`result_consumer.py:48`), so transactions are nested; the name also embeds the worker id under a `monitors.` prefix.\n- The `queue_depth` gauge is emitted by every worker with only the `identifier` tag, so workers overwrite each other.\n- The `except queue.ShutDown` around the processor call (`queue_consumer.py:142`) is effectively dead.\n- `wait_until_empty` is unused.\n- The default of 20 is duplicated at `queue_consumer.py:175` and `result_consumer.py:136`, where `max_workers or 20` also maps 0 to 20.\n- The `workers` metric tag is not set for the new mode.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:136-156"
+    },
+    {
+      "severity": "PASS",
+      "title": "Python version compatibility and mode wiring",
+      "description": "`queue.ShutDown` and `Queue.shutdown` need Python 3.13, which the project requires (`setup.cfg:24`). The CLI choice, the `Literal` type and the dispatch in `create_with_partitions` are consistent. Moving `result_processor` construction earlier in `__init__` is safe, and the `+ 1` on committed offsets is correct.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/result_consumer.py:131-137"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Strategy close shuts down the factory-owned queue pool, so messages after a rebalance are dropped and committed",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-345",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Blanket `except Exception` in `submit` turns any enqueue failure into a committed, unprocessed message",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:317-325",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Queues are unbounded, contradicting the documented backpressure guarantee",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:185",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Committable-offset calculation requires contiguous offsets and stalls forever on a gap",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:86-93",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shutdown is not graceful and `join` ignores its timeout",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:231-243",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Error-handling test asserts the opposite of its docstring and passes only by timing",
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py:1922",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New tests are racy or do not assert what their names claim",
+      "location": "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py:199-200",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Docstrings overstate guarantees",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:250-254",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Minor observability and consistency nits",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:136-156",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Python version compatibility and mode wiring",
+      "location": "src/sentry/remote_subscriptions/consumers/result_consumer.py:131-137",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "diff": "f438c4be9d36953d2bc72e0cce4c7eeb5e0b4016...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:34:12.589730",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "injected": [],
+  "files_read": [
+    "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "tests/sentry/uptime/consumers/test_results_consumer.py",
+    "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+    "src/sentry/consumers/__init__.py"
+  ],
+  "searches": [
+    "grep uptime_options|max_workers|thread-queue-parallel|batched-parallel in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/src/sentry",
+    "grep requires-python|python_requires|target-version|python_version in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "list_files **/arroyo/processing/processor.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "grep wait_until_empty|queue_pool|FixedQueuePool|SimpleQueueProcessingStrategy|OffsetTracker in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "grep class UptimeResultsStrategyFactory in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/src/sentry/uptime/consumers/results_consumer.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 55882,
+  "diff_chars_injected": 55882,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 128947,
+  "cached_tokens": 78460,
+  "cache_write_tokens": 50481,
+  "completion_tokens": 12173,
+  "reasoning_tokens": null,
+  "duration_seconds": 116.83711262466386,
+  "cost_usd": 1.312582,
+  "cost_basis": "provider"
+}

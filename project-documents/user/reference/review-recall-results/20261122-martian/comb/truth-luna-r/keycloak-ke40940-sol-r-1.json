@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The changed fallback returns `null` when the backing group is missing, contrary to the documented non-null contract."
+  ],
+  "F2": [
+   "KEEP",
+   "The test sets `deletedAll` without waiting for an in-flight request, so it can assert before that request records an exception."
+  ],
+  "F3": [
+   "KEEP",
+   "If deletion throws before `deletedAll.set(true)`, the non-daemon reader loop continues indefinitely."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0027979
+}

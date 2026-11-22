@@ -1,0 +1,263 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Equal `order()` values make provider selection depend on classpath order",
+      "description": "`detectProvider` sorts by `order()` and takes the first entry. Default, FIPS and Elytron all return 200 (`crypto/default/.../DefaultCryptoProvider.java:84`, `crypto/fips1402/.../FIPS1402Provider.java:115`, `crypto/elytron/.../WildFlyElytronProvider.java:77`). `sorted` is stable, so a tie is resolved by `ServiceLoader` discovery order, which follows the classpath. The old code threw \"Multiple crypto providers loaded\"; the new code silently picks one.\n\nThis matters for `integration/client-cli/client-cli-dist/assembly.xml:58-65`. That assembly copies both `keycloak-crypto-default` and `keycloak-crypto-fips1402` into `bin/client/lib`. `Globals.main` (`integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/Globals.java:44`) auto-detects over that directory, so the CLI can run with either provider. In a FIPS setup that could mean non-FIPS crypto. The Quarkus server path calls `CryptoIntegration.setProvider` explicitly (`quarkus/runtime/.../KeycloakRecorder.java:214`), so the tie mainly affects auto-detect paths.\n\nAlso, line 69 passes a non-literal string to `logger.debugf`, and the message ends with a stray \", \".\n\nSuggested fix: give FIPS a strictly higher order than default, or throw when the top two orders are equal so the ambiguity stays loud.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "DER decoder breaks its `IOException` contract on malformed input",
+      "description": "Today the only input is DER produced by the local JDK: `ECDSAAlgorithm.asn1derToConcatenatedRS` (`core/.../ECDSAAlgorithm.java:49-50`), called from `ECDSASignatureSignerContext`. So this is latent, not exploitable now. But `ECDSACryptoProvider` is public, and the method is declared to throw `IOException` on bad input. The decoder does not do that:\n\n- `readLength` returns -1 for indefinite length (lines 133-135). `readInteger` passes that to `read(length)` (line 72), which runs `new byte[-1]` (line 170) and throws an unchecked `NegativeArraySizeException`.\n- A zero-length INTEGER reaches `new BigInteger(bytes)` (line 73) with an empty array, which throws an unchecked `NumberFormatException`.\n- `readNext` (lines 80-82) computes `length += reset()`. For an indefinite-length element that gives `-1 + headerBytes`, a wrong element size, instead of an error.\n- `readSequence` (lines 55-61) subtracts element sizes from the content length without checking that elements stay inside the sequence, and ignores trailing bytes.\n- On the conversion side, `integerToBytes` (`AuthzClientCryptoProvider.java:151-163`) silently truncates values wider than the coordinate size instead of rejecting them.\n\nSuggested fix: reject 0x80 lengths and zero-length integers with `IOException`, check element bounds against the sequence length, and reject r or s that is negative or wider than `len`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:65-74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`getBouncyCastleProvider()` returns a JDK KeyStore provider, not BouncyCastle",
+      "description": "The interface documents this method as returning the BouncyCastle provider (`common/.../CryptoProvider.java:34-37`). This implementation returns the provider of `KeyStore.getInstance(KeyStore.getDefaultType())`, which is a JDK provider (typically SUN for PKCS12).\n\n`BouncyIntegration.PROVIDER` (`common/src/main/java/org/keycloak/common/util/BouncyIntegration.java:31-40`) is a `static final` value computed once from this method. If this stub wins detection, the wrong provider name is fixed for the life of the JVM. The method also creates a new KeyStore on every call.\n\nSuggested fix: return `null`, which `BouncyIntegration` already handles (lines 35-37), or return the provider this module actually relies on.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:61-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New abstract `order()` on the public SPI breaks external implementers",
+      "description": "All four implementations in this repo now define `order()`, so the tree is consistent. Out-of-tree `CryptoProvider` implementations will fail to compile, and an older jar will fail at runtime with `AbstractMethodError`.\n\nSuggested fix: declare `default int order()` with a documented lowest-priority value so external providers keep working.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:39-44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "ECDSA tests check only internal round-trip and do not cover the new behavior",
+      "description": "- The only assertion (line 56) is that `asn1derToConcatenatedRS(concatenatedRSToASN1DER(rs))` equals `rs`. The JDK-produced DER (line 52) and the re-encoded DER (line 54) are never checked with `Signature.verify`. A conversion error that is symmetric in both directions still passes.\n- Keys are not matched to curves. `KeyPairGenerator.getInstance(\"EC\").genKeyPair()` (line 42) uses default parameters, so the ES256/384/512 tests (lines 59-71) do not exercise their real curves or coordinate sizes.\n- There are no negative tests for the decoder or encoder, which is where the previous finding lives: malformed DER, indefinite length, zero-length INTEGER, wrong sequence size.\n- Nothing tests the new `order()`-based selection in `CryptoIntegration.detectProvider`, including the tie case.\n\nSuggested fix: generate keys per curve (secp256r1, secp384r1, secp521r1), verify the converted signature with `Signature.verify`, and add malformed-input cases that assert `IOException`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:46-57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two unused statements in the DER encoder",
+      "description": "Lines 114-115 create two `ASN1Encoder` instances, call `write` on them, and discard the results. They have no effect and the return statement below already encodes the same values. Remove them.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:114-115"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hamcrest is declared but never used",
+      "description": "The only test (`ECDSAAlgorithmTest.java:27-28`) imports `org.junit.Assert` and `org.junit.Test`. Nothing in `authz/client` uses Hamcrest. Drop it unless planned tests need it. The JUnit dependency itself is managed in the root POM (`junit.version`, root `pom.xml:565`).",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "authz/client/pom.xml:67-71"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`AuthzClient.create` mutates JVM-global crypto state",
+      "description": "`CryptoIntegration.init` is JVM-wide and first-wins (`CryptoIntegration.java:29-38`). All three `create` overloads reach this line (lines 60-63, 72-82), so it always runs. If the first caller's classloader sees only this module's stub, that stub is locked in for the whole JVM. The POM describes this artifact as testsuite-only (`authz/client/pom.xml:18-19`), which lowers the risk. If it stays, document the side effect in the Javadoc.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:94-96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated whitespace-only edits widen the diff",
+      "description": "Trailing spaces are removed in `CryptoProvider.java`, `DefaultCryptoProvider.java` and `FIPS1402Provider.java`, none of which relate to the change. Consider reverting them in this PR.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:94"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Equal `order()` values make provider selection depend on classpath order",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-58",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "DER decoder breaks its `IOException` contract on malformed input",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:65-74",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`getBouncyCastleProvider()` returns a JDK KeyStore provider, not BouncyCastle",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:61-67",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "New abstract `order()` on the public SPI breaks external implementers",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:39-44",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "ECDSA tests check only internal round-trip and do not cover the new behavior",
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:46-57",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Two unused statements in the DER encoder",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:114-115",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Hamcrest is declared but never used",
+      "location": "authz/client/pom.xml:67-71",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`AuthzClient.create` mutates JVM-global crypto state",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:94-96",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unrelated whitespace-only edits widen the diff",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:94",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "diff": "9e01551928c12485c55ca9e77d60d663de9966f9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:41:20.488889",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "injected": [],
+  "files_read": [
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+    "authz/client/pom.xml",
+    "core/src/main/java/org/keycloak/crypto/ECDSASignatureVerifierContext.java",
+    "core/src/main/java/org/keycloak/crypto/ECDSAAlgorithm.java",
+    "common/src/main/java/org/keycloak/common/util/BouncyIntegration.java",
+    "crypto/default/src/main/java/org/keycloak/crypto/def/BCECDSACryptoProvider.java",
+    "common/src/main/java/org/keycloak/common/util/KeystoreUtil.java",
+    "authz/pom.xml",
+    "quarkus/runtime/pom.xml",
+    "integration/client-cli/client-cli-dist/pom.xml",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/KeycloakRecorder.java",
+    "integration/client-cli/admin-cli/src/main/java/org/keycloak/client/cli/common/Globals.java",
+    "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+    "integration/client-cli/client-cli-dist/assembly.xml"
+  ],
+  "searches": [
+    "list_files authz/client/src/**/*.java in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep implements CryptoProvider|extends CryptoProvider|new CryptoProvider\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep asn1derToConcatenatedRS|concatenatedRSToASN1DER in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep hamcrest|org\\.junit\\.Assert|org\\.junit\\.Test in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/authz",
+    "grep CryptoIntegration\\.init|CryptoIntegration\\.setProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep getBouncyCastleProvider\\(\\)|BouncyIntegration\\.PROVIDER\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep <artifactId>keycloak-crypto-(default|fips1402|elytron)</artifactId> in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep <artifactId>(junit|hamcrest|hamcrest-core|hamcrest-library)</artifactId>|<artifactId>hamcrest-all</artifactId> in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/pom.xml",
+    "grep hamcrest in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep <profile>|<activation>|<id>|</profile> in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/integration/client-cli/client-cli-dist/pom.xml",
+    "grep <profile>|<activation>|</profile> in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/quarkus/runtime/pom.xml",
+    "grep return 200;|return 100; in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep CryptoIntegration|AuthzClient\\(|static AuthzClient|public AuthzClient in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/authz/client/src/main/java",
+    "list_files integration/client-cli/client-cli-dist/**/*.xml in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "list_files crypto/*/src/main/resources/META-INF/services/org.keycloak.common.crypto.CryptoProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 31609,
+  "diff_chars_injected": 31609,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 35,
+  "prompt_tokens": 880497,
+  "cached_tokens": 789254,
+  "cache_write_tokens": 91217,
+  "completion_tokens": 54551,
+  "reasoning_tokens": null,
+  "duration_seconds": 246.70627054199576,
+  "cost_usd": 0.05491774000000001,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "header-extra-info}}` renders inside a tagless `div.ember-view`, and that div is the actual flex item in `.d-header .contents`; its default minimum width is the full width of the `nowrap` title, so the title cannot shrink or show an ellipsis (the `order(2)` on `.extra-info-wrapper` misses for the same reason)."
+  ],
+  "F2": [
+   "KEEP",
+   "The change replaced `.small-action-desc`'s 4em left padding with `0 1.5%` inside a new flex row, so the unchanged mobile `margin-left: -40px` on `.custom-message` now pulls the message into the avatar column; this is a layout regression the change causes."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.14323160000000001
+}

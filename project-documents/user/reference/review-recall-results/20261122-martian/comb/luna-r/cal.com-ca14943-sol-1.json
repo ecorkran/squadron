@@ -1,0 +1,19 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "If the reminder was deleted during scheduling, the retry update throws and aborts processing the remaining batch."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00026482999999999997
+}

@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The React message bundles use i18next interpolation, so the single-brace placeholders and Java choice expression will render literally."
+  ],
+  "F2": [
+   "KEEP",
+   "The choice-expression replacement removes branch contents before HTML sanitization, allowing unsafe markup there to evade verification."
+  ],
+  "F3": [
+   "KEEP",
+   "Both Lithuanian bundles contain Italian OTP instructions instead of Lithuanian text."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00408152
+}

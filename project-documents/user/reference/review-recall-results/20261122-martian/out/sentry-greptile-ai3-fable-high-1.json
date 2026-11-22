@@ -1,0 +1,287 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Substring match treats negated and mixed queries as \"error focused\"",
+      "description": "`_is_error_focused_query` returns True whenever the raw query string contains `event.type:error`. That also matches `!event.type:error`, `event.type:error OR event.type:transaction`, and `event.type:error_foo`.\n\nOn the discover dataset with all projects allowlisted, those queries get `count()` rewritten to `sum(sample_weight)` over rows that are not errors. Transactions have no `sample_weight` (the helper's own docstring at line 106 says so), so the count for those rows collapses to zero.\n\nThe docstring claims the check \"errs on the side of caution\", but a substring test is the permissive direction. Decide from the parsed search filters instead, and add tests for the negated and OR cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:130-140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`upsampled_count` assumes every event has a `sample_weight`",
+      "description": "The aggregate is `toInt64(sum(sample_weight))` with no null fallback. The comment says the weight \"exists for all events in allowlisted projects as per schema design\".\n\nIngestion contradicts that: `_derive_client_error_sampling_rate` in `src/sentry/event_manager.py:774-798` only sets `sample_rate` when the SDK sent a valid `client_sample_rate` in (0, 1]. Events from before allowlisting, or from SDKs that don't send the context, carry no rate.\n\nUnless Snuba defaults the weight to 1 (not visible in this repo), those events contribute 0 rather than 1 and charts undercount. Use `sum(ifNull(sample_weight, 1))`.\n\nTwo smaller points in the same block:\n- `Column(\"sample_weight\")` is not entity-qualified, while `ErrorsQueryBuilderMixin` qualifies every column and builds a join when `status` is filtered (`src/sentry/search/events/builder/errors.py:51-57,109-116`). The unqualified column will likely be rejected in that join.\n- `default_result_type=\"number\"` is at odds with the `toInt64` wrapper and with `count()` being `integer`. The function is also public (no `private=True`) although it is only an internal rewrite target.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/search/events/datasets/discover.py:1041-1052"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Top-events ranking still uses raw `count()`",
+      "description": "Only `timeseries_columns` receives the transformed columns. `selected_columns` (`get_field_list`), `orderby` and `equations` go through untouched.\n\nIn `top_events_timeseries` (`src/sentry/snuba/errors.py:252-267`, `src/sentry/snuba/discover.py:489-505`) the top-N query is built from those untouched values. Groups are therefore ranked by sampled count while the series plot upsampled counts, so with differing sample rates the wrong groups can be chosen.\n\nEquations such as `equation|count() / 100` and related aggregates (`eps()`, `epm()`, `count_if`) are likewise not upsampled.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:253-259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Eligibility uses the outer `dataset` and `request` query, not what is actually run",
+      "description": "`_get_event_stats` takes `scoped_dataset` and `query` as arguments, but the upsampling check passes the closure variable `dataset` and re-reads `request.GET[\"query\"]`.\n\nIn the dashboard split path (lines 355-452) the function is called with `discover` and a rewritten query like `({query}) AND !event.type:transaction`. That path requires `metrics_enhanced`, so the closure `dataset` is a metrics dataset and the check always returns False.\n\nError widgets served through the split path therefore show raw counts while the same query made directly is upsampled. Pass `scoped_dataset` and the effective `query`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:220-222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cache layer adds cost and staleness, and its invalidation hook is dead",
+      "description": "`options.get` is the same call ingestion makes inline per job with no extra cache (`event_manager.py:776`). The new code wraps it in a `cache.get`/`cache.set` round trip on every `_get_event_stats` call, up to four per request in the split path.\n\n- **Staleness:** the cached value depends on a global option but is keyed by org and project set, so allowlist changes take up to 60s to apply to queries while ingestion applies them immediately.\n- **Dead code:** `invalidate_upsampling_cache` (lines 67-74) has no callers. It could not work in practice either, since it would need every project-ID combination ever queried.\n- **Key:** `hash(tuple(...))` makes the key opaque and collision-prone for no benefit; `project_ids` is already sorted (`search/events/types.py:182-184`).\n\nDrop the cache and the invalidation function, and turn the allowlist into a set for the membership check.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:27-40"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Transform is triplicated; the RPC branches are unreachable",
+      "description": "The same `if upsampling_enabled: final_columns = transform_...(query_columns)` appears three times (lines 232-233, 276-277, 295-296). Every return path applies it identically, so it can be computed once at the top.\n\n`upsampling_enabled = should_upsample` is a pointless alias.\n\n`use_rpc` is only true for `spans_rpc` and `ourlogs` (line 204), and `_should_apply_sample_weight_transform` returns False for both. The transform in the two RPC branches therefore never runs.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:218-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Comments and docstrings contradict the code",
+      "description": "- `_are_all_projects_error_upsampled` says it \"reads the allowlist configuration fresh each time\u2026 intentional\", while its only caller caches the result for 60s.\n- The endpoint comments at lines 218-219, 224-225 and 230-231 (\"performance optimization\", \"better query optimization and caching\", \"most current schema assumptions\") describe nothing the code does.\n- Test comments like `assert ... == 10  # First bucket has 1 event` (`tests/snuba/api/endpoints/test_organization_events_stats.py:3626-3627`) mislead; the point is one event weighted to 10.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:46-54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests miss the public entry point and the risky paths",
+      "description": "- **Untested functions:** `is_errors_query_for_error_upsampled_projects` (cache hit, miss, and a cached False) and `invalidate_upsampling_cache` have no tests; the unit tests only import private helpers.\n- **Untested endpoint paths:** `dataset=errors`, `topEvents`, `comparisonDelta`, multiple yAxes, events without a sample rate, and negated or OR queries.\n- **Unused setup:** `self.snuba_params` is built in `setUp` and never used.\n- **Fixture confusion:** the endpoint tests reassign `self.user` after `login_as` (`test_organization_events_stats.py:3559-3566`).\n- **Isolation:** the endpoint tests vary the allowlist through a mock while eligibility is cached; they rely on cache clearing or fresh project IDs between tests.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/api/helpers/test_error_upsampling.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test factory shim swallows all exceptions and diverges from production",
+      "description": "`_set_sample_rate_from_error_sampling` has two `except Exception: pass` blocks. It applies to every `store_event` regardless of the allowlist and skips the type and (0, 1] range validation that `_derive_client_error_sampling_rate` enforces.\n\nThe endpoint tests patch only `sentry.api.helpers.error_upsampling.options`, so the real ingestion derivation never runs and this shim is what produces the weights. The tests therefore do not exercise the ingestion-to-query contract.\n\nPrefer `self.options({\"issues.client_error_sampling.project_allowlist\": [...]})` in the tests so both sides read the same option. Failing that, narrow the excepts to `(AttributeError, TypeError, ValueError)`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/testutils/factories.py:344-357"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lint and style issues in the new code",
+      "description": "- 11 lines have trailing whitespace (8 in the helper, 3 in the endpoint at lines 223, 234, 278), which will fail pre-commit.\n- Line 27 exceeds the line-length limit.\n- `organization` is an unused parameter of `_are_all_projects_error_upsampled`.\n- `dataset` is typed `ModuleType` in one function and `Any` in another.\n- `sentry.snuba` imports are function-local and split across two statements without a stated reason.\n- `result = ...; return result` temporaries at lines 63-64 and 123-124 add nothing.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alias rewrite keeps the response shape intact",
+      "description": "`upsampled_count() as count` is accepted by the field parser (`search/events/constants.py:136` allows ` as <alias>`). Because the rewrite happens inside `_get_event_stats`, the outer result handling still sees `count()` and the `count` key. The error-message typo fix at `organization_events_stats.py:124` is correct.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:92-95"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Substring match treats negated and mixed queries as \"error focused\"",
+      "location": "src/sentry/api/helpers/error_upsampling.py:130-140",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`upsampled_count` assumes every event has a `sample_weight`",
+      "location": "src/sentry/search/events/datasets/discover.py:1041-1052",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Top-events ranking still uses raw `count()`",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:253-259",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Eligibility uses the outer `dataset` and `request` query, not what is actually run",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:220-222",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Cache layer adds cost and staleness, and its invalidation hook is dead",
+      "location": "src/sentry/api/helpers/error_upsampling.py:27-40",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Transform is triplicated; the RPC branches are unreachable",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:218-296",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comments and docstrings contradict the code",
+      "location": "src/sentry/api/helpers/error_upsampling.py:46-54",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests miss the public entry point and the risky paths",
+      "location": "tests/sentry/api/helpers/test_error_upsampling.py",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Test factory shim swallows all exceptions and diverges from production",
+      "location": "src/sentry/testutils/factories.py:344-357",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Lint and style issues in the new code",
+      "location": "src/sentry/api/helpers/error_upsampling.py",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Alias rewrite keeps the response shape intact",
+      "location": "src/sentry/api/helpers/error_upsampling.py:92-95",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "diff": "6ed572a59d2f51323f982a2cd7330cbaf12f890a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:35:12.570470",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "injected": [],
+  "files_read": [
+    "src/sentry/api/endpoints/organization_events_stats.py",
+    "src/sentry/api/helpers/error_upsampling.py",
+    "src/sentry/search/events/datasets/discover.py",
+    "src/sentry/testutils/factories.py",
+    "src/sentry/options/defaults.py",
+    "src/sentry/event_manager.py",
+    "src/sentry/snuba/errors.py",
+    "src/sentry/snuba/discover.py",
+    "src/sentry/search/events/types.py",
+    "src/sentry/testutils/cases.py",
+    "src/sentry/search/events/builder/errors.py",
+    "src/sentry/testutils/pytest/fixtures.py",
+    "tests/snuba/api/endpoints/test_organization_events_stats.py"
+  ],
+  "searches": [
+    "grep sample_weight|upsampled_count|client_error_sampling|error_upsampling in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "grep def project_ids|def top_events_timeseries|def timeseries_query|get_function_alias|\\\\s\\+as\\\\s\\+|cache\\.clear\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry",
+    "grep sample_rate|sample_weight in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry",
+    "grep alias|def parse_function|def is_function in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/constants.py",
+    "grep upsampled_count|sample_weight in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/datasets",
+    "grep class ErrorsQueryBuilder|dataset_config|DiscoverDatasetConfig|ErrorsDatasetConfig|Dataset.Events|Dataset.Discover in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/builder",
+    "grep invalidate_upsampling_cache|is_errors_query_for_error_upsampled_projects in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "grep [ \\t]+$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 24916,
+  "diff_chars_injected": 24916,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 23,
+  "prompt_tokens": 195318,
+  "cached_tokens": 145939,
+  "cache_write_tokens": 49369,
+  "completion_tokens": 15992,
+  "reasoning_tokens": null,
+  "duration_seconds": 156.52111491607502,
+  "cost_usd": 1.4599286,
+  "cost_basis": "provider"
+}

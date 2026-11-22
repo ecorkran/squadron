@@ -1,0 +1,45 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler calls `new CalendarCacheRepository()` directly instead of `CalendarCache.init()`, so the `calendar-cache` flag is skipped and the new mock method is never used; with the flag off, leftover cache rows still show a cache status and a delete option."
+  ],
+  "F2": [
+   "DROP",
+   "Access is still correctly denied; the only issue is the error code (500 instead of 403/404), and the client shows the same generic error toast either way."
+  ],
+  "F3": [
+   "KEEP",
+   "Intl.DateTimeFormat(\"en-US\", \u2026)` always shows the date in US format, even when the label around it is translated, so non-English users see the wrong date format."
+  ],
+  "F4": [
+   "DROP",
+   "An empty fixed-width column is a small layout issue, not a functional defect."
+  ],
+  "F5": [
+   "DROP",
+   "This is a local helper script that prints the path it writes to; the cwd-relative path is a minor tooling annoyance."
+  ],
+  "F6": [
+   "DROP",
+   "This is an interactive local helper script that no CI runs, so the exit code on failure has little real effect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  4
+ ],
+ "cost_usd": 0.20664480000000002
+}

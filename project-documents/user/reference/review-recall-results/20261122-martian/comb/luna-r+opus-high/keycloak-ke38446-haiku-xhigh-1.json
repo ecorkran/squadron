@@ -1,0 +1,32 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Passing raw codes to user storage is the normal contract: OTP secrets and passwords also go to `updateCredential` raw, and the storage provider does the hashing."
+  ],
+  "F2": [
+   "DROP",
+   "This is test-fixture code (`BackwardsCompatibilityUserStorage`), not production code, and how a custom provider consumes codes is that provider's job."
+  ],
+  "F3": [
+   "DROP",
+   "It only matters if a user has local codes and later moves to a federated store that supports recovery codes; the OTP path next to it works the same way, so this is a narrow edge case, not a defect the change introduced."
+  ],
+  "F4": [
+   "DROP",
+   "The reviewer admits the branch can't be reached with the current fixture; the claim is speculative and depends on a provider that doesn't exist yet."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.11613609999999999
+}

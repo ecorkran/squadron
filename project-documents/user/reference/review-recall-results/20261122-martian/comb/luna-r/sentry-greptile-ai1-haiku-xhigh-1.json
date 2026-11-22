@@ -1,0 +1,68 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies `math.floor`/`math.ceil` to audit-log datetimes, so any non-empty optimized page raises `TypeError`."
+  ],
+  "F2": [
+   "KEEP",
+   "Organization-token requests can have no member, causing the unguarded `has_global_access` access to raise `AttributeError`."
+  ],
+  "F3": [
+   "KEEP",
+   "A negative cursor offset reaches a negative ORM slice in the advanced branch and raises instead of paginating."
+  ],
+  "F4": [
+   "DROP",
+   "Clamping a malformed negative next-cursor offset avoids the prior slice failure and does not establish a defect requiring a merge fix."
+  ],
+  "F5": [
+   "KEEP",
+   "The optimized paginator passes an integer cursor value to the datetime comparison instead of converting it to a datetime."
+  ],
+  "F6": [
+   "KEEP",
+   "The advanced role-gated path accepts negative offsets and reaches the ORM slice that crashes; validate or reject them."
+  ],
+  "F7": [
+   "DROP",
+   "The class\u2019s duplication and optimization naming are design and maintainability concerns, not behavioral defects."
+  ],
+  "F8": [
+   "DROP",
+   "The inaccurate performance and safety comments are low-value documentation issues; the negative-slice defect is covered separately."
+  ],
+  "F9": [
+   "DROP",
+   "Missing tests alone are not a defect finding, and the substantive pagination defects are reported separately."
+  ],
+  "F10": [
+   "DROP",
+   "Trailing whitespace and extra blank lines are formatting issues, not merge-blocking defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.0048403100000000004
+}

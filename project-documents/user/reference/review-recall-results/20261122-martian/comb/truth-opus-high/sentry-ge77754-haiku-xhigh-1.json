@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "queued: datetime = timezone.now()` at assignment_source.py:18 is a class-level default that runs once at import, so every instance built by `from_integration` carries the process start time and serializes it through `to_dict()`; nothing reads it yet, but the data is wrong."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0316578
+}

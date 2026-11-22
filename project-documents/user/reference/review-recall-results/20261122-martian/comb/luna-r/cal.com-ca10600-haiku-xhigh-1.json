@@ -1,0 +1,83 @@
+{
+ "case": "cal.com-ca10600",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A supplied `totpCode` skips password verification, so a valid backup code can authenticate without the account password."
+  ],
+  "F2": [
+   "KEEP",
+   "Concurrent logins can both accept the same code or overwrite each other\u2019s consumption updates."
+  ],
+  "F3": [
+   "DROP",
+   "The duplicated checks are a maintainability concern, and the differing consumption behavior is intentional for login versus disabling 2FA."
+  ],
+  "F4": [
+   "KEEP",
+   "A non-string backup code can throw and produce a 500 instead of a client error."
+  ],
+  "F5": [
+   "KEEP",
+   "Dismissing the dialog after enabling 2FA skips cache invalidation and can permanently hide the only displayed backup codes."
+  ],
+  "F6": [
+   "KEEP",
+   "The caller\u2019s `type=\"password\"` overrides `PasswordField`\u2019s visibility toggle type."
+  ],
+  "F7": [
+   "KEEP",
+   "An empty backup-code submission can return `SecondFactorRequired` without showing an error because the login is already in the 2FA state."
+  ],
+  "F8": [
+   "KEEP",
+   "Clipboard failures are unhandled while the UI reports success unconditionally."
+  ],
+  "F9": [
+   "DROP",
+   "Missing tests alone are not an actionable defect when the path\u2019s behavior is otherwise covered by the code."
+  ],
+  "F10": [
+   "KEEP",
+   "The assertion passes a Promise to `toBeTruthy()`, so it cannot verify the switch state."
+  ],
+  "F11": [
+   "KEEP",
+   "tabIndex={-1}` removes the shared password visibility toggle from keyboard tab navigation."
+  ],
+  "F12": [
+   "KEEP",
+   "The visible backup-code label is not associated with the input, leaving it without an accessible name."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  4,
+  5,
+  6,
+  7,
+  9,
+  10,
+  11
+ ],
+ "cost_usd": 0.00418234
+}

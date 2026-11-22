@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "canView(ClientModel)` returns on the global view grant before checking client-specific permissions, and listing uses that global result to expose full representations."
+  ],
+  "F2": [
+   "KEEP",
+   "Global manage grants client-scope management and visibility, but `canView()` omits that grant, causing scope listings to be empty or forbidden."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0021241700000000003
+}

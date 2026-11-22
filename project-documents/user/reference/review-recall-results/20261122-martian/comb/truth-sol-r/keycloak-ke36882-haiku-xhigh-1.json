@@ -1,0 +1,17 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Exit code 4 uniquely identifies the disabled feature and is documented as such; the recreate verdict uses code 3."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.013261700000000001
+}

@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 1,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The `...` replacement does skip HTML checks inside choice expressions, but only for two specific keys. It is a deliberate workaround for the `<` that choice syntax uses, and closing the gap would be hardening, not a fix for broken behaviour."
+  ],
+  "F2": [
+   "KEEP",
+   "Both Lithuanian files now hold Italian text (\"Installa una delle seguenti applicazioni sul tuo cellulare:\"): `totpStep1` at `account/messages/messages_lt.properties:101` and `loginTotpStep1` at `login/messages/messages_lt.properties:71`, so Lithuanian users see foreign-language setup instructions."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2
+ ],
+ "cost_usd": 0.127274
+}

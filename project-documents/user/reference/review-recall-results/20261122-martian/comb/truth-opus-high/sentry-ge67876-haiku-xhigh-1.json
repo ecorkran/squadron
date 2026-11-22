@@ -1,0 +1,43 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "state` is `pipeline.signature`, an md5 of the view class names that is the same for every session, so the state check does not tie the callback to the browser that started the flow (login CSRF)."
+  ],
+  "F2": [
+   "KEEP",
+   "If the Integration row is missing, `GitHubInstallation.dispatch` calls `next_step()` before the new installer check and nothing binds `sender`, so that path skips verification entirely."
+  ],
+  "F3": [
+   "KEEP",
+   "integration.metadata[\"sender\"][\"login\"]` raises KeyError when the row has no `sender` (e.g. pipeline-created rows, which `build_integration` never gives one), turning a previously working flow into a 500."
+  ],
+  "F4": [
+   "KEEP",
+   "The check compares the mutable GitHub login, not the stored `sender.id`, so a renamed and re-registered login can match the wrong account or block the real installer."
+  ],
+  "F5": [
+   "KEEP",
+   "The new `safe_urlopen` call sits outside any try and `get_user_info` calls `raise_for_status()`, so connection errors or GitHub 4xx/5xx responses give unhandled 500s instead of `error(...)`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.1400295
+}

@@ -1,0 +1,95 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Website name bypasses restricted-profile filtering",
+      "description": "`website_name` is absent from `untrusted_attributes`, so anonymous visitors can receive a TL0 user\u2019s website hostname\u2014and sometimes path\u2014even when `website` is intentionally withheld. The inclusion method also lacks the required `?` suffix. Apply the same restriction as `website` and test a populated TL0 profile anonymously.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/serializers/user_serializer.rb:153-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unicode paths hide otherwise usable websites",
+      "description": "Ruby\u2019s URI parser rejects unescaped Unicode. An isolated execution confirmed that `http://example.com/caf\u00e9` returns `nil`; the updated template therefore hides the website entirely. Profile updates permit this value, and the previous hostname extraction displayed it. Normalize internationalized URLs before parsing and add regression coverage.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/serializers/user_serializer.rb:138"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Website name bypasses restricted-profile filtering",
+      "location": "app/serializers/user_serializer.rb:153-155",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unicode paths hide otherwise usable websites",
+      "location": "app/serializers/user_serializer.rb:138",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+    "diff": "c49ca5ea63ffedcf975193b44ad65232e521badc...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:54:22.454897",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 5126,
+  "diff_chars_injected": 5126,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 43380,
+  "cached_tokens": 40448,
+  "cache_write_tokens": null,
+  "completion_tokens": 327,
+  "reasoning_tokens": 52,
+  "duration_seconds": 47.58425408275798,
+  "cost_usd": 0.013178800000000001,
+  "cost_basis": "alias_pricing"
+}

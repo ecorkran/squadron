@@ -1,0 +1,48 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Grafana-backed Prometheus rules lack the ruler rule required to render Pause and Delete."
+  ],
+  "F2": [
+   "KEEP",
+   "The Silence action sets state, but the drawer is rendered only when a ruler alerting rule is present."
+  ],
+  "F3": [
+   "KEEP",
+   "Skipping the Grafana rule still permits Duplicate based on Grafana create permission, potentially exposing it for unsupported rules."
+  ],
+  "F4": [
+   "KEEP",
+   "The delegated legacy ability check loses the rule group\u2019s federated status, allowing edits or removal that should be disabled."
+  ],
+  "F5": [
+   "KEEP",
+   "Grafana recording rules are not alerting rules, so the new export ability marks them unsupported."
+  ],
+  "F6": [
+   "DROP",
+   "Filter results append and filter changes remount the list, so missing keys do not cause rows to be reconciled against different rules."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.0038547399999999997
+}

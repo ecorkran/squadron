@@ -1,0 +1,202 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "No re-check of the cache after acquiring the write lock",
+      "description": "The cache is read under `RLock` (lines 41-43), the lock is released, and then the exclusive lock is taken (line 48) with no second look at `entryPointAssetsCache`. In non-dev mode, every goroutine that saw `nil` during a cold start queues on `Lock()` and then re-reads and re-parses `assets-manifest.json` in turn, even though the first one already filled the cache. Each one also replaces the cached pointer with a new, equivalent object.\n\nThe fix is the standard double-checked pattern: after `Lock()`, add `if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`. Alternatively, use `singleflight` or `sync.Once`-style initialisation for the non-dev path.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:41-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed loads are now serialized behind an exclusive lock on every request",
+      "description": "When the load fails (manifest missing or malformed), line 69 stores `nil` in the cache, so the fast path never hits. Every later call takes the exclusive lock and repeats the file I/O and JSON decode while holding it.\n\nBefore this change those retries ran concurrently; now they run one at a time. The affected callers are the index page (`pkg/api/index.go:82`), the frontend settings hash (`pkg/api/frontendsettings.go:62`) and the panic recovery handler (`pkg/middleware/recovery.go:141`), so a broken manifest turns into a global contention point on those paths.\n\nThe same applies to every request in `setting.Dev`, where the cache is bypassed by design. There the `RLock` round trip is also wasted work.\n\nConsider doing the I/O outside the lock and locking only for the pointer swap, and not overwriting a previously good cache entry with `nil` on error.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:48-70"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test covers `GetWebAssets` or the concurrency fix",
+      "description": "The change exists to fix a data race, but `webassets_test.go` only exercises `readWebAssetsFromFile` and a skipped CDN test. `GetWebAssets` has no test at all, so nothing run under `go test -race` would catch a regression of the locking.\n\nA small test would cover it: spawn N goroutines calling `GetWebAssets` against a `setting.Cfg` whose `StaticRootPath` points at a testdata manifest, in both dev and non-dev `Env`. That test would also pin down the cache-hit behaviour.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets_test.go"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Network I/O would be held under the write lock if the CDN path is enabled",
+      "description": "`cdn` is hardcoded to `\"\"`, so `readWebAssetsFromCDN` is currently unreachable from `GetWebAssets`. If it is enabled later, the call would run inside the exclusive lock using `http.DefaultClient`, which has no timeout, bounded only by the request context of whichever caller got there first. Other callers block on a mutex that does not honour their own context. No action is needed now, but restructure the lock scope before turning that branch on.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:54-57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cached pointer is shared and mutable; safe today only because callers are read-only",
+      "description": "The mutex protects the pointer variable, not the `*dtos.EntryPointAssets` it points to. All three callers only read the result, and `SetContentDeliveryURL` (`pkg/api/dtos/index.go:51`), which mutates in place, is only called on the fresh object before it is published at line 69. So there is no race at present. A future caller that mutates the returned value, for example by calling `SetContentDeliveryURL` on it, would reintroduce a race the mutex cannot prevent. A doc comment on `GetWebAssets` saying the result must be treated as immutable would make that contract explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go#GetWebAssets"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cache ignores its inputs (pre-existing, acknowledged by TODO)",
+      "description": "The package-level cache is keyed on nothing, so the first `cfg`/`license` pair to fill it wins for the life of the process. This matters for tests or multi-instance setups in one binary. The new `TODO: get rid of global state` comment acknowledges it; it is not introduced by this diff.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:35-38"
+    },
+    {
+      "severity": "PASS",
+      "title": "Lock usage is correct and race-free for the guarded variable",
+      "description": "All accesses to `entryPointAssetsCache` (lines 42, 69, 70) happen under the appropriate lock. `RUnlock` is called before `Lock`, so there is no self-deadlock from attempting a lock upgrade. The `defer Unlock()` releases the mutex during panic unwinding before the recovery middleware re-enters `GetWebAssets` at `pkg/middleware/recovery.go:141`, so that path cannot deadlock. The mutex naming and placement next to the variable it guards follow normal Go convention.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:41-49"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "No re-check of the cache after acquiring the write lock",
+      "location": "pkg/api/webassets/webassets.go:41-49",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Failed loads are now serialized behind an exclusive lock on every request",
+      "location": "pkg/api/webassets/webassets.go:48-70",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test covers `GetWebAssets` or the concurrency fix",
+      "location": "pkg/api/webassets/webassets_test.go",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Network I/O would be held under the write lock if the CDN path is enabled",
+      "location": "pkg/api/webassets/webassets.go:54-57",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Cached pointer is shared and mutable; safe today only because callers are read-only",
+      "location": "pkg/api/webassets/webassets.go#GetWebAssets",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Cache ignores its inputs (pre-existing, acknowledged by TODO)",
+      "location": "pkg/api/webassets/webassets.go:35-38",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lock usage is correct and race-free for the guarded variable",
+      "location": "pkg/api/webassets/webassets.go:41-49",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "diff": "bdd7e6ed4882870360dbca20ece7a8d430ecc35d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:37:14.062739",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "injected": [],
+  "files_read": [
+    "pkg/api/webassets/webassets.go",
+    "pkg/api/webassets/webassets_test.go",
+    "pkg/api/index.go",
+    "pkg/api/frontendsettings.go",
+    "pkg/middleware/recovery.go"
+  ],
+  "searches": [
+    "grep GetWebAssets|entryPointAssetsCache in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939/pkg",
+    "list_files pkg/api/webassets/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "grep SetContentDeliveryURL|type EntryPointAssets in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939/pkg"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 1187,
+  "diff_chars_injected": 1187,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 46972,
+  "cached_tokens": 29024,
+  "cache_write_tokens": 17942,
+  "completion_tokens": 4429,
+  "reasoning_tokens": null,
+  "duration_seconds": 40.57080970797688,
+  "cost_usd": 0.47032240000000003,
+  "cost_basis": "provider"
+}

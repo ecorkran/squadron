@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "queued: datetime = timezone.now()` at line 18 runs once when the module is imported, so every `AssignmentSource` (including those built by `from_integration`) gets the process start time, not the time it was queued. That wrong timestamp is written into every task payload through `to_dict()`. It's new code and the fix is trivial: `field(default_factory=timezone.now)`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.039273699999999995
+}

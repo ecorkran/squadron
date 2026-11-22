@@ -1,0 +1,127 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Moving recovery codes to user storage leaves old local codes valid",
+      "description": "When `updateCredential()` succeeds, the helper skips the local provider without deleting any existing locally stored recovery-code credential. This affects users who previously configured recovery codes locally and whose federation provider subsequently gains recovery-code support.\n\n`UserCredentialManager.isValid()` falls back to local credential validators when external validation fails, and `RecoveryAuthnCodesCredentialProvider.isValid()` still reads the old local credential. Consequently, an old recovery code can remain usable after the user generates a replacement set.\n\nRemove existing local recovery-code credentials when replacement in user storage succeeds. Add a regression test that starts with local codes, generates replacements in external storage, and verifies that the old codes are rejected.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:125-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Federated test provider never consumes successful recovery codes",
+      "description": "The new validation branch returns whether **any** stored code matches, but never removes the accepted code or advances the next-code state. Meanwhile, `getCredentials()` reconstructs a fresh model from the unchanged full list on every call.\n\nThus, repeated logins can reuse the first recovery code indefinitely, the form keeps requesting code #1, and exhaustion never triggers regeneration. Although this provider is a test fixture, its behavior defeats the one-time recovery-code contract and lets the new integration test pass without exercising consumption.\n\nPersist consumption after successful validation, preserve code numbering, and extend `testRecoveryKeysSetupAndLogin()` to verify replay rejection, advancement to the next code, and regeneration after exhaustion.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:342"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Moving recovery codes to user storage leaves old local codes valid",
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:125-129",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Federated test provider never consumes successful recovery codes",
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:342",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "diff": "77c379efc3a0bcadb2c7dc035c8a0bc1ce524fe6...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:34:04.294686",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "injected": [],
+  "files_read": [
+    "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/requiredactions/RecoveryAuthnCodesAction.java",
+    "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java",
+    "services/src/main/java/org/keycloak/credential/RecoveryAuthnCodesCredentialProvider.java",
+    "server-spi/src/main/java/org/keycloak/models/credential/RecoveryAuthnCodesCredentialModel.java",
+    "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+    "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorageFactory.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java",
+    "CONTRIBUTING.md",
+    "server-spi/src/main/java/org/keycloak/credential/CredentialInputValidator.java",
+    "server-spi/src/main/java/org/keycloak/models/SubjectCredentialManager.java",
+    "model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/pages/EnterRecoveryAuthnCodePage.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/pages/SetupRecoveryAuthnCodesPage.java",
+    "server-spi/src/main/java/org/keycloak/credential/CredentialInputUpdater.java",
+    "testsuite/integration-arquillian/tests/base/src/main/java/org/keycloak/testsuite/pages/EnterRecoveryAuthnCodePage.java",
+    "testsuite/integration-arquillian/tests/base/src/main/java/org/keycloak/testsuite/pages/SetupRecoveryAuthnCodesPage.java"
+  ],
+  "searches": [
+    "list_files * in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "grep getFederatedCredentialsStream|boolean isValid\\(|removeStoredCredentialById in model",
+    "grep class EnterRecoveryAuthnCodePage|class SetupRecoveryAuthnCodesPage in testsuite",
+    "grep userStorageCreated|updateCredential\\(recovery|createCredential\\(realm, user, credentialModel in server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 481,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33382,
+  "diff_chars_injected": 33382,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 221092,
+  "cached_tokens": 187620,
+  "cache_write_tokens": null,
+  "completion_tokens": 1620,
+  "reasoning_tokens": 459,
+  "duration_seconds": 39.995803457684815,
+  "cost_usd": 0.101906,
+  "cost_basis": "alias_pricing"
+}

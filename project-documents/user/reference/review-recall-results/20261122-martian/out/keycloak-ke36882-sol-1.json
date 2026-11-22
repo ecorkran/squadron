@@ -1,0 +1,95 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Operator warning contradicts the implemented upgrade logic",
+      "description": "The Operator does not require `rolling-updates`: `UpgradeLogicFactory` selects implementations that neither check this feature nor invoke the compatibility commands. Remove or narrow the warning; it incorrectly tells users their Operator will fail without enabling a preview feature.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "docs/guides/operator/advanced-configuration.adoc:446-450"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exit-code changes lack behavioral coverage",
+      "description": "The new disabled-feature test checks only stderr, not exit code `4`, and covers only `metadata`. The incompatible-version tests likewise do not verify the changed exit code `3`. Add assertions for disabled `metadata` and `check`, incompatible checks, and successful checks, since automation explicitly depends on these exit codes.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Operator warning contradicts the implemented upgrade logic",
+      "location": "docs/guides/operator/advanced-configuration.adoc:446-450",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Exit-code changes lack behavioral coverage",
+      "location": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "diff": "bb4a51ac32539ad0d8b9f72bfd201ade75e95361...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:35:21.865949",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 15161,
+  "diff_chars_injected": 15161,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 63188,
+  "cached_tokens": 61312,
+  "cache_write_tokens": null,
+  "completion_tokens": 299,
+  "reasoning_tokens": 0,
+  "duration_seconds": 65.61046966677532,
+  "cost_usd": 0.0128732,
+  "cost_basis": "alias_pricing"
+}

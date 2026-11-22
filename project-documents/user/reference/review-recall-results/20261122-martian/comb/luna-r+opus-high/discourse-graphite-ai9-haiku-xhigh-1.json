@@ -1,0 +1,24 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The only place that loads the fallback locales is `set_locale` in the web request; `translate` loads only `config.locale`, so background jobs using `with_locale` get no `:en` fallback. Its results are also cached by locale, which keeps the missed lookup stuck."
+  ],
+  "F2": [
+   "DROP",
+   "SiteSetting.default_locale` comes from an in-memory site-settings hash that falls back to defaults, not a database query on each lookup. The early-boot error risk is speculative."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.08323799999999999
+}

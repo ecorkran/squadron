@@ -1,0 +1,73 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "List rows lack `rulerRule`, so the Delete gate fails and the Pause item cannot render."
+  ],
+  "F2": [
+   "KEEP",
+   "The Silence action opens no drawer because the drawer requires a ruler rule that list rows do not pass."
+  ],
+  "F3": [
+   "KEEP",
+   "Delegating legacy ability checks to the ruler hook drops the federated-group immutability guard."
+  ],
+  "F4": [
+   "DROP",
+   "The missing key causes a React warning, but this append-only list path does not establish user-visible incorrect behavior."
+  ],
+  "F5": [
+   "KEEP",
+   "Without `returnTo`, the rule viewer\u2019s back link loses the current list search and filters."
+  ],
+  "F6": [
+   "KEEP",
+   "Recording rules no longer support actions that the prior ability checks allowed."
+  ],
+  "F7": [
+   "DROP",
+   "The duplicated hook calls add overhead, but the finding does not establish a consequential performance defect."
+  ],
+  "F8": [
+   "DROP",
+   "This is a maintainability concern, not a behavior defect."
+  ],
+  "F9": [
+   "DROP",
+   "Unused code is cleanup, not a defect requiring action before merge."
+  ],
+  "F10": [
+   "DROP",
+   "The warning-and-null path concerns unsupported or absent rule inputs and avoids a crash."
+  ],
+  "F11": [
+   "DROP",
+   "The finding identifies test gaps, while the concrete menu regression is already covered by F1."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.006552570000000001
+}

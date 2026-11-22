@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache key at `translate_accelerator.rb:72` is only key, locale and backend id. But the fallback chain now also depends on the per-site `SiteSetting.default_locale`. So in multisite, one site can be served another site's fallback, and a changed default locale leaves stale cached results."
+  ],
+  "F2": [
+   "KEEP",
+   "Only `ApplicationController#set_locale` calls `ensure_loaded!`. Jobs (`Jobs::Base`, and PostAlerter via `with_locale`) never load the fallback locales, because `load_translations` ignores calls with no filenames. Fallback to the site locale or `en` therefore fails there, and the missing-translation result gets cached under that locale."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0750973
+}

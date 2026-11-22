@@ -1,0 +1,36 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Split requests are interpolated again by the backend, which can duplicate ad-hoc filters and re-expand variable values."
+  ],
+  "F2": [
+   "KEEP",
+   "An expression that becomes empty after interpolation can create an empty group and throw before the observable emits."
+  ],
+  "F3": [
+   "KEEP",
+   "Sharded queries can resolve `$__auto` against each time chunk instead of the full range, changing query resolution."
+  ],
+  "F4": [
+   "DROP",
+   "This identifies missing regression coverage, not a separate defect that requires fixing before merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00497537
+}

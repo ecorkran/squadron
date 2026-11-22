@@ -1,0 +1,228 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`UsernameForm` calls a method overload that does not exist",
+      "description": "`UsernameForm.authenticate` calls `isConditionalPasskeysEnabled()` with no arguments. The only declaration in the repository is `isConditionalPasskeysEnabled(UserModel user)` at `UsernamePasswordForm.java:160`; a grep over all `*.java` files finds no zero-argument overload. The `services` module will fail to compile. The call should pass the user, e.g. `!isConditionalPasskeysEnabled(context.getUser())`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`isConditionalPasskeysEnabled` is inverted: passkeys are off for initial login and on for every re-authenticating user",
+      "description": "The predicate returns `webauthnAuth != null && webauthnAuth.isPasskeysEnabled() && user != null`. The code it replaces filled the WebAuthn form data when the user was **not** yet selected. The effects at the three call sites:\n\n- **Initial login (`UsernamePasswordForm.java:115`)**: `context.getUser()` is null, so `fillContextForm` is never called and `enableWebAuthnConditionalUI` is never set. `passkeys.ftl:2` then renders no `webauth` form on `login.ftl` or `login-username.ftl`, so first-time passkey login disappears.\n- **Error challenge (`UsernamePasswordForm.java:137`)**: after an unknown username the user is still null, so the re-rendered form also loses passkeys. `PasskeysUsernameFormTest.java:190` expects `username webauthn` at that point.\n- **Re-authentication**: the passkey UI is shown to any user with a non-null context, whether or not they have a passkey credential. The new test comment at `PasskeysUsernamePasswordFormTest.java:304` says it should not be.\n\nThe tests in this same diff contradict the predicate: they assert the `webauth` form is present on the first `oauth.openLoginForm()` and expect automatic discoverable-key login.\n\nThe intended condition is most likely `user == null || user.credentialManager().isConfiguredFor(webauthnAuth.getCredentialType())`. With that, the `UsernameForm.java:47` guard also makes sense: skip the form on re-authentication only when the user has no passkey.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`reauthenticationOfUserWithoutPasskey` does not test the scenario it names",
+      "description": "The test sets `setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE)` (line 282), so it only proves that nothing is rendered when passkeys are disabled for the realm. The case that matters for this change is untested: passkeys enabled for the realm, re-authenticating user has no passkey credential. That is exactly the branch the inverted predicate above gets wrong, so the suite would not catch it.\n\nSmaller problems in the same test:\n- Lines 291-296 and 312-317 use `try { assertThat(findElement(...), nullValue()); fail(...); } catch (Exception nsee) {}`. This only works because `AssertionError` is not an `Exception`; the `nullValue()` assertion can never pass, and the blanket catch swallows any WebDriver failure. Use `Assert.assertThrows(NoSuchElementException.class, ...)`, as `PasskeysUsernameFormTest.java:202` already does.\n- The comment at line 280 (\"set passwordless policy for discoverable keys\") contradicts the code, which disables passkeys.\n- `webauthnLoginWithExternalKey` and `webauthnLoginWithExternalKey_reauthentication` have identical first halves; the latter makes the former redundant.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:279-333"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Re-authentication flag check is duplicated and adds a package cycle",
+      "description": "`setupReauthenticationInUsernamePasswordFormError` re-implements the auth-note read and `Boolean.parseBoolean` that already exist in `AbstractUsernameFormAuthenticator.isUserAlreadySetBeforeUsernamePasswordAuth` (`AbstractUsernameFormAuthenticator.java:257-260`). That method is still used at lines 129, 139 and 250, so there are now two sources of truth for the same flag.\n\nTo support this, `authenticators.util` statically imports `USER_SET_BEFORE_USERNAME_PASSWORD_AUTH` from `authenticators.browser` (line 35), while `browser` already imports `AuthenticatorUtils`. The constant was widened from `protected` to `public` (`AbstractUsernameFormAuthenticator.java:58`) solely for this.\n\nCleaner options: make the existing helper a public static method on `AbstractUsernameFormAuthenticator` and have `WebAuthnConditionalUIAuthenticator` (same package) call it, or move the constant and both helpers into one place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java:125-133"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Missing `@Override` on `shouldShowWebAuthnAuthenticators`",
+      "description": "The method overrides the new hook at `WebAuthnAuthenticator.java:128` but has no `@Override`, unlike the other overrides in this class (lines 41, 47). Without it, a later rename of the base hook would silently restore the default behaviour. The neighbouring `shouldDisplayAuthenticators` hook (`WebAuthnAuthenticator.java:147`) has a near-identical name and the same default, which is easy to confuse; a short Javadoc separating the two would help.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java:65"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`PasswordForm` now runs `fillContextForm` on bad-password challenges",
+      "description": "`PasswordForm` inherits `challenge(context, error, field)` and always has a user set. Previously the `context.getUser() == null` guard skipped WebAuthn setup there. Now each failed password on the password-only page generates a new challenge, overwrites `AUTH_CHALLENGE_NOTE` and sets passkey form attributes. `login-password.ftl` does not import `passkeys.ftl`, so nothing is rendered and the work is wasted. This persists for users with a passkey even after the predicate is corrected.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:136-142"
+    },
+    {
+      "severity": "PASS",
+      "title": "Passkey re-authentication cannot switch to a different user",
+      "description": "With `shouldShowWebAuthnAuthenticators` returning false, `isUserIdentified` is `\"false\"` during re-authentication, so the browser may offer any discoverable credential. `WebAuthnAuthenticator.action` still compares the user handle against the user already in the context and rejects a mismatch with `WEBAUTHN_ERROR_DIFFERENT_USER`, so the wider entry point does not allow swapping identity.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java:201-211"
+    },
+    {
+      "severity": "PASS",
+      "title": "Error paths keep the re-authentication form state",
+      "description": "`createErrorResponse` now applies `USERNAME_HIDDEN` and `REGISTRATION_DISABLED` before re-rendering, matching `badPasswordHandler` at `AbstractUsernameFormAuthenticator.java:222`. A failed passkey attempt during re-authentication therefore no longer falls back to the full username/registration form.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java:48-57"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`UsernameForm` calls a method overload that does not exist",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`isConditionalPasskeysEnabled` is inverted: passkeys are off for initial login and on for every re-authenticating user",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-162",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`reauthenticationOfUserWithoutPasskey` does not test the scenario it names",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:279-333",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Re-authentication flag check is duplicated and adds a package cycle",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java:125-133",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Missing `@Override` on `shouldShowWebAuthnAuthenticators`",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java:65",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`PasswordForm` now runs `fillContextForm` on bad-password challenges",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:136-142",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Passkey re-authentication cannot switch to a different user",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java:201-211",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Error paths keep the re-authentication form state",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java:48-57",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "diff": "c851f7883d229dd2a940a77cd49220ecb126ec84...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:28:16.303085",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "injected": [],
+  "files_read": [
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnPasswordlessAuthenticator.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernameFormTest.java"
+  ],
+  "searches": [
+    "grep isConditionalPasskeysEnabled|isUserAlreadySetBeforeUsernamePasswordAuth|shouldShowWebAuthnAuthenticators in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "grep webauthnAuth|extends UsernamePasswordForm|extends UsernameForm in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "grep configureTestRealm|NoSuchElementException|import org.junit.Assert|ApiUtil|getInputError|getInfoMessage in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn",
+    "grep shouldDisplayAuthenticators|isUserIdentified|IS_USER_IDENTIFIED in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/services/src/main/java",
+    "grep enableWebAuthnConditionalUI|isUserIdentified|shouldDisplayAuthenticators in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/themes/src/main/resources/theme/base/login",
+    "grep passkeys\\.ftl|conditionalUIData in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/themes/src/main/resources/theme/base/login"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 35663,
+  "diff_chars_injected": 35663,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 285857,
+  "cached_tokens": 233852,
+  "cache_write_tokens": 51993,
+  "completion_tokens": 9712,
+  "reasoning_tokens": null,
+  "duration_seconds": 89.24961283383891,
+  "cost_usd": 1.2688977,
+  "cost_basis": "provider"
+}

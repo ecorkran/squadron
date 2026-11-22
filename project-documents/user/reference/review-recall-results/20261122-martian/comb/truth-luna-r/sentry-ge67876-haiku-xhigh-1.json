@@ -1,0 +1,48 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The OAuth state is the public pipeline signature, so the callback is not bound to the browser that started the flow."
+  ],
+  "F2": [
+   "KEEP",
+   "The missing-integration branch advances the pipeline before the installer check, allowing that path to skip verification."
+  ],
+  "F3": [
+   "KEEP",
+   "Directly indexing `metadata[\"sender\"][\"login\"]` raises `KeyError` when sender metadata is absent."
+  ],
+  "F4": [
+   "KEEP",
+   "The check compares mutable, case-sensitive login names instead of the immutable GitHub user IDs stored by the webhook and returned by `/user`."
+  ],
+  "F5": [
+   "KEEP",
+   "Token exchange and user lookup exceptions can escape as server errors, while parse failures are swallowed without logging."
+  ],
+  "F6": [
+   "DROP",
+   "The cited problems are gaps in test coverage and assertions, not behavior defects in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.0029948
+}

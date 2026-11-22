@@ -1,0 +1,286 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Hung spawned flusher is never killed; its replacement runs alongside it",
+      "description": "In `_ensure_processes_alive`, `process.kill()` runs only inside `if isinstance(process, multiprocessing.Process):`. Production creates processes via `self.mp_context.Process` with the `spawn` context, which yields a `SpawnProcess`. In CPython, `SpawnProcess` and `Process` are sibling subclasses of `BaseProcess` (`multiprocessing/context.py:220` and `:284` in 3.12; same layout in 3.13), so the check is `False` and `kill()` is skipped. The removed code called `self.process.kill()` unconditionally, so this is a regression.\n\nWhen a process is flagged `hang`, it is still alive. The replacement starts on the same shards (line 259), and the old process keeps running until the parent exits, since `daemon=True` only ends it then. Both processes can call `buffer.flush_segments` on the same queue keys and produce the same segment to `buffered-segments` twice. The old process also keeps writing the shared `healthy_since` value.\n\n`join()` has the same wrong guard (lines 346-347), so `terminate()` never runs for spawned processes. That predates this diff, but the diff copies the pattern into more code.\n\nFix: use `isinstance(process, multiprocessing.process.BaseProcess)` in both places, and add a test that forces a restart with a spawned process.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:253-259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The added `time.sleep` in `test_basic` is a no-op",
+      "description": "`test_basic` patches `time.sleep` to a no-op at line 15. `time.sleep(0.1)` at line 62 resolves on the same `time` module, so it returns immediately. The comment \"Give flusher threads time to process\" is therefore wrong, and the test still races: it can call `step.join()`, which sets `stopped`, before the flusher thread flushes after the drift change. The added `step.poll()` does not change that ordering. Wait on the observable result with a deadline, or capture a real sleep before the patch, as `test_flusher.py` does with `from time import sleep`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test covers the process path; the new test checks internals",
+      "description": "`test_flusher_processes_limit` passes `produce_to_pipe=messages.append`, so `SpanFlusher` uses `threading.Thread` (flusher.py:106-108), not the spawn path production uses. The regression above is invisible to the suite. The test asserts `len(processes)`, `max_processes`, `num_processes`, and a total shard count (lines 114-121). These are internals and do not show that each process gets the correct shards or that its buffer is scoped to them. No test exercises `_ensure_processes_alive` with more than one process, and none covers the `flusher_processes=None` default.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:85-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Memory check repeats cluster-wide Redis INFO calls per buffer",
+      "description": "`submit` now calls `buffer.get_memory_info()` once for each entry in `self.buffers`. That method returns `iter_cluster_memory_usage(self.client)` (`src/sentry/spans/buffer.py:375-376`), which queries the whole cluster (`cluster.info()`, `src/sentry/processing/backpressure/memory.py:86-88`). With N flusher processes, each `submit` makes N cluster-wide round trips and appends N identical copies of every node's memory. The `used / available` ratio stays correct only because every copy is identical. Query once from the parent instead.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:299-301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dead method `_create_process_for_shard`",
+      "description": "`_create_process_for_shard` (singular) has no callers. `_ensure_processes_alive` calls `_create_process_for_shards` directly. The two names differ by one letter, which invites confusion. Remove the singular method.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:127-132"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--flusher-processes` accepts 0 and negative values",
+      "description": "The option is `type=int` with no lower bound. In `flusher.py:51`, `max_processes or len(...)` turns `0` into one process per shard without any warning. A negative value passes through `min()` at line 60, `range(num_processes)` becomes empty, and `process_to_shards_map[process_index]` at line 66 raises `KeyError` during construction. Use `click.IntRange(min=1)`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/sentry/consumers/__init__.py:432-437"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `shard` metric tag means different things across metrics",
+      "description": "`flusher_unhealthy` (lines 243-245) tags `shard` with a single integer. `flusher.produce` (line 185) and `segment_size_bytes` (lines 192-196) tag `shard` with the comma-joined list of all shards the process owns, for example `\"0,1,2,3\"`. `wait_produce` (line 199) uses the plural key `shards`. A dashboard filtering on `shard:3` will miss the produce metrics whenever a process owns more than one shard. Pick one key and one meaning.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:185-199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Docstring and defaults disagree",
+      "description": "The class docstring says \"Creates one process per shard.\" The CLI default (`consumers/__init__.py:434`, `default=1`) produces one flusher process in total, while the factory default of `None` produces one per shard. The `:param` list also omits `max_processes`. Document the actual default, and either align the CLI and factory defaults or state why they differ.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:31-32"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`max-flush-segments` now applies per flusher process",
+      "description": "`flush_segments` derives its per-shard cap from `len(self.assigned_shards)`, and each process now has a buffer with only its own shards. With the default `spans.buffer.max-flush-segments=500`, each process can flush about 500 segments per cycle, so the total is roughly 500 \u00d7 `flusher_processes`, where it used to be 500 overall. This may be intended, but the option is not documented as per-process, and Redis and Kafka load now scales with the new flag. Confirm and document it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/spans/buffer.py:382-384"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two `num_processes` attributes mean different things in one pipeline",
+      "description": "`SpanFlusher.num_processes` is the flusher process count. `ProcessSpansStrategyFactory.num_processes` (`factory.py:51`) is the batch-processing pool size. Both sit in the same pipeline and share a name with different meanings. Consider `num_flusher_processes` for the flusher.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:60"
+    },
+    {
+      "severity": "PASS",
+      "title": "The CLI option reaches the factory under the same name",
+      "description": "`cmd_context.invoke(strategy_factory_cls, **cmd_context.params, ...)` passes `flusher_processes` as a keyword. That matches the new parameter in `ProcessSpansStrategyFactory.__init__` (`factory.py:41`), which forwards it as `max_processes=` to `SpanFlusher` (`factory.py:74`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/consumers/__init__.py:508-512"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Hung spawned flusher is never killed; its replacement runs alongside it",
+      "location": "src/sentry/spans/consumers/process/flusher.py:253-259",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The added `time.sleep` in `test_basic` is a no-op",
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:62",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test covers the process path; the new test checks internals",
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:85-123",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Memory check repeats cluster-wide Redis INFO calls per buffer",
+      "location": "src/sentry/spans/consumers/process/flusher.py:299-301",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead method `_create_process_for_shard`",
+      "location": "src/sentry/spans/consumers/process/flusher.py:127-132",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`--flusher-processes` accepts 0 and negative values",
+      "location": "src/sentry/consumers/__init__.py:432-437",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `shard` metric tag means different things across metrics",
+      "location": "src/sentry/spans/consumers/process/flusher.py:185-199",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Docstring and defaults disagree",
+      "location": "src/sentry/spans/consumers/process/flusher.py:31-32",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`max-flush-segments` now applies per flusher process",
+      "location": "src/sentry/spans/buffer.py:382-384",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Two `num_processes` attributes mean different things in one pipeline",
+      "location": "src/sentry/spans/consumers/process/flusher.py:60",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The CLI option reaches the factory under the same name",
+      "location": "src/sentry/consumers/__init__.py:508-512",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "diff": "c1449270812b3fd722c26d64b8530922be72789e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:43:22.389829",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "injected": [],
+  "files_read": [
+    "src/sentry/spans/consumers/process/flusher.py",
+    "src/sentry/spans/consumers/process/factory.py",
+    "src/sentry/spans/buffer.py",
+    "tests/sentry/spans/consumers/process/test_consumer.py",
+    "tests/sentry/spans/consumers/process/test_flusher.py"
+  ],
+  "searches": [
+    "grep assigned_shards|def get_memory_info|class SpansBuffer|def record_stored_segments|def flush_segments in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/spans",
+    "grep _create_process_for_shard\\b|flusher_processes|isinstance\\(.*multiprocessing\\.Process|ProcessSpansStrategyFactory\\(|def multiprocessing_options|^import click|^from click|\"process-spans\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "grep click_options|def multiprocessing_options|-> list|return \\[ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/consumers/__init__.py",
+    "grep click_options|strategy_factory in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry",
+    "list_files **/multiprocessing/context.py in /Library/Frameworks/Python.framework/Versions",
+    "list_files **/lib/python3*/multiprocessing/context.py in /opt/homebrew/opt",
+    "grep ^class (Process|SpawnProcess|ForkProcess|ForkServerProcess)\\b|^class \\w+Process\\( in /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/context.py",
+    "grep ^class (Process|SpawnProcess|ForkProcess|ForkServerProcess)\\b|^class \\w+Process\\( in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/context.py",
+    "grep def tags|tags: |def incr|def timing in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/utils/metrics.py",
+    "grep max-flush-segments|flusher.max-unhealthy|flusher.backpressure-seconds in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/options/defaults.py",
+    "grep SpawnProcess|class .*Process in /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/context.py",
+    "grep def kill|def terminate|^class BaseProcess in /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/process.py",
+    "grep SpawnProcess\\(process\\.BaseProcess\\)|class Process\\(process\\.BaseProcess\\) in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/context.py",
+    "grep def iter_cluster_memory_usage|def get_memory_info|for node in|nodes in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/processing/backpressure/memory.py",
+    "grep _ensure_process_alive|\\.backpressure_since\\b|\\.healthy_since\\b|_flusher\\.buffer\\b|flusher\\.process\\b|\\.process_restarts\\b|_flusher\\.process\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19169,
+  "diff_chars_injected": 19169,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 379625,
+  "cached_tokens": 315579,
+  "cache_write_tokens": 64030,
+  "completion_tokens": 42244,
+  "reasoning_tokens": null,
+  "duration_seconds": 185.3372117090039,
+  "cost_usd": 0.037983090000000004,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "canManage()` accepts `VIEW`, so `requireManage()` allows view-only administrators to create groups or move them to the top level."
+  ],
+  "F2": [
+   "KEEP",
+   "The method returns authorization resource IDs, not group IDs, and its type-based lookup misses individual group resources."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0014352500000000001
+}

@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Successful federated replacement leaves the old local credential available as a fallback validator, so its codes can still authenticate."
+  ],
+  "F2": [
+   "KEEP",
+   "Successful validation never updates the fixture\u2019s stored codes, allowing the same recovery code to be reused indefinitely."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00267968
+}

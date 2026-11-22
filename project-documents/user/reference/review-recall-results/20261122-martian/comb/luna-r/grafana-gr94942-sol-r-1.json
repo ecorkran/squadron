@@ -1,0 +1,19 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The SQL backend methods and feature gate both reject SQL, so valid expressions cannot be parsed or executed."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0004936700000000001
+}

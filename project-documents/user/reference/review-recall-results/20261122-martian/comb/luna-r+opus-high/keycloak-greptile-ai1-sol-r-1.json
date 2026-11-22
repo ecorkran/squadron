@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-greptile-ai1",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The only declaration is `isConditionalPasskeysEnabled(UserModel)` at UsernamePasswordForm.java:160, and no zero-argument overload exists anywhere, so the call at UsernameForm.java:47 won't compile."
+  ],
+  "F2": [
+   "KEEP",
+   "Requiring `user != null` stops the initial login form (no user selected yet) from getting the conditional-UI WebAuthn data, which breaks username-less passkey login."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.09080579999999999
+}

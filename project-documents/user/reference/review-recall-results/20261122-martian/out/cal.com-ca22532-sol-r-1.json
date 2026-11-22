@@ -1,0 +1,154 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Empty update does not advance the selected-calendar timestamp",
+      "description": "`updateManyByCredentialId(this.credential.id, {})` passes an empty update to Prisma. Prisma does not advance an `@updatedAt` field when the update data is empty, so this call does not perform the timestamp update described by its comment. Pass `{ updatedAt: new Date() }` explicitly if this timestamp must track cache refreshes, and add a regression test that verifies it advances.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:1024"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delegated calendars cannot display their existing cache",
+      "description": "Cache status is looked up exclusively using the credential IDs returned for connected calendars. Delegated connections use the in-memory ID `-1` (`packages/lib/delegationCredential/server.ts`), whereas cache writes use a persisted, positive credential ID through `getCredentialForCalendarCache`.\n\nConsequently, delegated calendars receive `cacheUpdatedAt: null` even when they have cached availability, hiding the cache status and deletion action. Resolve delegated connections to their user-owned persisted cache credentials before querying status, and ensure deletion uses that resolved identity rather than `-1`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:27-35"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Successful cache deletion can leave stale cache controls visible",
+      "description": "The deletion mutation refreshes state only through the optional `onSuccess` callback. Unlike the disconnect mutation, it never invalidates `viewer.calendars.connectedCalendars` itself.\n\nThis fails in the event-type advanced settings: `EventAdvancedTab.tsx` renders `SelectedCalendarsSettingsWebWrapper` without an `onChanged` callback, and that wrapper disables refetching on window focus. After deletion succeeds there, the old timestamp and \u201cDelete cached data\u201d action remain visible. Invalidate the connected-calendars query on successful cache deletion independently of the optional callback, and test this callback-free usage.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:41-45"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Empty update does not advance the selected-calendar timestamp",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:1024",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delegated calendars cannot display their existing cache",
+      "location": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:27-35",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Successful cache deletion can leave stale cache controls visible",
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:41-45",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "diff": "74608dcfae2592562c1b07b0b24a783d6f80659a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:46:55.470569",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "injected": [],
+  "files_read": [
+    "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "packages/features/calendar-cache/calendar-cache.repository.ts",
+    "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+    "packages/features/apps/components/CredentialActionsDropdown.tsx",
+    "packages/features/apps/components/DisconnectIntegration.tsx",
+    "packages/lib/server/repository/selectedCalendar.ts",
+    "scripts/test-gcal-webhooks.sh",
+    "packages/lib/getConnectedDestinationCalendars.ts",
+    "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+    "packages/features/calendar-cache/calendar-cache.repository.interface.ts",
+    "packages/features/calendar-cache/calendar-cache.repository.mock.ts",
+    "packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx",
+    "packages/features/calendar-cache/calendar-cache.ts",
+    "packages/trpc/server/routers/viewer/calendars/_router.tsx",
+    "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql",
+    "apps/web/components/apps/CalendarListContainer.tsx",
+    "packages/lib/delegationCredential/clientAndServer.ts",
+    "packages/features/calendar-cache/calendar-cache.repository.test.ts",
+    "packages/lib/CalendarManager.ts",
+    "packages/lib/delegationCredential/server.ts",
+    "packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep userLevelSelectedCalendars|allSelectedCalendars in packages/trpc",
+    "grep updatedAt|model SelectedCalendar in packages/prisma/schema.prisma",
+    "grep onChanged=|SelectedCalendarsSettingsWebWrapper in apps/web",
+    "grep getConnectedDestinationCalendarsAndEnsureDefaultsInDb|UserWithCalendars in packages",
+    "list_files * in packages/features/calendar-cache",
+    "grep SelectedCalendarsSettingsWebWrapper in packages",
+    "grep getCredentialForCalendarCache|credentialId: -|id: - in packages/lib/delegationCredential/server.ts",
+    "grep cache_deleted_successfully|cache_last_updated|confirm_delete_cache|yes_delete_cache|delete_cached_data|cache_status|error_deleting_cache in apps/web/public/static/locales/en/common.json",
+    "list_files * in packages/trpc/server/routers/viewer/calendars",
+    "grep updatedAt|updateManyByCredentialId in packages/app-store/googlecalendar"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 899,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23017,
+  "diff_chars_injected": 23017,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 236943,
+  "cached_tokens": 182798,
+  "cache_write_tokens": null,
+  "completion_tokens": 1742,
+  "reasoning_tokens": 489,
+  "duration_seconds": 36.95991679187864,
+  "cost_usd": 0.1439898,
+  "cost_basis": "alias_pricing"
+}

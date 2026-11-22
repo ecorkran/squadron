@@ -1,0 +1,131 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Public member lists silently truncate at 50",
+      "description": "`findMembers()` now fetches only 50 members, but the public members template has no pagination controls or further loading. Custom groups previously displayed all members; members beyond the first page are now inaccessible. Add public pagination alongside the server-side limit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/routes/group-members.js.es6:8-11"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Removing membership leaves the primary group assigned",
+      "description": "Directly deleting membership bypasses the previous `Group#usernames=` deletion workflow, whose `destroy_deletions` callback also clears matching `User.primary_group_id` values. Removed users can therefore retain the group\u2019s label through `PostSerializer#primary_group_name`. Preserve that cleanup and test removal of a primary-group member.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exact page multiples produce an empty extra page",
+      "description": "`Math.floor(count / limit) + 1` reports two pages for 50 members and three for 100. Next remains enabled on the actual last page and navigates to an empty page. Use `Math.ceil(count / limit)` and test exact multiples. The calculation was reproduced against the controller source.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:11-14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adding existing members raises a uniqueness error",
+      "description": "Every submitted username is pushed into the association without checking membership. The unique `(group_id, user_id)` index rejects existing members. This is particularly easy to trigger because the new Add action leaves submitted usernames selected. Make additions idempotent and test repeated submissions and mixed existing/new members.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:71-74"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Public member lists silently truncate at 50",
+      "location": "app/assets/javascripts/discourse/routes/group-members.js.es6:8-11",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Removing membership leaves the primary group assigned",
+      "location": "app/controllers/admin/groups_controller.rb:90",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Exact page multiples produce an empty extra page",
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:11-14",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adding existing members raises a uniqueness error",
+      "location": "app/controllers/admin/groups_controller.rb:71-74",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "diff": "a9bdd78c37b33118c148364396308b8bba632563...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:53:33.397793",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 29541,
+  "diff_chars_injected": 29541,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 71550,
+  "cached_tokens": 71296,
+  "cache_write_tokens": null,
+  "completion_tokens": 472,
+  "reasoning_tokens": 0,
+  "duration_seconds": 72.29388100001961,
+  "cost_usd": 0.0123576,
+  "cost_basis": "alias_pricing"
+}

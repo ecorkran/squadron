@@ -1,0 +1,35 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The `Prisma` import really is unused, but an unused import is a lint/style issue, not a runtime defect."
+  ],
+  "F2": [
+   "DROP",
+   "consistent-type-imports` is a lint/style rule, and importing these names as values does not change runtime behavior."
+  ],
+  "F3": [
+   "KEEP",
+   "Correct: the lazy `PrismaPromise` deletes only run after the loop, so one SendGrid error skips every delete and stops the rest of the batch from being cancelled, and those cancelled reminders still get sent."
+  ],
+  "F4": [
+   "KEEP",
+   "Correct: the awaited reminder DB writes became fire-and-forget calls whose errors are only logged, so a failed `cancelled` flag write is silent and the reminder still goes out for a cancelled or edited booking."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2,
+  3
+ ],
+ "cost_usd": 0.1624717
+}

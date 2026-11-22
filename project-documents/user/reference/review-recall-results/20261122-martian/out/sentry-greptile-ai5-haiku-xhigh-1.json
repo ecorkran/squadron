@@ -1,0 +1,517 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Replay error details are zipped against an unordered, sparse nodestore result",
+      "description": "`fetch_error_details` pairs `error_ids` with `events.values()` using `zip`. `nodestore.backend.get_multi` (src/sentry/nodestore/base.py:198-205) returns only the IDs it found, so missing events are omitted rather than returned as `None`. Cache hits are also appended after uncached results (`items.update(cache_items)`), so result order does not follow `error_ids`. The result is that an error's title, message, and timestamp can be attributed to a different event ID, and later errors are silently dropped. The `if data is not None` filter never fires because missing keys are absent. Duplicate IDs also shift the pairing. `test_get_with_error` stores only one error, so this is not caught. Fix: look up each event by its node ID (`events.get(node_id)`) and skip `None`. Add a test with two or more errors where one is missing from nodestore.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:104-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A caller-supplied `field` parameter silently drops `error_ids`",
+      "description": "The endpoint passes `request.query_params.getlist(\"field\")` to `process_raw_response`. `generate_restricted_fieldset` (src/sentry/replays/post_process.py:106-108) keeps only the requested fields. A request such as `?field=trace_ids` therefore produces no `error_ids`, and `error_ids` falls back to `[]` with no warning. Fix: do not pass client fields here. Request `error_ids` explicitly, or read it from the raw row.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:79-84"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Error-ID query runs even when `enable_error_context=false`",
+      "description": "`query_replay_instance` runs on every request, but its only use is to find `error_ids` for error fetching. When error context is disabled, that Snuba query is wasted. Consider skipping it on that branch.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:69-94"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mutual-exclusion validators use truthiness, so `0` bypasses them",
+      "description": "`validate_timestamp` and `validate_age` check `self.initial_data.get(\"age\")` and `.get(\"timestamp\")` for truthiness. A payload such as `{\"age\": 0, \"timestamp\": 1640995200000}` passes both validators even though the rule says the two fields are mutually exclusive. Use `\"age\" in self.initial_data` (or `is not None`) instead.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:50-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One bad report rejects the whole batch, and a fixed type allowlist drops new report types",
+      "description": "The endpoint returns 422 on the first invalid report and discards every report in the batch, including valid ones. Combined with the new `BROWSER_REPORT_TYPES` allowlist (lines 21-30), any report type not on the list now drops the entire batch. The old code counted such reports under their type tag. The class docstring says the endpoint exists to collect real-world data, so this trades telemetry for strictness. Each invalid report is also logged at warning level with the full raw report (lines 111-114). Consider validating each report independently, counting rejects in a metric, and logging a truncated payload.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:106-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success-path tests no longer exercise the custom `application/reports+json` parser",
+      "description": "`test_basic` (line 66) and `test_handles_multiple_reports_both_specs` (line 88) now post with the default JSON content type. The `BrowserReportsJSONParser` added for `application/reports+json` (src/sentry/issues/endpoints/browser_reporting_collector.py:63-69) is therefore not exercised on any success path. The two tests that asserted the `browser_report_received` log were also removed. Restore a success case that sends `content_type=\"application/reports+json\"`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/api/endpoints/test_browser_reporting_collector.py#BrowserReportingCollectorEndpointTest"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hidden attributes are hidden only while searching",
+      "description": "`HIDDEN_ATTRIBUTES` (`is_segment`, `project_id`, `received`) is applied only inside the filter that runs after the early return for an empty search (lines 61-63). By default those attributes are shown, and they disappear only while a query is typed. Apply the hidden filter to `sorted` before the early return.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:59-70"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dashboard table flag branch renders hardcoded empty data",
+      "description": "When `use-table-widget-visualization` is on, every table widget renders `TableWidgetVisualization` with `columns={[]}` and empty `tableData`, ignoring `tableResults` entirely. The flag string does not appear anywhere else in this repo, so the branch is inert today. It is still placeholder code on a live render path, and it should not land in this form before the flag is wired up. Pass `result.data` and `result.meta`, derive columns from `fields`, or move this out of the PR.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/dashboards/widgetCard/chart.tsx:164-174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Attribute-keys query key omits the organization slug",
+      "description": "The key is `['use-trace-item-attribute-keys', queryOptions]`, and `queryOptions` has no organization component. The request URL built in `useGetTraceItemAttributeKeys` does include `organization.slug`. When the project selection is empty (all projects) and the date range matches, two organizations the user belongs to can share one cache entry. The old `useApiQuery` key included the org path. Add `organization.slug` to the key.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:39-54"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Attribute-keys hook changed retry and loading behavior and dropped `environment`",
+      "description": "The old call passed `retry: false`, `staleTime: 0`, and `refetchOnWindowFocus: false`. The new plain `useQuery` drops `retry: false`, so failures now retry with backoff and look like loading for several seconds before erroring. `isLoading` is now `isFetching` (line 61), so background refetches report loading. Window-focus refetch stays off because of `DEFAULT_QUERY_CLIENT_CONFIG` in `queryClient.tsx`. `makeTraceItemAttributeKeysQueryOptions` (`useGetTraceItemAttributeKeys.tsx`, around line 50) also stops sending `environment: selection.environments`, which the old hook sent. The comment says it is unsupported, so confirm the backend ignores it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:50-61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Project not found\" appears while projects are still loading",
+      "description": "The new check treats `project` being undefined as \"not found\". `useProjectFromId` reads from `useProjects()`, which exposes `initiallyLoaded` (static/app/utils/useProjects.tsx:34, 313). On first load the store is empty, so users see an error where they should see a spinner. Gate the error on `initiallyLoaded`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/replays/detail/ai/index.tsx:90-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Owner-to-ID mapping is duplicated between create and update",
+      "description": "The same branching that maps an `Actor` to `owner_user_id` and `owner_team_id` appears in `update` (lines 66-79) and again in `create` (lines 120-127). Extract a helper that returns `(user_id, team_id)` and use it in both places.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/workflow_engine/endpoints/validators/base/detector.py:66-79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`get_environment_info` swallows all exceptions and logs them at info level",
+      "description": "The blanket `except Exception` hides real failures such as database or Snuba errors. It logs at info level and passes the exception object as `extra={\"error\": e}`, which structured log handlers may not serialize. Narrow the `except`, and use `logger.warning(..., exc_info=True)` or `sentry_sdk.capture_exception`. The method also does one event lookup per issue in `get_comment_body`. That is acceptable for a small number of issues, but it adds work to the PR-comment path.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/integrations/source_code_management/commit_context.py:584-597"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Issue titles are interpolated into markdown link text",
+      "description": "The template `\"* \u203c\ufe0f [**{title}**]({url}){environment}\\n\"` puts the raw title inside link text, and `_truncate_title` only truncates (lines 578-582, 600-606). Titles come from event messages that SDK clients can send. A title containing `](` can close the link text and inject an arbitrary link or image into the PR comment. The previous template only used bold, so this adds link-injection surface. Escape markdown characters in the title, or keep the title outside the link.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/source_code_management/commit_context.py:143"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`format_comment_subtitle` is now dead code in both integrations",
+      "description": "After the template change, `format_comment_subtitle` has no callers in the GitHub integration (line 394) or the GitLab integration (`src/sentry/integrations/gitlab/integration.py:240`). A repo-wide grep found no references. Remove both, or keep the subtitle if the product still wants it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:393-395"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Nested `_handle_regex_match` is never called",
+      "description": "After the regex experiment class was removed, the nested `_handle_regex_match` inside `parametrize_w_experiments` is defined but never referenced. The copy in `parametrize_w_regex` (line 310) is still used. Delete the unused one.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/grouping/parameterization.py:335-343"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Single-element `dedupedYAxes` wrappers remain in eight places",
+      "description": "Because `yAxis` is now a single string, `const dedupedYAxes = [visualize.yAxis];` does no deduplication, and the name is misleading. The same pattern appears at useAnalytics.tsx:496, useExploreTimeseries.tsx:179, spansTab.tsx:349, toolbarSaveAs.tsx:153, utils.tsx:439, and charts/index.tsx:154. Use `visualize.yAxis` directly and drop the `flatMap` wrappers.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "static/app/views/explore/hooks/useAnalytics.tsx:475"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The autofix default change affects every project that never set the option",
+      "description": "The default for `sentry:autofix_automation_tuning` changes from `\"low\"` to `\"off\"` (also `src/sentry/constants.py:724`). That changes the effective value for existing projects that never stored a value, not just new projects. The diff has no migration or release note. Confirm this is intended for existing projects.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/projectoptions/defaults.py:205"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Migrations 0917 and 0920 were rewritten as no-ops in place",
+      "description": "Both migration bodies were replaced with `return`, and the comments point to 0921, which does the real work (`0917` line 15, `0920` line 14). Fresh installs are fine. Any environment that already ran the old bodies keeps its data with no record of the change. Consider a note in the PR description.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/migrations/0917_convert_org_saved_searches_to_views.py:15"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Preprod analytics are recorded before the feature gate",
+      "description": "`analytics.record` runs at line 81, before `features.has` at line 88. Organizations without the feature therefore also emit the event. If the metric should mean \"served\", move the call after the gate.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py:81-88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Layout conversions in trace waterfall and integration layout were not verified visually",
+      "description": "`FlexBox` (which had `height: 100%`) became `<Flex direction=\"column\" flex={1}>`, so `height: 100%` is gone. In `integrationLayout.tsx`, `Flex.Item grow={1}` replaces `flex: 1`, which changes `flex-basis` from `0%` to `auto`. Both are probably harmless, but I could not render them. Check them in the browser.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "static/app/views/performance/newTraceDetails/traceWaterfall.tsx:712"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Replay error details are zipped against an unordered, sparse nodestore result",
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:104-123",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A caller-supplied `field` parameter silently drops `error_ids`",
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:79-84",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Error-ID query runs even when `enable_error_context=false`",
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py:69-94",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mutual-exclusion validators use truthiness, so `0` bypasses them",
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:50-60",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "One bad report rejects the whole batch, and a fixed type allowlist drops new report types",
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:106-118",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Success-path tests no longer exercise the custom `application/reports+json` parser",
+      "location": "tests/sentry/api/endpoints/test_browser_reporting_collector.py#BrowserReportingCollectorEndpointTest",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Hidden attributes are hidden only while searching",
+      "location": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx:59-70",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dashboard table flag branch renders hardcoded empty data",
+      "location": "static/app/views/dashboards/widgetCard/chart.tsx:164-174",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Attribute-keys query key omits the organization slug",
+      "location": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:39-54",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Attribute-keys hook changed retry and loading behavior and dropped `environment`",
+      "location": "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx:50-61",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"Project not found\" appears while projects are still loading",
+      "location": "static/app/views/replays/detail/ai/index.tsx:90-96",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Owner-to-ID mapping is duplicated between create and update",
+      "location": "src/sentry/workflow_engine/endpoints/validators/base/detector.py:66-79",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`get_environment_info` swallows all exceptions and logs them at info level",
+      "location": "src/sentry/integrations/source_code_management/commit_context.py:584-597",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Issue titles are interpolated into markdown link text",
+      "location": "src/sentry/integrations/source_code_management/commit_context.py:143",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`format_comment_subtitle` is now dead code in both integrations",
+      "location": "src/sentry/integrations/github/integration.py:393-395",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Nested `_handle_regex_match` is never called",
+      "location": "src/sentry/grouping/parameterization.py:335-343",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Single-element `dedupedYAxes` wrappers remain in eight places",
+      "location": "static/app/views/explore/hooks/useAnalytics.tsx:475",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The autofix default change affects every project that never set the option",
+      "location": "src/sentry/projectoptions/defaults.py:205",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Migrations 0917 and 0920 were rewritten as no-ops in place",
+      "location": "src/sentry/migrations/0917_convert_org_saved_searches_to_views.py:15",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Preprod analytics are recorded before the feature gate",
+      "location": "src/sentry/preprod/api/endpoints/organization_preprod_artifact_assemble.py:81-88",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Layout conversions in trace waterfall and integration layout were not verified visually",
+      "location": "static/app/views/performance/newTraceDetails/traceWaterfall.tsx:712",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "diff": "0b1504e563dc2ce5648b38af85faf3ed1cb30472...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:48:30.932655",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 72,
+  "injected": [],
+  "files_read": [
+    "src/sentry/workflow_engine/processors/delayed_workflow.py",
+    "src/sentry/grouping/parameterization.py",
+    "src/sentry/issues/endpoints/browser_reporting_collector.py",
+    "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+    "src/sentry/nodestore/base.py",
+    "src/sentry/integrations/source_code_management/commit_context.py",
+    "src/sentry/integrations/github/integration.py",
+    "src/sentry/workflow_engine/endpoints/validators/base/detector.py",
+    "src/sentry/api/fields/actor.py",
+    "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx",
+    "static/app/views/explore/hooks/useTraceItemAttributeKeys.tsx",
+    "static/app/views/explore/hooks/useGetTraceItemAttributeValues.tsx",
+    "static/app/views/dashboards/widgetCard/chart.tsx",
+    "static/app/views/replays/detail/ai/index.tsx",
+    "static/app/components/core/layout/flex.tsx",
+    "static/app/views/explore/contexts/pageParamsContext/aggregateFields.tsx",
+    "static/app/views/explore/contexts/pageParamsContext/index.tsx",
+    "static/app/views/explore/hooks/useSaveQuery.tsx",
+    "src/sentry/analytics/base.py",
+    "src/sentry/feedback/usecases/feedback_summaries.py",
+    "src/sentry/api/endpoints/organization_feedback_summary.py",
+    "src/sentry/migrations/0921_convert_org_saved_searches_to_views_rerevised.py",
+    "src/sentry/workflow_engine/utils/log_context.py",
+    "static/app/utils/usePrevious.tsx"
+  ],
+  "searches": [
+    "list_files src/sentry/workflow_engine/processors/delayed_workflow.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep ParameterizationRegexExperiment|_handle_regex_match|grouping\\.experiments\\.parameterization\\.traceparent|MERGED_PR_SINGLE_ISSUE_TEMPLATE|format_comment_subtitle|UseTraceItemAttributeBaseProps|useTraceItemAttributeValues|0921_convert|DEFAULT_AUTOFIX_AUTOMATION_TUNING_DEFAULT|get_condition_query_group\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "list_files src/sentry/migrations/092[0-2]_*.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep def get_slow_conditions_for_groups|def dcg_ids|dcg_ids\\b.*=|dcg_to_groups:|def dcg_to_groups|class EventRedisData in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/workflow_engine",
+    "grep dcg_ids|dcg_to_groups in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/workflow_engine/processors/delayed_workflow.py",
+    "grep def get_logger|class .*LogContext|log_context\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/workflow_engine/utils",
+    "grep reports\\+json|BrowserReportsJSONParser|media_type in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep def get_multi|def process_raw_response|def query_replay_instance|def mock_replay in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry",
+    "grep error_ids|def generate_node_id|def generate_restricted_fieldset in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/replays/post_process.py",
+    "grep def generate_node_id in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/eventstore/models.py",
+    "grep ^logger|^from sentry.models.group import|import Group$|from sentry.models.group import Group in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/integrations/source_code_management/commit_context.py",
+    "grep format_comment_subtitle|get_environment_info|_truncate_title|get_merged_pr_single_issue_template in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "list_files src/sentry/api/fields/actor.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep owner_user_id|owner_team_id|def owner\\b|def owner\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/workflow_engine/models/detector.py",
+    "grep owner_user_id|OwnerBase in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/workflow_engine/models",
+    "grep def parse_and_validate_actor in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/types",
+    "grep class Detector\\(|class Detector\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/workflow_engine/models",
+    "grep use-table-widget-visualization in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep export function useQuery|export const useQuery|refetchOnWindowFocus|retry:|defaultOptions|staleTime in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static/app/utils/queryClient.tsx",
+    "grep export default function useProjectFromId|export function useProjectFromId|function useProjectFromId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static/app/utils",
+    "grep initiallyLoaded|loadingProjects|export default function useProjects|export function useProjects in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static/app/utils/useProjects.tsx",
+    "list_files static/app/components/core/layout/*.tsx in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep updateLocationWithAggregateFields\\(|getAggregateFieldsFromLocation\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static",
+    "grep isVisualize\\b|\\.toSpliced\\(|BaseVisualize\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static",
+    "grep \"lib\"|\"target\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/tsconfig.json",
+    "grep def run_top_events_timeseries_query|equations: list\\[str\\] \\| None|NoiseConfig\\b.*import|^from sentry.issues.grouptype import|import.*NoiseConfig|parameterization\\.traceparent|compiled_pattern in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src",
+    "list_files src/sentry/preprod/**/*.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep analytics.register\\(|^class .*\\(analytics.Event\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/analytics",
+    "grep NoiseConfig in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/issues/grouptype.py",
+    "grep preprod|analytics\\.register in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/analytics",
+    "grep import sentry\\.analytics\\.events|from sentry.analytics import events|analytics/events in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry",
+    "grep def register|import_module|events|raise .*already|duplicate in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/analytics/base.py",
+    "grep analytics\\.events|sentry\\.analytics\\.events in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry",
+    "grep analytics\\.register\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry",
+    "grep from \\.analytics import|from sentry\\.issues\\.analytics import|from sentry\\.mail\\.analytics import in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry",
+    "grep make_input_prompt|feedback_summaries in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry",
+    "grep generate_summary\\(|feedback_messages|messages\\s*=|\\.message|get_feedback_messages|feedbacks\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/api/endpoints/organization_feedback_summary.py",
+    "grep logging\\.|import logging in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/workflow_engine/processors/workflow.py",
+    "grep def run_top_events_timeseries_query in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/snuba",
+    "grep processing_deadline_duration in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry",
+    "grep class OurLogTestCase|def requires_snuba|def store_ourlogs|def create_ourlog in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/testutils",
+    "grep requires_snuba\\s*=|def requires_snuba|requires_snuba in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/src/sentry/testutils/skips.py",
+    "list_files static/app/components/textOverflow.tsx in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "grep legacySize|export function IconClock|IconClock =  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static/app/icons/iconClock.tsx",
+    "grep organization: Organization|organization\\b.*Organization;|type WidgetCardChartProps|interface WidgetCardChartProps in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static/app/views/dashboards/widgetCard/chart.tsx",
+    "grep const dedupedYAxes = \\[|dedupeArray in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5/static/app/views/explore",
+    "grep def test_basic|def test_handles_multiple_reports_both_specs|def test_rejects_invalid_content_type|environment left out intentionally|<Flex direction=\"column\" flex=\\{1\\}>|analytics\\.record\\(|if not features\\.has in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 248902,
+  "diff_chars_injected": 248902,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 21,
+    "in_fences": 0,
+    "in_section": 21,
+    "surviving": 21
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 73,
+  "prompt_tokens": 9028155,
+  "cached_tokens": 8778897,
+  "cache_write_tokens": 249168,
+  "completion_tokens": 86831,
+  "reasoning_tokens": null,
+  "duration_seconds": 428.86595791671425,
+  "cost_usd": 0.9593463500000001,
+  "cost_basis": "provider"
+}

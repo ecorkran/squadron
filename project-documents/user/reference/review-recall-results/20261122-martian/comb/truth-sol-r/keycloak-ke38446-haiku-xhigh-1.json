@@ -1,0 +1,43 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new user-storage path passes raw recovery codes, and the fixture persists them without hashing."
+  ],
+  "F2": [
+   "KEEP",
+   "The federated validator accepts any matching recovery code without consuming it, allowing repeated authentication."
+  ],
+  "F3": [
+   "KEEP",
+   "Successful user-storage regeneration leaves old local credentials intact, and rejected inputs still reach the local validator."
+  ],
+  "F4": [
+   "KEEP",
+   "Exhausted federated credentials are removed through the local-storage API, leaving an empty credential that can crash form rendering."
+  ],
+  "F5": [
+   "KEEP",
+   "The new getCredentials implementation dereferences a potentially absent user and silently omits credentials on deserialization failure."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.0455823
+}

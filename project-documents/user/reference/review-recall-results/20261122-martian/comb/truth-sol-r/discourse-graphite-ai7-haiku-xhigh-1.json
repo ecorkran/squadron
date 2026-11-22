@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The 70/30 pairing makes embedded-post author links low-contrast instead of preserving the intended 30/70 colors."
+  ],
+  "F2": [
+   "KEEP",
+   "Mobile topic-map headings use 50/50, reducing normal-sized text contrast and eliminating their color distinction from subheadings."
+  ],
+  "F3": [
+   "KEEP",
+   "The mobile hint uses 30/70 instead of desktop\u2019s 70/30, incorrectly promoting secondary hint text in both themes."
+  ],
+  "F4": [
+   "KEEP",
+   "Both desktop and mobile group-member names use the title\u2019s 50/50 color, losing the intended name/title hierarchy."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0486858
+}

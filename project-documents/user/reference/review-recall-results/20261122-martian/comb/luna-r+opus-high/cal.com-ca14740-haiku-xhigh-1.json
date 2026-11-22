@@ -1,0 +1,82 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 8,
+  "F9": 9,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12,
+  "F13": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "isTeamAdmin && isTeamOwner` only lets OWNER through, so team ADMINs get FORBIDDEN, which contradicts the admin-or-owner intent."
+  ],
+  "F2": [
+   "KEEP",
+   "the env blacklist is lowercased but each guest is compared raw with no base-email extraction, so case variants or plus-addresses get past it."
+  ],
+  "F3": [
+   "DROP",
+   "the add-guests emails with the ICS still go out, and the void-returning `updateCalendarAttendees` is existing EventManager behavior; this is a robustness preference, not a defect in the change."
+  ],
+  "F4": [
+   "DROP",
+   "duplicates within one request only arrive through direct API calls by an authorized user, so this is hardening with little real impact."
+  ],
+  "F5": [
+   "KEEP",
+   "sendAddGuestsEmails` gets the raw `guests` instead of `uniqueGuests`, so an existing attendee included in the request gets a full booking confirmation instead of the guests-added email."
+  ],
+  "F6": [
+   "KEEP",
+   "the new add-guests emails skip the event type's disable-host and disable-attendee email settings, which sibling flows like `sendLocationChangeEmails` follow, so hosts who opted out still get emailed."
+  ],
+  "F7": [
+   "DROP",
+   "this guards against direct API calls on cancelled bookings by already-authorized users; it's hardening, not a defect."
+  ],
+  "F8": [
+   "DROP",
+   "rate limiting and size caps are hardening, and letting attendees add guests is a product decision."
+  ],
+  "F9": [
+   "DROP",
+   "a missing translation key that shows a raw key in an error toast is a minor cosmetic issue."
+  ],
+  "F10": [
+   "DROP",
+   "the raw key in `<title>` comes from the existing `BaseScheduledEmail` code, which the change didn't touch and many existing templates share."
+  ],
+  "F11": [
+   "DROP",
+   "the sender display name differs only when `EMAIL_FROM_NAME` is set; it's cosmetic."
+  ],
+  "F12": [
+   "DROP",
+   "a stale validation message and an unreachable fallback toast are minor UI issues."
+  ],
+  "F13": [
+   "DROP",
+   "a hardcoded English tooltip is a localization nit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5,
+  6
+ ],
+ "cost_usd": 0.23397469999999998
+}

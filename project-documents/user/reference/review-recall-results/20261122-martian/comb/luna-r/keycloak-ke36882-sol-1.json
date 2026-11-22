@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The Operator\u2019s upgrade strategies do not check or require `rolling-updates`, so the warning incorrectly says the Operator will fail without it."
+  ],
+  "F2": [
+   "DROP",
+   "The command code sets the stated exit codes; missing assertions are a test-coverage gap, not a defect in the changed behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00272615
+}

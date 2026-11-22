@@ -1,0 +1,136 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Operator feature requirement contradicts the implementation",
+      "description": "The new caution states that the Operator will fail unless `rolling-updates` is enabled, but the inspected implementation does not enforce this requirement. `UpgradeLogicFactory.create()` selects an upgrade strategy solely from `UpdateSpec`, and both strategy implementations decide upgrades without invoking the newly gated CLI commands or checking feature configuration. Consequently, enabling the feature does not control these Operator update strategies.\n\nEither implement the intended Operator feature gate or revise the caution so it does not claim that ordinary Operator deployments require this preview feature.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "docs/guides/operator/advanced-configuration.adoc:446-450"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New exit-code contract lacks behavioral assertions",
+      "description": "The new disabled-feature test checks only the error text, not the newly documented exit code `4`, and exercises only `metadata`, although `check` has a separate guard. Additionally, `testWrongVersions()` never asserts the incompatible-result exit code, which this change switches from `4` to `3`.\n\nBecause the compatibility guide explicitly directs automation to rely on exit codes rather than messages, these tests would miss regressions in the primary scripting contract. Assert exit code `4` for both disabled subcommands and exit code `3` for incompatible metadata.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:45-49"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Operator feature requirement contradicts the implementation",
+      "location": "docs/guides/operator/advanced-configuration.adoc:446-450",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New exit-code contract lacks behavioral assertions",
+      "location": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:45-49",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "diff": "bb4a51ac32539ad0d8b9f72bfd201ade75e95361...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:34:03.210755",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "injected": [],
+  "files_read": [
+    "common/src/main/java/org/keycloak/common/Profile.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java",
+    "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+    "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+    "operator/scripts/Dockerfile-custom-image",
+    "docs/guides/operator/advanced-configuration.adoc",
+    "docs/guides/server/update-compatibility.adoc",
+    "docs/guides/templates/kc.adoc",
+    "operator/src/main/java/org/keycloak/operator/upgrade/impl/BaseUpgradeLogic.java",
+    "operator/src/main/java/org/keycloak/operator/upgrade/UpgradeLogicFactory.java",
+    "operator/src/main/java/org/keycloak/operator/upgrade/impl/RecreateOnImageChangeUpgradeLogic.java",
+    "operator/src/main/java/org/keycloak/operator/upgrade/impl/AlwaysRecreateUpgradeLogic.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractCommand.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibility.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/Environment.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/KeycloakRecorder.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/KeycloakMain.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/configuration/mappers/FeaturePropertyMappers.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityManagerImpl.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/configuration/mappers/PropertyMappers.java",
+    "operator/src/main/java/org/keycloak/operator/crds/v2alpha1/deployment/spec/UpdateSpec.java",
+    "operator/src/test/java/org/keycloak/operator/testsuite/integration/BaseOperatorTest.java"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep RECREATE_UPGRADE_EXIT_CODE|FEATURE_DISABLED|update-compatibility|case 4|case 3 in operator",
+    "list_files * in operator/src/main/java/org/keycloak/operator/upgrade",
+    "grep Profile\\.|configureProfile|includeBuildTime|AbstractUpdatesCommand|UpdateCompatibility in quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java",
+    "grep Profile.configure|Profile.init|Profile.defaults in quarkus",
+    "grep getCurrentOrCreateFeatureProfile|Profile.isFeatureEnabled in quarkus/runtime/src/main/java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 2846,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 15161,
+  "diff_chars_injected": 15161,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 12,
+  "prompt_tokens": 317599,
+  "cached_tokens": 268722,
+  "cache_write_tokens": null,
+  "completion_tokens": 1575,
+  "reasoning_tokens": 370,
+  "duration_seconds": 38.912490458227694,
+  "cost_usd": 0.1403762,
+  "cost_basis": "alias_pricing"
+}

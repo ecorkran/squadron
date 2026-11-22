@@ -1,0 +1,43 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The factory reuses its pool after strategy closure shuts down its queues and workers, so later submissions can be marked complete without processing."
+  ],
+  "F2": [
+   "KEEP",
+   "Shutdown stops commits before workers and makes workers exit after their current item, abandoning queued work and preventing a final commit."
+  ],
+  "F3": [
+   "KEEP",
+   "Each worker queue is unbounded and submissions do not apply backpressure, allowing queued work to grow without limit."
+  ],
+  "F4": [
+   "KEEP",
+   "Worker and submission exception paths mark offsets complete, allowing failed messages to become committable."
+  ],
+  "F5": [
+   "KEEP",
+   "The test can assert before the one-second commit cycle runs, and factory shutdown does not stop the strategy\u2019s commit thread."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00300532
+}

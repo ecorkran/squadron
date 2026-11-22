@@ -1,0 +1,747 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Table-list pins break at 2.1 and no task names them",
+      "description": "`test_a_new_store_has_all_thirteen_tables` asserts the fresh store's tables equal `TABLES` (test_schema.py:24-39, 14 names). Migration 011 adds `owners`, `machines`, `call_results` and `closed_mark` (task lines 110-112), so this fails. `tests/test_contract_docs.py:101` pins the same count (`assert len(schema) == 14`). Task 2.1 (line 115) allows only the version number to change, and line 55 says no other assertion changes, but the new code cannot keep 14 tables. The baseline criterion in 3.4 (line 141) is therefore unreachable as written. Name both tests and their new values (18 tables).",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "tests/store/test_schema.py:86"
+    },
+    {
+      "severity": "FAIL",
+      "title": "New columns must each be pinned under a reason, and the plan does not choose the reasons",
+      "description": "`test_every_column_is_pinned_under_one_reason` requires `COLUMN_REASONS` (lines 23-188) to equal every `table.column` of a fresh store. The contract test at lines 219-224 requires the same lists under `- **reason**:` items in `docs/store-contract.md`. Migration 011 adds about 30 columns (`owners.*`, `machines.*`, `call_results.*`, `closed_mark.*`, `owner_id` on twelve tables, `sessions.machine_id`). Task 3.4 (line 140) names this file only to exempt it from the `Store.open` change. Task 2.1 (line 116) asks for store-contract entries but not reason classifications. The plan has to pick a reason for each column, which the design does not do, and state it in both places.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "tests/store/test_schema_holds_no_mirrored_state.py:208"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The `OPERATIONAL_ERRORS` pin breaks at 6.2, so the section 6 commit is not on a green suite",
+      "description": "`test_the_operational_errors_are_the_five_the_cli_maps_to_exit_three` asserts `set(wiring.OPERATIONAL_ERRORS)` is exactly the five current classes. Task 6.2 joins `ClientFileError` (line 196), and 10.1a and 12.3 add more (lines 278, 333). The test is not named, and line 55 forbids changing it. The commit marker at line 208 therefore sits on a red suite. The plan must name this test as changing to the new membership.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "tests/test_wiring.py:100"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Raw SQL inserts in test fixtures bypass the owner and the acting machine, and 3.4 does not cover them",
+      "description": "`_answer_automatically` runs `INSERT INTO answers` through `transaction.execute` on the `store` fixture, which is `Store.open` (line 40). `tests/store/test_member_removal.py:171` does the same for `releases` on a `Store.open` fixture (line 49). A grep finds raw `INSERT INTO` into the twelve tables in 15 test modules, including `tests/store/message_support.py:75`, `tests/operations/test_pause_held.py:210` and `tests/mcp_server/test_inbox_watcher.py:207`. Once 011 adds the triggers, these fail. Task 3.2 (line 133) covers only `src/amoeba`, and 3.4 covers only `Store.open(` calls. Add a step that binds `owner_id` (and `machine_id` for sessions) in test SQL, or routes these helpers through the store functions, and list the files. The commit at line 146 is red until this is done.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "tests/store/test_settled.py:83"
+    },
+    {
+      "severity": "FAIL",
+      "title": "A join killed after the closed mark is written leaves a store that no command ends",
+      "description": "Task 13.2 (line 348) writes the closed mark under the write lock, then checkpoints, renames and removes the side files. Task 4.2 (line 157) makes every write refuse while a mark is present. If the process dies after the mark and before the rename, the store sits at its path with a mark, no set-aside file and no client file. Re-running `join --set-aside-local` (13.3b, line 355) finds a store at the path, so it takes the set-aside branch. Its write (and `act_as_local`, a write in 3.3) then raises `LocalStoreClosedError` naming a hub this machine never joined. Every local command fails the same way, and `leave` exits 0 with the mark still set. Design line 229 promises that re-running `join` finishes a stopped join, and this stop point is not covered. Fix: treat an existing mark with the same address as already done, and have `leave` clear a mark when there is no set-aside file. Also, the side-file removal after the rename is not one of the resumable steps (line 348), so a stop there leaves `-wal` and `-shm` at the store path, which 13.3b's skip branch does not clean up.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:348"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The mechanical `Store.open(` replacement rewrites a string literal in a pinned scanner test",
+      "description": "Task 3.4 (line 140) replaces `Store.open(` in every file the grep lists, and the 114-file grep includes this file. Line 43 is `calls_store_open(\"Store.open(\\n    path,\\n)\\n\")`, the test's own check for the scanner. The blanket replacement changes it to `open_local_store(`, so `test_the_scan_catches_a_wrapped_call_and_ignores_other_opens` fails. Exclude this file in 3.4.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "tests/test_store_opened_only_by_state_move.py:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`StateLayout` gains a required field, and five test modules construct it directly",
+      "description": "Task 6.1 (line 190) adds `client_file` to `StateLayout`. Direct `StateLayout(` calls are in `tests/operations/test_prune.py:55`, `tests/operations/test_prune_wiring.py:75`, `tests/operations/state_move_support.py:41`, `tests/operations/state_move_worker.py:36` and `tests/mcp_server/test_detached.py:219`, besides `config/home.py:145`. A required field makes each one a `TypeError`. The plan names none of them. Say to pass `client_file` at each call site; a default would be a silent fallback, which the file forbids (line 43).",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "tests/operations/test_prune.py:55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new top-level CLI commands break two parser tests unless they join `CLI_ONLY_COMMANDS`, and the plan gives no dispatch",
+      "description": "Tasks 13.4 and 14.2 (lines 358, 373) register `join`, `leave` and `hub` \"like wake-run\". `tests/cli/test_parser_names.py:34` and `tests/mcp_server/test_tools.py:87` subtract `CLI_ONLY_COMMANDS`, which holds only `wake-run`, so both fail. `src/amoeba/cli/main.py:49-56` dispatches only `WAKE_RUN_COMMAND`, and any other name with no operation reaches `raise AssertionError` at line 56. The plan needs to name both the set and a dispatch branch for each command and for the `hub` group. The commit at line 365 is red without them.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/amoeba/cli/wake_command.py:22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`JoinError` and `NotServedError` are not joined to `OPERATIONAL_ERRORS`, so the promised exit codes and MCP error results do not happen",
+      "description": "Design line 171 says `NotServedError` joins `OPERATIONAL_ERRORS` so the CLI exits 3 and MCP returns an error result. Task line 44 says each named error joins when created, but no task joins `JoinError` (1.3) or `NotServedError` (13.1). `main.py:64` catches only `WakeRunError` and the tuple, so `amoeba join` with a wrong fingerprint, or an unserved command on a joined machine, exits with a traceback. MCP catches the same tuple at `src/amoeba/mcp/server.py:116-117` and `:289`. Add both to the tuple in 1.3 and 13.1.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/amoeba/cli/main.py:64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A first start that dies between the certificate and the store leaves a state the start refuses and no command clears",
+      "description": "Task 8.2 (line 247) classes a directory with a certificate or key and no store as partial. Task 11.2a step 5 (line 302) writes the certificate before step 7 creates the store. A kill between those, or between the certificate and the key, leaves a directory the next start refuses, naming the missing file. The only way out is deleting files by hand, and `--from-backup` refuses a directory that holds a certificate or key. Write the pair under temporary names and rename them together, and treat \"certificate and key, no store\" as an unfinished first start. Design lines 254-256 have the same gap.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:247"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--from-backup` copies three files non-atomically, so a re-run after a kill is refused",
+      "description": "Step 4 refuses a state directory that holds a store, certificate or key, then copies the three files in. A kill after the first copy leaves a partial state. The re-run refuses because the directory now holds files, and step 5 would refuse the partial state anyway. Copy into a `.partial-` directory and rename it, or let a re-run accept files that match the backup. Design line 462 states the same rule.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:302"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A timed backup from the serving process and `amoeba hub backup` can delete each other's copies",
+      "description": "Task 9.1 (line 266) deletes any `.partial-` directory of its kind before copying. `amoeba hub backup` is a separate process (14.2, line 373), and the serving process takes timed backups every `BACKUP_CHECK_SECONDS` (11.2b, line 306). One process can delete the other's copy mid-write, failing that backup, while design line 497 says `amoeba hub backup` \"is safe while the hub is serving.\" The test at 9.2 (line 270) checks a lock held by another connection, not a second backup process. Add a lock or owner-only cleanup, and a test that runs two backups at once.",
+      "file_ref": null,
+      "category": "concurrency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:266"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`act_as_local` takes a write lock on every local open, against the design's \"one read per open\"",
+      "description": "Task 3.1 (line 129) says `act_as_local` works \"in one write\". Design line 416 says it \"costs one read per open, and one write the first time.\" As written, every open through `wiring.open_store` (CLI commands, presence ticks, inbox reads) takes `BEGIN IMMEDIATE`, so a read-only command waits behind any writer until the busy timeout. The existing `tests/load` modules exercise these opens under concurrency. Read first, and write only when the row is missing.",
+      "file_ref": null,
+      "category": "concurrency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The fixture's seeding step does not name the acting machine, and the likeliest choice breaks the \"no local machine\" criterion",
+      "description": "Task 15.1 seeds the hub store \"under an `act_as`\" without naming the machine. The easy choice, `act_as_local`, creates a `local` machine in the hub store, which breaks 15.4's check (line 399) and design line 650. Name the path: act as one of the two invited machines (its `ActingMachine` from `machine_for_token`), or create and remove a seed-only machine.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:390"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The join's set-aside step has no seam, because `client.join` writes the client file itself",
+      "description": "Task 13.3a (line 352) puts \"save it, make one hello call, write the client file\" inside `client.join`. Task 13.3b (line 355) says `wiring_door.join` sets the store aside \"between hello and writing the client file.\" Both cannot hold unless `client.join` takes a callback or is split. Design lines 211-215 and 225 give the order. Name the seam.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:352"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The hub start's step 2 error contract contradicts 8.1",
+      "description": "Task 11.2a says steps 2 to 7 \"raise `HubStartError` with one line.\" Task 8.1 (line 241) says a bad `hub.yaml` raises `HubConfigError` naming every problem, and 11.4 (line 314) expects every bad key named. Decide which exception step 2 raises and how the stderr line carries multiple keys.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:302"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The connect and read times cannot both be set on `HTTPSConnection`",
+      "description": "Task 12.3 (line 330) says \"`HTTPSConnection` with `pinned_context` and the connect and read times.\" `http.client.HTTPSConnection` takes a single `timeout` for connect and read. The 43-second bound in D7 depends on the 3-second connect. Name the way: connect, then set the socket's timeout to the read time, and test it.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:330"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 11's tests come after three implementation tasks and a helper",
+      "description": "Tasks 11.1 (`hub/app.py`), 11.2a and 11.2b have no test directly after them. The first test is 11.4 (line 312), after the 11.3 helper. Task 13.1 (`wiring_door`) also has no test of its own until 13.5 and 14.4. Move the app and start tests to follow their implementation, or name the earlier task each test belongs to.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:297"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `hub` import rule is weaker than the design says",
+      "description": "`_mentions` matches `amoeba.wiring` and `amoeba.wiring.*` only. It does not match `amoeba.wiring_door` or `amoeba.wiring_results`, and `from amoeba import wiring_door` escapes it as well. Task 8.4 (line 257) says the rule covers \"the wiring modules\", so list each `wiring_*` prefix. The test reads only direct imports, so `hub` reaches `client` through `operations.state_move` (6.3 imports `read_client_address`) and reaches `upstream` through `operations/errors.py` (10.1a imports `SquadronError`). Either add the transitive check or state that the rule is direct only.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "tests/test_import_boundaries.py:69"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 54's claim about `test_contract_docs.py` is wrong, so new flags and config keys go unchecked",
+      "description": "Line 54 says the test \"requires every new table, column, flag and config key.\" It checks `UserConfig.model_fields` for config keys (line 124) and flags only for `add`, `rm` and `list` (lines 238-241). The `hub.yaml` keys and the `join`, `leave` and `hub` flags are not checked. Tasks 8.1, 13.4 and 14.2 still have to write them, but the green test in 17.1 does not prove them. Make 17.1 check them by name.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "tests/test_contract_docs.py:122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The load test's CI check cannot fail, and the CI gate is implicit",
+      "description": "Task 15.6 confirms CI collection with `uv run pytest --collect-only -q tests/load/test_door_load.py`. `pyproject.toml:58-64` says a path named on the command line is collected regardless of `--ignore`, so this passes even if the bare run dropped the file. Use `uv run pytest --collect-only -q` with no path and check the output for `door_load`. The bare run does collect `tests/load` today (`pyproject.toml:59-64`), but nothing in the plan stops a later `--ignore` from removing it. The criteria say CI gating must not be implicit, and no CI wiring task exists, so add one (an assertion test on the default collection, or an explicit CI step).",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:407"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 7.6 cannot reach the operations' own transactions with `fail_on_statement`",
+      "description": "`fail_on_statement` patches one `Transaction` instance (`fault_injection.py:28-38`). Operations open their own transactions with `store.write()`, which builds a new `Transaction` inside the context manager (`src/amoeba/store/store.py:131-146`). Task 7.6 (line 232) needs a nested `write()` inside a call scope to fail its last statement, but the test cannot get that instance. The existing use (`tests/store/test_store.py:142`) passes a transaction the test opened. Name the seam: a class-level patch of `Transaction.execute` that matches the statement text, or a hook in `_transaction`.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "tests/fault_injection.py:17"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`result_from_document` needs hand-written rebuilding for the two dataclass results",
+      "description": "Four of the six results are Pydantic models. `DismissResult` (`dismiss.py:53-54`) and `RetractResult` (`retract.py:49-50`) are dataclasses serialised with `asdict` and a JSON round trip (`src/amoeba/wiring_results.py:83`), so enums come back as strings and tuples as lists. Say so in 7.5 (line 227).",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "src/amoeba/operations/dismiss.py:53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The fingerprint's input form and the saved certificate's form are unspecified",
+      "description": "Task 1.3 gives `fingerprint(pem_or_der)`, and 12.1 (line 324) says `fetch_certificate` returns \"the presented certificate.\" `ssl` returns DER, and the saved file is `pinned-hub-cert.pem`. Say which form is saved and where any conversion happens, so the saved file's fingerprint matches the fetched one.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:92"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 16.1 cites a guide path that does not resolve from the repository root",
+      "description": "The guide is at `project-documents/ai-project-guide/tool-guides/docker/02-entrypoint-and-process-model.md`. Give the full path.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:415"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The update-script test's shared fixture builds a current-schema store",
+      "description": "`live` opens its store with `Store.open` (line 65), so once 011 lands it is schema 11 and the existing update tests exercise no migration. Task 17.2 (line 432) adds a schema-10 case but does not say whether `live` changes.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "tests/scripts/test_update_live.py:62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The wheel test does not assert that the example is shipped",
+      "description": "Task 8.1's success (line 244) says the wheel test \"passes with the example listed in it,\" but the test checks only the migration and the entry point (lines 35-36). Add an assertion for `hub.yaml.example`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "tests/test_wheel_contents.py:35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 13.1 says \"no layout,\" but the client file's path comes from the layout",
+      "description": "`joined()` needs `layout.client_file` (6.1). Say that it uses the path function in `config/home.py`, so the \"no layout\" claim holds.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:345"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No task or test covers the integration requirement that 261 can add a served operation without a call-format change",
+      "description": "Design line 663 is a success criterion. Tasks 7.6 and 10.2 cover the six operations through `run_served`, which is the nearest evidence. Add a test that a name added to the served list dispatches with no change to the document shape, or record it as a 261 test.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/260-slice.hub-and-door.md:663"
+    },
+    {
+      "severity": "PASS",
+      "title": "Size and structure are proportionate",
+      "description": "One file with 70 tasks over 17 sections, for a design with 19 decisions spanning wire, client, hub, store, CLI, container and docs. No split is needed. Section-end commit markers are at sensible points, except the three flagged above (lines 146, 208, 365).",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Most statements about existing code check out",
+      "description": "Verified: `EXPECTED_SCHEMA_VERSION` is 10 (migrations.py:25); migrations 001 to 010 exist; the twelve record tables and `schema_meta` and `pm_marker` match the schema; the 16 `INSERT` statements are in the six named files; `Store.open` appears in 114 test files; the five `OPERATIONAL_ERRORS` members match (wiring.py:84-90); line counts are 325, 488 and 235; `open_state_store` is at `state_move.py:117-120`; `prepare_state_home` does not open a store (`state_move.py:87-95`), so the `join` re-run's prepare step cannot create one; `BUSY_TIMEOUT_SECONDS` is 5.0 (store.py:28); the `_dispatch` cases and `decisions`/`standing` signatures match 7.1\u20137.4.",
+      "file_ref": null,
+      "category": "existing-code",
+      "raw_category": null,
+      "location": "src/amoeba/store/migrations.py:25"
+    },
+    {
+      "severity": "PASS",
+      "title": "The pinned uvicorn version matches the design's stalled-peer reasoning",
+      "description": "The locked `uvicorn` is 0.54.0, the version D14 names, so 11.2b's conditional recheck is not triggered. `cryptography` (50.0.2) and `starlette` (1.10.0) are locked as the task says.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "uv.lock:850"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Table-list pins break at 2.1 and no task names them",
+      "location": "tests/store/test_schema.py:86",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "New columns must each be pinned under a reason, and the plan does not choose the reasons",
+      "location": "tests/store/test_schema_holds_no_mirrored_state.py:208",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The `OPERATIONAL_ERRORS` pin breaks at 6.2, so the section 6 commit is not on a green suite",
+      "location": "tests/test_wiring.py:100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Raw SQL inserts in test fixtures bypass the owner and the acting machine, and 3.4 does not cover them",
+      "location": "tests/store/test_settled.py:83",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "A join killed after the closed mark is written leaves a store that no command ends",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:348",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The mechanical `Store.open(` replacement rewrites a string literal in a pinned scanner test",
+      "location": "tests/test_store_opened_only_by_state_move.py:43",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "`StateLayout` gains a required field, and five test modules construct it directly",
+      "location": "tests/operations/test_prune.py:55",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "The new top-level CLI commands break two parser tests unless they join `CLI_ONLY_COMMANDS`, and the plan gives no dispatch",
+      "location": "src/amoeba/cli/wake_command.py:22",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`JoinError` and `NotServedError` are not joined to `OPERATIONAL_ERRORS`, so the promised exit codes and MCP error results do not happen",
+      "location": "src/amoeba/cli/main.py:64",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "A first start that dies between the certificate and the store leaves a state the start refuses and no command clears",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:247",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "`--from-backup` copies three files non-atomically, so a re-run after a kill is refused",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:302",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "concurrency",
+      "raw_category": null,
+      "summary": "A timed backup from the serving process and `amoeba hub backup` can delete each other's copies",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:266",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "concurrency",
+      "raw_category": null,
+      "summary": "`act_as_local` takes a write lock on every local open, against the design's \"one read per open\"",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:129",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "The fixture's seeding step does not name the acting machine, and the likeliest choice breaks the \"no local machine\" criterion",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:390",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "The join's set-aside step has no seam, because `client.join` writes the client file itself",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:352",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The hub start's step 2 error contract contradicts 8.1",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:302",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "The connect and read times cannot both be set on `HTTPSConnection`",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:330",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Section 11's tests come after three implementation tasks and a helper",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:297",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The `hub` import rule is weaker than the design says",
+      "location": "tests/test_import_boundaries.py:69",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 54's claim about `test_contract_docs.py` is wrong, so new flags and config keys go unchecked",
+      "location": "tests/test_contract_docs.py:122",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The load test's CI check cannot fail, and the CI gate is implicit",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:407",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "Task 7.6 cannot reach the operations' own transactions with `fail_on_statement`",
+      "location": "tests/fault_injection.py:17",
+      "location_verified": true
+    },
+    {
+      "id": "F023",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "`result_from_document` needs hand-written rebuilding for the two dataclass results",
+      "location": "src/amoeba/operations/dismiss.py:53",
+      "location_verified": true
+    },
+    {
+      "id": "F024",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "The fingerprint's input form and the saved certificate's form are unspecified",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:92",
+      "location_verified": true
+    },
+    {
+      "id": "F025",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 16.1 cites a guide path that does not resolve from the repository root",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:415",
+      "location_verified": true
+    },
+    {
+      "id": "F026",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The update-script test's shared fixture builds a current-schema store",
+      "location": "tests/scripts/test_update_live.py:62",
+      "location_verified": true
+    },
+    {
+      "id": "F027",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The wheel test does not assert that the example is shipped",
+      "location": "tests/test_wheel_contents.py:35",
+      "location_verified": true
+    },
+    {
+      "id": "F028",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "Task 13.1 says \"no layout,\" but the client file's path comes from the layout",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:345",
+      "location_verified": true
+    },
+    {
+      "id": "F029",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No task or test covers the integration requirement that 261 can add a served operation without a call-format change",
+      "location": "project-documents/user/slices/260-slice.hub-and-door.md:663",
+      "location_verified": true
+    },
+    {
+      "id": "F030",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Size and structure are proportionate",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+      "location_verified": null
+    },
+    {
+      "id": "F031",
+      "severity": "pass",
+      "category": "existing-code",
+      "raw_category": null,
+      "summary": "Most statements about existing code check out",
+      "location": "src/amoeba/store/migrations.py:25",
+      "location_verified": true
+    },
+    {
+      "id": "F032",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The pinned uvicorn version matches the design's stalled-peer reasoning",
+      "location": "uv.lock:850",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+    "against": "project-documents/user/slices/260-slice.hub-and-door.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/amoeba260"
+  },
+  "timestamp": "2026-11-22T16:11:17.645840",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 85,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+      "chars": 58847,
+      "sha256": "b2f9f04a5699af0eb09aa40690f69fea14a01dacefec10acc4a801697f5d6c40",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/260-slice.hub-and-door.md",
+      "chars": 69666,
+      "sha256": "657c4287c65958ea4c55ada10e708445269122c2732629c435416fe472ffdcd2",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "tests/test_store_opened_only_by_state_move.py",
+    "src/amoeba/operations/state_move.py",
+    "src/amoeba/wiring.py",
+    "src/amoeba/wiring_standing.py",
+    "tests/test_import_boundaries.py",
+    "tests/test_wheel_contents.py",
+    "tests/test_contract_docs.py",
+    "tests/test_store_safety.py",
+    "tests/store/test_schema_holds_no_mirrored_state.py",
+    "tests/store/test_schema.py",
+    "src/amoeba/store/store.py",
+    "src/amoeba/cli/main.py",
+    "src/amoeba/cli/commands.py",
+    "src/amoeba/wiring_release.py",
+    "pyproject.toml",
+    ".github/workflows/ci.yml",
+    "scripts/update_live.py",
+    "tests/scripts/test_update_live.py",
+    "tests/fault_injection.py",
+    "tests/test_wiring.py",
+    "tests/store/test_migration_010.py",
+    "tests/store/test_settled.py",
+    "src/amoeba/cli/parser.py",
+    "tests/cli/test_parser_names.py",
+    "tests/mcp_server/test_tools.py",
+    "src/amoeba/wiring_results.py"
+  ],
+  "searches": [
+    "list_files **/wiring.py in /Users/manta/source/repos/manta-squadron",
+    "list_files **/wiring.py in .",
+    "list_files src/amoeba/store/**/*.py in .",
+    "grep CREATE TABLE in src/amoeba/store/schema",
+    "grep EXPECTED_SCHEMA_VERSION|BUSY_TIMEOUT|def read_schema_version in src/amoeba",
+    "grep INSERT\\s+(OR\\s+\\w+\\s+)?INTO\\s+(programs|members|dependency_pairs|releases|questions|answers|standing_answers|messages|deliveries|message_rejections|sessions|wakes)\\b in src/amoeba",
+    "grep INSERT in src/amoeba",
+    "grep OPERATIONAL_ERRORS|def invoke|def _dispatch|start_after in src/amoeba",
+    "grep ^def |^class |deps|Deps|cf|runner|member in src/amoeba/operations/decisions.py",
+    "grep ^def |^class |cf|runner|resolve|member|Member in src/amoeba/operations/standing.py",
+    "list_files {src/amoeba/operations/errors.py,src/amoeba/operations/served.py,src/amoeba/wire/**,src/amoeba/client/**,src/amoeba/hub/**,src/amoeba/store/set_aside.py,src/amoeba/store/machines.py,src/amoeba/store/call_results.py,src/amoeba/wiring_door.py,src/amoeba/cli/hub_commands.py,src/amoeba/cli/join_command.\u2026 in .",
+    "list_files {tests/load/**,tests/scripts/**,tests/store/test_schema_holds_no_mirrored_state.py,tests/store/test_migration_010.py,tests/store/seed.py,tests/fault_injection.py,tests/user_configs.py,tests/test_wheel_contents.py,tests/test_contract_docs.py,tests/test_import_boundaries.py,tests/test_wiring_results.p\u2026 in .",
+    "list_files {docs/store-contract.md,docs/cli-contract.md,docs/config-contract.md,docs/mcp-server.md,docs/squadron-hook.md,docs/*.md,docker/**,.github/workflows/ci.yml,scripts/update_live.py,pyproject.toml,uv.lock,.claude/skills/release/SKILL.md} in .",
+    "list_files tests/{load,scripts,store}/*.py in .",
+    "list_files tests/*.py in .",
+    "list_files {docker,tests/load,tests/scripts,tests/hub,tests/client,tests/wire} in .",
+    "grep sqlite_master|== 14|== 10|EXPECTED_SCHEMA|schema_version|set_trace_callback|trace_callback|PRAGMA foreign_keys in tests",
+    "grep ^def |^class |^[A-Z_]+ *[:=]|^    def |client|logs_dir|store_path|STORE_FILE_NAME|legacy_home|set-aside|set_aside in src/amoeba/config/home.py",
+    "grep ^def |^class |^[A-Z_]+ *[:=]|set.aside|SET_ASIDE|closed|hub in src/amoeba/store/relocate.py",
+    "grep ^class |^def |^[A-Z_]+ *[:=] in src/amoeba/store/errors.py",
+    "grep wake-run|WAKE_RUN|handle-pause|HANDLE_PAUSE|calls_log|calls-log|def main|def _run|cli_only|CLI_ONLY|cli_name in src/amoeba/cli",
+    "grep def |state_layout|load_config|prepare_home|run_stdio|asyncio|answer|deadline|DeadlineError|check_deadline|open_store in src/amoeba/mcp/server.py",
+    "grep check_deadline|DeadlineError|def |answer in src/amoeba/mcp/in_process.py",
+    "grep ^def |^class |^type |^[A-Z_]+ *[:=]|Literal|Union|\\| in src/amoeba/wiring_results.py",
+    "grep class OperationName|DECISIONS|MARK_READ|DISMISS|RETRACT|STANDING|WITHDRAW|HANDLE_PAUSE|HELLO|def cli_name|class Door in src/amoeba/operations/names.py",
+    "grep ^name = \"(cryptography|starlette|uvicorn|anyio|mcp)\"$ in uv.lock",
+    "grep ^def |^class |FakeSteps|_migrate|PRODUCTION|open_state_store|state_layout|def test_ in tests/scripts/test_update_live.py",
+    "grep ^## |^```|^#  in docs/config-contract.md",
+    "grep ^def |^class |autouse|^    def |monkeypatch\\.setattr\\(.*execute in tests/fault_injection.py",
+    "grep ^def |^class  in tests/store/seed.py",
+    "grep autouse|AMOEBA_HOME|def amoeba_home in tests/conftest.py",
+    "grep def test_|wiring_results|result_document|def _ in tests/test_wiring_release.py",
+    "grep result_document|wiring_results in tests",
+    "grep fail_on_statement\\(|OPERATIONAL_ERRORS|setattr\\(wiring|setattr\\(\\s*wiring|wiring\\.open_store|wiring\\.invoke|from amoeba.wiring import in tests",
+    "grep DISMISS|RETRACT|MARK_READ|DECISIONS|STANDING|WITHDRAW|wiring_results|from amoeba.wiring_results in tests/test_wiring.py",
+    "grep ^TABLES|^    \"[a-z_]+\",$|TABLES = in tests/store/test_schema.py",
+    "grep ^- \\*\\*[a-z]+\\*\\*: in docs/store-contract.md",
+    "grep INSERT INTO (programs|members|dependency_pairs|releases|questions|answers|standing_answers|messages|deliveries|message_rejections|sessions|wakes)\\b in tests",
+    "grep Store\\.open\\( in tests",
+    "grep INSERT INTO (programs|members|dependency_pairs|releases|questions|answers|standing_answers|messages|deliveries|message_rejections|sessions|wakes)\\b in tests",
+    "grep Store\\.open|open_state_store|_migrate_to|migrate\\(|def |store\\.write|connection = |sqlite3\\.connect in tests/store/test_settled.py",
+    "grep Store\\.open|open_state_store|_migrate_to|migrate\\(|def |store\\.write|connection = |sqlite3\\.connect in tests/store/test_member_removal.py",
+    "grep Store\\.open|open_state_store|_migrate_to|migrate\\(|def |sqlite3\\.connect|connection =  in tests/operations/test_pause_held.py",
+    "grep state_layout|config_home|state_home|AMOEBA_HOME|ALLOWED|allowed|_MODULES|ONLY|def test_|amoeba\\.[a-z_.]+\" in tests/test_home_access.py",
+    "grep ^ in src/amoeba/store/sql.py",
+    "grep ^ in src/amoeba/store/relocate.py",
+    "grep \"state_layout\"|'state_layout'|\"config_home\"|\"state_home\"|CLI_ONLY|cli_only|set_defaults in tests",
+    "list_files {src/amoeba/store/schema/*.sql,tool-guides/docker/*.md,**/tool-guides/docker/02-entrypoint-and-process-model.md,.claude/skills/release/SKILL.md} in .",
+    "grep Store\\.open|open_state_store|open_store|sqlite3\\.connect in src/amoeba",
+    "grep StateLayout\\(|[^a-zA-Z_]Transaction\\(|[^a-zA-Z_.]Store\\(|ServedEdges|class StateLayout|@dataclass\\(frozen=True\\)$ in src/amoeba/config/home.py",
+    "grep StateLayout\\(|Transaction\\( in tests",
+    "grep \\bdecisions\\(|\\bstanding\\( in tests",
+    "grep from amoeba\\.operations\\.(decisions|standing) import|operations\\.standing import|operations\\.decisions import in src",
+    "grep REPLACE\\s+INTO|ON CONFLICT|UPSERT in src/amoeba",
+    "grep basicConfig|addHandler|StreamHandler|logging\\.getLogger\\(\\)|lastResort in src/amoeba",
+    "grep mcp_server|def test_.*StoreError|OPERATIONAL|NotServed|operational in src/amoeba/mcp/server.py",
+    "grep ^class (DecisionsResult|MarkReadResult|DismissResult|RetractResult|StandingResult|WithdrawResult)\\b in src/amoeba/operations",
+    "grep rglob|glob\\(|startswith\\(\"sql|FROM members|sql_|SQL_FILES|ALLOWED|allowed in tests/store/test_members_queried_in_one_place.py",
+    "grep rglob|glob\\(|SQL|sql in tests/test_read_side_defined_once.py"
+  ],
+  "sections_in_document": 19,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 32,
+    "in_fences": 0,
+    "in_section": 32,
+    "surviving": 32
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 86,
+  "prompt_tokens": 8111072,
+  "cached_tokens": 7816859,
+  "cache_write_tokens": 294133,
+  "completion_tokens": 216324,
+  "reasoning_tokens": null,
+  "duration_seconds": 941.0201634583063,
+  "cost_usd": 1.0807415699999998,
+  "cost_basis": "provider"
+}

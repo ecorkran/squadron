@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "BuildIndex` now takes the cache lock only when it stores the result (bleve.go:137-139), so two calls to the unsynchronized `getOrCreateIndex` can build the same key at once; the later build overwrites the earlier one and can drop updates a write event already made to it."
+  ],
+  "F2": [
+   "KEEP",
+   "the new `TotalDocs()` call at search.go:216 runs after the event goroutine starts, and `TotalDocs` reads `b.cache` with no lock while `BuildIndex` can write to it, a concurrent map read/write that crashes Go programs."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1064914
+}

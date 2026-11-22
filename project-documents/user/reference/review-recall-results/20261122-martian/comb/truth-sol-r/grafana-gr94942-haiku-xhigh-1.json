@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The helper returns false regardless of the feature flag, so the new parser rejects every SQL expression."
+  ],
+  "F2": [
+   "KEEP",
+   "The stub database always errors, causing legacy SQL command construction and SQL execution to fail."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.016281
+}

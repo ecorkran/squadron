@@ -1,0 +1,48 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "All four goroutines inherit caller cancellation, so request completion can cancel legacy writes."
+  ],
+  "F2": [
+   "KEEP",
+   "Legacy errors are discarded after metric recording, and unrecovered panics in the new goroutines can crash the process."
+  ],
+  "F3": [
+   "KEEP",
+   "Create and Update storage failures populate the legacy histogram, while legacy DeleteCollection populates the storage histogram."
+  ],
+  "F4": [
+   "KEEP",
+   "Delete returns immediately on storage NotFound, leaving any legacy-only object undeleted."
+  ],
+  "F5": [
+   "KEEP",
+   "Legacy receives the original objInfo and recomputes updates against its own state, allowing divergence from storage."
+  ],
+  "F6": [
+   "DROP",
+   "Unconditional forwarding of dry-run requests to legacy predates this change; moving those calls into goroutines did not introduce it."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.0427962
+}

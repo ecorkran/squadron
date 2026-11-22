@@ -1,0 +1,55 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "prisma` is used without an import or declaration, so Salesforce token refresh fails at runtime."
+  ],
+  "F2": [
+   "KEEP",
+   "The parse result envelope is persisted as the credential key instead of its `data`, breaking subsequent credential parsing."
+  ],
+  "F3": [
+   "KEEP",
+   "The computed Zod keys do not preserve provider fields such as expiry and refresh tokens in sharing mode."
+  ],
+  "F4": [
+   "KEEP",
+   "The delegated path returns a Fetch `Response` where callers expect decoded token data, causing refresh flows to fail."
+  ],
+  "F5": [
+   "KEEP",
+   "The webhook indexes metadata by database slug, but supported app slugs differ from the metadata map\u2019s directory-name keys."
+  ],
+  "F6": [
+   "KEEP",
+   "Bigin passes the credential ID as `userId`, so synchronization targets the wrong user or fails to find their account."
+  ],
+  "F7": [
+   "KEEP",
+   "The helper fabricates a refresh token when none is returned, overwriting Office365\u2019s valid stored token."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.00466921
+}

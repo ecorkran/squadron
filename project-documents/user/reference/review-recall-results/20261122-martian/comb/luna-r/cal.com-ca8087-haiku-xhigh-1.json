@@ -1,0 +1,34 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The `forEach` callbacks\u2019 rejected promises bypass the surrounding catch, so cleanup failures go unhandled."
+  ],
+  "F2": [
+   "DROP",
+   "The unawaited recurring-delete callbacks predate the change, so this is not a defect introduced by the change."
+  ],
+  "F3": [
+   "DROP",
+   "Eager evaluation is real, but the finding does not establish that lazy loading is an intended requirement."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests alone do not establish a defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00228626
+}

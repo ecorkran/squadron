@@ -1,0 +1,113 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Preserve i18next-compatible error messages",
+      "description": "The account and admin React UIs use i18next, and `ThemeResource.getLocalizationTexts()` returns these messages without MessageFormat conversion. Replacing `{{0}}` placeholders with `{0}` and adding Java choice syntax leaves literal placeholders and choice expressions in validation errors. Preserve i18next formatting in both UI bundles and add a rendering regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:188"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Choice normalization hides unsafe HTML",
+      "description": "Removing entire choice expressions bypasses HTML verification for their contents. For example, `{2,choice,0#<img src=x onerror=alert(1)>|1#value}` becomes `...` before sanitization, so the verifier misses the unsafe markup. Normalize only choice operators while retaining branch text for inspection, and test malicious branch content.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lithuanian OTP instructions were replaced with Italian",
+      "description": "`loginTotpStep1` now contains Italian text in the Lithuanian bundle. The same regression appears in the account bundle at line 101. Replace both strings with Lithuanian translations.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve i18next-compatible error messages",
+      "location": "js/apps/account-ui/maven-resources/theme/keycloak.v3/account/messages/messages_en.properties:188",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Choice normalization hides unsafe HTML",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:124-126",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lithuanian OTP instructions were replaced with Italian",
+      "location": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "diff": "ea94b5d50e6de265cb7ddcd13f76a1cff31232cf...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:34:14.810933",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 77585,
+  "diff_chars_injected": 77585,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 70751,
+  "cached_tokens": 69376,
+  "cache_write_tokens": null,
+  "completion_tokens": 311,
+  "reasoning_tokens": 0,
+  "duration_seconds": 84.13440800039098,
+  "cost_usd": 0.0127976,
+  "cost_basis": "alias_pricing"
+}

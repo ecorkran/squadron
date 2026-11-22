@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "UsernameForm.java:47` calls a no-arg `isConditionalPasskeysEnabled()`, but the only method is the one-argument `isConditionalPasskeysEnabled(UserModel)` at `UsernamePasswordForm.java:160`, so the services module won't compile."
+  ],
+  "F2": [
+   "KEEP",
+   "The helper returns false when `user == null`, so the first login page never calls `fillContextForm`; that drops the conditional-UI passkey form and breaks the existing first-page assertions (e.g. `PasskeysUsernamePasswordFormTest.java:145-146`)."
+  ],
+  "F3": [
+   "DROP",
+   "This is a test-quality nitpick: `fail()` throws an `AssertionError`, which `catch (Exception)` doesn't catch, so the test still works when the element is present; it only risks passing on an unrelated WebDriver error."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1362798
+}

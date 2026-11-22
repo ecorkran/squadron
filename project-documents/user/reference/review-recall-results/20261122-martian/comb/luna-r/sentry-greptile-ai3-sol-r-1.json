@@ -1,0 +1,31 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Top-events queries retain raw ranking fields and can select raw and upsampled counts under the same alias."
+  ],
+  "F2": [
+   "KEEP",
+   "With alias transformation enabled, serialization looks up the original axis name while results use the transformed expression name."
+  ],
+  "F3": [
+   "KEEP",
+   "Substring matching can enable upsampling for negated, mixed-type, or quoted queries that do not restrict results to errors."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.015094
+}

@@ -1,0 +1,30 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In the new `OAuthLoginView`, the OAuth `state` is `pipeline.signature`, which is the same MD5 of view class names for every user, so the CSRF check does nothing and an attacker can inject their own authorization code into a victim's flow."
+  ],
+  "F2": [
+   "DROP",
+   "Moving on when there is no `Integration` record is the existing, intended path for fresh installs whose webhook hasn't arrived yet; the change didn't add this gap, and failing closed as suggested would break normal installs."
+  ],
+  "F3": [
+   "KEEP",
+   "Integrations created through the pipeline get metadata replaced by `build_integration()` output, which has no `sender` because no state ever binds it, so `integration.metadata[\"sender\"][\"login\"]` raises `KeyError` (a server error) once such an integration is unlinked from its org."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.1261429
+}

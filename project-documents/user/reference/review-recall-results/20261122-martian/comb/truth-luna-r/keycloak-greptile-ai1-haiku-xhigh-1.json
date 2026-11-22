@@ -1,0 +1,41 @@
+{
+ "case": "keycloak-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "UsernameForm` calls a no-argument helper that is not declared in its superclass chain, so the code does not compile."
+  ],
+  "F2": [
+   "KEEP",
+   "The helper returns false when no user is set, preventing the initial username form from being populated with conditional passkey data."
+  ],
+  "F3": [
+   "DROP",
+   "The different passkey UI on the error page is shown, but the finding does not establish that this behavior is incorrect."
+  ],
+  "F4": [
+   "DROP",
+   "The duplicated check and package cycle are structural concerns, not behavior defects."
+  ],
+  "F5": [
+   "KEEP",
+   "The broad catch can swallow unrelated WebDriver exceptions, allowing the test to pass without verifying that the element is absent."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  4
+ ],
+ "cost_usd": 0.00355792
+}

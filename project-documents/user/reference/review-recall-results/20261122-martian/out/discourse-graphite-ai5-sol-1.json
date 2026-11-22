@@ -1,0 +1,77 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Long topic titles can push header controls offscreen",
+      "description": "Making `.contents` a flex container gives the `header-extra-info` component\u2019s outer Ember element an automatic minimum width. Its topic link uses `white-space: nowrap`, so long titles can prevent that flex item from shrinking and push navigation controls outside the header.\n\nThe existing `overflow: hidden` targets the nested `.extra-info-wrapper`, not the actual flex item. Apply `min-width: 0` and appropriate sizing to the component\u2019s outer element, then verify long-title layouts at narrow desktop widths.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/header.scss:14-18"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Long topic titles can push header controls offscreen",
+      "location": "app/assets/stylesheets/common/base/header.scss:14-18",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "diff": "53963048419d79170560938c003ae9ed1172f8ee...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:54:26.841252",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 3645,
+  "diff_chars_injected": 3645,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 47615,
+  "cached_tokens": 46848,
+  "cache_write_tokens": null,
+  "completion_tokens": 150,
+  "reasoning_tokens": 0,
+  "duration_seconds": 57.69335270812735,
+  "cost_usd": 0.0077188,
+  "cost_basis": "alias_pricing"
+}

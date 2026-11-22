@@ -1,0 +1,154 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Reject ambiguous highest-priority crypto providers",
+      "description": "Sorting does not resolve equal priorities: `DefaultCryptoProvider`, `WildFlyElytronProvider`, and `FIPS1402Provider` all return `200`. If multiple full providers are present, selection now depends on service-discovery order instead of rejecting the configuration as before. In particular, the presence of the FIPS provider does not guarantee its selection alongside the default provider.\n\nRetain the lower-priority authz-client fallback, but reject configurations with multiple providers sharing the highest priority unless an explicit selection mechanism resolves them. Add provider-selection tests covering this case.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:55-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Enforce ASN.1 sequence boundaries",
+      "description": "`readSequence()` reads children from the entire input and accepts a child that exceeds the sequence\u2019s remaining length. For example, `30 04 02 01 01 02 01 01` declares four content bytes but contains two three-byte integers. The decoder consumes both, lets `length` become negative, and returns them successfully; `asn1derToConcatenatedRS()` then accepts the result.\n\nDecode within a bounded sequence-content buffer, reject children exceeding that boundary, and verify complete consumption. Add malformed-length tests so invalid signature encodings cannot be silently normalized.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:55-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exercise the actual curves and verify converted signatures",
+      "description": "Every test generates the same provider-default EC curve; the ES384 and ES512 cases change only the digest and output width. They therefore do not exercise full-width P-384/P-521 integers or the long-form sequence length normally needed by P-521 signatures.\n\nThe assertion also compares two outputs of the new converter without checking that the converted DER signature remains valid. Matching conversion errors can pass this round-trip test.\n\nInitialize the generator explicitly with `secp256r1`, `secp384r1`, and `secp521r1` respectively, then verify the converted signature using JCA and the public key. Include deterministic vectors for sign-padding and long-form lengths.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:41-56"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Reject ambiguous highest-priority crypto providers",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:55-57",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Enforce ASN.1 sequence boundaries",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:55-62",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Exercise the actual curves and verify converted signatures",
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:41-56",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "diff": "9e01551928c12485c55ca9e77d60d663de9966f9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:34:45.750962",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "injected": [],
+  "files_read": [
+    "authz/client/pom.xml",
+    "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Encoder.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "authz/client/src/main/resources/META-INF/services/org.keycloak.common.crypto.CryptoProvider",
+    "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java",
+    "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java",
+    "crypto/default/src/main/java/org/keycloak/crypto/def/DefaultCryptoProvider.java",
+    "crypto/elytron/src/main/java/org/keycloak/crypto/elytron/WildFlyElytronProvider.java",
+    "crypto/fips1402/src/main/java/org/keycloak/crypto/fips/FIPS1402Provider.java",
+    "common/src/main/java/org/keycloak/common/util/BouncyIntegration.java",
+    "crypto/default/src/main/java/org/keycloak/crypto/def/BCECDSACryptoProvider.java",
+    "core/src/main/java/org/keycloak/crypto/ECDSAAlgorithm.java",
+    "core/src/main/java/org/keycloak/crypto/AsymmetricSignatureVerifierContext.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/Configuration.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/Http.java",
+    "core/src/main/java/org/keycloak/jose/jwk/AbstractJWKParser.java",
+    "core/src/main/java/org/keycloak/protocol/oidc/client/authentication/JWTClientCredentialsProvider.java",
+    "common/src/main/java/org/keycloak/common/util/KeystoreUtil.java",
+    "core/src/main/java/org/keycloak/protocol/oidc/client/authentication/ClientCredentialsProviderUtils.java",
+    "core/src/main/java/org/keycloak/crypto/ECDSASignatureVerifierContext.java"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep CryptoIntegration|getSignature\\(|getPemUtils\\(|getKeyFactory\\( in core/src/main/java",
+    "grep CryptoIntegration|PemUtils|KeyUtils|KeyStore|Signature in authz/client/src/main/java",
+    "grep class ECDSA|concatenatedRSToASN1DER|signature.length in core/src/main/java/org/keycloak",
+    "list_files *RULE* in .",
+    "grep PemUtils|CryptoIntegration|getKeyStore|decode in authz",
+    "grep CryptoIntegration|PemUtils|KeyUtils|Certificate in adapters/oidc/adapter-core/src/main/java/org/keycloak/adapters",
+    "list_files AGENTS.md in .",
+    "grep class JWTClient|class ClientCredentialsProviderUtils|class KeyStoreUtil in ."
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1829,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 31609,
+  "diff_chars_injected": 31609,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 207530,
+  "cached_tokens": 169154,
+  "cache_write_tokens": null,
+  "completion_tokens": 1722,
+  "reasoning_tokens": 318,
+  "duration_seconds": 39.4005306661129,
+  "cost_usd": 0.1108874,
+  "cost_basis": "alias_pricing"
+}

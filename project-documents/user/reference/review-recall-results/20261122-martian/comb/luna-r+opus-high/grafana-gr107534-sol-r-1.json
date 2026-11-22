@@ -1,0 +1,17 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The repeated interpolation is real: the shard path at shardQuerySplitting.ts:52 interpolates, then querySplitting.ts:299 does it again, then `DataSourceWithBackend.query()` does it once more. But after the first pass only literal `$name` tokens are left for later passes to change. So results differ only when a variable's value itself contains another variable's name, a rare edge case and not a defect worth blocking the merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.1361198
+}

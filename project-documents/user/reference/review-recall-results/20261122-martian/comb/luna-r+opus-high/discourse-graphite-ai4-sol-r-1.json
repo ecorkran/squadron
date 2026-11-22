@@ -1,0 +1,36 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "end if %>` still compiles: Ruby reads the next line's output-append call as the `if` condition, which is always truthy, so the template renders, only with some whitespace reordered."
+  ],
+  "F2": [
+   "KEEP",
+   "cook_method raw_html` makes `cook` return `raw` without sanitizing, so feed or remote HTML (such as `javascript:` hrefs or event-handler attributes), and any later edit by the owning account, is stored and shown on the forum origin."
+  ],
+  "F3": [
+   "KEEP",
+   "RSS items that only have `description` give a nil `i.content`, so `.scrub` raises and the whole poll loop stops, skipping every remaining item."
+  ],
+  "F4": [
+   "KEEP",
+   "absolutize_urls` turns protocol-relative `//cdn.host/x` into `https://article-host/cdn.host/x`, which breaks URLs that worked before, and it leaves document-relative links pointing at the forum instead of the source article."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.09253940000000001
+}

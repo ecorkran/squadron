@@ -1,0 +1,70 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding an existing member can violate the unique join-table index and fail after earlier additions have committed."
+  ],
+  "F2": [
+   "KEEP",
+   "Removing a member does not clear a matching `primary_group_id`, leaving the user associated with a group they no longer belong to."
+  ],
+  "F3": [
+   "KEEP",
+   "Exact multiples of the page limit produce an extra page that can display no members."
+  ],
+  "F4": [
+   "KEEP",
+   "After a removal, the stale count can leave the UI on an empty final page with no automatic correction."
+  ],
+  "F5": [
+   "KEEP",
+   "The public members page fetches only the first 50 members and provides no way to view more."
+  ],
+  "F6": [
+   "KEEP",
+   "Negative limit or offset values reach the database query and can cause a server error."
+  ],
+  "F7": [
+   "KEEP",
+   "Failed add or remove requests have no rejection handler to inform the admin."
+  ],
+  "F8": [
+   "DROP",
+   "The omitted `alias_level` behavior predates this change, so it is not a defect introduced by the changed code."
+  ],
+  "F9": [
+   "DROP",
+   "This identifies missing or outdated test coverage, not a defect in the endpoint\u2019s behavior."
+  ],
+  "F10": [
+   "DROP",
+   "These are coverage and assertion-quality concerns rather than demonstrated runtime defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.0021642000000000002
+}

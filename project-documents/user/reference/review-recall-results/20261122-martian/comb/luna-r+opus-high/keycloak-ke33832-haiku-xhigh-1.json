@@ -1,0 +1,32 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The CLI scenario doesn't happen: `ClassLoaderUtil.java:41` loads only one of the default or FIPS jars, so they never tie in auto-detection, and the debug-log wording is cosmetic."
+  ],
+  "F2": [
+   "DROP",
+   "Today the decoder only reads DER that the local JDK produced, so this is hardening against malformed input that cannot reach it."
+  ],
+  "F3": [
+   "DROP",
+   "This provider has order 100, so it only wins when no real provider is on the classpath; returning the JDK KeyStore provider then gives `BouncyIntegration.PROVIDER` a working, non-null value on purpose."
+  ],
+  "F4": [
+   "DROP",
+   "Every in-tree implementation defines `order()`; possible breakage for out-of-tree implementers of this internal SPI is an API-policy concern, not a defect in this change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.1231744
+}

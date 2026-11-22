@@ -1,0 +1,288 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Lithuanian TOTP instructions replaced with Italian text",
+      "description": "`totpStep1` in the Lithuanian account bundle now reads `Installa una delle seguenti applicazioni sul tuo cellulare:`. That is Italian. The same paste appears in the Lithuanian login bundle at `themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties:71` (`loginTotpStep1`). The wording matches the Italian bundle at `messages_it.properties:138`, so this looks like a copy from the wrong locale. Lithuanian users on the login TOTP page and the account security page will see an Italian instruction between Lithuanian steps. Restore a Lithuanian translation before merging.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Simplified Chinese account string written in Traditional Chinese",
+      "description": "The new `totpStep1` uses Traditional forms (`\u624b\u6a5f`, `\u5b89\u88dd`, `\u61c9\u7528\u7a0b\u5f0f`) and a full-width colon in the `zh_CN` file. The same file's `totpStep2` (line 113) and the `zh_CN` login `loginTotpStep1` (`messages_zh_CN.properties` under login, line 123) are Simplified. Use Simplified wording such as `\u5728\u60a8\u7684\u624b\u673a\u4e0a\u5b89\u88c5\u4ee5\u4e0b\u5e94\u7528\u4e4b\u4e00\uff1a`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Anchor pattern matches any tag whose name starts with \"a\"",
+      "description": "`ANCHOR_PATTERN = \"</?a[^>]*>\"` matches `<abbr>`, `<address>`, `<article>`, `<aside>`, `<audio>`, and so on, not only `<a>`. `santizeAnchors` (lines 150-162) strips every match that is identical to the English string before the sanitizer runs. A disallowed tag such as `<abbr onmouseover=\"\u2026\">` is therefore removed before the `POLICY_*` check sees it, and passes whenever English contains the identical tag. Exposure is limited because English is trusted source, and no current English string contains such a tag (a grep of `messages_en.properties` for `<a[a-zA-Z]` returned nothing). Tighten the pattern to `</?a(\\s[^>]*)?>`. Without that change, a mismatch on `<abbr>` also reports the misleading \"Didn't find anchor tag\".",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test assertion weakened from `contains` to `hasItem`",
+      "description": "`verifyDuplicateKeysDetected` previously used `contains(...)`, which requires the result list to hold exactly one matching element. It now uses `hasItem`, which passes if any element matches. `duplicateKeys_en.properties` only holds `key=value` twice, and that value sanitizes to itself, so it should not produce a second message. The stricter matcher should therefore still hold, and the weaker one would hide a spurious extra message. I have not run this. Revert to `contains`, or assert the extra message explicitly if one is expected.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test covers a conforming translation; the choice-format exemption is untested",
+      "description": "All four tests assert a failure. None asserts that a conforming translation yields zero messages. That is the case that guards against false positives, which would fail the themes build for every locale. The `normalizeValue` exemptions (`templateHelp`, `optimizeLookupHelp`, `linkExpirationFormatter.timePeriodUnit*`, `error-invalid-multivalued-size`) and the email RTL strip are also unexercised. Add a `_de` fixture whose anchor matches English and expect an empty list, plus a choice-format case. Also, `illegalHtmlTag_en.properties:17` ends in `</div` with no `>`, so the fixture is malformed beyond what the test needs. A well-formed `<div>tag</div>` would isolate the disallowed tag.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Read failures use RuntimeException, not the mojo's exception type",
+      "description": "`verify()` wraps I/O failures as `MojoExecutionException` (lines 52-53). `verifySafeHtml()` throws `RuntimeException` for the translation file (line 70) and the English file (line 79). A malformed `\\uXXXX` escape also makes `PropertyResourceBundle` throw `IllegalArgumentException`, which is not caught here. Either case escapes `ThemeVerifierMojo` as an unchecked exception and aborts the whole scan. The build still fails closed, so this is a message-quality problem. Declare `verifySafeHtml() throws MojoExecutionException` and catch `IllegalArgumentException` next to `IOException`. The community directories I inspected all have a matching `_en` file, so this path is not hit today.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Path-string heuristics applied to the absolute path",
+      "description": "The English path is derived by rewriting the whole absolute path: `replaceAll(\"resources-community\", \"resources\")` and a `_\u2026\\.properties` regex. Line 132 then calls `file.getAbsolutePath().contains(\"email\")` to decide whether to strip RTL styling. A checkout directory whose path contains \"email\" or \"resources-community\" changes behavior for every file. Derive the counterpart from the file name and its parent directory instead. The `TODO` at line 133 should be a tracked issue rather than a comment in new code.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-75"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Constants as mutable instance fields; policies rebuilt per file; naming drift",
+      "description": "`POLICY_SOME_HTML` and `POLICY_NO_HTML` (lines 58, 63) and `HTML_TAGS` (line 139) are non-static, non-final, package-private fields declared between methods. `ANCHOR_PATTERN` (line 145), in the same class, is `private static final`. Each `VerifyMessageProperties` instance, one per file, rebuilds both policies. Make the three `private static final`. The method `santizeAnchors` (line 150) is misspelled, and the comment at line 94 says \"numberic\". `verifySafeHtml()` also re-reads the file (line 67) that `verify()` already read at line 49.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verifier design forces cosmetic churn and name-based exemptions",
+      "description": "The check compares each value with the sanitizer's serialization. OWASP emits `<br />`, so every `<br/>` had to be rewritten across roughly 25 locale files. I confirmed no `<br/>` or `<br>` remains in any messages file, so the churn is complete. The cost is that the check tests serialization rather than meaning. Each new key that contains a `<` inside a MessageFormat choice must also be added to the name-based list at lines 117-127. Normalize void-element spelling before comparing, and handle choice subformats structurally rather than by key name.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99"
+    },
+    {
+      "severity": "PASS",
+      "title": "`error-invalid-multivalued-size` choice pattern is valid on every path",
+      "description": "`{2,choice,0#values|1#value|1<values}` needs a `Number` for argument 2. `MultiValueValidator.addError` passes `Long` min and max (`services/src/main/java/org/keycloak/userprofile/validator/MultiValueValidator.java:137`). `ValidationError.getInputHintWithMessageParameters()` (`server-spi/.../validate/ValidationError.java:125`) keeps those boxed values, and the server formats with `MessageFormat` (`server-spi-private/.../validation/ValidationError.java:63`). The admin and account JS UIs never look up this key, and i18next does not parse ICU syntax, so the raw pattern does not reach them. The same pattern in the admin and account bundles is correct. The Slovak login fix from `{1,choice}` to `{2,choice}` for the max value is also correct. Verified by reading, not by running.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "themes/src/main/resources/theme/base/login/messages/messages_en.properties:530"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Lithuanian TOTP instructions replaced with Italian text",
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties:101",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Simplified Chinese account string written in Traditional Chinese",
+      "location": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties:112",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Anchor pattern matches any tag whose name starts with \"a\"",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:145",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test assertion weakened from `contains` to `hasItem`",
+      "location": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java:33",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test covers a conforming translation; the choice-format exemption is untested",
+      "location": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Read failures use RuntimeException, not the mojo's exception type",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:65-80",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Path-string heuristics applied to the absolute path",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:74-75",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Constants as mutable instance fields; policies rebuilt per file; naming drift",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:58",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Verifier design forces cosmetic churn and name-based exemptions",
+      "location": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java:99",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`error-invalid-multivalued-size` choice pattern is valid on every path",
+      "location": "themes/src/main/resources/theme/base/login/messages/messages_en.properties:530",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "diff": "ea94b5d50e6de265cb7ddcd13f76a1cff31232cf...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:32:25.601351",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "injected": [],
+  "files_read": [
+    "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+    "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java",
+    "misc/theme-verifier/pom.xml",
+    "misc/theme-verifier/src/test/resources/duplicateKeys_en.properties",
+    "services/src/main/java/org/keycloak/userprofile/validator/MultiValueValidator.java",
+    "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/ThemeVerifierMojo.java",
+    "js/apps/admin-ui/src/i18n/i18n.ts",
+    "js/apps/account-ui/src/i18n.ts",
+    "js/apps/admin-ui/src/utils/translationFormatter.ts",
+    "services/src/main/java/org/keycloak/theme/beans/MessageFormatterMethod.java",
+    "themes/src/main/resources/theme/base/login/login-config-totp.ftl",
+    "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/MessagePropertiesFilter.java",
+    "js/pom.xml",
+    "themes/pom.xml",
+    "server-spi-private/src/main/java/org/keycloak/userprofile/ValidationException.java",
+    "server-spi-private/src/main/java/org/keycloak/validation/ValidationError.java"
+  ],
+  "searches": [
+    "grep VerifyMessageProperties|theme-verifier|themeverifier in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep error-invalid-multivalued-size|multivalued-size in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep MessageFormat|i18next-icu|ICU|formatMessage in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js",
+    "grep \"i18next|\"i18next-icu\"|interpolation|escapeValue|MessageFormat in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js",
+    "grep MessageFormat|new MessageFormat|messageFormat|choice, in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1",
+    "grep \\{\\{0\\}\\}|\\{0\\} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/js/apps/admin-ui/src/i18n",
+    "grep MessageFormat|\\{\\{|replace\\(.*\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/services/src/main/java/org/keycloak/theme",
+    "grep \"key\"|getMessages|KeyValue|toJson in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/services/src/main/java/org/keycloak/services/resources/admin",
+    "grep messages_|MessageBundle|getMessages|admin/\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/services/src/main/java/org/keycloak/services/resources",
+    "grep MessageFormat|getLocalizedMessage|getAllLocalizedErrorsAsString|getParameters|getMessage\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep totpStep1|loginTotpStep1|totpStep2 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/themes/src/main/resources/theme/base",
+    "grep ^(totpStep1|loginTotpStep1)= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/themes/src/main/resources-community/theme/base",
+    "grep ^(totpStep1|loginTotpStep1)= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/themes/src/main/resources/theme/base",
+    "grep ^totpStep1=|^loginTotpStep1= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+    "grep <(i|em|span|ul|ol|li|div|code|u|sup|sub|small|h[1-6]|table|tr|td|img|pre|label|button|input|font|center|section)[\\s>/] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/themes/src/main/resources/theme/base",
+    "grep theme-verifier|verify-theme in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/themes/pom.xml",
+    "grep resources-community|maven-resources-community in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "list_files **/*community*/**/messages_*.properties in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "list_files **/messages_en.properties in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep getInputHintWithMessageParameters|getMessageParameters|String.valueOf|toString\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429/server-spi/src/main/java/org/keycloak/validate/ValidationError.java",
+    "grep <br\\s*/?>|<br/>|<br>|<br\\s{2,}/?>|<p\\s*/>|<p\\s*>\\s*</p>|<br \\/>\\s*</ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep <br/>|<br>|<br\\s{2,}/>|<br />\\s*< in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep <a[a-zA-Z] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429",
+    "grep ^error-invalid-multivalued-size= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37429"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 77585,
+  "diff_chars_injected": 77585,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 42,
+  "prompt_tokens": 2048982,
+  "cached_tokens": 1902757,
+  "cache_write_tokens": 146185,
+  "completion_tokens": 79152,
+  "reasoning_tokens": null,
+  "duration_seconds": 359.7016427498311,
+  "cost_usd": 0.29222625,
+  "cost_basis": "provider"
+}

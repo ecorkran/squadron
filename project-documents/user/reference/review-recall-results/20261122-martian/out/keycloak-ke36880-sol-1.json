@@ -1,0 +1,113 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Global view permission bypasses client-specific restrictions",
+      "description": "`canView(client)` returns true for an all-clients VIEW grant before evaluating the client\u2019s own resource. A client-specific denial therefore cannot restrict that grant. `ClientsResource.getClients()` also uses parameterless `canView()` to bypass individual checks. Preserve role-based overrides, but evaluate fine-grained permissions against each client before exposing it. Add tests covering global grants with client-specific denials.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:77-87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MANAGE grants cannot list clients or client scopes",
+      "description": "Parameterless `canView()` recognizes VIEW but not MANAGE. Consequently, an administrator with only an all-clients MANAGE permission can create clients but fails inherited listing checks without an additional query role. Client-scope listing similarly fails despite `canManageClientScopes()` succeeding. Include MANAGE in the appropriate view/list checks and test without preassigned query roles; the current fixture\u2019s QUERY_USERS role masks the client-listing failure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:85-88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Permission enumeration does not return client IDs",
+      "description": "`findByType(..., \"Clients\", ...)` misses individual resources because `AdminPermissionsSchema.getOrCreateResource()` never assigns their type. Meanwhile, the all-clients resource has that type, so a matching grant adds the literal `\"Clients\"` rather than actual client IDs. Enumerate real clients and evaluate their effective permission, or explicitly distinguish and expand the aggregate resource. Add coverage for both individual and all-clients grants.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:138-142"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Global view permission bypasses client-specific restrictions",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:77-87",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "MANAGE grants cannot list clients or client scopes",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:85-88",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Permission enumeration does not return client IDs",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:138-142",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "diff": "d59c0fbb0ca50c9e9c54e7deec77bb7cbbb212d5...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:36:17.799954",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 78806,
+  "diff_chars_injected": 78806,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 87133,
+  "cached_tokens": 81792,
+  "cache_write_tokens": null,
+  "completion_tokens": 408,
+  "reasoning_tokens": 0,
+  "duration_seconds": 86.31925404118374,
+  "cost_usd": 0.022941200000000002,
+  "cost_basis": "alias_pricing"
+}

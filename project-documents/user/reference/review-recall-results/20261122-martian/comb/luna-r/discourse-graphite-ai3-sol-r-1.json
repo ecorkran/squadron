@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Accessing `record.errors[attribute]` can leave an empty email array in the response, causing the client to reject a valid email after another validation failure."
+  ],
+  "F2": [
+   "KEEP",
+   "Exact matching lets differently cased domains bypass an existing blocked-email entry."
+  ],
+  "F3": [
+   "KEEP",
+   "Concurrent read-modify-save checks can lose match-count increments, recording incorrect statistics."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0020998600000000003
+}

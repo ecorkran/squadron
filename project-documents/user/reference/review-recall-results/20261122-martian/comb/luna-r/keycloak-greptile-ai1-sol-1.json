@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-greptile-ai1",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "isConditionalPasskeysEnabled` requires a `UserModel` argument, so this call prevents compilation."
+  ],
+  "F2": [
+   "KEEP",
+   "The null-user check prevents passkey initialization on ordinary login, removing passkey login UI for unidentified users."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0020276
+}

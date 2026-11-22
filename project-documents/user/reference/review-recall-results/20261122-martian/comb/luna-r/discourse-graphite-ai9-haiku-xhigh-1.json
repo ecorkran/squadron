@@ -1,0 +1,35 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Non-request translation paths can miss fallback locales, and the cached missing result persists after those locales load."
+  ],
+  "F2": [
+   "DROP",
+   "Missing test coverage is not itself a defect requiring action before merge."
+  ],
+  "F3": [
+   "KEEP",
+   "A failed or unavailable site-setting read can raise during fallback lookup and break translation."
+  ],
+  "F4": [
+   "DROP",
+   "The stock fallbacks object is not configured in the changed code, so this describes only a hypothetical future regression."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.00193903
+}

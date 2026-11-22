@@ -1,0 +1,43 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The feature-flagged branch passes empty columns, data, and metadata instead of the query result."
+  ],
+  "F2": [
+   "KEEP",
+   "The query key omits organization identity even though the fetch URL is organization-specific."
+  ],
+  "F3": [
+   "KEEP",
+   "The merge compares error timestamps in epoch seconds directly with recording timestamps that can be in milliseconds."
+  ],
+  "F4": [
+   "KEEP",
+   "The code reads the top-level message field, so messages stored under logentry are lost."
+  ],
+  "F5": [
+   "KEEP",
+   "Truthiness checks treat valid custom renderer results such as null and zero as requests for fallback rendering."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00409841
+}

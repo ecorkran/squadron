@@ -1,0 +1,55 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5,
+  "F6": 6,
+  "F7": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies numeric rounding to datetime objects and lacks datetime cursor conversion."
+  ],
+  "F2": [
+   "KEEP",
+   "The unconditional membership dereference raises AttributeError for authorized API-key callers whose member is None."
+  ],
+  "F3": [
+   "KEEP",
+   "Unchanged Redis keys can contain legacy SETs, causing the new ZADD, ZCARD, and ZSCAN operations to fail."
+  ],
+  "F4": [
+   "KEEP",
+   "The Lua script permanently removes excess spans without reporting the truncation through logs or metrics."
+  ],
+  "F5": [
+   "KEEP",
+   "Forward pagination clamps negative offsets while cursor construction retains them, allowing incorrect or repeated pages."
+  ],
+  "F6": [
+   "KEEP",
+   "The advanced negative-offset branch passes a negative slice bound to Django, which raises an error."
+  ],
+  "F7": [
+   "KEEP",
+   "Both unions default to summing duplicate members\u2019 timestamps, corrupting the score-based trimming order."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5,
+  6,
+  8
+ ],
+ "cost_usd": 0.09887080000000001
+}

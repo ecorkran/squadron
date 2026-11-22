@@ -1,0 +1,25 @@
+{
+ "case": "cal.com-ca22345",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Without filters, org/team conditions expose a top-level OR that lets rows bypass an additional AND predicate."
+  ],
+  "F2": [
+   "KEEP",
+   "The constructor accepts team scope without teamId, then silently converts that invalid configuration into a deny-all condition."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.0181142
+}

@@ -1,0 +1,76 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies `math.floor` to datetime values and returns an integer cursor value for a datetime column."
+  ],
+  "F2": [
+   "KEEP",
+   "The endpoint dereferences `organization_context.member` before checking the optimization flag, so callers without membership can get an `AttributeError`."
+  ],
+  "F3": [
+   "KEEP",
+   "The code reuses the existing span-buffer keys as ZSETs, so unexpired keys written as SETs can trigger WRONGTYPE errors."
+  ],
+  "F4": [
+   "KEEP",
+   "The Lua script removes spans above 1000 without recording that truncation occurred."
+  ],
+  "F5": [
+   "KEEP",
+   "max_segment_spans` is accepted but unused, so custom limits are ignored in favor of the Lua hardcoded limit."
+  ],
+  "F6": [
+   "KEEP",
+   "Negative offsets are clamped for next cursors but still reach Django slicing for previous cursors, contrary to the stated support."
+  ],
+  "F7": [
+   "KEEP",
+   "The advanced negative-offset branch passes a negative start to Django queryset slicing, which rejects it."
+  ],
+  "F8": [
+   "DROP",
+   "The finding describes duplicated code and maintenance burden, not a behavior defect."
+  ],
+  "F9": [
+   "KEEP",
+   "Both `ZUNIONSTORE` calls use the default SUM aggregation, which can alter scores for duplicate members and affect trimming."
+  ],
+  "F10": [
+   "DROP",
+   "Missing tests are not a behavior defect."
+  ],
+  "F11": [
+   "DROP",
+   "Formatting and lint violations are not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  8
+ ],
+ "cost_usd": 0.0047316699999999995
+}

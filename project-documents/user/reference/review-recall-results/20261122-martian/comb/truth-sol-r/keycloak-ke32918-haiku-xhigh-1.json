@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Realm-level BROKER_PUBLIC changes preserve the predicate and organization ID, skipping invalidation even though ORG_ONLY/null query membership changes."
+  ],
+  "F2": [
+   "KEEP",
+   "The org-aware original can fail eligibility solely because its organization is disabled, leaving hidden or link-only IDPs cached and displayed after re-enabling."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0945807
+}

@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The flex item is Ember's wrapper div around `.extra-info-wrapper`, and it keeps `min-width: auto`; with the `nowrap` `.topic-link`, a long title sets the item's minimum width, so the title won't truncate and the panel gets pushed out."
+  ],
+  "F2": [
+   "KEEP",
+   "small-action-desc` is now a shrink-to-fit flex item with no `flex-grow`, so the edit/delete buttons floated right inside it now sit next to short text instead of at the row's right edge (755px on desktop)."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1966532
+}

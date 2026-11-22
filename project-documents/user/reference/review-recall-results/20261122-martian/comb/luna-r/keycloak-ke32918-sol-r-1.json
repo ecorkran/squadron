@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The organization-aware predicate can suppress invalidation when a provider becomes hidden while its organization is disabled, leaving stale login results after re-enabling it."
+  ],
+  "F2": [
+   "KEEP",
+   "The cleanup callbacks target the literal alias `alias` instead of the created providers, leaving test data behind."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0022979999999999997
+}

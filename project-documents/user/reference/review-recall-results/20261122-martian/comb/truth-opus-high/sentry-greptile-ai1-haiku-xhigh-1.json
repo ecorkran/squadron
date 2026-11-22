@@ -1,0 +1,48 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_item_key` calls `math.floor`/`math.ceil` on the `datetime` field, which raises TypeError, and `build_cursor` runs it on every non-empty page."
+  ],
+  "F2": [
+   "KEEP",
+   "organization_context.member` can be None (it is only set when `user_id` is given), and the unguarded `.has_global_access` now runs on every request, so non-member token callers who aren't superusers get an AttributeError."
+  ],
+  "F3": [
+   "KEEP",
+   "When advanced features are on and the offset is negative, the client's negative offset goes straight into `queryset[start:stop]`, which Django rejects, so the request crashes instead of getting a clean pagination error."
+  ],
+  "F4": [
+   "DROP",
+   "Clamping a negative next-cursor offset to 0 turns what used to be a crash into a valid page; that is not wrong behavior, and the complaint about the comment is a documentation point."
+  ],
+  "F5": [
+   "KEEP",
+   "value_from_cursor` returns the raw integer cursor value, and `build_queryset` compares it against the `datetime` column, which is wrong, unlike `DateTimePaginator`, which converts it to a datetime."
+  ],
+  "F6": [
+   "KEEP",
+   "The branch for superusers and global-access members does use the client's cursor offset without the negative-offset check that `OffsetPaginator` applies, and the result is a crash."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.2396749
+}

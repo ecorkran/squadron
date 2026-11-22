@@ -1,0 +1,30 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Non-request translations load only the active locale, so unloaded fallbacks fail and no-argument missing translations remain cached."
+  ],
+  "F2": [
+   "KEEP",
+   "Although settings are cached, an uncached site's default-locale read can raise during refresh and abort translation without a fallback guard."
+  ],
+  "F3": [
+   "DROP",
+   "The current configuration installs the custom fallback object; the claimed crash requires a hypothetical future configuration change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.0541784
+}

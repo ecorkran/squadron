@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new null return violates GroupModel.getSubGroupsCount()\u2019s explicit non-null contract and propagates into the representation."
+  ],
+  "F2": [
+   "DROP",
+   "The unchecked dereferences in the subgroup-stream overloads are pre-existing code, not defects introduced by this change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.021641700000000003
+}

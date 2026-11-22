@@ -1,0 +1,48 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Closing any strategy shuts down the factory\u2019s shared pool, so later assignments can silently mark unprocessed messages complete."
+  ],
+  "F2": [
+   "KEEP",
+   "The test\u2019s no-commit assertion contradicts the completion behavior and can fail when a commit tick occurs during its timing window."
+  ],
+  "F3": [
+   "KEEP",
+   "The gap assertions assume missing Kafka offsets block commits, but the tracker skips holes and the timing checks can fail on a later commit tick."
+  ],
+  "F4": [
+   "KEEP",
+   "Unbounded queues provide no backpressure and can grow until they exhaust process memory when processing falls behind."
+  ],
+  "F5": [
+   "DROP",
+   "Shutdown may abandon queued work, but those offsets remain uncommitted and Kafka can redeliver it; the remaining concern is documentation and shutdown latency."
+  ],
+  "F6": [
+   "KEEP",
+   "Workers can drain the queue before the stats assertion, making the test flaky."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  3,
+  4,
+  5,
+  7
+ ],
+ "cost_usd": 0.00465933
+}

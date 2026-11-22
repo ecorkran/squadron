@@ -1,0 +1,202 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`retryCount` delete branch is not scoped to SMS reminders",
+      "description": "The new `OR` branch `{ retryCount: { gt: 1 } }` carries no `method: WorkflowMethods.SMS` filter, so the SMS cron deletes any `WorkflowReminder` with `retryCount > 1`, including EMAIL and WHATSAPP rows. The comment on line 28 still says \"delete all scheduled sms reminders\".\n\nThis is latent today: a repo-wide search shows only this handler writes `retryCount`, so only SMS rows can exceed 1. It becomes silent cross-method data loss as soon as the email or WhatsApp handler adopts the shared column.\n\nFix by adding `method: WorkflowMethods.SMS` (and ideally `scheduled: false`) to the second branch, or hoisting `method` above the `OR`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "DB update inside `catch` can throw and abort the whole cron run",
+      "description": "The `catch` block now awaits `prisma.workflowReminder.update` with no guard of its own. If that update rejects, the error escapes the `for` loop:\n- **Remaining reminders are skipped:** every reminder after the failing one in the batch is left unprocessed and the request returns a 500. Before this change the `catch` only logged, so one bad reminder could not stop the batch.\n- **Original error is lost:** the `console.log` of the Twilio or rate-limit error sits after the update, so it never runs when the update throws.\n- **Likely trigger:** the row can be deleted mid-run, for example by `deleteScheduledSMSReminder` in `smsReminderManager.ts:251` when a booking is cancelled, which makes the update fail with P2025.\n\nLog first, then wrap the retry update in its own try/catch or use `updateMany`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Retry counter uses a stale read-modify-write and conflates failure types",
+      "description": "- **Stale increment:** both sites write `retryCount: reminder.retryCount + 1` from the value read at the start of the run. Overlapping cron invocations can lose increments; `data: { retryCount: { increment: 1 } }` is atomic. The same update block is duplicated at lines 179-186 and 190-197.\n- **Non-Twilio errors count as retries:** the `try` wraps the whole body, so a failure in `bookingMetadataSchema.parse`, `getBookerBaseUrl`, or the success-path update at line 169 also increments the counter. In the line 169 case Twilio has already accepted the message while `scheduled` stays false, so the next run schedules a duplicate SMS.\n- **Non-transient outcomes burn retries:** `twilio.scheduleSMS` returns `undefined` when the user or team is SMS-locked (`twilioProvider.ts:92-95`) and throws on the monthly rate limit (`twilioProvider.ts:97-102`). Either way the reminder is deleted after two cron runs even if the scheduled date is days away. If that is the intent, a comment should say so.\n- **One path never counts:** when `message` is empty or `sendTo` is missing (line 158), nothing is incremented, so those reminders are still retried on every run until the scheduled date passes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests for the new retry and delete behaviour",
+      "description": "The change adds destructive behaviour (deleting reminders after repeated failures) and new state transitions with no accompanying tests; there are no `*.test.ts` files under `packages/features/ee/workflows`. At minimum, cover these cases:\n- the counter increments when `scheduleSMS` returns a falsy value;\n- the counter increments when `scheduleSMS` throws;\n- reminders with `retryCount > 1` are deleted, and only SMS ones;\n- a failure on one reminder does not stop the rest of the batch.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New `OR` delete predicate has no supporting index",
+      "description": "The previous delete could use `@@index([method, scheduled, scheduledDate])` (line 1005). The second `OR` branch filters on `retryCount`, which has no index, so Postgres will most likely fall back to a sequential scan of `WorkflowReminder` on every cron run. Scoping that branch to `method: SMS` and `scheduled: false`, or splitting it into two `deleteMany` calls, lets the existing index be used.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/prisma/schema.prisma:1000"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Magic retry threshold and inline type widening",
+      "description": "- **Threshold:** `gt: 1` encodes \"max 2 attempts\" as an unnamed literal; a constant such as `MAX_SMS_SCHEDULE_ATTEMPTS` would make the policy explicit.\n- **Type:** the cast `as (PartialWorkflowReminder & { retryCount: number })[]` patches the type inline; adding `retryCount` to `PartialWorkflowReminder` and the shared `select` in `getWorkflowReminders.ts` would keep it in one place.\n- **Sibling handler:** `scheduleWhatsappReminders.ts` uses the same Twilio scheduling path and still retries without a cap, so the two handlers now diverge.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:39-60"
+    },
+    {
+      "severity": "PASS",
+      "title": "Migration and schema change are safe and consistent",
+      "description": "`ADD COLUMN \"retryCount\" INTEGER NOT NULL DEFAULT 0` matches `retryCount Int @default(0)` at `schema.prisma:1000`. On current Postgres it is a metadata-only change, and existing rows and inserts that omit the field keep working.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "packages/prisma/migrations/20240508134359_add_retry_count_to_workflow_reminder/migration.sql:2"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`retryCount` delete branch is not scoped to SMS reminders",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "DB update inside `catch` can throw and abort the whole cron run",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-199",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Retry counter uses a stale read-modify-write and conflates failure types",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-197",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests for the new retry and delete behaviour",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "New `OR` delete predicate has no supporting index",
+      "location": "packages/prisma/schema.prisma:1000",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Magic retry threshold and inline type widening",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:39-60",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Migration and schema change are safe and consistent",
+      "location": "packages/prisma/migrations/20240508134359_add_retry_count_to_workflow_reminder/migration.sql:2",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "diff": "b521f3a8ec35ec1e90b28075046b369b6eff5554...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:50:06.856821",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "injected": [],
+  "files_read": [
+    "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "packages/features/ee/workflows/lib/getWorkflowReminders.ts",
+    "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts",
+    "packages/prisma/schema.prisma"
+  ],
+  "searches": [
+    "grep retryCount in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "list_files packages/features/ee/workflows/lib/getWorkflowReminders.ts in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "grep workflowReminder\\.(deleteMany|findMany|delete)\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943/packages",
+    "list_files packages/features/ee/workflows/**/*.test.ts in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 2947,
+  "diff_chars_injected": 2947,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 50413,
+  "cached_tokens": 30944,
+  "cache_write_tokens": 19463,
+  "completion_tokens": 6026,
+  "reasoning_tokens": null,
+  "duration_seconds": 55.81619237503037,
+  "cost_usd": 0.5589853,
+  "cost_basis": "provider"
+}

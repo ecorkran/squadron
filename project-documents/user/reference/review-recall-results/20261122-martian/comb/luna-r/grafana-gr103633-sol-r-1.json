@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The denial cache key conflates identity types, so an anonymous denial can incorrectly deny a renderer request."
+  ],
+  "F2": [
+   "KEEP",
+   "Undelimited fields can alias distinct resource and folder tuples, causing one denial to affect another request."
+  ],
+  "F3": [
+   "DROP",
+   "The test\u2019s permission value does not establish a competing allow, but this is a test gap, not a production defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0021917399999999997
+}

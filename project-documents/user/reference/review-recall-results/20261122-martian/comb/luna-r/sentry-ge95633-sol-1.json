@@ -1,0 +1,37 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Recreated strategies reuse the factory\u2019s pool after shutdown, so submissions can be lost while their offsets are marked complete."
+  ],
+  "F2": [
+   "KEEP",
+   "Shutdown stops workers before they drain queued work and stops commits without ensuring final completions are committed."
+  ],
+  "F3": [
+   "KEEP",
+   "Unbounded queues can accumulate decoded work faster than workers process it and exhaust consumer memory."
+  ],
+  "F4": [
+   "KEEP",
+   "The test checks before the one-second commit cycle, masking that failed work is marked complete and can later be committed."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0028721099999999998
+}

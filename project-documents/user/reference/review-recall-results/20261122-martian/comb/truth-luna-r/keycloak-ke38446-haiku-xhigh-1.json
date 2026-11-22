@@ -1,0 +1,53 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The user-storage branch serializes and persists the raw generated codes, while the credential model stores hashes."
+  ],
+  "F2": [
+   "KEEP",
+   "The federated validator accepts any listed code without removing it, allowing successful codes to be replayed."
+  ],
+  "F3": [
+   "KEEP",
+   "When user storage accepts regenerated codes, the helper skips local credential creation and leaves any prior local credential intact."
+  ],
+  "F4": [
+   "KEEP",
+   "Exhaustion of a federated credential triggers removal by ID through the local store, while the federated model has no ID."
+  ],
+  "F5": [
+   "DROP",
+   "The package dependency cycle is an architectural concern, not a behavior defect."
+  ],
+  "F6": [
+   "KEEP",
+   "getCredentials` dereferences a potentially missing user and catches deserialization errors by returning no credential."
+  ],
+  "F7": [
+   "DROP",
+   "The finding identifies missing test coverage, not a behavior defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.0025070000000000005
+}

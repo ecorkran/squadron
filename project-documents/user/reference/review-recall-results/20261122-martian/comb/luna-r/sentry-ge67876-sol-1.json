@@ -1,0 +1,31 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The OAuth state is the deterministic pipeline signature, so it does not distinguish authorization attempts."
+  ],
+  "F2": [
+   "KEEP",
+   "When no integration record exists, the pipeline advances without verifying the authenticated user\u2019s access to the installation."
+  ],
+  "F3": [
+   "KEEP",
+   "A successful reconnect can replace metadata without `sender`, causing a later reconnect to raise `KeyError`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00412468
+}

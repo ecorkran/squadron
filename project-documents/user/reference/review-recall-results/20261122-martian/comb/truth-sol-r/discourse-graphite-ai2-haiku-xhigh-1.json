@@ -1,0 +1,36 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Direct saving leaves the reason unset, allowing update_last_read to restore tracking after unsubscribe."
+  ],
+  "F2": [
+   "DROP",
+   "The custom resolver converts topicUnsubscribe to topic/unsubscribe when looking up templates."
+  ],
+  "F3": [
+   "KEEP",
+   "TopicView does not create a TopicUser row, so unsubscribing without one dereferences nil and raises."
+  ],
+  "F4": [
+   "KEEP",
+   "The GET action changes notification settings without a CSRF token or signed unsubscribe token."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  3
+ ],
+ "cost_usd": 0.0624312
+}

@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-greptile-ai1",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "UsernameForm` calls `isConditionalPasskeysEnabled()` without an argument, but the only declaration requires a `UserModel`, so the code does not compile."
+  ],
+  "F2": [
+   "KEEP",
+   "The helper returns false when no user is selected, preventing initial username-less login forms from receiving conditional-passkey attributes and a WebAuthn challenge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00211954
+}

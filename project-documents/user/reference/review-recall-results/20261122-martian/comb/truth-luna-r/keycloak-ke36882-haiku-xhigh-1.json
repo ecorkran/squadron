@@ -1,0 +1,27 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Exit code 4 is distinct from the recreate verdict at code 3, and the documentation explicitly identifies it as the feature-disabled case."
+  ],
+  "F2": [
+   "DROP",
+   "Missing test coverage is not a behavior defect under the review criteria."
+  ],
+  "F3": [
+   "DROP",
+   "The finding concerns inaccurate or incomplete documentation, not a behavior defect in changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0033417200000000003
+}

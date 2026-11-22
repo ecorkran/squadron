@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The Operator does not enforce this feature gate, so the caution falsely says deployments will fail without enabling it."
+  ],
+  "F2": [
+   "DROP",
+   "The commands set the documented exit codes; this finding identifies missing assertions rather than a behavioral defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0029498000000000003
+}

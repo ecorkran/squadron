@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The fallback returns `null` when the group was deleted, violating the documented non-null count contract."
+  ],
+  "F2": [
+   "KEEP",
+   "The test can assert before an in-flight request records its failure, so it may miss the regression it is intended to catch."
+  ],
+  "F3": [
+   "KEEP",
+   "If deletion throws, the stop flag is never set and the non-daemon reader can continue indefinitely."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00247128
+}

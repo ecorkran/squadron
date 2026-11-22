@@ -1,0 +1,31 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "An empty update may not trigger Prisma\u2019s `@updatedAt`, leaving selected-calendar timestamps unchanged."
+  ],
+  "F2": [
+   "KEEP",
+   "Without invalidating `connectedCalendars`, the UI can continue showing cache status after the cache is deleted."
+  ],
+  "F3": [
+   "KEEP",
+   "ENV_FILE` is relative to the working directory, so invocation from the repository root targets the wrong `.env`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0055617900000000005
+}

@@ -1,0 +1,34 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "mp_context.Process` returns a `SpawnProcess`, which inherits from `BaseProcess` and not from `multiprocessing.Process`, so the `isinstance` check is always False in production and a hung worker is never killed before its replacement starts."
+  ],
+  "F2": [
+   "DROP",
+   "Because of the F1 type-check bug, `terminate()` never runs for real workers anyway, and the `stopped` flag already makes workers exit after their current loop, so the `break` adds little beyond F1."
+  ],
+  "F3": [
+   "DROP",
+   "Every buffer gets the same cluster-wide totals, so `used` and `available` scale together and the ratio stays correct; the only cost is a few extra Redis queries on a path that, per the code's own comment, is not hot."
+  ],
+  "F4": [
+   "DROP",
+   "It's true that the added `time.sleep(0.1)` does nothing under the monkeypatch, but the line is harmless and the race it describes comes from the existing test structure; this is test-only flakiness, not a product defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.2028149
+}

@@ -1,0 +1,368 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Unescaped embed URL interpolated into raw-HTML post allows stored XSS",
+      "description": "`TopicEmbed.import` builds `\"<a href='#{url}'>#{url}</a>\"` with no escaping, and the result is stored with `cook_method: raw_html`. `Post#cook` (`app/models/post.rb:133`) returns `raw` verbatim for that method, so the markup is rendered unsanitized.\n\nThe URL is attacker-controllable end to end:\n- **Entry:** `EmbedController#best` takes `params[:embed_url]` and enqueues `retrieve_topic` (`app/controllers/embed_controller.rb:15`). The only gate is the `Referer` header, which any non-browser client can set.\n- **Host check:** `TopicRetriever#invalid_host?` only compares `URI(@embed_url).host`. A URL such as `http://<embeddable_host>/post.html?'onmouseover='alert(1)` passes, since `'` is legal in a URI.\n- **Fetch:** most servers return 200 for an unknown query string, so `import_remote` succeeds.\n- **Result:** the `'` closes the `href` attribute and injects an event handler into a topic on the forum origin.\n\nFix: escape the URL with `ERB::Util.html_escape` (or build the link via Nokogiri), and anchor the scheme check with `\\A` rather than `^` on line 11.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Remote content is stored and rendered as trusted HTML with no sanitization",
+      "description": "- **RSS path:** `poll_feed` passes `CGI.unescapeHTML(i.content.scrub)` straight to `TopicEmbed.import`. There is no whitelist, so `<script>`, `on*` attributes and `javascript:` URLs survive into `cooked`.\n- **HTTP path:** `import_remote` (`app/models/topic_embed.rb:48-50`) whitelists tags and attributes via Readability but not URL schemes, so `href=\"javascript:...\"` survives.\n- **Edit path:** `PostRevisor` re-saves edited raw for a `raw_html` post through the same no-op `cook`, so anyone who can edit the post can inject script.\n- **Display:** both `app/views/embed/best.html.erb:19` (`raw post.cooked`) and the main app render it.\n\nRun imported HTML through the existing sanitizer before storing it.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/jobs/scheduled/poll_feed.rb:35-36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unauthenticated callers can create unlimited topics and trigger feed polls",
+      "description": "- The throttle key is `\"retrieved:#{@embed_url}\"`, and embeds are keyed on the exact URL string. Varying the query string (`?x=1`, `?x=2`, \u2026) bypasses the throttle and creates a new topic per request under `embed_by_username`.\n- Each such request also runs `Jobs::PollFeed.new.execute({})` synchronously (line 41), re-downloading the whole feed.\n- `setnx` followed by `expire` (lines 27-28) is not atomic. A crash between them leaves a key with no TTL, permanently blocking that URL. Use `set(key, 1, nx: true, ex: 60)`.\n\nNormalize the URL (strip query and fragment) and add a global or per-IP limit.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "lib/topic_retriever.rb:21-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Referer is emitted into inline JS in the wrong escaping context and cached across requesters",
+      "description": "`'<%= request.referer %>'` is HTML-escaped inside a `<script>` string, where it should be JS-escaped. A Referer ending in `\\` escapes the closing quote and breaks the resize script.\n\n`discourse_expires_in 1.minute` (`app/controllers/embed_controller.rb:19`) stores the response in `Middleware::AnonymousCache`, whose key is only host plus request URI (`lib/middleware/anonymous_cache.rb:14`). Consequences:\n- One requester's Referer-derived body is served to every anonymous viewer for a minute.\n- The cached response, including `X-Frame-Options: ALLOWALL`, is served without running `ensure_embeddable`, so the referer check is bypassed while the cache is warm.\n\nEmit only the origin, via `to_json`, built from `SiteSetting.embeddable_host`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/views/layouts/embed.html.erb:11"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Protocol-relative and default-port URLs are rewritten incorrectly",
+      "description": "- `href.start_with?('/')` also matches `//cdn.example.com/a.png`. `sub(/^\\/+/, '')` then yields `http://host/cdn.example.com/a.png`, breaking CDN images and links.\n- The port check `uri.port != 80 && uri.port != 443` ignores the scheme, so `http://host:443` and `https://host:80` lose their port. Compare against `uri.default_port`.\n- Path-relative URLs such as `images/a.png` are not handled.\n- The `a` and `img` loops are duplicates.\n\n`URI.join(url, href)` would handle all of these.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:56-76"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`import` mutates its argument and mishandles failed creates and deleted posts",
+      "description": "- **Line 13:** `contents << ...` mutates the caller's string, which raises on frozen input.\n- **Lines 23-24:** `PostCreator#create` returns an unsaved `Post` when it rolls back (`lib/post_creator.rb:222-236`). `post.present?` is still true, so `TopicEmbed.create!` runs with nil ids and raises. Check `post.persisted?` or the errors instead.\n- **Lines 32-36:** `Post` uses a `Trashable` default scope, so `embed.post` is nil once the imported post is deleted. `PostRevisor.new(nil).revise!` then raises `NoMethodError` when the content changes.\n- **Deleted topics:** no code removes the `topic_embeds` row when its topic is deleted, so `topic_id_for_embed` keeps returning the dead topic id.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:10-42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Feed polling aborts on one bad item and uses `Kernel#open` on configurable input",
+      "description": "- `i.content.scrub` raises `NoMethodError` for items with only `<description>`.\n- Any exception from `TopicEmbed.import` on one item stops the remaining items. With `retry: false` nothing is logged per item.\n- `open(SiteSetting.feed_polling_url)` here, `open(url)` in `import_remote` (`app/models/topic_embed.rb:48`), and the Disqus task's `t[:link]` all use `Kernel#open`. That executes a command for values starting with `|`, reads local paths, has no timeout or size limit, and follows redirects.\n\nUse `Net::HTTP` or `URI.parse(...).open` after validating the scheme.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "app/jobs/scheduled/poll_feed.rb:24-38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stray `if` after `end` in the embed template",
+      "description": "`<%- end if %>` leaves a dangling modifier-`if`. Depending on how Erubis joins the statement, it is either a syntax error or silently uses the next output-buffer append as the condition. Either way it should be `<%- end %>`. No spec renders this view, so it is unexercised.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/views/embed/best.html.erb:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Disqus import loses category and created_at, and now needs a live fetch per thread",
+      "description": "- The `--category` option and the `created_at:` argument were removed, so imported topics are uncategorized and dated at import time.\n- `TopicEmbed.import_remote` makes an HTTP request per thread. A single dead link raises `OpenURI::HTTPError` and aborts the whole import.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "lib/tasks/disqus.thor:148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Existing migration edited and `force: true` added to table creation",
+      "description": "An already-shipped migration is modified to `create_table :top_topics, force: true`, and the new `topic_embeds` migration (`db/migrate/20131217174004_create_topic_embeds.rb:3`) uses it too. `force: true` silently drops an existing table and its data.\n\n`db/migrate/20131210181901_migrate_word_counts.rb` is also touched with whitespace-only changes. Historical migrations should be left immutable.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "db/migrate/20131223171005_create_top_topics.rb:3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New gems are missing from two of the three lock files",
+      "description": "`ruby-readability` and `simple-rss` appear in `Gemfile_rails4.lock` but not in `Gemfile.lock` or `Gemfile_rails_master.lock`. A frozen `bundle install` on the default lock fails, and the lazy `require` calls then raise at runtime.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "Gemfile:210-211"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests miss the critical paths and some pass for the wrong reason",
+      "description": "- **Vacuous guards:** \"requires feed_polling_url\" and \"requires embed_by_username\" each stub only one setting. `feed_polling_enabled` defaults to false (`config/site_settings.yml:355`), so `execute` short-circuits before the stubbed guard is reached.\n- **Copy-paste:** the `require_dependency 'jobs/regular/process_post'` on line 2 is unrelated.\n- **Untested code:** `PollFeed#poll_feed`, `TopicEmbed.import_remote`, `Jobs::RetrieveTopic`, `TopicRetriever#perform_retrieve`, `#retrieved_recently?`, and the `skip_validations` path in `PostRevisor`.\n- **Thin assertions:** `absolutize_urls` has no port or protocol-relative cases, and the update test in `spec/models/topic_embed_spec.rb:39-42` only regex-matches `cooked`.\n- **Views never rendered:** `spec/controllers/embed_controller_spec.rb:48-52` stubs `TopicView.new` to return nil and does not render views, so the templates never run.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/jobs/poll_feed_spec.rb:18-28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Weak origin check and missing guards in embed.js",
+      "description": "`discourseUrl.indexOf(e.origin) === -1` is a substring test, so a prefix origin such as `https://forum.example.co` passes for `https://forum.example.com/`. Impact is limited to setting the iframe height. Compare against the exact origin instead. The script also assumes `discourseUrl` ends in `/` and that `#discourse-comments` exists.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/assets/javascripts/embed.js:17"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead code and incorrect requires",
+      "description": "- `feed_key` and the `digest/sha1` require in `poll_feed.rb` are unused.\n- `require_dependency 'email/sender'` in `app/jobs/regular/retrieve_topic.rb:1` is unrelated.\n- `require_dependency 'nokogiri'` in `app/models/topic_embed.rb:1` should be a plain `require`.\n- `topic_embed.rb` uses `open` without requiring `open-uri`, relying on other files having loaded it.\n- The lookup `User.where(username_lower: SiteSetting.embed_by_username.downcase).first` is duplicated in `poll_feed.rb:25` and `lib/topic_retriever.rb:49`. The latter raises on a nil setting.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/jobs/scheduled/poll_feed.rb:20-22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cook_method` is not exposed to API callers",
+      "description": "`PostsController#create_params` (`app/controllers/posts_controller.rb:227-253`) does not permit `cook_method`, so regular or API users cannot request raw-HTML cooking. The first post is excluded from the embed view by `post_number > 1` in `lib/filter_best_posts.rb:37`, so the imported article is not echoed under itself.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "lib/post_creator.rb:216"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Unescaped embed URL interpolated into raw-HTML post allows stored XSS",
+      "location": "app/models/topic_embed.rb:13",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Remote content is stored and rendered as trusted HTML with no sanitization",
+      "location": "app/jobs/scheduled/poll_feed.rb:35-36",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Unauthenticated callers can create unlimited topics and trigger feed polls",
+      "location": "lib/topic_retriever.rb:21-46",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Referer is emitted into inline JS in the wrong escaping context and cached across requesters",
+      "location": "app/views/layouts/embed.html.erb:11",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Protocol-relative and default-port URLs are rewritten incorrectly",
+      "location": "app/models/topic_embed.rb:56-76",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`import` mutates its argument and mishandles failed creates and deleted posts",
+      "location": "app/models/topic_embed.rb:10-42",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Feed polling aborts on one bad item and uses `Kernel#open` on configurable input",
+      "location": "app/jobs/scheduled/poll_feed.rb:24-38",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Stray `if` after `end` in the embed template",
+      "location": "app/views/embed/best.html.erb:6",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Disqus import loses category and created_at, and now needs a live fetch per thread",
+      "location": "lib/tasks/disqus.thor:148",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Existing migration edited and `force: true` added to table creation",
+      "location": "db/migrate/20131223171005_create_top_topics.rb:3",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "New gems are missing from two of the three lock files",
+      "location": "Gemfile:210-211",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests miss the critical paths and some pass for the wrong reason",
+      "location": "spec/jobs/poll_feed_spec.rb:18-28",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Weak origin check and missing guards in embed.js",
+      "location": "app/assets/javascripts/embed.js:17",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead code and incorrect requires",
+      "location": "app/jobs/scheduled/poll_feed.rb:20-22",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`cook_method` is not exposed to API callers",
+      "location": "lib/post_creator.rb:216",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "diff": "40c0c041eef5dc44025770d153a3608edf852aed...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:48:47.733399",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "injected": [],
+  "files_read": [
+    "app/controllers/embed_controller.rb",
+    "app/models/topic_embed.rb",
+    "lib/topic_retriever.rb",
+    "app/jobs/scheduled/poll_feed.rb",
+    "lib/post_revisor.rb",
+    "app/views/embed/best.html.erb",
+    "app/views/layouts/embed.html.erb",
+    "lib/tasks/disqus.thor",
+    "app/assets/javascripts/embed.js",
+    "app/models/post.rb",
+    "lib/post_creator.rb",
+    "lib/topic_view.rb",
+    "config/locales/server.en.yml",
+    "lib/filter_best_posts.rb",
+    "app/controllers/posts_controller.rb",
+    "db/migrate/20131223171005_create_top_topics.rb",
+    "lib/middleware/anonymous_cache.rb"
+  ],
+  "searches": [
+    "grep embeddable_host|feed_polling|embed_by_username|embed\\.|imported_from in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep cook_method|def rebake|def best|filter_best|:best\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep def self\\.enqueue|def self\\.queue_jobs|queue_jobs|def discourse_expires_in|public: ?true|X-Frame|def scrub|\\.scrub\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "list_files lib/filter_best_posts.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep open-uri|ruby-readability|simple-rss|digest/sha1 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep cook_method|params\\.(require|permit)|permit\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/app/controllers/posts_controller.rb",
+    "grep dependent|has_one :topic_embed|has_many :topic_embed|topic_embed in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/app/models",
+    "grep queue_jobs in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "list_files lib/middleware/anonymous_cache.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "list_files Gemfile* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep RetrieveTopic|retrieve_topic|import_remote|absolutize_urls|skip_validations in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/spec",
+    "grep ruby-readability|simple-rss in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/Gemfile.lock",
+    "grep default_scope|def with_deleted in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/lib/trashable.rb"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 25589,
+  "diff_chars_injected": 25589,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 33,
+  "prompt_tokens": 295094,
+  "cached_tokens": 237200,
+  "cache_write_tokens": 57882,
+  "completion_tokens": 21790,
+  "reasoning_tokens": null,
+  "duration_seconds": 218.02226370899007,
+  "cost_usd": 1.8466034999999998,
+  "cost_basis": "provider"
+}

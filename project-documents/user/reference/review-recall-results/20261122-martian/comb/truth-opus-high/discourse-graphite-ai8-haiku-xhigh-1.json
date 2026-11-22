@@ -1,0 +1,60 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "group.add` calls `users.push` with no membership check, and the unique `(group_id, user_id)` index raises `RecordNotUnique`, which nothing rescues, so re-adding a member returns a 500 after earlier names were already added."
+  ],
+  "F2": [
+   "KEEP",
+   "group.users.delete(user_id)` deletes the join row without `Group#remove`, so neither the `user_count` counter cache nor the `primary_group_id` cleanup in `destroy_deletions` runs."
+  ],
+  "F3": [
+   "KEEP",
+   "Math.floor(user_count/limit)+1` gives one page too many when the count is an exact multiple of the limit, so \"next\" moves the offset to `user_count` and shows an empty page."
+  ],
+  "F4": [
+   "KEEP",
+   "removing the only row on the last page re-fetches at the old offset, which is now equal to the new total, so an empty page is shown with no automatic step back."
+  ],
+  "F5": [
+   "KEEP",
+   "the public members route now calls `findMembers()` with the default limit of 50, and `members.hbs` has no pager or load-more, so larger groups are cut off."
+  ],
+  "F6": [
+   "KEEP",
+   "limit` and `offset` go into the query after only `.to_i`, so negative values make PostgreSQL error (a 500), and `limit` has no cap."
+  ],
+  "F7": [
+   "KEEP",
+   "addMembers`/`removeMember` have no rejection handler in the controller or the model, so a 422, 404 or 500 gives the admin no feedback."
+  ],
+  "F8": [
+   "DROP",
+   "the finding itself says the old `create` already ignored `alias_level`, so the change did not introduce this."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.18940210000000002
+}

@@ -1,0 +1,36 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The null return violates the documented non-null contract and can silently put a null subgroup count in the representation."
+  ],
+  "F2": [
+   "DROP",
+   "The uncaught subgroup-stream dereferences are unchanged code, so they are outside this change."
+  ],
+  "F3": [
+   "KEEP",
+   "If deletion throws, the non-daemon reader can loop indefinitely and keep issuing requests."
+  ],
+  "F4": [
+   "KEEP",
+   "Without joining the reader, an in-flight read failure can arrive after the assertion and go undetected."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  3
+ ],
+ "cost_usd": 0.00250845
+}

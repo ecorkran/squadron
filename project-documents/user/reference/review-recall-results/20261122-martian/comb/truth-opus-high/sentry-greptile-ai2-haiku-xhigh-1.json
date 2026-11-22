@@ -1,0 +1,54 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5,
+  "F6": 6,
+  "F7": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "OptimizedCursorPaginator.get_item_key` calls `math.floor`/`math.ceil` on the `datetime` field, which raises TypeError for any non-empty result, and `value_from_cursor` returns a raw int instead of converting it back to a datetime."
+  ],
+  "F2": [
+   "KEEP",
+   "enable_advanced` is computed on every request and reads `organization_context.member.has_global_access` with no None check, so an API-key caller (AnonymousUser, no membership) gets an AttributeError even without `optimized_pagination`."
+  ],
+  "F3": [
+   "KEEP",
+   "span-buf:s:` keys switch from SET to ZSET under the same names, so old SET keys still in Redis cause WRONGTYPE errors from `zadd`/`zcard`/`zunionstore`/`zscan` until they expire."
+  ],
+  "F4": [
+   "KEEP",
+   "zpopmin` in add-buffer.lua drops spans beyond 1000 with no metric or log, while the Python span-count guard it replaces is gone and `max_segment_spans` is no longer used."
+  ],
+  "F5": [
+   "DROP",
+   "clamping a malformed negative next-cursor offset to 0 is reasonable handling of bad input rather than a defect, the prev-cursor crash existed before the change, and the rest is about comments."
+  ],
+  "F6": [
+   "KEEP",
+   "the advanced branch slices `queryset[negative:stop]`, which Django rejects, so any request with a negative offset fails with a 500."
+  ],
+  "F7": [
+   "KEEP",
+   "ZUNIONSTORE` without `AGGREGATE` sums the scores of members present in both sets, which inflates their timestamps and changes which spans `zpopmin` trims."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  6,
+  8
+ ],
+ "cost_usd": 0.26644609999999996
+}

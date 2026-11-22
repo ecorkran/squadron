@@ -1,0 +1,43 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Ruby replaces the five-argument method, so the emoji resize job now raises ArgumentError."
+  ],
+  "F2": [
+   "KEEP",
+   "The fixed client limit diverges from configured attachment limits, allowing rejected uploads and blocking otherwise permitted ones."
+  ],
+  "F3": [
+   "KEEP",
+   "The loop ignores failed conversions and retries silently before passing the oversized file to validation."
+  ],
+  "F4": [
+   "KEEP",
+   "Downloads can be silently truncated, then resized below the validation limit and stored without detecting the incomplete download."
+  ],
+  "F5": [
+   "KEEP",
+   "Disabling animated thumbnails now causes oversized uploaded GIF originals to be flattened to their first frame."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.0266704
+}

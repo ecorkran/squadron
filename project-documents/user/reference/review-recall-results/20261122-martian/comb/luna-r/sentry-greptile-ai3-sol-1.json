@@ -1,0 +1,31 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Alias translation changes the result key, while serialization still looks up the original column and can return zero."
+  ],
+  "F2": [
+   "KEEP",
+   "Substring matching enables upsampling for queries that can include non-error events or exclude errors."
+  ],
+  "F3": [
+   "KEEP",
+   "Top-event ranking uses the untransformed count, so it can select different groups from those ranked by upsampled counts."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.015471780000000001
+}

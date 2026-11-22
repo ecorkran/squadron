@@ -1,0 +1,47 @@
+{
+ "case": "keycloak-ke37634",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The matcher checks the wrong substring and inverted comparison, so it never verifies the expected grant shortcut."
+  ],
+  "F2": [
+   "KEEP",
+   "Client-credentials and UMA issuance do not set the grant attribute, so their tokens are encoded with the unknown-grant shortcut."
+  ],
+  "F3": [
+   "KEEP",
+   "The test accepts any runtime exception, so it passes on a null-session-factory NPE instead of verifying the intended invalid-grant exception."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests alone do not establish a defect in the production encode path or factory validation."
+  ],
+  "F5": [
+   "KEEP",
+   "Shortcuts longer than two characters are accepted but produce token IDs that the decoder rejects."
+  ],
+  "F6": [
+   "DROP",
+   "The unchecked raw ID is not shown to be null in production, making this an edge-case constructor-check issue."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4
+ ],
+ "cost_usd": 0.007344850000000001
+}

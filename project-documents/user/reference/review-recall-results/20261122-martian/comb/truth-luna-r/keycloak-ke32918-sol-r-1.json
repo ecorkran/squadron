@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The original is organization-aware but the updated model is not, so both predicates can be false and skip invalidation, leaving a hidden provider in the login cache."
+  ],
+  "F2": [
+   "KEEP",
+   "The cleanup callbacks target the literal alias `\"alias\"` rather than the created aliases, leaving the test providers behind."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00186272
+}

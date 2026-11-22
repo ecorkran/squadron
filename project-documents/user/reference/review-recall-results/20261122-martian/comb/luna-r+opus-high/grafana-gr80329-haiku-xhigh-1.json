@@ -1,0 +1,29 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The Error-level logs at xorm_store.go:534-537, 554-557 and 576-579 are leftover debug output: they record normal progress and full ID lists on every batch, even when nothing is deleted, which floods ERROR logs and will set off false alerts."
+  ],
+  "F2": [
+   "DROP",
+   "The quadratic string building is real, but it only runs on SQLite when the batch size is set above 999, which is not the default; it costs CPU time and memory churn but does not cause wrong behavior."
+  ],
+  "F3": [
+   "DROP",
+   "This only fails if an operator sets the batch size above the driver's bind-parameter limit (about 65k for MySQL and Postgres), which is a misconfiguration; guarding against it is hardening, not a defect in the change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0756004
+}

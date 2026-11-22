@@ -1,0 +1,60 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding an existing member violates the unique index, and earlier additions remain committed when the request fails."
+  ],
+  "F2": [
+   "KEEP",
+   "Removal bypasses the cleanup that clears primary_group_id, leaving removed members associated with the group on posts."
+  ],
+  "F3": [
+   "KEEP",
+   "Exact multiples produce an extra page, allowing navigation to an empty member list."
+  ],
+  "F4": [
+   "KEEP",
+   "Removing the final member on the last page leaves the offset beyond the remaining records without correction."
+  ],
+  "F5": [
+   "KEEP",
+   "The public members page fetches only 50 members and provides no pagination or load-more control."
+  ],
+  "F6": [
+   "KEEP",
+   "Negative limits and offsets reach PostgreSQL unchecked and cause request failures."
+  ],
+  "F7": [
+   "KEEP",
+   "Add and remove requests have no rejection handler to display failures to the admin."
+  ],
+  "F8": [
+   "DROP",
+   "Ignoring alias_level during creation is a pre-existing defect, not behavior introduced by this change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.0659753
+}

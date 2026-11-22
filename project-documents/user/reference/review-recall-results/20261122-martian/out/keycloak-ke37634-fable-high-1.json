@@ -1,0 +1,271 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`isAccessTokenId` matcher never verifies the grant shortcut (wrong offsets and inverted condition)",
+      "description": "The matcher has two bugs on one line: `if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;`.\n- **Wrong offsets:** the encoder writes the grant shortcut at indices 4\u20136 of the prefix (`DefaultTokenContextEncoderProvider.java:79-81`). `substring(3, 5)` takes the second token-type character plus the first grant character, e.g. `\"ta\"` from `onrtac`.\n- **Inverted condition:** it returns `false` when the value equals the expected shortcut; the `!` is missing.\n\nThe two bugs mask each other. The extracted value always starts with `t`, so it never equals `ac`, `dg`, `rt` or `ci`, and the check never fires. `expectCodeToToken`, `expectDeviceCodeToToken`, `expectRefresh` and `expectAuthReqIdToToken` (lines 145, 173, 182, 244) therefore accept any grant type. Fixing only one of the two bugs would break every caller.\n\nA prefix shorter than 5 characters also throws `StringIndexOutOfBoundsException` instead of returning a mismatch. The fix is `if (items[0].length() != 6 || !items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`rawTokenId` null check validates `grantType` a second time",
+      "description": "`Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\");` checks `grantType` again, so `rawTokenId` is never validated. A null raw id is accepted, and `encodeTokenId` (`DefaultTokenContextEncoderProvider.java:114-117`) would then emit a `jti` ending in the literal `:null`. It should be `Objects.requireNonNull(rawTokenId, ...)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Client-credentials and other flows never set `Constants.GRANT_TYPE`, so their tokens are tagged `na`",
+      "description": "The attribute is set in only five places: `TokenManager.java:248`, `OAuth2GrantTypeBase.java:109`, `PreAuthorizedCodeGrantType.java:82`, `ResourceOwnerPasswordCredentialsGrantType.java:134` and `StandardTokenExchangeProvider.java:237`. These flows create tokens without it:\n- **Client credentials:** `ClientCredentialsGrantType` calls `responseBuilder(...).generateAccessToken()` directly (lines 122-141) and never goes through `createTokenResponse`. Every such token gets the `na` shortcut, and the `cc` shortcut registered by `ClientCredentialsGrantTypeFactory` is never emitted.\n- **Legacy token exchange:** `AbstractTokenExchangeProvider.java:409-410` has the same gap.\n- **UMA:** `AuthorizationTokenService.java:357-358` has the same gap.\n\nThe unit test's `trltcc:1234` case suggests coverage that the server does not provide. Either set the attribute in these flows or document that `na` is expected for them.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`getShortcut()` contract contradicts the encoder's fixed 2-character format and is not validated",
+      "description": "The Javadoc says \"usually like 3-letters shortcut\". Every in-repo shortcut is 2 characters, and the decoder hard-requires a 6-character prefix (`DefaultTokenContextEncoderProvider.java:74-81`).\n\nA factory that follows the Javadoc produces a 7-character prefix. `encodeTokenId` emits it without complaint and `getTokenContextFromTokenId` then rejects it with `IllegalArgumentException`.\n\n`DefaultTokenContextEncoderProviderFactory.postInit` (lines 70-85) checks only for duplicates, not length or null. A null shortcut would throw `NullPointerException` from `ConcurrentHashMap.put` at startup. The lazy-registration paths (lines 106-137) skip even the duplicate check.\n\nThe method is also abstract with no default, so any out-of-tree `OAuth2GrantTypeFactory` breaks. All nine in-repo implementations are updated. Fix the Javadoc to \"exactly 2 characters\" and validate at registration.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:29-33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`testIncorrectGrantType` passes because of an accidental `NullPointerException`",
+      "description": "The test builds the factory with `init(null)` and never calls `postInit`, so `sessionFactory` is null. Decoding `ofrtac:5678` misses the map and dereferences `sessionFactory` at `DefaultTokenContextEncoderProviderFactory.java:125`, throwing `NullPointerException`. The `catch (RuntimeException iae)` swallows that, so the intended `IllegalArgumentException` branch (`DefaultTokenContextEncoderProvider.java:92-94`) is never exercised.\n\nFurther gaps in the same file:\n- No test covers `getTokenContextFromClientSessionContext`, the only method production code calls.\n- No test covers a malformed prefix length or unknown session/token shortcuts.\n- `assertEquals` arguments are in (actual, expected) order throughout.\n\nUse `Assert.assertThrows(IllegalArgumentException.class, ...)` and give the factory a stub session factory.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:76-85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Public copy constructor `Context(Context)` removed instead of extended",
+      "description": "The diff deletes `public Context(Context context)` rather than adding `this.grantType = context.grantType`. No in-repo caller remains; the only construction is `TokenEndpoint.java:149`. The removal is unrelated to the feature and breaks source and binary compatibility for extensions that wrap a context. Restore it with the new field copied.\n\nRelatedly, `grantType` is captured once from `formParams` in the constructor (line 102), and `setFormParams` (line 105) does not refresh it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java:87-103"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused import added",
+      "description": "`TokenExchangeGrantTypeFactory` is imported but never referenced in the file; line 237 uses `OAuth2Constants.TOKEN_EXCHANGE_GRANT_TYPE`. Remove the import.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java:50"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Inconsistent shortcut constants and overlapping shortcut values",
+      "description": "Four factories expose a `GRANT_SHORTCUT` constant (authorization code, refresh, CIBA, device). The other five return inline literals (`cc`, `pg`, `pc`, `ro`, `te`).\n\nThe refresh-token shortcut `rt` is identical to `TokenType.REGULAR`'s `rt` (`AccessTokenContext.java:54`), giving IDs like `onrtrt:<uuid>`. Decoding is positional so it is unambiguous, but it is easy to misread.\n\nSimilarly, \"unknown\" is `un` for session and token type but `na` for grant type.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/RefreshTokenGrantTypeFactory.java:33"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Decoder has no production caller, and the factory's maps are loosely encapsulated",
+      "description": "`getTokenContextFromTokenId` is referenced only from the unit test; production code calls only `getTokenContextFromClientSessionContext` and `encodeTokenId` (`TokenManager.java:1052-1054`). That is fine as groundwork, with three things to settle before it gets a caller:\n- A token ID containing `:` with a non-6-character prefix throws `IllegalArgumentException` instead of being treated as legacy/unknown.\n- The exception messages echo the raw token ID, which is caller-supplied.\n- An unknown shortcut triggers a scan of all grant factories on every call (`DefaultTokenContextEncoderProviderFactory.java:125-133`).\n\nSeparately, `grantsByShortcuts` and `grantsToShortcuts` (factory lines 41-42) are package-private, non-final and reassigned by the test to plain `HashMap`s. A package-private constructor or setter would keep the `ConcurrentHashMap` invariant.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:66-98"
+    },
+    {
+      "severity": "PASS",
+      "title": "SPI registration and token-ID wiring are consistent",
+      "description": "`TokenContextEncoderSpi` is registered in `META-INF/services/org.keycloak.provider.Spi`, and the default factory is registered in its own service file. `initToken` falls back to `na` when no grant type is set, so the admin evaluation and authorization paths cannot hit the \"unknown grantType\" exception. `TokenEndpoint.java:114-116` guarantees non-null `formParams` before `Context` reads the grant type. The `requestedAucienceClients` \u2192 `requestedAudienceClients` rename is a correct typo fix.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:1052-1054"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`isAccessTokenId` matcher never verifies the grant shortcut (wrong offsets and inverted condition)",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`rawTokenId` null check validates `grantType` a second time",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:73",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Client-credentials and other flows never set `Constants.GRANT_TYPE`, so their tokens are tagged `na`",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java:140",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`getShortcut()` contract contradicts the encoder's fixed 2-character format and is not validated",
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:29-33",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`testIncorrectGrantType` passes because of an accidental `NullPointerException`",
+      "location": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:76-85",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Public copy constructor `Context(Context)` removed instead of extended",
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java:87-103",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Unused import added",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java:50",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Inconsistent shortcut constants and overlapping shortcut values",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/RefreshTokenGrantTypeFactory.java:33",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Decoder has no production caller, and the factory's maps are loosely encapsulated",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:66-98",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "SPI registration and token-ID wiring are consistent",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:1052-1054",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "diff": "fbd9543bab513d8f2124cf583d1b9388ec492635...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:22:25.340794",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [],
+  "files_read": [
+    "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/PreAuthorizedCodeGrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/endpoints/TokenEndpoint.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeBase.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/mappers/AbstractOIDCProtocolMapper.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+    "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/ResourceOwnerPasswordCredentialsGrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java"
+  ],
+  "searches": [
+    "grep implements OAuth2GrantTypeFactory|extends \\w*GrantTypeFactory in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep new (OAuth2GrantType\\.)?Context\\(|extends (OAuth2GrantType\\.)?Context\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep TokenContextEncoderProvider|getTokenContextFromTokenId|isAccessTokenId|getShouldUseLightweightToken|Constants\\.GRANT_TYPE\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep TokenContextEncoder|getTokenContextFromTokenId|isAccessTokenId|getShouldUseLightweightToken|Constants\\.GRANT_TYPE,|getShortcut\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep Details\\.TOKEN_ID, isUUID\\(\\)|TOKEN_ID.*isUUID in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep initToken\\(|createClientAccessToken\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main",
+    "grep TokenExchangeGrantTypeFactory in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/tokenexchange",
+    "grep createTokenResponse\\(|generateAccessToken\\(\\)|responseBuilder\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 54272,
+  "diff_chars_injected": 54272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 286380,
+  "cached_tokens": 213518,
+  "cache_write_tokens": 72852,
+  "completion_tokens": 15278,
+  "reasoning_tokens": null,
+  "duration_seconds": 139.49447437515482,
+  "cost_usd": 1.8221192999999998,
+  "cost_basis": "provider"
+}

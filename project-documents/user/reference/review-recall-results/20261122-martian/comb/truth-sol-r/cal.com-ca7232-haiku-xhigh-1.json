@@ -1,0 +1,46 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 1,
+  "F2": 2,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This is a type-import lint/style violation, not a demonstrated behavior defect."
+  ],
+  "F2": [
+   "KEEP",
+   "One SendGrid rejection aborts subsequent cancellations and prevents all queued lazy database deletes from executing."
+  ],
+  "F3": [
+   "KEEP",
+   "Cancellation flag writes are neither awaited by callers nor allowed to propagate failures, so success can leave reminders active."
+  ],
+  "F4": [
+   "DROP",
+   "Different helper semantics and naming do not establish a behavior defect or a need for the removed DELETE request."
+  ],
+  "F5": [
+   "KEEP",
+   "Immediate email cancellation leaves stale scheduled rows intact, including flagged rows that cron will cancel again."
+  ],
+  "F6": [
+   "DROP",
+   "The outer catch is ineffective for asynchronous failures, but both helpers already catch those failures internally."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.0773476
+}

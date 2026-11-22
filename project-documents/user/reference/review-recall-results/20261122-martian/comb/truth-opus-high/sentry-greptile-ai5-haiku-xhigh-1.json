@@ -1,0 +1,80 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 12,
+  "F11": 13,
+  "F12": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_multi` dedupes IDs and puts cache hits after uncached results (`items.update(cache_items)`), so zipping `error_ids` against `events.values()` can attach an error's title, message and timestamp to the wrong event ID."
+  ],
+  "F2": [
+   "KEEP",
+   "the client's `field` list goes to `process_raw_response`, which keeps only those fields, so a request without `error_ids` in it silently gets no error context."
+  ],
+  "F3": [
+   "KEEP",
+   "both validators test `self.initial_data.get(...)` for truthiness, so `age: 0` sent together with a timestamp passes the mutual-exclusion check."
+  ],
+  "F4": [
+   "DROP",
+   "rejecting the whole batch on one invalid report is the deliberate strict-validation contract the change adds, and the rest is a suggestion, not a defect."
+  ],
+  "F5": [
+   "KEEP",
+   "HIDDEN_ATTRIBUTES` is applied only after the early return for an empty search, so those attributes show by default and disappear only while a query is typed."
+  ],
+  "F6": [
+   "KEEP",
+   "with the flag on, every table widget renders `TableWidgetVisualization` with empty hardcoded columns and data and ignores `tableResults`."
+  ],
+  "F7": [
+   "KEEP",
+   "the query key is `['use-trace-item-attribute-keys', queryOptions]` with no org slug, while the request URL is org-specific, so two orgs with the same project and date selection can share a cache entry."
+  ],
+  "F8": [
+   "DROP",
+   "default tanstack retries and `isFetching`-as-loading are behavior changes, not defects, and leaving out `environment` is intentional per the code comment."
+  ],
+  "F9": [
+   "KEEP",
+   "useProjectFromId` returns undefined while the projects store is still empty, and the new check then shows \"Project not found\" instead of a loading state."
+  ],
+  "F10": [
+   "DROP",
+   "the catch-all is deliberate graceful degradation with a comment saying so, and the exception is logged; this is about logging quality, not wrong behavior."
+  ],
+  "F11": [
+   "DROP",
+   "the title was already put into markdown unescaped before this change (a bold title could carry link syntax), so the new template adds no real injection surface."
+  ],
+  "F12": [
+   "DROP",
+   "naming and redundant-wrapper style point; the single-element array behaves correctly."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  6,
+  7,
+  8,
+  10
+ ],
+ "cost_usd": 0.43793849999999995
+}

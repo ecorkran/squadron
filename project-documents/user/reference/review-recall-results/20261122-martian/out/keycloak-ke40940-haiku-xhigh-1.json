@@ -1,0 +1,234 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "getSubGroupsCount() can now return null, contradicting the GroupModel contract",
+      "description": "The new body `return model == null ? null : model.getSubGroupsCount();` returns null when the backing group has vanished. The default method in server-spi/src/main/java/org/keycloak/models/GroupModel.java:293-300 is documented \"Never returns {@code null}.\" The JPA implementation (model/jpa/src/main/java/org/keycloak/models/jpa/GroupAdapter.java:190) always returns a count query result. The only caller, `GroupUtils.populateSubGroupCount` (services/src/main/java/org/keycloak/utils/GroupUtils.java:89-92), passes the value straight into `setSubGroupCount`, so the null is silently serialized instead of surfacing as an error. Returning `0L` would keep the documented contract. If null is really intended, the GroupModel Javadoc must change to say so.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:272-276"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Null handling for a vanished group is inconsistent across the same class",
+      "description": "The same race this change fixes still throws NPE in the three `getSubGroupsStream(...)` overloads at lines 256, 262 and 268, which call `modelSupplier.get().getSubGroupsStream(...)` with no null check. The class already handles the same condition three different ways: `getDelegateForUpdate()` (line 60-61) throws `IllegalStateException`, `isUpdated()` (lines 73-74) throws `IllegalStateException(\"Not found in database\")`, and the new `getSubGroupsCount` returns null. The fix covers only the count path that the new test exercises. Pick one policy and apply it to every `modelSupplier.get()` dereference in the class, or document why only the count path can race.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:256"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reader thread leaks and busy-loops forever if the deletion loop throws",
+      "description": "`deletedAll.set(true)` at line 155 is not in a `finally`. The reader thread (lines 139-149) is non-daemon and loops `while (!deletedAll.get())` with no pause. If any `remove()` at lines 152-154 throws, the flag is never set and the thread keeps issuing `groups(null, 0, Integer.MAX_VALUE, true)` for the rest of the JVM's life. Each read triggers a count query per top-level group through `populateSubGroupCount`. Each failure is appended to a `CopyOnWriteArrayList`, which copies the whole array on every add. Also, the `fail(...)` at line 131 skips deletion of groups already created, which leaves them in the managed realm. Wrap the deletion in try/finally that sets the flag and joins the thread, and make the thread a daemon.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Assertion can run before the reader finishes, so late failures are missed",
+      "description": "The test asserts `caughtExceptions` at line 157 without joining the reader thread. A read in flight when the flag flips can add its exception after the assertion has already passed, so the test can report success despite a failed read. Nothing also guarantees the reader completed a single successful read, so the assertion can pass vacuously. Join the thread before asserting, and assert a successful-read counter is greater than zero. The final state of the realm is also never checked after deletion.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:155-157"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The regression test depends on a timing race and does not deterministically cover the null branch",
+      "description": "The null path in `GroupAdapter.getSubGroupsCount` is reached only when a group is removed between listing and counting. The test relies on that interleaving across 100 deletions, so it may pass against the pre-fix code on many runs. A stress test is reasonable for this scenario, but a unit-level test that gives the adapter a delegate lookup returning null would exercise the branch every time. I did not run the test, so I cannot say how often it reproduces.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:118-158"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test name, typo and whitespace drift",
+      "description": "`createMultiDeleteMultiReadMulti` does not say what is asserted (no errors while listing during concurrent deletes). Neighboring tests such as `getGroupsWithBriefAndFullRepresentation` (line 853) name the behavior. The variable `groupUuuids` has a triple-u typo, used at lines 121, 129 and 152. Line 117 is a whitespace-only line before `@Test`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:117-121"
+    },
+    {
+      "severity": "PASS",
+      "title": "CachedGroup `@Override` on getRealm() is valid",
+      "description": "Verified that `InRealm` declares `String getRealm();` (model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/InRealm.java:8). The annotation compiles and makes the interface contract explicit. No behavior change.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/CachedGroup.java:61-64"
+    },
+    {
+      "severity": "PASS",
+      "title": "Removed GroupUtils helper was unused private code",
+      "description": "A repo-wide search found no remaining references to `groupMatchesSearchOrIsPathElement` in `GroupUtils`. The only other match is a separately declared private method with a different signature in server-spi-private/src/main/java/org/keycloak/models/utils/ModelToRepresentation.java:209. Every remaining import in `GroupUtils` is still used.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/utils/GroupUtils.java:98-101"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "getSubGroupsCount() can now return null, contradicting the GroupModel contract",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:272-276",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Null handling for a vanished group is inconsistent across the same class",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:256",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Reader thread leaks and busy-loops forever if the deletion loop throws",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:139-155",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Assertion can run before the reader finishes, so late failures are missed",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:155-157",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The regression test depends on a timing race and does not deterministically cover the null branch",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:118-158",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Test name, typo and whitespace drift",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:117-121",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "CachedGroup `@Override` on getRealm() is valid",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/CachedGroup.java:61-64",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Removed GroupUtils helper was unused private code",
+      "location": "services/src/main/java/org/keycloak/utils/GroupUtils.java:98-101",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "diff": "7fdb3b9b6b815577e65cb19ce2f2646e9a688e7a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:40:15.365038",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "injected": [],
+  "files_read": [
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/CachedGroup.java",
+    "services/src/main/java/org/keycloak/utils/GroupUtils.java",
+    "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/LazyModel.java",
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/entities/InRealm.java",
+    "server-spi/src/main/java/org/keycloak/models/GroupModel.java",
+    "model/jpa/src/main/java/org/keycloak/models/jpa/GroupAdapter.java",
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/DefaultLazyLoader.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java",
+    "server-spi-private/src/main/java/org/keycloak/models/utils/ModelToRepresentation.java",
+    "integration/admin-client/src/main/java/org/keycloak/admin/client/resource/GroupsResource.java"
+  ],
+  "searches": [
+    "grep groupMatchesSearchOrIsPathElement in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "grep class LazyModel|interface InRealm in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940/model/infinispan/src/main/java",
+    "grep getSubGroupsCount in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "grep populateGroupHierarchyFromSubGroups|populateSubGroupCount|getSubGroupsCount|setSubGroupCount|getSubGroupCount in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "grep public .*groups\\(|briefRepresentation|populateGroupHierarchy in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940/services/src/main/java/org/keycloak/services/resources/admin",
+    "grep List<GroupRepresentation> groups\\(|Stream<GroupRepresentation> groups\\(|public static GroupRepresentation toRepresentation\\(GroupModel|public static GroupRepresentation toRepresentation\\(GroupModel group, boolean full\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "grep buildGroupPath\\(GroupModel|public RealmResource admin\\(\\)|RealmResource admin\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "grep public void \\w+\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940/tests/base/src/test/java/org/keycloak/tests/admin/group",
+    "grep modelSupplier\\.get\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940/model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 5626,
+  "diff_chars_injected": 5626,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 25,
+  "prompt_tokens": 385651,
+  "cached_tokens": 334584,
+  "cache_write_tokens": 51045,
+  "completion_tokens": 29471,
+  "reasoning_tokens": null,
+  "duration_seconds": 136.8083925419487,
+  "cost_usd": 0.028710540000000003,
+  "cost_basis": "provider"
+}

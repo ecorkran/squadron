@@ -1,0 +1,48 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "All four goroutines build their timeout context from the caller's request context and never detach it from cancellation, so the legacy write can start with an already-cancelled context."
+  ],
+  "F2": [
+   "KEEP",
+   "The new goroutines turn legacy errors into a metric boolean and never log them, and they have no panic recovery, so legacy failures are now silent."
+  ],
+  "F3": [
+   "KEEP",
+   "Lines 45 and 129 record a storage failure in the legacy histogram, and line 166 records the legacy DeleteCollection call in the storage histogram, so the metrics data is wrong."
+  ],
+  "F4": [
+   "KEEP",
+   "The new Delete returns on any storage error, NotFound included (`apierrors` is no longer even imported), so legacy is never deleted when storage lacks the object."
+  ],
+  "F5": [
+   "KEEP",
+   "Line 139 hands legacy the raw `objInfo` instead of wrapping the result storage persisted, so legacy works out its own update and can persist something different from storage."
+  ],
+  "F6": [
+   "DROP",
+   "The legacy stores do ignore DryRun, but the finding itself says the old code passed the same options to legacy, so the diff did not change this behaviour."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.21150600000000003
+}

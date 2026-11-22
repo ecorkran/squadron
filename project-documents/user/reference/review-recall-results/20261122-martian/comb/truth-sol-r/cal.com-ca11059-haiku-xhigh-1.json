@@ -1,0 +1,94 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 7,
+  "F8": 8,
+  "F9": 9,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12,
+  "F13": 13,
+  "F14": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Google persists the SafeParse wrapper instead of its data, breaking subsequent credential validation."
+  ],
+  "F2": [
+   "KEEP",
+   "Bigin passes the credential ID as calcomUserId, including for team-owned credentials."
+  ],
+  "F3": [
+   "KEEP",
+   "Although the computed keys can collide rather than force rejection, the schema strips expiry and refresh-token fields needed by callers."
+  ],
+  "F4": [
+   "KEEP",
+   "Sync returns a fetch Response, but these callers expect parsed SDK or axios results."
+  ],
+  "F5": [
+   "KEEP",
+   "The Salesforce refresh path references prisma without importing or defining it."
+  ],
+  "F6": [
+   "DROP",
+   "The statusText check is pre-existing, and the newly unreachable success check causes no behavioral defect."
+  ],
+  "F7": [
+   "KEEP",
+   "A missing refresh_token becomes a literal placeholder that overwrites Office 365\u2019s stored token."
+  ],
+  "F8": [
+   "DROP",
+   "Reduced diagnostics and unreachable checks do not establish a behavioral defect, and rejecting invalid tokens is not inherently wrong."
+  ],
+  "F9": [
+   "KEEP",
+   "Zoom sends zoomvideo where the app\u2019s registered slug is zoom."
+  ],
+  "F10": [
+   "KEEP",
+   "The webhook authenticates its shared secret using a non-constant-time string comparison."
+  ],
+  "F11": [
+   "KEEP",
+   "Body validation, decryption, and JSON decoding failures escape the handler and produce server errors."
+  ],
+  "F12": [
+   "KEEP",
+   "The webhook accepts and persists malformed decrypted credentials that subsequently fail in credential readers."
+  ],
+  "F13": [
+   "DROP",
+   "Holding the key in a server-side constant does not itself expose it, and its truthiness works for existing consumers."
+  ],
+  "F14": [
+   "KEEP",
+   "The token-sync request supplies only user and app identifiers, without authentication protecting token retrieval."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  7,
+  9,
+  10,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 0.10271770000000001
+}

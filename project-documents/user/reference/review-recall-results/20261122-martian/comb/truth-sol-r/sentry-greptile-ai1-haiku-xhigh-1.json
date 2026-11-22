@@ -1,0 +1,48 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies math.floor/ceil directly to AuditLogEntry.datetime, crashing non-empty pages."
+  ],
+  "F2": [
+   "KEEP",
+   "Org-token authentication supplies an anonymous user with no membership, so the unconditional member dereference crashes authorized requests."
+  ],
+  "F3": [
+   "KEEP",
+   "Client-supplied negative offsets reach a Django QuerySet slice, which rejects negative indexing."
+  ],
+  "F4": [
+   "DROP",
+   "Clamping an invalid next-cursor offset changes behavior but does not itself establish a behavioral defect."
+  ],
+  "F5": [
+   "KEEP",
+   "Nonzero cursor values are bound as numbers in comparisons against the datetime column instead of being converted to datetimes."
+  ],
+  "F6": [
+   "KEEP",
+   "The role-gated branch passes unvalidated negative offsets into ORM slicing, causing a crash rather than a validation error."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.12281900000000001
+}

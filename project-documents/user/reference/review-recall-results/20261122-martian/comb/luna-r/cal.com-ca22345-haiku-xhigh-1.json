@@ -1,0 +1,29 @@
+{
+ "case": "cal.com-ca22345",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The unparenthesized fragment is only used as a standalone predicate in the repository, so the described precedence leak has no current caller."
+  ],
+  "F2": [
+   "DROP",
+   "Missing cache tests are not a defect, and the cache checks correctly distinguish `undefined` from a cached `null`."
+  ],
+  "F3": [
+   "KEEP",
+   "The constructor accepts invalid scope/team combinations at compile time and silently turns them into a no-results condition."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2
+ ],
+ "cost_usd": 0.00197723
+}

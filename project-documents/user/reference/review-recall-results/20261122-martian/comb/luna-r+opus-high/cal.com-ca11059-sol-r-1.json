@@ -1,0 +1,55 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "salesforce/lib/CalendarService.ts` calls `prisma.credential.update` but never imports `prisma`, so it fails type checking and throws a ReferenceError when that line runs."
+  ],
+  "F2": [
+   "KEEP",
+   "parseRefreshTokenResponse` returns the whole `safeParse` result, so Google stores `{success, data}` as `key`, and the next `googleCredentialSchema.parse(credential.key)` fails."
+  ],
+  "F3": [
+   "KEEP",
+   "both computed keys turn into the same literal key `\"[object Object]\"` and `z.object` strips unknown keys, so `expires_in`/`refresh_token` are lost (Zoom then works out `expiry_date` from undefined)."
+  ],
+  "F4": [
+   "KEEP",
+   "the delegated branch returns a raw Fetch `Response`, but Google reads `res.data.access_token` and Zoho reads `tokenInfo.data.error`, so both break when sharing is enabled."
+  ],
+  "F5": [
+   "KEEP",
+   "appStoreMetadata` is keyed by directory name (`googlecalendar`, `office365video`), not by slug (`google-calendar`, `msteams`), so looking it up by the database slug returns undefined and the webhook sends back a 404."
+  ],
+  "F6": [
+   "KEEP",
+   "Bigin passes `credentialId` as the third argument, which gets sent as `calcomUserId`, so the sync endpoint is asked for the wrong user."
+  ],
+  "F7": [
+   "KEEP",
+   "when a response has no refresh token, the placeholder `\"refresh_token\"` gets merged over the real stored token in Office365 (and assigned directly in Zoom), which breaks the next refresh."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.2879336
+}

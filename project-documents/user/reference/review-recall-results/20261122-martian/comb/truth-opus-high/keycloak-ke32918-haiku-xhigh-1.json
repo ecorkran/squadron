@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A realm-level IDP that gains `BROKER_PUBLIC=true` passes the login predicate both before and after the update and keeps the same null org ID, so the early return at lines 409-412 skips invalidation even though the uncached `ORG_ONLY`/null-org query now returns it."
+  ],
+  "F2": [
+   "KEEP",
+   "getById` returns the org-aware wrapper, whose `isEnabled()` is false while the org is disabled, so setting `hideOnLogin` or `linkOnly` takes the early return at lines 405-407; nothing invalidates login keys when the org is re-enabled, and the bean re-checks only `isEnabled()`, so the hidden IDP gets shown."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.23985160000000003
+}

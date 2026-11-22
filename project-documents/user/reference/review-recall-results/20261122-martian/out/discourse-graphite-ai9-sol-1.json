@@ -1,0 +1,95 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cached translations ignore the site fallback locale",
+      "description": "Fallback results now depend on `SiteSetting.default_locale`, but the cache key in `lib/freedom_patches/translate_accelerator.rb:72` includes only the translation key, current locale, and backend identity. Changing the site default\u2014or switching between multisite databases\u2014can therefore return another site's fallback language. Include the fallback chain in the cache identity and add regression coverage.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fallback loading only runs for controller requests",
+      "description": "Background jobs set `I18n.locale` directly (`app/jobs/base.rb:151`) without calling this preload hook. The translation accelerator loads only the current locale, so fallback translations remain unavailable when their locale files have not already been loaded. Make fallback loading part of translation lookup rather than relying on a controller callback, and test cold-worker behavior.\n\nFull project tests could not run because the locked dependencies are missing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/application_controller.rb:159"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cached translations ignore the site fallback locale",
+      "location": "config/initializers/i18n.rb:17",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fallback loading only runs for controller requests",
+      "location": "app/controllers/application_controller.rb:159",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "diff": "3bf663a6c4c82bf9a92dadde7cf9de567813f102...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:51:24.204280",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 4351,
+  "diff_chars_injected": 4351,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 46870,
+  "cached_tokens": 46592,
+  "cache_write_tokens": null,
+  "completion_tokens": 233,
+  "reasoning_tokens": 0,
+  "duration_seconds": 90.9719456252642,
+  "cost_usd": 0.0075452,
+  "cost_basis": "alias_pricing"
+}

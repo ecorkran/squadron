@@ -1,0 +1,31 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Pause rendering requires a Ruler rule, and Delete is gated on one, but the new Grafana list supplies only a Prometheus rule."
+  ],
+  "F2": [
+   "KEEP",
+   "The silence drawer is rendered only for a Ruler alerting rule, which the new list does not provide."
+  ],
+  "F3": [
+   "KEEP",
+   "The combined-rule adapter omits federated group metadata, and the shared ability hook hardcodes federated status to false."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0028171900000000007
+}

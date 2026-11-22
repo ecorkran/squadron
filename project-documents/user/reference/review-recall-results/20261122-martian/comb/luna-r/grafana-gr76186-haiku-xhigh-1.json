@@ -1,0 +1,22 @@
+{
+ "case": "grafana-gr76186",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Missing tests alone are not a defect, and the cited logging behavior is implemented."
+  ],
+  "F2": [
+   "DROP",
+   "The middleware order currently places contextual logging before request logging, so the cited attribution loss requires a hypothetical reordering."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0034722600000000005
+}

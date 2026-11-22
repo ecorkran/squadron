@@ -1,0 +1,35 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cleanup paths log routine batches and terminal empty batches at Error level, including ID lists."
+  ],
+  "F2": [
+   "DROP",
+   "The repeated string copying is a performance concern but does not name a behavior failure."
+  ],
+  "F3": [
+   "KEEP",
+   "Non-SQLite deletes bind one parameter per ID, so a configured batch exceeding a driver\u2019s limit causes cleanup batches to fail."
+  ],
+  "F4": [
+   "DROP",
+   "The broader cadence and logging changes are described as operational impact, not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.0021705500000000003
+}

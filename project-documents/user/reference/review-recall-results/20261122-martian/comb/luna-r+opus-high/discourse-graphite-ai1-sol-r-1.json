@@ -1,0 +1,30 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Ruby has no overloading by argument count, so the second `downsize` (`optimized_image.rb:149`) replaces the 4-dimension version, and `resize_emoji.rb:14`, which passes 5 args, will raise ArgumentError."
+  ],
+  "F2": [
+   "KEEP",
+   "The browser check now uses a fixed 10 MB limit (`utilities.js:182`) for every upload type, so attachments that the site's configured limit allows are blocked, and attachments over a smaller limit are no longer caught in the browser."
+  ],
+  "F3": [
+   "DROP",
+   "This finding is about a stale test in an unchanged file plus requests for more test coverage, not a defect in the shipped code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.08656549999999999
+}

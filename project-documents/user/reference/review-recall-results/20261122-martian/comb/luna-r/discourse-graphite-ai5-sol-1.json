@@ -1,0 +1,19 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The flex-item component can retain the nowrap title\u2019s min-content width, pushing header controls offscreen."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00229723
+}

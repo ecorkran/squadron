@@ -1,0 +1,104 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 8,
+  "F9": 9,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12,
+  "F13": 13,
+  "F14": 14,
+  "F15": 16,
+  "F16": 17
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_multi` may omit or reorder nodes, so zipping its values with `error_ids` can misattribute or drop errors."
+  ],
+  "F2": [
+   "KEEP",
+   "A nonempty `field` request can exclude `error_ids`, causing the endpoint to fetch no error details."
+  ],
+  "F3": [
+   "KEEP",
+   "If both `age` and `timestamp` are zero, both truthiness checks pass and the mutually exclusive fields are accepted."
+  ],
+  "F4": [
+   "KEEP",
+   "The endpoint rejects the entire batch on one invalid report, discarding valid reports, and logs the raw invalid report."
+  ],
+  "F5": [
+   "DROP",
+   "This identifies missing test coverage, not a behavior defect in the changed code."
+  ],
+  "F6": [
+   "KEEP",
+   "Hidden attributes remain visible when the search query is empty."
+  ],
+  "F7": [
+   "KEEP",
+   "When the feature is enabled, table widgets render empty columns and data instead of the query results."
+  ],
+  "F8": [
+   "KEEP",
+   "The query key omits the organization even though the request URL depends on it, allowing cross-organization cache collisions."
+  ],
+  "F9": [
+   "KEEP",
+   "The new query uses default retries and reports background fetching as loading, changing the prior retry and loading behavior."
+  ],
+  "F10": [
+   "KEEP",
+   "The error renders whenever the project is absent, including while the projects store is still loading."
+  ],
+  "F11": [
+   "DROP",
+   "Duplicated owner-mapping logic is a structural concern, not a behavior defect."
+  ],
+  "F12": [
+   "KEEP",
+   "The broad exception handler suppresses failures and returns without environment information, hiding real errors from callers."
+  ],
+  "F13": [
+   "KEEP",
+   "Unescaped issue titles are inserted into Markdown link text, allowing crafted titles to alter the rendered link."
+  ],
+  "F14": [
+   "DROP",
+   "Dead code is a cleanup concern, not a behavior defect."
+  ],
+  "F15": [
+   "DROP",
+   "The single-element wrappers are redundant, but the finding identifies no behavior defect."
+  ],
+  "F16": [
+   "DROP",
+   "The default does change for projects without a stored value, but the finding does not establish that this behavior is wrong."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  4,
+  6,
+  7,
+  8,
+  9,
+  10,
+  12,
+  13
+ ],
+ "cost_usd": 0.0111018
+}

@@ -1,0 +1,132 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Write lock taken without re-checking the cache, and held across manifest I/O",
+      "description": "The read path at lines 41\u201347 takes the read lock, sees a nil cache (or dev mode), then takes the write lock at line 48 and unconditionally reloads (lines 51\u201370). There is no re-check after `Lock()`, so when N requests miss at cold start, each one in turn re-reads and re-parses `assets-manifest.json`. The same happens on persistent failure: if the manifest is missing, `result` is nil, the cache stays nil (line 69), and every request takes the exclusive lock and hits disk. Index and frontend-settings requests that previously ran concurrently now run one at a time. In dev mode every call falls through to the write lock, so all dev requests are serialized too.\n\nSuggested fix: after `Lock()`, re-check `if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`.\n\nHolding the lock across I/O is acceptable today only because the CDN branch is dead (`cdn := \"\"`, line 54) and the file read is local. If the CDN path is enabled, the request at line 56 uses `http.DefaultClient`, which has no timeout. Every request's `RLock` at line 41 would wait on the write lock for as long as that fetch runs.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test covers the cache, the dev-mode bypass, or the new locking",
+      "description": "`webassets_test.go` only tests `readWebAssetsFromFile` (`TestReadWebassets`) and a skipped CDN test (`TestReadWebassetsFromCDN`, line 90 `t.Skip()`). Nothing exercises `GetWebAssets`, so the cache-hit path, the dev-mode reload, and the `RWMutex` are untested. A regression would not be caught, and the race detector has nothing to run against.\n\nSuggested test: set `cfg.StaticRootPath` to a temp dir containing `build/assets-manifest.json` (copied from `testdata/sample-assets-manifest.json`), use `licensingtest.FakeLicensing`, and call `GetWebAssets` from several goroutines under `go test -race`. Add a case with `Env: setting.Dev` to confirm reloads happen. The cache is a package global with no reset hook, so the test must clear `entryPointAssetsCache` under the lock between cases.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The lock fixes an existing unsynchronized access to the global cache",
+      "description": "Before this diff, concurrent HTTP handlers read and wrote `entryPointAssetsCache` with no synchronization, which is a data race. The new code reads under `RLock` and stores under `Lock`, so the race is gone. I checked the callers (`pkg/api/index.go:82`, `pkg/api/frontendsettings.go:62`, `pkg/middleware/recovery.go:141`). They only read the returned DTO. The DTO is fully built, including `SetContentDeliveryURL` at line 64, before it is published under the lock, so nothing mutates it once it is shared.\n\nThe deferred `Unlock` covers panics, which matters because `recovery.go:141` calls `GetWebAssets` from the panic path. None of the calls made under the write lock re-enter `GetWebAssets`: only `pkg/api` and `pkg/middleware` import `pkg/api/webassets`, and `pkg/setting` and `pkg/services/licensing` do not, so there is no re-entrant deadlock.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:41"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Write lock taken without re-checking the cache, and held across manifest I/O",
+      "location": "pkg/api/webassets/webassets.go:48",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test covers the cache, the dev-mode bypass, or the new locking",
+      "location": "pkg/api/webassets/webassets.go:40",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The lock fixes an existing unsynchronized access to the global cache",
+      "location": "pkg/api/webassets/webassets.go:41",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "diff": "bdd7e6ed4882870360dbca20ece7a8d430ecc35d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:53:37.110840",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "injected": [],
+  "files_read": [
+    "pkg/api/webassets/webassets.go",
+    "pkg/api/index.go",
+    "pkg/api/frontendsettings.go",
+    "pkg/api/webassets/webassets_test.go",
+    "pkg/api/dtos/index.go",
+    "pkg/middleware/recovery.go"
+  ],
+  "searches": [
+    "grep entryPointAssetsCache|GetWebAssets in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "list_files pkg/api/webassets/**/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "grep EntryPointAssets|SetContentDeliveryURL in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939/pkg",
+    "grep pkg/api/webassets\"|func \\(cfg \\*Cfg\\) GetContentDeliveryURL|func .*ContentDeliveryPrefix\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939/pkg"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 1187,
+  "diff_chars_injected": 1187,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 95697,
+  "cached_tokens": 72418,
+  "cache_write_tokens": 23269,
+  "completion_tokens": 15657,
+  "reasoning_tokens": null,
+  "duration_seconds": 72.16631370782852,
+  "cost_usd": 0.013445080000000002,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The change added `return model == null ? null : model.getSubGroupsCount();` at GroupAdapter.java:275, but `GroupModel.getSubGroupsCount()` says \"Never returns null\", and `GroupUtils.populateSubGroupCount` passes the null straight into the representation."
+  ],
+  "F2": [
+   "DROP",
+   "The three `getSubGroupsStream(...)` overloads at lines 256/262/268 and the `IllegalStateException` paths were not changed by this diff, so the NPE risk there is in untouched code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.15205399999999997
+}

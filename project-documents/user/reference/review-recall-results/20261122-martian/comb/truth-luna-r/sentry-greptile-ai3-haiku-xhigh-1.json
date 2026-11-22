@@ -1,0 +1,64 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The substring check matches negated `event.type:error` queries and enables upsampling for them."
+  ],
+  "F2": [
+   "KEEP",
+   "Alias remapping emits `upsampled_count() as count`, but the serializer looks up `count()`, so it defaults the series to zero."
+  ],
+  "F3": [
+   "KEEP",
+   "Eligibility is decided using the outer dataset and original query, which can differ from the dataset and query actually executed."
+  ],
+  "F4": [
+   "KEEP",
+   "Only an exact `count()` column is transformed, leaving count expressions and aliased forms unweighted."
+  ],
+  "F5": [
+   "KEEP",
+   "The cache key relies on `hash()` of project IDs, so a collision can reuse another project set\u2019s eligibility result."
+  ],
+  "F6": [
+   "KEEP",
+   "upsampled_count` is not private, allowing callers to use it without the allowlist eligibility check."
+  ],
+  "F7": [
+   "DROP",
+   "The repeated calls and variable aliases are structural concerns, not behavior defects."
+  ],
+  "F8": [
+   "DROP",
+   "Missing test cases and not running tests do not establish a behavior defect."
+  ],
+  "F9": [
+   "DROP",
+   "The exception handlers silently skip sample-rate assignment for malformed or invalid test data, but no behavior defect is shown."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.011760610000000001
+}

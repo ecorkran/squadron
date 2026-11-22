@@ -1,0 +1,31 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The top-events builder merges the raw `count()` from `selected_columns` with the timeseries `upsampled_count() as count`, so two different expressions share the alias `count`; the find-topn query also still ranks by the raw `count()`."
+  ],
+  "F2": [
+   "KEEP",
+   "With `transformAliasToInputFormat=1`, `process_results` renames the `count` key to the `FunctionDetails.field` string `upsampled_count() as count`, but `resolve_axis_column` returns `count()`, so the serializer's `r.get(\"count()\", 0)` returns zero."
+  ],
+  "F3": [
+   "KEEP",
+   "The plain substring check also matches `!event.type:error` and OR'd mixed-type queries, so discover queries that include non-error events get `sum(sample_weight)` instead of `count()`, giving wrong counts."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.35441629999999996
+}

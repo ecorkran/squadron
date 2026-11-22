@@ -1,0 +1,218 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "No tests for the new contextual logger middleware or the changed log path",
+      "description": "The commit adds a new exported middleware, a new `Logger.FromContext` interface method with a real implementation (`pkg/plugins/log/logger.go:48-56`), and rewrites `LoggerMiddleware.logRequest` to get its fields from the context. None of this has a test:\n- There is no `contextual_logger_middleware_test.go` and no `logger_middleware_test.go` in the package.\n- The only test touched is the renamed `metrics_middleware_test.go`, which asserts Prometheus metrics only.\n- Nothing asserts that `endpoint`, `pluginId`, `dsName`, `dsUID` and `uname` reach the context or the \"Plugin Request Completed\" line.\n- Nothing covers the `CreateMiddlewares` ordering that the log line now relies on.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`TestLogger.FromContext` returns a throwaway logger, so logs written through it cannot be asserted",
+      "description": "`FromContext` returns `NewTestLogger()`, a fresh instance unrelated to the receiver. `LoggerMiddleware` now logs only via `m.logger.FromContext(ctx).Info(...)` (`logger_middleware.go:58`). A test that injects a `TestLogger` will therefore always see `InfoLogs.Calls == 0`. This mirrors the existing `TestLogger.New` at `fake.go:18-20`, but here it makes the one production caller of `FromContext` untestable with the project's own fake. Returning `f` would keep calls observable.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/plugins/log/fake.go:46-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`LoggerMiddleware` silently depends on middleware ordering and a global tracing provider",
+      "description": "`logRequest` used to add `pluginId`, `endpoint`, `uname`, `dsName`, `dsUID` and `traceID` itself. It now emits only `status`, `duration`, `eventName`, `time_before_plugin_request` and `error`. Everything else must arrive through the context:\n- **Plugin fields:** these appear only if `ContextualLoggerMiddleware` sits ahead of it in the chain. That holds today at `pluginsintegration.go:160-161`.\n- **`traceID`:** this appears only because `tracing.ProvideService` registers a global provider (`pkg/infra/tracing/tracing.go:91-97`). Wiring that skips `ProvideService` loses it.\n\nIf either condition breaks, the `grafana-data-egress` line loses its identifying fields with no error and no failing test. The old doc comment stating where the middleware must sit in the stack was deleted; neither `NewContextualLoggerMiddleware` nor `NewLoggerMiddleware` documents the requirement.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:49-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ContextualLoggerMiddleware` dereferences `req` without the nil guard its neighbour has",
+      "description": "`QueryData`, `CallResource`, `CheckHealth` and `CollectMetrics` read `req.PluginContext` unconditionally (lines 40, 45, 50, 55). `LoggerMiddleware`, directly behind it, guards every one of those with `if req == nil` (`logger_middleware.go:63, 77, 90, 104`). Placing the new middleware in front makes those guards unreachable, and a nil request panics here.\n\nThe impact is limited in the production chain: `TracingMiddleware` (`tracing_middleware.go:85`) and `MetricsMiddleware` (`metrics_middleware.go:146`) already dereference `req` earlier, as before this change. The real exposure is when this exported middleware is composed on its own or in tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:39-57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fallback branch in `grafanaInfraLogWrapper.FromContext` is unreachable and would drop context if hit",
+      "description": "`ConcreteLogger.FromContext` returns either `cl.New(args...)` or `cl` (`pkg/infra/log/log.go:203-217`), both `*log.ConcreteLogger`. The `!ok` branch therefore cannot execute today. If it ever did, `d.New()` would return a logger without the contextual attributes and with no signal; falling back to `d` or logging the mismatch would be safer.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/plugins/log/logger.go:49-52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Naming and comment drift left over from the rename",
+      "description": "- The test function is still `TestInstrumentationMiddleware` in `metrics_middleware_test.go`.\n- The constructor variable is still `imw` (`metrics_middleware.go:77`).\n- The helper in the contextual logger file is still called `instrumentContext` (`contextual_logger_middleware.go:27`).\n- The `FromContext` doc comment in `pkg/plugins/log/ifaces.go` is copied from `New`; it does not say that attributes come from a `context.Context` via the registered contextual log providers.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:21"
+    },
+    {
+      "severity": "PASS",
+      "title": "Rename and interface change are complete",
+      "description": "- No references to `NewInstrumentationMiddleware` or `InstrumentationMiddleware` remain, apart from the test name noted above.\n- The only two implementers of the plugins `Logger` interface under `pkg/` (`grafanaInfraLogWrapper` and `TestLogger`) both gained `FromContext`.\n- The `interface{}` \u2192 `any` change is purely cosmetic.\n- Contextual attributes are still attached regardless of `PluginLogBackendRequests`, as before.\n- The logger name `plugin.instrumentation` is unchanged, so existing log filters keep working.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/services/pluginsintegration/pluginsintegration.go:157-161"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests for the new contextual logger middleware or the changed log path",
+      "location": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`TestLogger.FromContext` returns a throwaway logger, so logs written through it cannot be asserted",
+      "location": "pkg/plugins/log/fake.go:46-48",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`LoggerMiddleware` silently depends on middleware ordering and a global tracing provider",
+      "location": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go:49-58",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`ContextualLoggerMiddleware` dereferences `req` without the nil guard its neighbour has",
+      "location": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:39-57",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Fallback branch in `grafanaInfraLogWrapper.FromContext` is unreachable and would drop context if hit",
+      "location": "pkg/plugins/log/logger.go:49-52",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Naming and comment drift left over from the rename",
+      "location": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go:21",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Rename and interface change are complete",
+      "location": "pkg/services/pluginsintegration/pluginsintegration.go:157-161",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186",
+    "diff": "b29f69288de1f9c8d7ecadb882b85ba44f379789...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:42:33.934790",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "injected": [],
+  "files_read": [
+    "pkg/plugins/log/logger.go",
+    "pkg/plugins/log/fake.go",
+    "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+    "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+    "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+    "pkg/infra/log/log.go",
+    "pkg/infra/tracing/tracing.go",
+    "pkg/services/pluginsintegration/pluginsintegration.go",
+    "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+    "pkg/infra/log/logtest/fake.go",
+    "pkg/services/pluginsintegration/clientmiddleware/tracing_middleware.go"
+  ],
+  "searches": [
+    "grep func (\\(cl \\*ConcreteLogger\\) )?(FromContext|WithContextualAttributes|RegisterContextualLogProvider|New|TimeSinceStart)\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg/infra/log",
+    "grep InstrumentationMiddleware|instrumentContext|NewContextualLoggerMiddleware|ContextualLoggerMiddleware|plog\\.Logger|RegisterContextualLogProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg",
+    "list_files pkg/services/pluginsintegration/clientmiddleware/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186",
+    "grep func TraceIDFromContext in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg/infra/tracing",
+    "grep \\) (Debug|Warn)\\(msg string, (ctx|args|_) \\.\\.\\.(any|interface\\{\\})\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg",
+    "grep NewTestLogger\\(\\)|log\\.TestLogger|InfoLogs|ErrorLogs|WarnLogs|DebugLogs in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg",
+    "grep instrumentation|Instrumentation in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg/services/pluginsintegration",
+    "grep FromContext\\(|log\\.New\\(|plog\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg/services/pluginsintegration/clientmiddleware",
+    "grep NewLoggerMiddleware|NewMetricsMiddleware|NewInstrumentationMiddleware|PluginLogBackendRequests in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186",
+    "grep \\bLogger\\b.*=.*\\(\\*|log\\.Logger = |plog\\.Logger\\b|pluginslog\\.Logger|pluginsLogger\\.Logger in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg/plugins",
+    "grep \\) New\\((_|ctx|args) \\.\\.\\.(any|interface\\{\\})\\) (log\\.|plog\\.|pluginslog\\.)?Logger in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg",
+    "grep statusOK|endpointQueryData in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186/pkg/services/pluginsintegration/clientmiddleware/utils.go",
+    "grep InstrumentationMiddleware|instrumentation_middleware in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr76186"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21622,
+  "diff_chars_injected": 21622,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 25,
+  "prompt_tokens": 212748,
+  "cached_tokens": 163703,
+  "cache_write_tokens": 49035,
+  "completion_tokens": 11588,
+  "reasoning_tokens": null,
+  "duration_seconds": 105.14363712491468,
+  "cost_usd": 1.2821079,
+  "cost_basis": "provider"
+}

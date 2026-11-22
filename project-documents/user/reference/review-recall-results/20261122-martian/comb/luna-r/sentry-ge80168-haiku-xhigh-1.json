@@ -1,0 +1,34 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler inherits unimplemented abstract methods, so accessing it for a metric-alert detector raises `TypeError`."
+  ],
+  "F2": [
+   "DROP",
+   "IssueOccurrence` equality compares IDs, and the helper uses the same ID for both occurrences, so the assertion does not fail."
+  ],
+  "F3": [
+   "DROP",
+   "The helper\u2019s unused value weakens test coverage but does not establish a defect in behavior that needs fixing before merge."
+  ],
+  "F4": [
+   "DROP",
+   "The inaccurate docstring is a low-value documentation issue, not a behavioral defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0015240700000000002
+}

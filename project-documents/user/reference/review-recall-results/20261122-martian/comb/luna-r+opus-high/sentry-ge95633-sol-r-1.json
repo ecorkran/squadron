@@ -1,0 +1,41 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The factory makes one `queue_pool` and hands it to every strategy, but `close()` shuts it down for good. A strategy recreated after a rebalance gets a dead pool, `put` raises `ShutDown`, and the catch-all in `submit()` marks those offsets complete, so messages are skipped without being processed."
+  ],
+  "F2": [
+   "KEEP",
+   "close()` stops the commit thread before draining the workers. `FixedQueuePool.shutdown()` also sets each worker's `shutdown` flag first, so workers exit after their current item and leave the queue unprocessed. On every close or rebalance, queued work is dropped and finished work goes uncommitted, so it is replayed."
+  ],
+  "F3": [
+   "KEEP",
+   "Each queue is an unbounded `queue.Queue()` and `submit` never rejects a message. If processing falls behind, the consumer keeps reading and buffering until it runs out of memory, which contradicts the backpressure guarantee in the strategy's docstring."
+  ],
+  "F4": [
+   "DROP",
+   "The existing `ResultProcessor.__call__` already catches processing exceptions and only logs them (result_consumer.py:53), and the serial path commits anyway. Log-and-skip is the established policy, not a new defect."
+  ],
+  "F5": [
+   "DROP",
+   "This is a test-quality concern only. With the processor mocked, the test runs well under the 1s commit interval, so it does not fail in practice and production code is unaffected."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.22157110000000002
+}

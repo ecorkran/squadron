@@ -1,0 +1,17 @@
+{
+ "case": "grafana-gr90939",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The code returns correct results in every case. The missing re-check after `Lock()` only causes a few redundant local manifest reads at cold start. The serialization it describes only happens in dev mode or when the manifest is missing, and a missing manifest breaks Grafana anyway. The `http.DefaultClient` timeout concern is in the CDN branch, which never runs because `cdn := \"\"`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0418814
+}

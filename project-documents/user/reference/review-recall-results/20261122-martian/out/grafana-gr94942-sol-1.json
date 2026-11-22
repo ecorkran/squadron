@@ -1,0 +1,95 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "SQL feature gate rejects enabled configurations",
+      "description": "`enableSqlExpressions` returns `false` on both branches. Consequently, `ReadQuery` rejects every SQL expression even when `FlagSqlExpressions` is enabled. Honor the flag and add tests for both states.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/reader.go:194-199"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Replacement database cannot parse or execute SQL",
+      "description": "Both database operations unconditionally return \u201cnot implemented.\u201d Thus `sql.TablesList` always fails, causing `NewSQLCommand` to reject every nonempty query\u2014including through the legacy parser in `pkg/expr/nodes.go`, which bypasses the new reader gate. Execution also cannot succeed. Provide a working replacement before removing DuckDB.\n\nTests could not run: the read-only sandbox prevented Go from creating its build directory.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql/db.go:16-21"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "SQL feature gate rejects enabled configurations",
+      "location": "pkg/expr/reader.go:194-199",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Replacement database cannot parse or execute SQL",
+      "location": "pkg/expr/sql/db.go:16-21",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "diff": "00101eef1aa1d1acd93e97289a309b348a657d7d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:47:04.611118",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19087,
+  "diff_chars_injected": 19087,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 56753,
+  "cached_tokens": 55808,
+  "cache_write_tokens": null,
+  "completion_tokens": 196,
+  "reasoning_tokens": 0,
+  "duration_seconds": 48.333309083245695,
+  "cost_usd": 0.0094308,
+  "cost_basis": "alias_pricing"
+}

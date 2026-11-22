@@ -1,0 +1,24 @@
+{
+ "case": "grafana-gr90939",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Concurrent cold-cache calls serialize under the write lock and redundantly reread and parse the manifest because the cache is not rechecked."
+  ],
+  "F2": [
+   "DROP",
+   "Missing test coverage alone is not a defect when the cited paths work."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0014702600000000001
+}

@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The routes are plain GETs to `unsubscribe`, which calls `tu.save!` on the logged-in user's session with no token or POST, so any cross-site link or image can change a user's notification level."
+  ],
+  "F2": [
+   "KEEP",
+   "TopicUser.find_by` at topics_controller.rb:105 can return nil, and line 107 calls `tu.notification_level` without a check, so a user with no topic_user record hits a NoMethodError and gets a 500."
+  ],
+  "F3": [
+   "KEEP",
+   "update_last_read` promotes to tracking whenever `notifications_reason_id` is null, and the unsubscribe action never sets it, so once the read-time threshold is passed, further reading silently undoes the unsubscribe."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.09370289999999999
+}

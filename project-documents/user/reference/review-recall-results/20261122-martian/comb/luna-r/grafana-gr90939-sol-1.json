@@ -1,0 +1,19 @@
+{
+ "case": "grafana-gr90939",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Concurrent cold-cache production requests serialize redundant manifest reads and parsing, increasing request latency until the cache is populated."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00108182
+}

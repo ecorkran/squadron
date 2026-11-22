@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The cited input\u2019s common prefix and suffix fit within the sanitized string, so it does not trigger the claimed exception."
+  ],
+  "F2": [
+   "KEEP",
+   "Replacing the whole choice expression before sanitization allows prohibited HTML in its alternatives to evade verification."
+  ],
+  "F3": [
+   "KEEP",
+   "Both changed Lithuanian OTP instructions are Italian, so Lithuanian users see the wrong language."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2
+ ],
+ "cost_usd": 0.00226263
+}

@@ -1,0 +1,229 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Fallback locales are only loaded on the web-request path",
+      "description": "`set_locale` is the only caller of `I18n.fallbacks.ensure_loaded!`. A search for `ensure_loaded` finds no other callers. Other paths that set a non-default locale never load the fallback locale: `app/services/post_alerter.rb:138` (`I18n.with_locale(user.effective_locale)`), `lib/post_destroyer.rb:102`, and `app/jobs/base.rb:151`. The freedom patch's `translate` loads only `config.locale` (`lib/freedom_patches/translate_accelerator.rb:68`). So in a Sidekiq process that has not served a request, `:en` is never loaded and the fallback silently finds nothing.\n\nIt is worse than a missing fallback. `translate` caches results under a key built from the current locale only (`translate_accelerator.rb:71-76`). If a non-English key misses before `:en` is loaded, the \"translation missing\" string is cached. It survives the later `ensure_loaded!` call until `I18n.reload!`. The eager load should happen where the cache key is computed, or inside `translate`, rather than depending on each entry point to remember the call.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/application_controller.rb:159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No spec covers the fallback chain or `ensure_loaded!`",
+      "description": "A search of `spec/` for `fallback`, `ensure_loaded`, and `FallbackLocaleList` returns nothing relevant. The only `set_locale` specs (`spec/controllers/application_controller_spec.rb:88-108`) assert `I18n.locale` and never check that a missing key resolves to the English string or that `:en` is loaded. Add a spec for a non-English locale with a key missing in that locale, and one for the site-default fallback step.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An unguarded SiteSetting read now sits inside every fallback-enabled lookup",
+      "description": "`FallbackLocaleList#[]` calls `SiteSetting.default_locale.to_sym` with no guard. That is a DB-backed read. The Fallbacks backend consults `I18n.fallbacks[locale]` on each lookup, so every `I18n.t` now performs that read and allocates an array. The codebase already treats this read as fallible: `lib/tasks/db.rake:3` and `:28` wrap the same call in `rescue :en`. The new code has no equivalent guard, so an early-boot or pre-migration translation can raise from inside I18n. Wrap the read in the same rescue, or cache the default and refresh it from the site-setting change hook.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`set_locale` depends on a duck-typed method that the stock fallbacks object lacks",
+      "description": "`set_locale` calls `ensure_loaded!` on whatever `I18n.fallbacks` currently is. Only `FallbackLocaleList` defines it; the stock `I18n::Locale::Fallbacks` does not. Removing `config.i18n.fallbacks = true` from `production.rb`, `profile.rb`, and the cloud66 file is what makes this safe today. If someone re-adds that line, Rails' i18n railtie should replace the list with the stock object (I believe this from Rails 4.x behavior; I did not verify it here). Every request would then raise `NoMethodError` in `set_locale`, and nothing guards or tests for that. Make the contract explicit, or add a comment or spec that forbids re-adding the config line.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "app/controllers/application_controller.rb:159"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`FallbackLocaleList` has design issues",
+      "description": "The class subclasses `Hash` but never uses Hash storage; it only overrides `[]`. A plain class would state the intent. Two smaller issues: `.compact` on line 17 can never remove anything, because `.to_sym` on nil would already have raised. And `.uniq` does not dedupe mixed types. The call at `app/mailers/user_notifications.rb:48` passes `locale: 'en'` as a String, so the list becomes `['en', :en]` and English is tried twice. The top-level constant could also live under a namespace.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fallbacks now apply in dev and test, not only in production",
+      "description": "The fallback config was previously set only in `production.rb` and `profile.rb`. The initializer runs in every environment, so development and test now quietly show English and the site default when a non-English key is missing. The integrity checks in `spec/integrity/i18n_spec.rb` run in `:en`, so they are unaffected. If the dev/test change is intended, say so in a comment or the commit message. If not, gate the initializer to production.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:24"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New `ensure_loaded!` is undocumented and inconsistent with `translate`",
+      "description": "`ensure_loaded!` is a new public method on `I18n` with no comment. The file header (lines 1-9) still describes only on-demand loading, so it does not say that fallback locales now need an explicit call. The method uses `@loaded_locales ||= []`, while `translate` at line 68 uses a bare `include?`, so the two handle nil state differently. Add a doc comment on when to call it and why, and make the nil handling consistent.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "lib/freedom_patches/translate_accelerator.rb:62"
+    },
+    {
+      "severity": "PASS",
+      "title": "Config removal is complete and the pluralization move preserves behavior",
+      "description": "A repo-wide search finds no remaining `config.i18n.fallbacks` setting in any environment or cloud file, so the removal is complete with no double configuration. The `Pluralization` include on `I18n::Backend::Simple` still runs after `02-freedom_patches.rb`, so moving it from `pluralization.rb` into `i18n.rb` does not change behavior.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:3"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fallback locales are only loaded on the web-request path",
+      "location": "app/controllers/application_controller.rb:159",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No spec covers the fallback chain or `ensure_loaded!`",
+      "location": "config/initializers/i18n.rb:12",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "An unguarded SiteSetting read now sits inside every fallback-enabled lookup",
+      "location": "config/initializers/i18n.rb:17",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`set_locale` depends on a duck-typed method that the stock fallbacks object lacks",
+      "location": "app/controllers/application_controller.rb:159",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`FallbackLocaleList` has design issues",
+      "location": "config/initializers/i18n.rb:12",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Fallbacks now apply in dev and test, not only in production",
+      "location": "config/initializers/i18n.rb:24",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "New `ensure_loaded!` is undocumented and inconsistent with `translate`",
+      "location": "lib/freedom_patches/translate_accelerator.rb:62",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Config removal is complete and the pluralization move preserves behavior",
+      "location": "config/initializers/i18n.rb:3",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "diff": "3bf663a6c4c82bf9a92dadde7cf9de567813f102...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:57:27.252990",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "injected": [],
+  "files_read": [
+    "config/initializers/i18n.rb",
+    "lib/freedom_patches/translate_accelerator.rb",
+    "app/controllers/application_controller.rb",
+    "spec/controllers/application_controller_spec.rb",
+    "lib/tasks/db.rake",
+    "config/initializers/02-freedom_patches.rb",
+    "spec/integrity/i18n_spec.rb",
+    "app/mailers/user_notifications.rb"
+  ],
+  "searches": [
+    "grep i18n\\.fallbacks|I18n\\.fallbacks|ensure_loaded in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "grep pluralization in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "list_files config/initializers/*.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "grep set_locale|with_locale|I18n\\.locale\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "grep i18n|I18n in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9/Gemfile.lock",
+    "grep fallback|ensure_loaded|FallbackLocaleList in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9/spec",
+    "grep default_locale in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9/config/site_settings.yml",
+    "grep translation missing|MissingTranslation|exception_handler in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "grep config\\.i18n|I18n\\.default_locale in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9/config"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 4351,
+  "diff_chars_injected": 4351,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 181834,
+  "cached_tokens": 141024,
+  "cache_write_tokens": 40798,
+  "completion_tokens": 43020,
+  "reasoning_tokens": null,
+  "duration_seconds": 184.11328483419493,
+  "cost_usd": 0.03144444,
+  "cost_basis": "provider"
+}

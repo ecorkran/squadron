@@ -1,0 +1,95 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Pass the required argument to the passkeys helper",
+      "description": "`isConditionalPasskeysEnabled()` is called without arguments, but the only declaration requires a `UserModel`. This prevents compilation. Pass `context.getUser()` or change the helper signature consistently.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Preserve passkeys login before a user is identified",
+      "description": "The new `user != null` requirement disables passkeys initialization on ordinary login, where `context.getUser()` is null. Consequently, `fillContextForm()` is skipped and `passkeys.ftl` renders neither the conditional UI nor the passkey authentication button. This breaks existing discoverable-key and external-key login scenarios. Enable passkeys for unidentified users as well as re-authenticating users.\n\nBuild and integration tests were not executed; findings were verified against source and surrounding contracts.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-161"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Pass the required argument to the passkeys helper",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve passkeys login before a user is identified",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-161",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "diff": "c851f7883d229dd2a940a77cd49220ecb126ec84...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:38:13.823213",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 35663,
+  "diff_chars_injected": 35663,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 63411,
+  "cached_tokens": 61952,
+  "cache_write_tokens": null,
+  "completion_tokens": 231,
+  "reasoning_tokens": 0,
+  "duration_seconds": 48.74946016725153,
+  "cost_usd": 0.0114232,
+  "cost_basis": "alias_pricing"
+}

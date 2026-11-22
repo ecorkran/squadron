@@ -1,0 +1,85 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 9,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12,
+  "F13": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Google passes the whole `safeParse` result (`{success, data}`) to `credential.key` at line 100, so the next `googleCredentialSchema.parse` fails."
+  ],
+  "F2": [
+   "KEEP",
+   "refreshOAuthTokens` gets `credentialId` (`credential.id`) as the user ID, so sync mode asks for tokens for the wrong user and team credentials also take the sync path."
+  ],
+  "F3": [
+   "KEEP",
+   "The computed keys both become `\"[object Object]\"`, so it doesn't fail every response, but zod still strips `expires_in`/`refresh_token`; Zoom then saves a NaN expiry and Office keeps a stale expiry in sync mode."
+  ],
+  "F4": [
+   "KEEP",
+   "In sync mode the callers get a fetch `Response`, so Google, Zoho Bigin and Zoho CRM read `.data` (undefined) and HubSpot saves NaN/undefined token fields; the error is either swallowed or thrown."
+  ],
+  "F5": [
+   "KEEP",
+   "prisma` is never imported; TypeScript won't complain because a global is declared, but `globalThis.prisma` is only set outside production, so production throws a ReferenceError."
+  ],
+  "F6": [
+   "DROP",
+   "Node fetch over HTTP/1.1 sets `statusText` to \"OK\", and the dead branch causes no wrong behavior."
+  ],
+  "F7": [
+   "DROP",
+   "Refreshing on every construction costs speed and is a design choice, but it isn't a correctness defect."
+  ],
+  "F8": [
+   "KEEP",
+   "The literal `\"refresh_token\"` is written over the stored refresh token (always in sync mode, because the schema strips the field), which corrupts the credential."
+  ],
+  "F9": [
+   "KEEP",
+   "The Zoom app's slug is `zoom`, so sending `\"zoomvideo\"` to the sync endpoint doesn't match the slug the webhook and the app use."
+  ],
+  "F10": [
+   "DROP",
+   "A timing attack on a network string compare is hardening, and an array header just fails the check."
+  ],
+  "F11": [
+   "DROP",
+   "Returning 500 instead of 400 on a malformed webhook body is low value; nothing breaks."
+  ],
+  "F12": [
+   "DROP",
+   "The payload comes from a trusted, secret-authenticated source and is validated when read, so write-time validation is only hardening."
+  ],
+  "F13": [
+   "DROP",
+   "The sync endpoint is left for the operator to define (the code says to customize the payload), so outbound auth is a design suggestion, not a defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  7,
+  9
+ ],
+ "cost_usd": 0.2940522
+}

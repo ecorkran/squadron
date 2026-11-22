@@ -1,0 +1,263 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Light-theme colour changed and dark value inverted for `.topic-meta-data h5 a`",
+      "description": "The original was `scale-color($primary, $lightness: 30%)`. The new value is `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))`. Every other 30% conversion in this diff produces `($primary 30%, $secondary 70%)`, e.g. `common/base/topic-post.scss:15` and `common/base/user.scss:119`.\n\nTwo regressions follow:\n- **Light theme:** the bold poster link in the embedded-reply header goes from 30% to 70% lightness, which makes it much fainter and lowers contrast.\n- **Dark theme:** `$secondary` at 30% is a near-background colour, so the link has low contrast there too.\n\nIt should be `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/desktop/topic-post.scss:291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mobile `.custom-message-length` arguments are swapped relative to desktop",
+      "description": "The original was `scale-color($primary, $lightness: 70%)`. The new value is `dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%))`. The identical selector at `desktop/modal.scss:94` was converted to `($primary 70%, $secondary 30%)`.\n\nOn mobile the flag-modal character-count hint is now noticeably darker on light themes than before, and differs from desktop on both themes. It should match desktop.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/mobile/modal.scss:102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mobile `.topic-map h3` light-theme colour changed from 20% to 50%",
+      "description": "The original was `scale-color($primary, $lightness: 20%)`. The new value is `($primary 50%, $secondary 50%)`. The desktop counterpart at `desktop/topic-post.scss:321` was converted to `($primary 20%, $secondary 80%)`.\n\nThe mobile heading now renders the same colour as the `h4` directly below it (line 190), flattening the h3/h4 hierarchy on both themes. It should be `($primary 20%, $secondary 80%)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`.group-member-info .name` light-theme colour changed from 30% to 50% on desktop and mobile",
+      "description": "The original at both `desktop/user.scss:522` and `mobile/user.scss:497` was `scale-color($primary, $lightness: 30%)`. Both are now `($primary 50%, $secondary 50%)`, identical to the sibling `.title` rule a few lines below (`desktop/user.scss:527`, `mobile/user.scss:503`).\n\nThe name was deliberately darker than the title; that distinction is lost on both themes. The equivalent `.name` rule at `common/base/user.scss:124` was converted to `($primary 30%, $secondary 70%)`. The two-file repeat looks like a copy-paste from the `.title` line.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/desktop/user.scss:522"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Same two-argument expression hand-duplicated at about 150 call sites",
+      "description": "Every changed line spells out `dark-light-choose(scale-color($primary, $lightness: N%), scale-color($secondary, $lightness: (100-N)%))` by hand. The complement is derivable, yet it is typed manually each time. That is the mechanism behind the four inconsistencies above, and review cannot easily tell intentional deviations from typos.\n\nA small helper next to `dark-light-choose` and `dark-light-diff` would remove the duplication, for example:\n\n```scss\n@function primary-scaled($lightness) {\n  @return dark-light-choose(\n    scale-color($primary, $lightness: $lightness),\n    scale-color($secondary, $lightness: 100% - $lightness)\n  );\n}\n```\n\nThe handful of non-mirrored pairs could stay explicit, which would make them visibly deliberate.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/variables.scss:46-52"
+    },
+    {
+      "severity": "NOTE",
+      "title": "One unconverted occurrence left in a touched file",
+      "description": "`.topic-list.categories .category .badge-notification` still uses bare `scale-color($primary, $lightness: 50%)`. Six other 50% rules in the same file were converted. This is the only remaining colour declaration of this form under `app/assets/stylesheets`. Unlike its neighbours it will not adapt on dark themes.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/_topic-list.scss:115"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Comment no longer matches the default it describes",
+      "description": "The comment says \"the default for table cells in topic list is scale-color($primary, $lightness: 50%)\". That default (`_topic-list.scss` `td`) is now a `dark-light-choose(...)` expression, so the comment is only true for light themes.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/discourse.scss:72-74"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hard-coded colours remain beside the newly theme-aware rules",
+      "description": "`a.new-user` in `embed.css.scss` is now theme-aware, but its siblings are still literal hex: `.username a` `#5c5c5c` (line 82), `span.title` `#999` (line 94), `.post-date` `#aaa` (line 43). The same applies to `.invalid .hex input { background-color: white; }` next to the converted `.description` in `admin_base.scss`. This predates the change and does not block it; dark-theme support in these files stays partial.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/embed.css.scss:89"
+    },
+    {
+      "severity": "PASS",
+      "title": "`dark-light-choose` is in scope in every changed file",
+      "description": "The function is defined in `common/foundation/variables.scss`. It is reachable by all three entry paths:\n- `common.scss` imports it, and `desktop.scss` / `mobile.scss` import `common`.\n- `admin_base.scss:2` imports it directly.\n- `embed.css.scss:4` imports it directly.\n\nSo no call falls through as a literal, uncompiled CSS function.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/variables.scss:46-52"
+    },
+    {
+      "severity": "PASS",
+      "title": "Remaining conversions preserve light-theme output",
+      "description": "Apart from the five hunks above, every changed line in the diff keeps the original `scale-color($primary, $lightness: N%)` as the first (light-theme) argument, and `!important` flags are retained in `common/base/discourse.scss:76-82` and `desktop/topic-list.scss`. Light-theme rendering is unchanged for those rules.\n\nMost dark values are the `100-N` mirror. `admin_base.scss:385` and `admin_base.scss:726` use 50/50, which is the mirror for 50%.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Light-theme colour changed and dark value inverted for `.topic-meta-data h5 a`",
+      "location": "app/assets/stylesheets/desktop/topic-post.scss:291",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mobile `.custom-message-length` arguments are swapped relative to desktop",
+      "location": "app/assets/stylesheets/mobile/modal.scss:102",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mobile `.topic-map h3` light-theme colour changed from 20% to 50%",
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:182",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`.group-member-info .name` light-theme colour changed from 30% to 50% on desktop and mobile",
+      "location": "app/assets/stylesheets/desktop/user.scss:522",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Same two-argument expression hand-duplicated at about 150 call sites",
+      "location": "app/assets/stylesheets/common/foundation/variables.scss:46-52",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "One unconverted occurrence left in a touched file",
+      "location": "app/assets/stylesheets/common/base/_topic-list.scss:115",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comment no longer matches the default it describes",
+      "location": "app/assets/stylesheets/common/base/discourse.scss:72-74",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Hard-coded colours remain beside the newly theme-aware rules",
+      "location": "app/assets/stylesheets/embed.css.scss:89",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`dark-light-choose` is in scope in every changed file",
+      "location": "app/assets/stylesheets/common/foundation/variables.scss:46-52",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Remaining conversions preserve light-theme output",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7",
+    "diff": "1e6fee6c7bc61eedeba48dccd25886ba7e31cfe3...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:43:28.930070",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "injected": [],
+  "files_read": [
+    "app/assets/stylesheets/embed.css.scss",
+    "app/assets/stylesheets/desktop/topic-post.scss",
+    "app/assets/stylesheets/mobile/topic-post.scss",
+    "app/assets/stylesheets/mobile/modal.scss",
+    "app/assets/stylesheets/desktop/user.scss",
+    "app/assets/stylesheets/mobile/user.scss",
+    "app/assets/stylesheets/common/base/discourse.scss",
+    "app/assets/stylesheets/desktop/modal.scss",
+    "app/assets/stylesheets/common/base/user.scss",
+    "app/assets/stylesheets/mobile/compose.scss",
+    "app/assets/stylesheets/common/base/_topic-list.scss"
+  ],
+  "searches": [
+    "grep dark-light-choose|dark-light-diff in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7",
+    "grep @function|@import in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7/app/assets/stylesheets",
+    "grep scale-color\\(\\$primary, \\$lightness: \\d+%\\)(?!, scale-color) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7/app/assets/stylesheets",
+    "grep : (\\d+px \\w+ |\\w+ \\d+px )?scale-color\\(\\$primary in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7/app/assets/stylesheets"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 41052,
+  "diff_chars_injected": 41052,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 156231,
+  "cached_tokens": 119480,
+  "cache_write_tokens": 36743,
+  "completion_tokens": 6413,
+  "reasoning_tokens": null,
+  "duration_seconds": 59.27918054070324,
+  "cost_usd": 0.8704252000000001,
+  "cost_basis": "provider"
+}

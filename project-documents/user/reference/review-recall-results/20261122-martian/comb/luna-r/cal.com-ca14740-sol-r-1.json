@@ -1,0 +1,43 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler permits adding guests to cancelled or rejected bookings, then sends invitations marked CONFIRMED."
+  ],
+  "F2": [
+   "KEEP",
+   "The `&&` check excludes team administrators who are not also owners."
+  ],
+  "F3": [
+   "KEEP",
+   "Duplicate submitted addresses pass filtering and can be persisted as duplicate attendees."
+  ],
+  "F4": [
+   "KEEP",
+   "Case-sensitive comparisons let mixed-case addresses bypass the blacklist."
+  ],
+  "F5": [
+   "KEEP",
+   "Guest notification emails ignore event-type host and attendee email suppression settings."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00377647
+}

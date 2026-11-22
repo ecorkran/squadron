@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "should_block?` compares the raw address with a case-sensitive `where(email:)` and nothing normalizes the signup email first, so changing the letter case gets past a blocked entry."
+  ],
+  "F2": [
+   "KEEP",
+   "The validator calls the mutating `should_block?`, and on a new record `valid?` (line 168) and `save` (line 172) both run it because `email_changed?` is still true, so every blocked attempt adds 2 to `match_count`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0718086
+}

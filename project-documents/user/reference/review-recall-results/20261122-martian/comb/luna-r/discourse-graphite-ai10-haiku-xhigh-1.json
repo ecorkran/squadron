@@ -1,0 +1,105 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The migration indexes an empty query result before it can handle a missing setting row."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw SQL bypasses host normalization, so legacy URL-form entries will not match requests by hostname."
+  ],
+  "F3": [
+   "KEEP",
+   "Interpolating setting values into SQL can break the migration when a value contains an apostrophe."
+  ],
+  "F4": [
+   "KEEP",
+   "The migration is irreversible and deletes legacy settings that its rollback cannot restore."
+  ],
+  "F5": [
+   "KEEP",
+   "A nil host raises in the `before_validation` callback before validation can return an error."
+  ],
+  "F6": [
+   "KEEP",
+   "Valid hosts with long TLDs are rejected, while accepted port-bearing hosts cannot match the lookup."
+  ],
+  "F7": [
+   "KEEP",
+   "Duplicate host rows can map one host to different categories, with no deterministic lookup order."
+  ],
+  "F8": [
+   "KEEP",
+   "Imports from hosts without a matching row now omit the category that the old code supplied."
+  ],
+  "F9": [
+   "KEEP",
+   "Unknown IDs and missing nested parameters can raise in the controller instead of returning an error response."
+  ],
+  "F10": [
+   "DROP",
+   "The update action is unused by the UI, and host changes are persisted through separate host endpoints."
+  ],
+  "F11": [
+   "KEEP",
+   "The `_ids` branch can discard IDs and yield undefined associations when side-loaded records are absent."
+  ],
+  "F12": [
+   "KEEP",
+   "The stale buffered host value reappears when editing again after the server normalizes a successful save."
+  ],
+  "F13": [
+   "KEEP",
+   "A failed delete has no rejection handler or user-facing error feedback."
+  ],
+  "F14": [
+   "DROP",
+   "Missing controller coverage is a test gap, not itself a defect in behavior that the code shows is broken."
+  ],
+  "F15": [
+   "DROP",
+   "The mock makes the test less effective, but that is a test-quality issue rather than a runtime defect."
+  ],
+  "F16": [
+   "DROP",
+   "The fabricator file placement is organizational and does not affect loading or behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  10,
+  11,
+  12
+ ],
+ "cost_usd": 0.00505608
+}

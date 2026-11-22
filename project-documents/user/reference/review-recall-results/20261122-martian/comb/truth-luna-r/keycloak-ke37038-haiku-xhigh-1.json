@@ -1,0 +1,41 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "V2 collects random resource UUIDs instead of group IDs, breaking group-scoped user counts and search filtering."
+  ],
+  "F2": [
+   "KEEP",
+   "canManage()` accepts VIEW grants, allowing a VIEW-only caller to pass the top-level group creation check."
+  ],
+  "F3": [
+   "KEEP",
+   "View-only callers can reach `/groups/count`, which returns unfiltered realm-wide counts."
+  ],
+  "F4": [
+   "DROP",
+   "The finding identifies increased per-element evaluation cost, not a behavior defect."
+  ],
+  "F5": [
+   "DROP",
+   "Missing test coverage alone is not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0029109599999999998
+}

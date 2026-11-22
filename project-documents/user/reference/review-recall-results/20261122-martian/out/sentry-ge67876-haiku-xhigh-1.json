@@ -1,0 +1,266 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "OAuth `state` is a public constant, so the installer check can be bypassed",
+      "description": "`OAuthLoginView` sets `state = pipeline.signature` (line 402) and compares the callback's `state` against that same value (line 412). `pipeline.signature` is an md5 of the view class names (`src/sentry/pipeline/base.py:132-133`), so it is identical for every user and session. The test constant `9cae5e88803f35ed7970fc131e6e65d3` (`tests/sentry/integrations/github/test_integration.py:235, 242, 445`) confirms it never varies. The check only rejects strings other than that public value. It does not bind the callback to the browser that started the flow.\n\nAttack sketch: the attacker completes GitHub authorization in their own browser with `state=<constant>` and copies the returned `code`. They then get a victim whose session holds an in-progress pipeline bound to the attacker's `installation_id` to load `/extensions/github/setup/?code=<attacker code>&state=<constant>`. The state check passes. The identity is the attacker's login, which is the sender of the attacker's own installation, so the check at lines 501-505 also passes, and the installation links to the victim's organization.\n\nThe repo already has the correct pattern. `OAuth2LoginView` generates `secrets.token_hex()`, stores it with `pipeline.bind_state(\"state\", ...)`, and compares it with `pipeline.fetch_state(\"state\")` on callback (`src/sentry/identity/oauth2.py:245-252, 318-325`). Use that here and update the tests, which currently pin the constant.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:401-413"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Installer check is skipped when no Integration row exists yet",
+      "description": "When `Integration.objects.get` raises `DoesNotExist`, the code returns `pipeline.next_step()` before reaching the new check at lines 492-505. Nothing in the pipeline binds `sender`. The only producer is the installation webhook (`src/sentry/integrations/github/webhook.py:202-208`). So the create path runs with no installer verification, and the integration it creates has no `sender` metadata. The check only applies if the webhook has already written the row, so a user who returns from GitHub before `installation.created` is processed skips it. Either fail closed when the row is missing, or document the ordering assumption and test it.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:481-482"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`metadata[\"sender\"]` lookup raises KeyError for rows without sender",
+      "description": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` when `sender` is absent. `build_integration` sets it only when present (lines 376-377), and the pipeline-created rows described above never have it. The existing guard at `src/sentry/integrations/github/installation.py:44` suggests such rows exist in practice. The result is a 500 for an active, unlinked integration where the flow previously succeeded. Use `.get()` and render the error page, or switch to the ID comparison below.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:501-505"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Installer is compared by a reusable login, not an immutable ID",
+      "description": "The check compares the OAuth login against `sender.login`. GitHub logins can be renamed, and the old name can then be registered by another account. If the original installer renames and someone else claims the name, the stale `sender.login` matches the new account. The webhook stores `sender.id` (`webhook.py:204-206`), and `/user` returns `id`, so compare IDs. The comparison is also case-sensitive, while GitHub logins are not. The test stub at `test_integration.py:123` returns only `login`, so it needs an `id` as well.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:438, 501-505"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Token exchange and user lookup failures either crash or are silently swallowed",
+      "description": "`safe_urlopen` at line 423 is outside any `try`, so a connection error produces a 500. `get_user_info` (`src/sentry/identity/github/provider.py:16`) calls `raise_for_status()`, so a GitHub 401 or 5xx at line 434 is also unhandled. `OAuth2CallbackView.exchange_token` catches `ConnectionError` and logs it (`src/sentry/identity/oauth2.py:302-308`). Conversely, the `except Exception` at lines 428-429 swallows decode and parse failures with no log, so operators cannot see why installs fail. Catch the request exceptions, log them, and return `error(...)`. Log the swallowed exception as well.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:423-436"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test edits drop coverage for \"installation not found\" and for the allow path",
+      "description": "`test_installation_not_found` still mocks a 404 (lines 381-383), but its request now carries a bad state, so the 404 path never runs. Its assertion changed from \"The GitHub installation could not be found.\" to \"Invalid installation request.\" No test under `tests/sentry/integrations/github/` asserts the former message now, and the test name no longer matches what it checks.\n\nThe allow branch of the new check (existing Integration, matching sender, flow proceeds) has no test. The success tests (`test_basic_flow`, the second half of `test_github_installed_on_another_org`, and the second half of `test_github_prevent_install_until_pending_deletion_is_complete`) either never create the row or delete it first, so they all take the `DoesNotExist` branch. Missing as well: token-exchange failure and missing-`login` cases.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/integrations/github/test_integration.py:379-396"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test assertion depends on HTTP call ordering",
+      "description": "`responses.calls[2]` replaces `calls[0]`, so the assertion now depends on the OAuth and `/user` calls running first. Match on URL or method instead. `test_github_user_mismatch` (lines 448-454) also doesn't assert that no `OrganizationIntegration` was created for `org_2`, which is the property the test exists to protect.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/integrations/github/test_integration.py:257"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Authorize URL is string-built without encoding",
+      "description": "`redirect_uri` is interpolated raw, while `OAuth2LoginView` builds the same kind of URL with `urlencode(params)` (`src/sentry/identity/oauth2.py:230-250`). There are two ways of doing the same thing. The current value is probably safe, but `urlencode` removes the question.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:407-409"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated refactor bundled into the security change",
+      "description": "`FORWARD_INSTALL_FOR = [\"github\"]` was replaced with an inline `provider_id == \"github\"`. Behavior is unchanged, and I found no other references to the constant, but this is outside the installer-verification change. Split it out or call it out in the PR description.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/web/frontend/pipeline_advancer.py:37-41"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`error()` helper: generic name and untyped parameters",
+      "description": "Consolidating the two duplicated render blocks from `GitHubInstallation` is a good change. But `error` is a generic module-level name that reads like `Pipeline.error` (`src/sentry/pipeline/base.py:198`), and both `error` and `get_document_origin` take untyped parameters. `OAuthLoginView.dispatch` leaves `pipeline` untyped, while `GitHubInstallation.dispatch` annotates it as `Pipeline` (line 447).",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:129-152"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "OAuth `state` is a public constant, so the installer check can be bypassed",
+      "location": "src/sentry/integrations/github/integration.py:401-413",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Installer check is skipped when no Integration row exists yet",
+      "location": "src/sentry/integrations/github/integration.py:481-482",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`metadata[\"sender\"]` lookup raises KeyError for rows without sender",
+      "location": "src/sentry/integrations/github/integration.py:501-505",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Installer is compared by a reusable login, not an immutable ID",
+      "location": "src/sentry/integrations/github/integration.py:438, 501-505",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Token exchange and user lookup failures either crash or are silently swallowed",
+      "location": "src/sentry/integrations/github/integration.py:423-436",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test edits drop coverage for \"installation not found\" and for the allow path",
+      "location": "tests/sentry/integrations/github/test_integration.py:379-396",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test assertion depends on HTTP call ordering",
+      "location": "tests/sentry/integrations/github/test_integration.py:257",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Authorize URL is string-built without encoding",
+      "location": "src/sentry/integrations/github/integration.py:407-409",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unrelated refactor bundled into the security change",
+      "location": "src/sentry/web/frontend/pipeline_advancer.py:37-41",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`error()` helper: generic name and untyped parameters",
+      "location": "src/sentry/integrations/github/integration.py:129-152",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "diff": "11980b40faffa3631be5733d29650675f30d54b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:52:36.191162",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "injected": [],
+  "files_read": [
+    "src/sentry/integrations/github/integration.py",
+    "src/sentry/web/frontend/pipeline_advancer.py",
+    "src/sentry/identity/github/provider.py",
+    "src/sentry/pipeline/base.py",
+    "src/sentry/pipeline/views/base.py",
+    "src/sentry/identity/github/__init__.py",
+    "src/sentry/integrations/github/installation.py",
+    "src/sentry/integrations/github/webhook.py",
+    "src/sentry/http.py",
+    "src/sentry/identity/oauth2.py",
+    "tests/sentry/integrations/github/test_integration.py"
+  ],
+  "searches": [
+    "grep def get_user_info|def get_oauth_|class GitHubIdentityProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/identity",
+    "grep \"sender\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry",
+    "grep FORWARD_INSTALL_FOR|get_user_info|safe_urlopen|safe_urlread in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry",
+    "grep state|uuid|secrets|nonce in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/identity/oauth2.py",
+    "grep def test_|def _stub_github|self.base_url =|setup_path =|init_path = in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/tests/sentry/integrations/github/test_integration.py",
+    "grep could not be found|INSTALLATION_EVENT_EXAMPLE|base_url = |\"login\": \"octocat\"|\"sender\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "grep \"sentry-extension-setup\"|sentry-organization-integrations-setup|integration-installation in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/web/urls.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 19901,
+  "diff_chars_injected": 19901,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 520748,
+  "cached_tokens": 452849,
+  "cache_write_tokens": 67877,
+  "completion_tokens": 48285,
+  "reasoning_tokens": null,
+  "duration_seconds": 218.92133366689086,
+  "cost_usd": 0.04316749,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,132 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Successful cleanup batches are logged as errors",
+      "description": "Normal cleanup emits error-level messages before and after every batch, including when no rows are found and no error occurred. The count-based and orphan-tag paths do the same. This creates false failure signals and logs potentially large ID lists during routine maintenance. Use debug-level batch summaries without complete ID lists, and reserve error logging for actual failures.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:534-537"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SQLite ID-list construction has quadratic allocation cost",
+      "description": "Each `fmt.Sprintf(\"%s, %d\", values, v)` copies the entire accumulated string. Building a deletion statement therefore requires quadratic copying and allocation as the batch grows\u2014the newly added 32,767 batch-size case exercises this path. This can create substantial CPU and garbage-collection overhead during large cleanups. Build the list with a `strings.Builder` or append integers into a byte buffer, as the existing dashboard-ID filter in this file does.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:609-612"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Increasing the global cleanup frequency affects unrelated maintenance jobs",
+      "description": "Changing the ticker from ten minutes to one minute schedules every cleanup task ten times as often, not just annotation cleanup. This includes temporary-directory scans, dashboard-version deletion, and query-history limit enforcement. The cleanup timeout also remains nine minutes, so a run lasting over a minute can leave a pending tick and trigger another run immediately afterward. Preserve the existing interval unless this broader workload change is intentional and validated; if annotations need a different cadence, schedule them separately.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/cleanup/cleanup.go:77"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Successful cleanup batches are logged as errors",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:534-537",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "SQLite ID-list construction has quadratic allocation cost",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:609-612",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Increasing the global cleanup frequency affects unrelated maintenance jobs",
+      "location": "pkg/services/cleanup/cleanup.go:77",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329",
+    "diff": "2eb6310b796e3ca92bf2ad7de13cdecacb7c3469...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:44:15.439466",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "injected": [],
+  "files_read": [
+    "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+    "pkg/services/cleanup/cleanup.go",
+    "pkg/services/annotations/annotationsimpl/cleanup.go"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep r.log.Error|values = fmt.Sprintf|values :=|time.NewTicker in pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "grep time.NewTicker|const timeout in pkg/services/cleanup/cleanup.go",
+    "grep AnnotationCleanupJobBatchSize|cleanupjob_batchsize in pkg/setting",
+    "list_files *AGENTS* in .",
+    "list_files *RULE* in ."
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 15675,
+  "diff_chars_injected": 15675,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 4,
+  "prompt_tokens": 49565,
+  "cached_tokens": 32697,
+  "cache_write_tokens": null,
+  "completion_tokens": 895,
+  "reasoning_tokens": 234,
+  "duration_seconds": 20.27525020809844,
+  "cost_usd": 0.0459557,
+  "cost_basis": "alias_pricing"
+}

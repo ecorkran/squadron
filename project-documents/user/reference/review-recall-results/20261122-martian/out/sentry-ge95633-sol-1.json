@@ -1,0 +1,131 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Recreated strategies reuse a permanently stopped queue pool",
+      "description": "The factory creates its pool once, then passes that same pool to every strategy. However, strategy `close()` and `terminate()` shut it down. A subsequent strategy created after a rebalance therefore receives stopped workers and shut-down queues. Submissions fail, and the broad exception handler in `submit()` marks those unprocessed messages complete, making them eligible for commit. Create a fresh pool and offset tracker per strategy lifecycle, and test strategy recreation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/result_consumer.py:244-258"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Graceful shutdown abandons accepted work and stops commits prematurely",
+      "description": "`close()` stops the commit thread before processing finishes, then calls pool shutdown. Pool shutdown sets each worker\u2019s shutdown flag before draining its queue, so workers exit after their current item despite `queue.shutdown(immediate=False)`. `join()` simply repeats `close()` without draining work or committing final completions. Drain accepted work before stopping workers, perform the final commit, and honor the join timeout.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unbounded queues provide no backpressure",
+      "description": "Every queue is created without a size limit. `submit()` always enqueues, while `poll()` only reports metrics. When processing falls behind ingestion, queued decoded results, original messages, and offset sets grow without bound, potentially exhausting consumer memory. Bound outstanding work and signal backpressure through the processing-strategy contract.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:184-185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Error-handling test passes before the erroneous commit occurs",
+      "description": "The test usually checks for no commits roughly 0.2 seconds after processing, but the commit loop runs every second. Workers mark failed processing complete unconditionally, so both offsets become committable on that later tick. Synchronize with a commit cycle and assert the intended failure policy rather than relying on a short sleep.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py:1913-1922"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Recreated strategies reuse a permanently stopped queue pool",
+      "location": "src/sentry/remote_subscriptions/consumers/result_consumer.py:244-258",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Graceful shutdown abandons accepted work and stops commits prematurely",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-345",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Unbounded queues provide no backpressure",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:184-185",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Error-handling test passes before the erroneous commit occurs",
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py:1913-1922",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "diff": "f438c4be9d36953d2bc72e0cce4c7eeb5e0b4016...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:44:12.574154",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 55882,
+  "diff_chars_injected": 55882,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 66119,
+  "cached_tokens": 62464,
+  "cache_write_tokens": null,
+  "completion_tokens": 667,
+  "reasoning_tokens": 152,
+  "duration_seconds": 70.51761912507936,
+  "cost_usd": 0.0202264,
+  "cost_basis": "alias_pricing"
+}

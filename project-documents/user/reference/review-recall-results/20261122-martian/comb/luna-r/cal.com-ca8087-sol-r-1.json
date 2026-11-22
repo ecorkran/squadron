@@ -1,0 +1,25 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The registry starts every dynamic import at module evaluation, so unused integrations load and can reject unobserved."
+  ],
+  "F2": [
+   "KEEP",
+   "forEach` discards each async callback\u2019s promise, so cleanup is not awaited and its failures bypass the surrounding `try/catch`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00122769
+}

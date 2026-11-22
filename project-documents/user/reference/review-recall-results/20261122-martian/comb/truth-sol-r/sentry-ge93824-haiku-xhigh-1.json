@@ -1,0 +1,31 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 5,
+  "F3": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "SpawnProcess fails the Process type check, leaving hung workers alive alongside replacements on the same shards."
+  ],
+  "F2": [
+   "KEEP",
+   "Zero silently disables the limit, while negative values cause a KeyError when assigning nonempty shards."
+  ],
+  "F3": [
+   "KEEP",
+   "Grouped shard values replace individual shard tags, so per-shard filters miss produce and segment-size metrics."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  5,
+  6
+ ],
+ "cost_usd": 0.0417133
+}

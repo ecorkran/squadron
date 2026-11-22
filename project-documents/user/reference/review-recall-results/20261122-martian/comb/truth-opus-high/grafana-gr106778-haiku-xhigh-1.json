@@ -1,0 +1,54 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The list item now passes only `promRule`, so `rulerRule` is always undefined; that hides Pause (`rulerRuleType.grafana.rule(rulerRule)`) and Delete (`canDelete && rulerRule`) even though `canDelete` can be true from the prom abilities, and the test asserts exactly 4 items."
+  ],
+  "F2": [
+   "KEEP",
+   "Silence renders from the prom abilities, but `SilenceGrafanaRuleDrawer` only mounts when `rulerRuleType.grafana.alertingRule(rule)`, and `rule` is undefined in the list, so clicking it does nothing."
+  ],
+  "F3": [
+   "KEEP",
+   "useAllAlertRuleAbilities` now delegates to `useAllRulerRuleAbilities`, which hardcodes `isFederated = false`, and `isFederatedRuleGroup` is no longer used in `useAbilities.ts`, so federated groups lose their immutability guard."
+  ],
+  "F4": [
+   "KEEP",
+   "The Grafana branch in `FilterView` renders `GrafanaRuleListItem` without `key={key}` inside `rules.map`, while the other branches pass it."
+  ],
+  "F5": [
+   "KEEP",
+   "The new Grafana list `href` is `createRelativeUrl('/alerting/grafana/${uid}/view')` with no `returnTo`, unlike `DataSourceRuleListItem`, so the back link from `RuleViewer` falls back to `/alerting/list` and drops the filters."
+  ],
+  "F6": [
+   "KEEP",
+   "useAllGrafanaPromRuleAbilities` gates export, pause, restore and permanent delete on `prometheusRuleType.grafana.alertingRule`, which leaves out recording rules; the ruler path used `rulerRuleType.grafana.rule`, which includes them."
+  ],
+  "F7": [
+   "DROP",
+   "Every current caller passes either a ruler rule (guarded by `if (rulerRule)` / `rule.rulerRule ?`) or a Grafana `promRule`, so the null path is unreachable, and the log wording is not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.43935430000000003
+}

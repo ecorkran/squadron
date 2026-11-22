@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The change added `r.log.Error` calls at lines 534/537, 554/557 and 576/579. They run on every batch, even the final empty one, and log the full ID list while `err` is always nil. The new one-minute ticker in `cleanup.go:77` makes these runs more frequent, so the ERROR logs will flood."
+  ],
+  "F2": [
+   "KEEP",
+   "The non-SQLite branch of the new `deleteByIDs` uses one placeholder per ID, and nothing caps the batch size. A large `cleanupjob_batchsize` will go over the MySQL, Postgres or MSSQL parameter limits and make every batch fail. The old single DELETE statement did not have this limit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.078151
+}

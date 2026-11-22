@@ -1,0 +1,22 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The helper does always return false, but that matches the stub in `pkg/expr/sql/db.go`, so it reads as a deliberate shutdown of the feature rather than an inverted check; its clumsy shape and the error type are style concerns."
+  ],
+  "F2": [
+   "DROP",
+   "Every SQL path does now fail, but the diff deliberately replaces the DuckDB-backed DB with \"not implemented\" stubs, and the feature is an experimental flag (`sqlExpressions`); the finding asks whether that was intended rather than pointing to a defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.12298329999999999
+}

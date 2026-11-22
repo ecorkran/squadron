@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "getGroupIdsWithViewPermission` passes and collects `groupResource.getId()` (a resource UUID, not a group ID), so the per-group `findByName` lookup misses and the returned set never holds real group IDs; user counts and group-filtered search come out wrong."
+  ],
+  "F2": [
+   "KEEP",
+   "canManage()` checks `hasPermission(null, VIEW, MANAGE)`, so an all-groups VIEW grant passes `requireManage()` in `addTopLevelGroup` and a view-only admin can create top-level groups."
+  ],
+  "F3": [
+   "DROP",
+   "canView()` only looks at the all-groups resource, so VIEW on a single group does not pass `requireList()`; callers who do pass can already view every group, so realm-wide counts reveal nothing new."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2604763
+}

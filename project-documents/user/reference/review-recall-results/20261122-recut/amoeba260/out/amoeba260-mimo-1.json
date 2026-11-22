@@ -1,0 +1,239 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Migration 011 breaks table-set and table-count pins no task is allowed to update",
+      "description": "Task 2.1 permits only \"changing only the version number\" for the existing tests its migration breaks, and the Context Summary (task file line 55) repeats that no other existing assertion changes. But `tests/store/test_schema.py:25-40` (`test_a_new_store_has_all_thirteen_tables`) asserts `names == TABLES`, a hard-coded set of 14 tables; migration 011 adds `owners`, `machines`, `call_results` and `closed_mark`, so a fresh store has 18. `tests/test_contract_docs.py:96-104` asserts `len(schema) == 14` on a fresh store's table list \u2014 same failure \u2014 and that file is outside `tests/store`, so 2.1's named command (`uv run pytest tests/store -q`) would not even surface it. Task 2.1 covers the contract-doc *entries* but never the count pin. As written, a junior agent hits red tests it has been told not to touch.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "tests/store/test_schema.py:25"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Migration 011's triggers break raw-insert tests in tests/store/test_migrations.py with no sanctioned fix",
+      "description": "Task 2.1 adds a `BEFORE INSERT` trigger on each of the twelve tables aborting a null `owner_id`. `tests/store/test_migrations.py::test_a_closed_question_needs_a_known_reason` runs a full `migrate(connection)` first and then raw-inserts into `programs`, `members` and `questions` with no `owner_id`; the \"good\" insert now raises where the test expects success. `test_a_migration_leaving_a_dangling_foreign_key_rolls_back` expects `StoreCorruptError` matching \"dangling foreign key\" from an extra migration whose statement inserts into `questions` without an owner \u2014 the trigger aborts the insert first, so the expected error never arises. `test_the_rebuilt_questions_table_keeps_the_key_answers_reference` keeps passing, but for the trigger's abort rather than the foreign key it means to prove \u2014 a masked assertion. None of these are version pins; 3.2 fixes only `src/` statements and 3.4 only `Store.open` call sites, so no task repairs them.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "tests/store/test_migrations.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`open_local_store(path)` cannot absorb the mechanical `Store.open(` replacement",
+      "description": "Task 3.4 defines `open_local_store(path)` and instructs a verbatim replacement of `Store.open(` in every test module (no assertion changes). `Store.open` takes `busy_timeout_seconds` (src/amoeba/store/store.py:75-76), and four call sites pass it: `tests/store/test_store.py:91` and `:97`, `tests/operations/test_question_sweep.py:266`, `tests/operations/test_status_sweep.py:48`. The mechanical replacement raises `TypeError` at those sites unless the helper forwards the keyword, which the task text does not say.",
+      "file_ref": null,
+      "category": "api-design",
+      "raw_category": null,
+      "location": "tests/store/test_store.py:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`act_as_local` \"in one write\" contradicts D12 and breaks the no-lock open assertion",
+      "description": "Task 3.1 has `act_as_local` \"in one write, find the machine named `local` or create it\", i.e. a write transaction on every open. Design D12 says the local opener \"costs one read per open, and one write the first time\". With 3.4's mechanical replacement, `tests/store/test_store.py::test_a_second_writer_past_the_timeout_gets_store_busy` opens a third store inside a held write lock with the explicit assertion \"A third process opening a current store needs no lock, so it opens\" \u2014 a write at open time fails this with `StoreBusyError`, and 3.4 forbids assertion changes. Following the design's read-first wording avoids this; the task text points the wrong way.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "tests/store/test_store.py:83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.2 changes INSERT constants that `tests/store/seed.py` executes directly",
+      "description": "Task 3.2 binds `owner_id` into the sixteen insert statements, including `sql.INSERT_PROGRAM/MEMBER/PAIR/QUESTION/ANSWER` in `store/sql.py`. `tests/store/seed.py:34-140` executes exactly those five constants with positional parameter tuples; a new `?` breaks every seeded test with \"Incorrect number of bindings\". No task names updating the seed helpers (3.4 is only the `Store.open` replacement), 3.2's success criterion is \"pyright clean\" alone \u2014 which cannot catch a runtime binding-count mismatch \u2014 and line 55's allow-list omits this change. The mechanical edit is small but must be named the way 3.4 names its own.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "tests/store/seed.py:34"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage is complete",
+      "description": "All 23 functional requirements map to tests: FR1-4 to 15.2 (+7.6 for the `cf`-free readers), FR5 to 12.2/13.5, FR6 to 13.5, FR7 to 15.3, FR8 to 12.4/15.5/10.2, FR9 to 10.2, FR10 to 12.4, FR11 to 3.4/7.4, FR12 to 14.3/14.4, FR13 to 12.4/15.3/10.2, FR14-15 to 15.4/15.3, FR16-17 to 11.4, FR18 to 15.5, FR19 to 11.4/9.2, FR20 to 15.4/9.2/8.4, FR21 to 13.5, FR22 to 10.2/15.4, FR23 to 17.2. Technical and integration requirements map to 0.2/17.4, the import-rule steps in 1.4/6.2/8.4, 15.6 (load bounds, figures to 17.3), 17.4 (`wc -l`) and 17.1 (`test_contract_docs`). The load test is in `tests/load/` (15.6) and its CI gate already exists \u2014 `.github/workflows/ci.yml:39-40` (`check` job, `Tests` step, bare `uv run pytest`) with `pyproject.toml` ignoring only `tests/live` \u2014 so no separate CI-wiring task is required, and 15.6 explicitly confirms collection.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Migration 011 breaks table-set and table-count pins no task is allowed to update",
+      "location": "tests/store/test_schema.py:25",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Migration 011's triggers break raw-insert tests in tests/store/test_migrations.py with no sanctioned fix",
+      "location": "tests/store/test_migrations.py",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "api-design",
+      "raw_category": null,
+      "summary": "`open_local_store(path)` cannot absorb the mechanical `Store.open(` replacement",
+      "location": "tests/store/test_store.py:91",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`act_as_local` \"in one write\" contradicts D12 and breaks the no-lock open assertion",
+      "location": "tests/store/test_store.py:83",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 3.2 changes INSERT constants that `tests/store/seed.py` executes directly",
+      "location": "tests/store/seed.py:34",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criteria coverage is complete",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+    "against": "project-documents/user/slices/260-slice.hub-and-door.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/amoeba260"
+  },
+  "timestamp": "2026-11-22T16:04:29.837765",
+  "model": "xiaomi/mimo-v2.6-pro",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+      "chars": 58847,
+      "sha256": "b2f9f04a5699af0eb09aa40690f69fea14a01dacefec10acc4a801697f5d6c40",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/260-slice.hub-and-door.md",
+      "chars": 69666,
+      "sha256": "657c4287c65958ea4c55ada10e708445269122c2732629c435416fe472ffdcd2",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "pyproject.toml",
+    "src/amoeba/wiring.py",
+    "src/amoeba/wiring.py",
+    "src/amoeba/operations/decisions.py",
+    "src/amoeba/operations/deps.py",
+    "src/amoeba/operations/state_move.py",
+    "src/amoeba/operations/standing.py",
+    "src/amoeba/wiring_standing.py",
+    "tests/store/test_schema.py",
+    "tests/store/test_migrations.py",
+    "tests/store/test_store.py",
+    "tests/test_store_opened_only_by_state_move.py",
+    "tests/test_contract_docs.py",
+    "tests/test_import_boundaries.py",
+    "tests/test_wheel_contents.py",
+    "scripts/update_live.py",
+    "tests/scripts/test_update_live.py"
+  ],
+  "searches": [
+    "list_files * in .",
+    "list_files * in src/amoeba",
+    "list_files * in tests",
+    "grep INSERT INTO (programs|members|dependency_pairs|releases|questions|answers|standing_answers|messages|deliveries|message_rejections|sessions|wakes)\\b in src/amoeba",
+    "grep EXPECTED_SCHEMA_VERSION in src/amoeba",
+    "grep def (open_state_store|prepare_state_home|open_store|read_schema_version) in src/amoeba",
+    "grep Store\\.open in src/amoeba",
+    "grep Store\\.open in tests",
+    "grep name = \"(cryptography|starlette|uvicorn)\" in uv.lock",
+    "list_files * in tests/store",
+    "list_files * in tests/load",
+    "list_files * in docs",
+    "grep pytest|check|Tests in .github/workflows",
+    "grep artifacts|tests/live|tests/live|addopts|testpaths|ignore in pyproject.toml",
+    "grep OPERATIONAL_ERRORS|class \\w+Error|def (open_store|invoke|_dispatch)|import in src/amoeba/wiring.py",
+    "grep ^def |^class |cf_run|resolver|def standing|Deps in src/amoeba/operations/standing.py",
+    "grep def (open|write|read|close)|class (Store|Transaction)|BUSY_TIMEOUT in src/amoeba/store/store.py",
+    "grep ^def |^class |^__all__ in src/amoeba/store/relocate.py",
+    "grep Store\\.open\\([^)]*busy_timeout in tests",
+    "grep ^def |^class |FakeSteps|PRODUCTION|_migrate|_migrate|\"\"\"|owners|machines|docstring in scripts/update_live.py",
+    "grep ^def |^class |FakeSteps|Store\\.open|open_state_store|state_layout|PRODUCTION|main\\( in tests/scripts/test_update_live.py",
+    "grep execute|sql\\.|INSERT|def  in tests/store/seed.py",
+    "grep INSERT_|SELECT_SCHEMA_VERSION|_COLUMNS|VALUES in src/amoeba/store/sql.py",
+    "grep sql\\.INSERT_|sql_held\\.|sql_messages\\.|sql_sessions\\.|sql_standing\\.|sql_wakes\\. in tests",
+    "grep sql\\.INSERT_|INSERT_PROGRAM|INSERT_MEMBER|INSERT_PAIR|INSERT_QUESTION|INSERT_ANSWER|INSERT_NEW_QUESTION|INSERT_RECORDED_ANSWER in src/amoeba",
+    "grep def |migration_files|schema|version in tests/store/test_migration_010.py",
+    "grep class StateLayout|_FILE|_DIRNAME|def |Final in src/amoeba/config/home.py",
+    "grep class OperationName|= |WAKE|HANDLE in src/amoeba/operations/names.py"
+  ],
+  "sections_in_document": 19,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 100346,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 131072,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "xiaomi/mimo-v2.6-pro",
+  "answering_models": [
+    "xiaomi/mimo-v2.6-pro"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1360892,
+  "cached_tokens": 1161088,
+  "cache_write_tokens": null,
+  "completion_tokens": 30628,
+  "reasoning_tokens": 26105,
+  "duration_seconds": 532.9515682919882,
+  "cost_usd": 0.118205452,
+  "cost_basis": "alias_pricing"
+}

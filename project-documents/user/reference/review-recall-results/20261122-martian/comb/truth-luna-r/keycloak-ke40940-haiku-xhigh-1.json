@@ -1,0 +1,36 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The changed method can return null despite the GroupModel contract and GroupUtils passes that value through."
+  ],
+  "F2": [
+   "DROP",
+   "The subgroup stream overloads are unchanged, so their existing null-dereference behavior is outside this change."
+  ],
+  "F3": [
+   "KEEP",
+   "If deletion throws, the flag is never set and the non-daemon reader can loop indefinitely, preventing JVM exit."
+  ],
+  "F4": [
+   "KEEP",
+   "The test does not join the reader, so an in-flight read can report an exception after the assertion passes."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  3
+ ],
+ "cost_usd": 0.0021667100000000005
+}

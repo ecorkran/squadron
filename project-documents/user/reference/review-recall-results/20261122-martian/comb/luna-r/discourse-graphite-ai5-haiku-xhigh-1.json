@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The flex item\u2019s automatic min-content width can prevent the nested title from shrinking, so long titles can push the panel out of view."
+  ],
+  "F2": [
+   "KEEP",
+   "The unchanged negative margin now pulls custom-message content into the avatar column after the description\u2019s left padding was removed."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0033222800000000004
+}

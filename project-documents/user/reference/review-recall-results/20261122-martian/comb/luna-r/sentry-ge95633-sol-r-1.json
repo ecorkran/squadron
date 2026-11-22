@@ -1,0 +1,43 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The factory reuses the pool that strategy shutdown permanently closes, so recreated strategies cannot process submitted messages."
+  ],
+  "F2": [
+   "KEEP",
+   "Workers stop after their current item and the commit thread exits before later completions can be committed, abandoning accepted work during shutdown."
+  ],
+  "F3": [
+   "KEEP",
+   "Unbounded queues can accumulate work without limit, allowing ingestion to exhaust memory when processing falls behind."
+  ],
+  "F4": [
+   "KEEP",
+   "Worker and submission exceptions still mark offsets complete, allowing failed or unprocessed messages to be committed."
+  ],
+  "F5": [
+   "KEEP",
+   "The test may assert before the one-second commit cycle runs, and factory shutdown does not stop the strategy\u2019s commit thread."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00369988
+}

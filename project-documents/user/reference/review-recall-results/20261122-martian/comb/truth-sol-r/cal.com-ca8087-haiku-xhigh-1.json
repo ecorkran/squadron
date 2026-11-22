@@ -1,0 +1,25 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The async callbacks return ignored promises, so calendar initialization failures bypass the surrounding catch or mutation error handling."
+  ],
+  "F2": [
+   "KEEP",
+   "The changed callback awaits calendar initialization and deletion before pushing results, so Promise.all does not await recurring deletes or handle their failures."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0334638
+}

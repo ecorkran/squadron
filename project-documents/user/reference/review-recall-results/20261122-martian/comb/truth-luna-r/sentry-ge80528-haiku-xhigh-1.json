@@ -1,0 +1,17 @@
+{
+ "case": "sentry-ge80528",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The cited issue is inaccurate documentation, not a behavior defect, and the docstring was moved unchanged from existing code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0007902300000000001
+}

@@ -1,0 +1,76 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 11,
+  "F11": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Post#cook` returns raw feed HTML unchanged, and nothing sanitizes it before it is rendered unescaped in the topic view and on the embed page (stored XSS)."
+  ],
+  "F2": [
+   "KEEP",
+   "the URL is put inside `href='...'` without escaping, and `URI()` accepts a single quote, so a crafted feed link or embed URL can close the attribute and add new ones."
+  ],
+  "F3": [
+   "DROP",
+   "Erubis emits a statement alone on its line with its trailing newline and no `;`, so `end if` takes the next statement as its condition and still parses; it does not raise a SyntaxError."
+  ],
+  "F4": [
+   "KEEP",
+   "the item loop has no per-item rescue and the job uses `retry: false`, so one bad item aborts every later item on each run, and the check-then-create in `import` can hit the unique `embed_url` index."
+  ],
+  "F5": [
+   "KEEP",
+   "inside the outer `Topic.transaction`, the `Rollback` from `save_post` is swallowed and `create` returns an unsaved post, so `present?` is true and `TopicEmbed.create!` fails on the NOT NULL `post_id`."
+  ],
+  "F6": [
+   "DROP",
+   "embeddable_host` defaults to `''` and the controller rejects a blank host, so the nil == nil case can't be reached; the timeout and size-cap points name no concrete failure."
+  ],
+  "F7": [
+   "KEEP",
+   "cdn.example.com/x.png` passes `start_with?('/')`, its slashes get stripped, and it becomes a path on the source host."
+  ],
+  "F8": [
+   "KEEP",
+   "the `indexOf` test accepts any origin that is a prefix of `discourseUrl` (e.g. `https://forum.example.co`), so the origin check is wrong."
+  ],
+  "F9": [
+   "KEEP",
+   "the mapping still points at a trashed or destroyed topic, so for non-staff `find_topic` returns nil, `TopicView` raises NotFound, and the embed 404s for good."
+  ],
+  "F10": [
+   "KEEP",
+   "the topic now comes from `import_remote` with no `created_at` and no rescue around `open(url)`, so topics are dated at import time and one failed fetch aborts the whole run."
+  ],
+  "F11": [
+   "DROP",
+   "force: true` only matters if the migration runs while the table already exists, which normal migrate and redo never do, so it causes no behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  4,
+  5,
+  8,
+  9,
+  10,
+  11
+ ],
+ "cost_usd": 0.3512626
+}

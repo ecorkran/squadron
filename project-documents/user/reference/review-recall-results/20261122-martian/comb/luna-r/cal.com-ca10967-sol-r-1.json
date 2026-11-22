@@ -1,0 +1,49 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A missing or empty destination leaves `mainHostDestinationCalendar` undefined, so selecting Google Meet throws instead of falling back."
+  ],
+  "F2": [
+   "KEEP",
+   "Video references discard the credential ID, preventing cancellation from finding the credential needed to delete the meeting."
+  ],
+  "F3": [
+   "KEEP",
+   "The adapters that select the first destination can use another host\u2019s calendar ID or create no event while reporting success."
+  ],
+  "F4": [
+   "KEEP",
+   "When `externalCalendarId` is absent, the fallback lookup cannot match a destination, leaving updates without a calendar ID and deletions targeting primary."
+  ],
+  "F5": [
+   "KEEP",
+   "Recurring cancellation deletes only the first calendar reference using the booking owner\u2019s credentials, leaving co-host events active."
+  ],
+  "F6": [
+   "KEEP",
+   "With billing disabled, creation stores neither slug field, breaking the onboarding paths that require one."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.0062048400000000005
+}

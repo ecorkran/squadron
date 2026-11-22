@@ -1,0 +1,60 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The five-argument emoji call raises `ArgumentError` because only the four-or-fewer-argument definition remains."
+  ],
+  "F2": [
+   "DROP",
+   "The test asserts the removed client-side setting behavior; its failure is a stale-test issue, not a production defect."
+  ],
+  "F3": [
+   "DROP",
+   "The overwritten definition is dead code, but removing it is cleanup rather than a functional fix."
+  ],
+  "F4": [
+   "DROP",
+   "The server still enforces configured limits and reports rejection, so the mismatch is recoverable client-side validation."
+  ],
+  "F5": [
+   "DROP",
+   "Failed downsizing leaves oversized files subject to server validation; the repeated attempts and generic error do not establish a merge-blocking failure."
+  ],
+  "F6": [
+   "DROP",
+   "The download can be truncated, but the claimed acceptance depends on unverified image-conversion behavior."
+  ],
+  "F7": [
+   "KEEP",
+   "Disabling animated thumbnails now causes oversized uploaded GIF originals to be reduced to a single frame."
+  ],
+  "F8": [
+   "DROP",
+   "The setting descriptions are stale documentation, not a defect in runtime behavior."
+  ],
+  "F9": [
+   "DROP",
+   "Missing coverage alone is not a defect when no broken behavior is established."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  6
+ ],
+ "cost_usd": 0.006245450000000001
+}

@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The dimensions-based definition replaces the five-argument method, so emoji resizing raises `ArgumentError`."
+  ],
+  "F2": [
+   "KEEP",
+   "The fixed 10 MB check ignores configured attachment limits and can block valid attachments or pass oversized ones."
+  ],
+  "F3": [
+   "KEEP",
+   "The existing test expects a 10 KB image to fail under a 5 KB limit, but the changed 10 MB check makes that test fail."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00122959
+}

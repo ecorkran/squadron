@@ -1,0 +1,77 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Recheck the cache after acquiring the write lock",
+      "description": "Concurrent production requests can all observe an empty cache before acquiring the write lock. Each then reloads and parses the manifest sequentially, even after another request populated the cache. Recheck the cache under the write lock before loading; retain unconditional reloads in development. Add concurrent cold-cache regression coverage.\n\nTests could not run: the read-only sandbox prevented Go from creating its build directory.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:48-49"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Recheck the cache after acquiring the write lock",
+      "location": "pkg/api/webassets/webassets.go:48-49",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "diff": "bdd7e6ed4882870360dbca20ece7a8d430ecc35d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:47:35.954869",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 1187,
+  "diff_chars_injected": 1187,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 39997,
+  "cached_tokens": 39680,
+  "cache_write_tokens": null,
+  "completion_tokens": 200,
+  "reasoning_tokens": 0,
+  "duration_seconds": 46.87122766720131,
+  "cost_usd": 0.006602,
+  "cost_basis": "alias_pricing"
+}

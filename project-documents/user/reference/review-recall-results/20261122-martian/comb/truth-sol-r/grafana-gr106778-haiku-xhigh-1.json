@@ -1,0 +1,53 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Grafana list items supply no ruler rule, so the menu suppresses both Delete and Pause despite granted abilities."
+  ],
+  "F2": [
+   "KEEP",
+   "Clicking Silence only updates state because the drawer requires the ruler rule that Grafana list items no longer supply."
+  ],
+  "F3": [
+   "KEEP",
+   "The delegated abilities hook hardcodes federation to false, allowing updates and deletion of otherwise immutable federated rules."
+  ],
+  "F4": [
+   "DROP",
+   "The missing key causes a React warning, but the finding establishes no behavioral failure in this append-only list."
+  ],
+  "F5": [
+   "KEEP",
+   "Grafana view links omit returnTo, so the viewer\u2019s back button loses the list\u2019s search and filters."
+  ],
+  "F6": [
+   "KEEP",
+   "The new alerting-only checks incorrectly exclude Grafana recording rules from export and other previously supported abilities."
+  ],
+  "F7": [
+   "DROP",
+   "All current callers supply either a ruler rule or a Grafana Prometheus rule, so the claimed silent failure path is not reached."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.0802866
+}

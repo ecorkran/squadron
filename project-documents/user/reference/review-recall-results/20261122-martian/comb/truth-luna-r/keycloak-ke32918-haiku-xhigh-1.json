@@ -1,0 +1,36 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Realm-level IDPs remain predicate-eligible when BROKER_PUBLIC changes, so the affected login-list caches are not invalidated."
+  ],
+  "F2": [
+   "KEEP",
+   "The wrapped original model can appear ineligible solely because its organization is disabled, skipping invalidation and leaving stale login-list membership."
+  ],
+  "F3": [
+   "DROP",
+   "Missing test coverage is not a behavior defect under the review criteria."
+  ],
+  "F4": [
+   "KEEP",
+   "The added cleanup callbacks target the literal alias \"alias\", so they do not remove the IDPs created by the test."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3
+ ],
+ "cost_usd": 0.00212722
+}

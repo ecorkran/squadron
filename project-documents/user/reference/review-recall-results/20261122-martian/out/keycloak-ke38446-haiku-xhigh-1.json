@@ -1,0 +1,330 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Recovery codes are stored in plaintext in user storage",
+      "description": "`createRecoveryCodesCredential` serializes `generatedCodes`, the raw codes shown to the user, into the `UserCredentialModel` at lines 119\u2013123 and passes it to `updateCredential` at line 125. The local branch of the same method stores only hashes: `RecoveryAuthnCodesCredentialModel.createFromValues` runs each code through `hashRawCode` (`server-spi/src/main/java/org/keycloak/models/credential/RecoveryAuthnCodesCredentialModel.java:65-68`). The helper already receives that hashed model as `credentialModel`, but ignores its secret data on the user-storage branch. The same credential is therefore hashed in the local DB and plaintext in external user storage such as LDAP or a custom store. Recovery codes act as a second factor, so that is a real exposure. The fixture's validator also depends on the raw format (`BackwardsCompatibilityUserStorage.java:197` and `:340`). The fix is to persist the hashed secret data and have user-storage validators hash the input before comparing, then update the fixture to match. If raw storage is required, document that decision explicitly.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Federated recovery codes are never consumed",
+      "description": "The local provider consumes one code per successful check, and only the next code in order is accepted (`RecoveryAuthnCodesCredentialProvider.java:105-111`). The federated branch accepts any code in the list and removes nothing. Once the user-storage validator accepts an input, `UserCredentialManager.isValid` (`model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java:66-79`) has nothing left to pass to the local validators. A code can therefore be replayed indefinitely. The new test logs in only once and does not catch this. Because the helper now routes codes into user storage, this fixture effectively defines the contract for other providers, so one-time use should be enforced or documented.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:326-344"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Old local codes stay valid after regeneration into user storage",
+      "description": "When `updateCredential` returns true, `createRecoveryCodesCredential` leaves the local store alone. The only code that deletes prior local recovery codes is `RecoveryAuthnCodesCredentialProvider.createCredential` (lines 39\u201340), and it is skipped on this branch. `UserCredentialManager.isValid` still runs the local validator for any input the user storage rejects (`UserCredentialManager.java:76-77`), and the local provider is registered as a `CredentialProviderFactory` (`services/src/main/java/org/keycloak/credential/RecoveryAuthnCodesCredentialProviderFactory.java:8-9`). A user who had local codes before becoming federated, and who then regenerates, keeps accepting the old local codes. Delete any stored local recovery credential on the user-storage path, mirroring `createCredential`, and add a test for it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exhausted-code removal acts on the wrong store",
+      "description": "Line 80 now uses `getCredential`, which prefers the federated credential. If that credential has no codes left, lines 85\u201388 call `removeStoredCredentialById(getId())`. That method only touches the local store (`UserCredentialManager.java:114-117`), and a federated model has a null id, because `createFromValues` does not set one and the fixture's `getCredentials` builds the model that way (`BackwardsCompatibilityUserStorage.java:237-241`). The branch is unreachable with the current fixture, since codes are never consumed (see the consumption finding above). Once a user-storage provider does consume codes, the exhausted credential would persist. `RecoveryAuthnCodeInputLoginBean.java:19-21` would then call `.get()` on an empty `Optional`. Route the removal through the store the credential came from, or keep it off the federated path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java:80-89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New dependency cycle between model packages",
+      "description": "`RecoveryAuthnCodesUtils` now imports `RecoveryAuthnCodesCredentialModel` (line 12), while that model already imports `RecoveryAuthnCodesUtils` (`RecoveryAuthnCodesCredentialModel.java:13`). The two packages now depend on each other. The hashing and code-generation utility also gained a credential-store lookup. Move `getCredential` into `CredentialHelper` in server-spi-private. Services already imports it (`RecoveryAuthnCodesAction` does), and it avoids the cycle.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java:56-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`getCredentials` can NPE and swallows its error",
+      "description": "Line 232 dereferences `getMyUser(user)` with no null check. `isConfiguredFor` (lines 270\u2013271) and `getDisableableCredentialTypesStream` (line 259) both guard against that. `getCredentials` is reached through `getFederatedCredentialsStream`, which `getCredential` calls for every federated user lookup. A federated user missing from the map therefore throws an NPE. The `IOException` at lines 243\u2013245 is logged without a username and then dropped, so the caller sees \"no codes\" and fails later in `RecoveryAuthnCodeInputLoginBean`. Add the null check and include the username in the log. The log message also has a double space.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:230-252"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New test covers only the happy path",
+      "description": "`testRecoveryKeysSetupAndLogin` covers one setup and one successful login. It does not cover a wrong code on the federated path, reuse of a code that was already accepted, the federated-over-local precedence in `getCredential`, or regeneration while a local credential exists. `RecoveryAuthnCodesUtils.getCredential` has two branches and no direct unit test. Add tests for the rejection and reuse cases, and for the stale-local case once it is fixed.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test flow helper duplicated, with a typo copied along",
+      "description": "`configureBrowserFlowWithRecoveryAuthnCodes` is a near-copy of the one in `RecoveryAuthnCodesAuthenticatorTest.java:123-148`, with a different authenticator list. Both contain the alias `\"delayed-suthenticator-config\"`, which is misspelled (line 135 here). Extract a shared helper parameterized by the first-factor authenticator and the delay, and fix the alias.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:123"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Raw `List` used for deserialized codes",
+      "description": "`List generatedKeys` (line 332) and the `List.class` deserializations at lines 237\u2013238 and 334 use raw types. Elements are unchecked `Object`s, so `key.equals(...)` on a null element would throw. Use `JsonSerialization.readValue(String, TypeReference<List<String>>)`, which exists at `core/src/main/java/org/keycloak/util/JsonSerialization.java:89`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:332"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated formatting and an unexplained OTP change mixed into the diff",
+      "description": "The diff re-indents `getConfigurableAuthenticatorFactory` (lines 76\u201385), changes the `<p>` javadoc (line 61), removes a double space (line 95), and reformats `asJson(...)` and `.acceptJson()` in the test. It also adds `newOTP.setId(KeycloakModelUtils.generateId())` at `BackwardsCompatibilityUserStorage.java:179`, which changes OTP behavior and is not part of this feature. Move the reformatting into a separate change, and explain the OTP id change or drop it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:76"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"RecoveryKeys\" naming contradicts the rest of the feature",
+      "description": "Everywhere else the feature is \"recovery authn codes\", for example `RecoveryAuthnCodesCredentialModel`, `EnterRecoveryAuthnCodePage`, and `CONFIGURE_RECOVERY_AUTHN_CODES`. The new test and helpers say \"RecoveryKeys\": `testRecoveryKeysSetupAndLogin` (241), `setupRecoveryKeysForUserWithRequiredAction` (410), `assertUserHasRecoveryKeysCredentialInUserStorage` (457). The fixture mixes `hasRecoveryCodes`, `recoveryCodes`, `storedRecoveryKeys`, and `generatedKeys`. Use the existing terminology.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test helper shadows a field and mixes assertion styles",
+      "description": "`enterRecoveryCodes` takes a parameter named `enterRecoveryAuthnCodePage` that shadows the `@Page` field of the same name, and it takes a `driver` argument only to call `setDriver`. Line 481 uses a fully qualified `org.junit.Assert.assertEquals`, while the same file uses `org.keycloak.testsuite.Assert` (line 462). Use the field directly and the file's existing `Assert` import.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:476-482"
+    },
+    {
+      "severity": "PASS",
+      "title": "Core API calls match their declarations",
+      "description": "I checked the APIs the diff depends on. `getCredentials` in the fixture overrides the `CredentialInputUpdater.getCredentials` default (`server-spi/src/main/java/org/keycloak/credential/CredentialInputUpdater.java:50`). `getFederatedCredentialsStream` exists (`SubjectCredentialManager.java:88`). `JsonSerialization.writeValueAsString` declares `IOException` (`core/.../JsonSerialization.java:65`), so the catch at line 120 compiles. `KeycloakModelUtils.generateId` exists and is already imported elsewhere in the fixture module. The removed imports (`Collectors`, `Pbkdf2Sha512PasswordHashProviderFactory`) are no longer referenced in the fixture. This is a read-only check; I did not compile.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:120"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Recovery codes are stored in plaintext in user storage",
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:119",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Federated recovery codes are never consumed",
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:326-344",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Old local codes stay valid after regeneration into user storage",
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:125",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Exhausted-code removal acts on the wrong store",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java:80-89",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "New dependency cycle between model packages",
+      "location": "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java:56-62",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`getCredentials` can NPE and swallows its error",
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:230-252",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New test covers only the happy path",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:241",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Test flow helper duplicated, with a typo copied along",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:123",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Raw `List` used for deserialized codes",
+      "location": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java:332",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unrelated formatting and an unexplained OTP change mixed into the diff",
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:76",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "\"RecoveryKeys\" naming contradicts the rest of the feature",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:241",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Test helper shadows a field and mixes assertion styles",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java:476-482",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Core API calls match their declarations",
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java:120",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "diff": "77c379efc3a0bcadb2c7dc035c8a0bc1ce524fe6...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:37:12.186485",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 29,
+  "injected": [],
+  "files_read": [
+    "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java",
+    "server-spi/src/main/java/org/keycloak/models/utils/RecoveryAuthnCodesUtils.java",
+    "services/src/main/java/org/keycloak/authentication/requiredactions/RecoveryAuthnCodesAction.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/RecoveryAuthnCodesFormAuthenticator.java",
+    "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java",
+    "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibil\u2026",
+    "server-spi/src/main/java/org/keycloak/models/credential/RecoveryAuthnCodesCredentialModel.java",
+    "services/src/main/java/org/keycloak/credential/RecoveryAuthnCodesCredentialProvider.java",
+    "server-spi/src/main/java/org/keycloak/models/SubjectCredentialManager.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/forms/RecoveryAuthnCodesAuthenticatorTest.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java",
+    "services/src/main/java/org/keycloak/credential/RecoveryAuthnCodesCredentialProviderFactory.java"
+  ],
+  "searches": [
+    "grep class RecoveryAuthnCodesCredentialModel|createFromValues|createFromCredentialModel|allCodesUsed|markNextRecoveryAuthnCodeAsUsed|getNextRecoveryAuthnCode|hashRawCode|TYPE =|getCredentialData|setCredentialData in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "grep getFederatedCredentialsStream|getStoredCredentialsByTypeStream in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/server-spi/src/main/java",
+    "grep Stream<CredentialModel> getCredentials\\(RealmModel realm, UserModel user\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "grep RECOVERY_AUTHN_CODES|keycloak-recovery-authn-codes in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/services/src/main/java/org/keycloak/credential",
+    "grep getChallengeResponse|public UserCredentialModel\\(|buildFromBackupAuthnCode in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/server-spi/src/main/java/org/keycloak/models/UserCredentialModel.java",
+    "list_files **/UserCredentialManager.java in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "grep public boolean isValid|public boolean updateCredential|getFederatedCredentialsStream|public Stream<CredentialModel> getStoredCredentialsByTypeStream|isValid\\(|updateCredential\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/model/storage/src/main/java/org/keycloak/credential/UserCredentialManager.java",
+    "grep PROVIDER_ID = \"delayed-authenticator\"|class EnterRecoveryAuthnCodePage|class SetupRecoveryAuthnCodesPage|public static void revertFlows|public FlowUtil copyBrowserFlow|copyBrowserFlow\\(|public .* addSubFlowExecution\\(|public .* addAuthenticatorExecution\\(.*Consumer|public static .* writeValueAsStrin\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "grep import org.keycloak.utils.CredentialHelper in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/services/src/main/java",
+    "grep getRecoveryAuthnCodeToEnterNumber|enterRecoveryAuthnCode\\(|uncheckLogoutSessions|getRecoveryAuthnCodes\\(|clickSaveRecoveryAuthnCodesButton|setDriver in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/pages",
+    "grep getRecoveryAuthnCodeToEnterNumber|void enterRecoveryAuthnCode\\(|uncheckLogoutSessions|getRecoveryAuthnCodes\\(|clickSaveRecoveryAuthnCodesButton|clickSignInButton|public FlowUtil addAuthenticatorExecution\\(Requirement requirement, String providerId\\)|public FlowUtil inForms|public FlowUtil clear\\(|de\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/testsuite/integration-arquillian/tests/base/src",
+    "grep recoveryCodes|RecoveryAuthnCodes|getCredentials|federat in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/forms/RecoveryAuthnCodesAuthenticatorTest.java",
+    "grep testRecoveryKeysSetupAndLogin|org\\.junit\\.Assert\\.assertEquals|private void enterRecoveryCodes|enterRecoveryAuthnCodePage\\.setDriver|hasRecoveryKeys|setupRecoveryKeysForUserWithRequiredAction\\(String|BROWSER_FLOW_WITH_RECOVERY_AUTHN_CODES = |testAppHelper.logout\\(\\);|assertUserHasRecoveryKeysCredent\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java",
+    "grep Collectors|Pbkdf2Sha512PasswordHashProviderFactory|public static String generateId|public void setId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "grep import org.keycloak.models.utils.KeycloakModelUtils in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java",
+    "grep class RecoveryAuthnCodesCredentialProviderFactory|class RecoveryAuthnCodesCredentialProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446/services/src/main/java/org/keycloak/credential"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33382,
+  "diff_chars_injected": 33382,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 30,
+  "prompt_tokens": 1033731,
+  "cached_tokens": 930918,
+  "cache_write_tokens": 102785,
+  "completion_tokens": 61404,
+  "reasoning_tokens": null,
+  "duration_seconds": 261.7570257089101,
+  "cost_usd": 0.13433438,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,17 @@
+{
+ "case": "grafana-gr76186",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Missing regression tests alone are not a defect, and the code shows the contextual middleware adds request attributes before the logger reads them."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0010732200000000002
+}

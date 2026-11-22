@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Global view grants bypass per-client permission checks and expose clients despite client-specific denials."
+  ],
+  "F2": [
+   "KEEP",
+   "MANAGE-only aggregate grants do not satisfy the inherited list checks, so client and client-scope listing is denied."
+  ],
+  "F3": [
+   "KEEP",
+   "Individual client resources lack the Clients type, while aggregate grants can return the literal \u201cClients\u201d instead of client IDs."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0067309100000000005
+}

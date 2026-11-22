@@ -1,0 +1,48 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler calls `new CalendarCacheRepository()` directly, so it skips the `calendar-cache` flag check in `CalendarCache.init()`, and leftover cache rows still drive the \"Last updated\" label and delete option when the flag is off."
+  ],
+  "F2": [
+   "KEEP",
+   "deleteCache.handler.ts:25` throws a plain `Error` on the ownership check, which tRPC turns into an INTERNAL_SERVER_ERROR (500) instead of a NOT_FOUND/FORBIDDEN."
+  ],
+  "F3": [
+   "KEEP",
+   "CredentialActionsDropdown.tsx:89` hardcodes `\"en-US\"` in `Intl.DateTimeFormat`, so every user sees US date formatting whatever their locale."
+  ],
+  "F4": [
+   "DROP",
+   "The empty `w-32` wrapper is only a layout/spacing issue, not a behavior defect, and the platform wrapper already leaves the same empty div in place."
+  ],
+  "F5": [
+   "KEEP",
+   "ENV_FILE=\"../.env\"` resolves against the current directory, so running from the repo root creates or edits a `.env` outside the repo."
+  ],
+  "F6": [
+   "KEEP",
+   "cleanup` always ends with `exit 0` and is also the exit path for the rate-limit and URL-extraction failures, so failed runs report success."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  4,
+  6,
+  7
+ ],
+ "cost_usd": 0.2192986
+}

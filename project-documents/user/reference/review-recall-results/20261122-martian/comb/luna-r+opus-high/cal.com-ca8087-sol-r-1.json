@@ -1,0 +1,24 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The old static imports already loaded every integration eagerly, so this is no regression. Any startup failure would also have broken the old code at import time."
+  ],
+  "F2": [
+   "KEEP",
+   "Moving `getCalendar` into a discarded async `forEach` callback means its rejections, including CalendarService constructor errors, now escape the surrounding try/catch as unhandled rejections. This happens in all three reschedule paths, so they should use an awaited loop or `Promise.all`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1
+ ],
+ "cost_usd": 0.1248778
+}

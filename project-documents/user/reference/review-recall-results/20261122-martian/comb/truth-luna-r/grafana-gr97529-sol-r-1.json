@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Concurrent calls can independently build the same key and overwrite a cache entry after an event updates another index."
+  ],
+  "F2": [
+   "KEEP",
+   "TotalDocs` iterates the cache without a lock while `BuildIndex` writes to it under a lock."
+  ],
+  "F3": [
+   "DROP",
+   "Disabling the PostgreSQL test reduces coverage but does not cause a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00250216
+}

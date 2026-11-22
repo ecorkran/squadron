@@ -1,0 +1,131 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "GET requests change notification preferences without CSRF protection",
+      "description": "These GET routes invoke a persistent preference change using the current session, without a token or confirmation. A cross-site navigation can therefore unsubscribe a logged-in user. Keep GET read-only and perform changes through a CSRF-protected mutation.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "config/routes.rb:441-442"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Missing topic-user records cause a server error",
+      "description": "`find_by` can return `nil` for a user without an existing topic-user record; `TopicView` does not create one. Dereferencing `notification_level` then crashes. Handle absent records and create the preference through `TopicUser.change`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:105-107"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Client-side navigation does not unsubscribe",
+      "description": "The route only loads the normal topic view. An Ember transition to this URL never invokes the server\u2019s unsubscribe action, yet displays the unsubscribe message. Ensure client navigation performs the mutation before reporting success.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6:4-9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Direct saves allow automatic tracking to override unsubscribe",
+      "description": "Saving only `notification_level` bypasses `TopicUser.change`, which also records the explicit user-change reason. For records whose reason remains null, `TopicUser.update_last_read` can automatically restore tracking on subsequent reading. Use the existing preference-change mechanism so unsubscribe remains effective.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:107-113"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "GET requests change notification preferences without CSRF protection",
+      "location": "config/routes.rb:441-442",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Missing topic-user records cause a server error",
+      "location": "app/controllers/topics_controller.rb:105-107",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Client-side navigation does not unsubscribe",
+      "location": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6:4-9",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Direct saves allow automatic tracking to override unsubscribe",
+      "location": "app/controllers/topics_controller.rb:107-113",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "diff": "8ed1eef2746ad2b5bc996a74233852e5d83a765d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:56:32.698760",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19364,
+  "diff_chars_injected": 19364,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 67906,
+  "cached_tokens": 65792,
+  "cache_write_tokens": null,
+  "completion_tokens": 352,
+  "reasoning_tokens": 0,
+  "duration_seconds": 69.71477208286524,
+  "cost_usd": 0.014327199999999998,
+  "cost_basis": "alias_pricing"
+}

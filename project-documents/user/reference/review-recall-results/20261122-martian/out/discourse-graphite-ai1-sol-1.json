@@ -1,0 +1,95 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Duplicate method definition breaks emoji resizing",
+      "description": "Ruby replaces methods rather than overloading by argument count. This definition overwrites the width/height version above it. Consequently, `Jobs::ResizeEmoji#execute` calls `downsize(path, path, 100, 100, opts)` and raises `ArgumentError`. An isolated Ruby reproduction confirmed this. Preserve both calling conventions through one method or use distinct names, with regression tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/optimized_image.rb:149-150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fixed upload limit incorrectly applies to attachments",
+      "description": "The 10 MB limit applies to attachments as well as images, but `Validators::UploadValidator` still enforces `max_attachment_size_kb`, and attachments receive no automatic reduction. This accepts files the server will reject when the configured limit is lower, and blocks valid attachments when it exceeds 10 MB. Apply the new ceiling only to images and retain the configured attachment limit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/lib/utilities.js:182"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Duplicate method definition breaks emoji resizing",
+      "location": "app/models/optimized_image.rb:149-150",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fixed upload limit incorrectly applies to attachments",
+      "location": "app/assets/javascripts/discourse/lib/utilities.js:182",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1",
+    "diff": "c3290c1d85eabd86f9f839931bdf2a043474f844...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:55:21.049949",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 3917,
+  "diff_chars_injected": 3917,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 45053,
+  "cached_tokens": 43264,
+  "cache_write_tokens": null,
+  "completion_tokens": 228,
+  "reasoning_tokens": 0,
+  "duration_seconds": 52.7648109998554,
+  "cost_usd": 0.0101844,
+  "cost_basis": "alias_pricing"
+}

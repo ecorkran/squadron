@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "When user storage accepts the new codes, nothing removes the old local credential. `UserCredentialManager.isValid()` (lines 64-79) then falls back to the local validators, so old recovery codes still work. The local path in `RecoveryAuthnCodesCredentialProvider.createCredential` does delete the previous set."
+  ],
+  "F2": [
+   "DROP",
+   "This is a test fixture's behaviour, not a defect in production code; it amounts to a request for a stronger test."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.15885370000000001
+}

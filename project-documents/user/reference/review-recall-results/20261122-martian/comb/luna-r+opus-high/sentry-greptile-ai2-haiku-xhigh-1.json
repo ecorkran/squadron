@@ -1,0 +1,52 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5,
+  "F6": 6,
+  "F7": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_item_key` calls `math.floor`/`math.ceil` on the `datetime` field, which raises TypeError, so every non-empty optimized request returns a 500; `value_from_cursor` also never converts the cursor back to a datetime."
+  ],
+  "F2": [
+   "KEEP",
+   "enable_advanced` runs on every request and reads `organization_context.member.has_global_access` without a guard, so a caller with no membership (e.g. an API key) gets an AttributeError and a 500 even without the optimized flag."
+  ],
+  "F3": [
+   "KEEP",
+   "the key names stay the same while the type changes from SET to ZSET, so SET keys left in Redis cause WRONGTYPE errors in `zadd`, `zcard`, `zunionstore` and `zscan` during rollout until they expire."
+  ],
+  "F4": [
+   "DROP",
+   "capping segments with `zpopmin` is an intended design change that loses less data than the old skip-the-whole-segment guard; adding a metric is a nice-to-have."
+  ],
+  "F5": [
+   "DROP",
+   "clamping a negative forward offset to 0 replaces what used to be a 500, and the prev path behaves exactly as before, so the main problem left is a misleading comment."
+  ],
+  "F6": [
+   "KEEP",
+   "the new branch exists to let client-supplied negative offsets reach data \"beyond normal pagination bounds,\" and Django rejects negative slices, so the branch is broken and unsafe in intent and should be removed."
+  ],
+  "F7": [
+   "DROP",
+   "the score summing only happens if the same payload sits in both sets, and it only changes trim order since scores are otherwise unused, so the impact is small."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  6
+ ],
+ "cost_usd": 0.1683542
+}

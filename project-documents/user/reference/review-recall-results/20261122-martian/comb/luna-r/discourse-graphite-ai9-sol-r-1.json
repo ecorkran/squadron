@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache key omits the site default locale, so identical requests can reuse a translation resolved through a different fallback chain."
+  ],
+  "F2": [
+   "KEEP",
+   "Background translations load only the active locale, so an unloaded fallback locale cannot supply its translation."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0017493399999999998
+}

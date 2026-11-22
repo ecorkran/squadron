@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "canView(ClientModel)` returns true as soon as the all-clients `view` check in `canView()` passes, and `ClientsResource.getClients()` uses that same result, so a deny policy on one client can never block viewing it (users and client `manage` don't have this problem)."
+  ],
+  "F2": [
+   "KEEP",
+   "canView()` checks only the all-clients `view` scope, so an admin with only all-clients `manage` can create client scopes but gets 403 from `getClientScopes`, or an empty list if they hold `query-clients`; meanwhile `canView(ClientScopeModel)` does accept `manage`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2450871
+}

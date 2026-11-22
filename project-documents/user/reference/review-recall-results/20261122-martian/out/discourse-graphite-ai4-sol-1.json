@@ -1,0 +1,149 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Embed template contains invalid Ruby",
+      "description": "`<%- end if %>` produces a syntax error, preventing rendering whenever an embedded topic exists. ERB compilation reproduced the failure. Replace it with `<%- end %>` and add a rendering test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/views/embed/best.html.erb:6"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Feed imports bypass HTML sanitization",
+      "description": "`PollFeed` passes external feed HTML directly into this raw-HTML import path. `absolutize_urls` does not sanitize it, and `Post#cook` returns it unchanged. Scripts and event-handler attributes can therefore become stored XSS on the forum origin. Sanitize imported HTML with an explicit allowlist before storing or rendering it, including updates.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:22"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Embed assets are absent from production precompilation",
+      "description": "Neither `embed.css` nor `embed.js` is registered in `config/application.rb`\u2019s precompile list. Production disables runtime compilation in `config/environments/production.rb:23`, leaving the new stylesheet and embedding script unavailable after normal asset deployment. Register both standalone assets.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "app/views/layouts/embed.html.erb:4"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Relative URL conversion breaks valid article resources",
+      "description": "Only root-relative URLs are converted. Document-relative references such as `images/photo.jpg` remain relative to Discourse, while protocol-relative references such as `//cdn.example.com/photo.jpg` are incorrectly rewritten onto the article host. Resolve both link and image references against the article URL using `URI.join`, with tests for these cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:61-72"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Full test execution was unavailable",
+      "description": "`bundle check` reported missing dependencies, including Rails and RSpec. Findings are based on source inspection and the standalone ERB compilation check, not a completed test suite.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "Gemfile"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Embed template contains invalid Ruby",
+      "location": "app/views/embed/best.html.erb:6",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Feed imports bypass HTML sanitization",
+      "location": "app/models/topic_embed.rb:22",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Embed assets are absent from production precompilation",
+      "location": "app/views/layouts/embed.html.erb:4",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Relative URL conversion breaks valid article resources",
+      "location": "app/models/topic_embed.rb:61-72",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Full test execution was unavailable",
+      "location": "Gemfile",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "diff": "40c0c041eef5dc44025770d153a3608edf852aed...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:55:45.347295",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 25589,
+  "diff_chars_injected": 25589,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 73547,
+  "cached_tokens": 71680,
+  "cache_write_tokens": null,
+  "completion_tokens": 497,
+  "reasoning_tokens": 0,
+  "duration_seconds": 81.3741382076405,
+  "cost_usd": 0.015872,
+  "cost_basis": "alias_pricing"
+}

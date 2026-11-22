@@ -1,0 +1,83 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 8,
+  "F9": 10,
+  "F10": 11,
+  "F11": 12,
+  "F12": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Running `execute(...)[0]` on an empty PG result raises (nil or IndexError), and that happens on any DB with no `embed_category` row; line 15 has the same unguarded `[0]['value']`."
+  ],
+  "F2": [
+   "KEEP",
+   "The migration inserts legacy lines verbatim with no `before_validation`, and `record_for_host` compares against `uri.host`, so URL-form entries never match after upgrade."
+  ],
+  "F3": [
+   "KEEP",
+   "Line 25 interpolates `'#{h}'` straight into SQL, so a host value with an apostrophe breaks the migration."
+  ],
+  "F4": [
+   "KEEP",
+   "self.host.sub!` on a nil host raises NoMethodError before validation runs, and `save_host` passes the param through unchecked."
+  ],
+  "F5": [
+   "KEEP",
+   "The regex accepts `:port`, which nothing strips, but matching uses `uri.host` (no port), so those rows never match; the `[a-z]{2,5}` TLD cap also rejects valid long TLDs."
+  ],
+  "F6": [
+   "KEEP",
+   "Neither the model nor the migration enforces uniqueness, and `where(...).first` has no order, so the category for a duplicated host is nondeterministic."
+  ],
+  "F7": [
+   "DROP",
+   "Topic#ensure_topic_has_a_category` assigns `uncategorized_category_id` when category is nil, so the topic does get a category, and the suggested fallback already happens."
+  ],
+  "F8": [
+   "KEEP",
+   "For an unknown id, `where(id:).first` returns nil, so `save_host(nil)` and `nil.destroy` raise (500), and `destroy` renders success without checking the result."
+  ],
+  "F9": [
+   "KEEP",
+   "The `_ids` branch calls `obj[k].map` with no null guard and stores undefined for ids that weren't side-loaded; the `|| []` fallback is dead code."
+  ],
+  "F10": [
+   "KEEP",
+   "save()` never applies or discards the buffer, so after `setProperties` writes the normalized server value, re-editing still shows the stale buffered input."
+  ],
+  "F11": [
+   "KEEP",
+   "destroyRecord().then(...)` has no rejection handler, so a failed delete fails silently."
+  ],
+  "F12": [
+   "DROP",
+   "Swapped fabricator file names are a code-organization issue, not a behavior defect; Fabrication loads both files either way."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  6,
+  8,
+  10,
+  11,
+  12
+ ],
+ "cost_usd": 0.217106
+}

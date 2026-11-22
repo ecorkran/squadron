@@ -1,0 +1,167 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Template variables and ad-hoc filters are applied twice on the split paths",
+      "description": "`runSplitQuery` now calls `applyTemplateVariables` on every target (querySplitting.ts:299). Its sub-requests go through `datasource.runQuery` (datasource.ts:350-353) into `super.query`, and `DataSourceWithBackend.query` calls `this.applyTemplateVariables(q, request.scopedVars, request.filters)` again for each target (packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:185). The sub-requests carry `filters` because they spread the original request, so ad-hoc filters are added twice and variables are substituted twice. Before this change the time-split path substituted once. The sharded path added ad-hoc filters once and now adds them three times (shardQuerySplitting.ts:52, then querySplitting.ts:299 via shardQuerySplitting.ts:163, then DataSourceWithBackend.ts:185).\n\nThe effect depends on the filter type. Stream-selector filters are protected by the `labelExists` check in `addFilterToStreamSelector` (modifyQuery.ts:494). Parsed and structured-metadata filters go through `addFilterAsLabelFilter` (modifyQuery.ts:511-541), which has no such check. A query like `\u2026 | logfmt | level=\"info\"` therefore reaches the backend as `\u2026 | logfmt | level=\"info\" | level=\"info\"`. The repeated predicate is idempotent, so results should not change for typical values. The query text, query inspector output, and cache key do change, and a second substitution pass can re-expand any `$name` text that came from a variable value.\n\nSuggested fix: give each path one interpolation owner. The shard path needs interpolated expressions for grouping and selector injection. The time-split path needs them only for classification. Make the other layers skip their own pass, and add a test that goes through the real `runQuery` / `super.query`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/plugins/datasource/loki/querySplitting.ts:296-299"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reordered filter in the sharded path can hang the query on an empty expression",
+      "description": "The old code interpolated first and then filtered on `expr` (`interpolateVariablesInQueries(...).filter(expr)`), so a target whose expression was only a template variable resolving to an empty string was dropped. The new order filters first, so that target survives. Tracing the new path:\n\n1. `requestSupportsSharding` is false for an empty expression (queryUtils.ts:319-331), so the target goes into the non-sharded group (shardQuerySplitting.ts:246-249).\n2. `interpolateShardingSelector` returns the targets unchanged when there are no shards (queryUtils.ts:392-393).\n3. `runSplitQuery` drops it at querySplitting.ts:298, leaving zero requests.\n4. `runSplitGroupedQueries` evaluates `requests.filter(...)[0].partition` at querySplitting.ts:96, which throws on an empty array.\n5. The throw happens inside `groupTargetsByQueryType(...).then(...)` (shardQuerySplitting.ts:213). The rejection is unhandled and the observable never emits.\n\nThe trigger needs `lokiShardSplitting`, which is experimental with no default-on expression (registry.go:151-156). It also needs a request with at least one sharding-eligible target plus a second target that resolves to empty. The empty-group crash predates this change: when every target is dropped, shardQuerySplitting.ts:69 reads `groups[0]` from an empty array.\n\nSuggested fix: restore the old order (`map` before the `expr` filter), and guard against empty `requests` in `runSplitGroupedQueries`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:49-52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`$__auto` in the sharded path is now resolved per time chunk",
+      "description": "Previously `interpolateVariablesInQueries` passed `scopedVars` straight to `templateSrv.replace` (datasource.ts:429-447), so `$__auto` was resolved on the frontend once for the whole request. `applyTemplateVariables` strips `__auto` from `scopedVars` (datasource.ts:1113), so it now stays in the query for the backend. For range queries the backend derives the step from the query's own time range when no step is set (`safeStep = timeRange / 11000`, pkg/tsdb/loki/step.go:27-33, called from parse_query.go:145-147). Time chunks are at most one day (querySplitting.ts:304), so `$__auto` can differ from chunk to chunk.\n\nThe time-split path already behaves this way, because `super.query` strips the same variable. This change extends that behavior to shard queries rather than introducing a new mechanism. It is still an unmentioned behavior change with no test. Please confirm it is intended, or keep resolving `$__auto` on the frontend for the shard path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:52"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests lock in the redundant pass and miss the path where it happens",
+      "description": "The assertion changed from one call to `toHaveBeenCalledTimes(5)`. The five calls are one from `runShardSplitQuery` plus one per sub-request `runSplitQuery`, so the test now treats the redundant interpolation as expected behavior. The two new \"Interpolates queries before execution\" tests stub `runQuery` (querySplitting.test.ts:83, shardQuerySplitting.test.ts:92), which bypasses `DataSourceWithBackend.query`. Neither can detect the duplicate pass from the first finding. No test passes `filters` through either split path, and none covers the empty-after-interpolation case from the second finding.\n\nSuggested tests: assert the final expression once through the real `runQuery` with a parsed-label ad-hoc filter present; add a template-only expression that resolves to empty; replace the call-count assertion with an assertion on the request that reaches the backend.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "public/app/plugins/datasource/loki/shardQuerySplitting.test.ts:112"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Template variables and ad-hoc filters are applied twice on the split paths",
+      "location": "public/app/plugins/datasource/loki/querySplitting.ts:296-299",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reordered filter in the sharded path can hang the query on an empty expression",
+      "location": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:49-52",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`$__auto` in the sharded path is now resolved per time chunk",
+      "location": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:52",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests lock in the redundant pass and miss the path where it happens",
+      "location": "public/app/plugins/datasource/loki/shardQuerySplitting.test.ts:112",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534",
+    "diff": "73393963d5aa54c83f0935cfd4408cab16d12e8f...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:58:53.630914",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "injected": [],
+  "files_read": [
+    "public/app/plugins/datasource/loki/querySplitting.ts",
+    "public/app/plugins/datasource/loki/shardQuerySplitting.ts",
+    "public/app/plugins/datasource/loki/datasource.ts",
+    "packages/grafana-runtime/src/utils/DataSourceWithBackend.ts",
+    "public/app/plugins/datasource/loki/modifyQuery.ts",
+    "public/app/plugins/datasource/loki/querySplitting.test.ts",
+    "public/app/plugins/datasource/loki/shardQuerySplitting.test.ts",
+    "pkg/tsdb/loki/parse_query.go",
+    "pkg/tsdb/loki/step.go"
+  ],
+  "searches": [
+    "grep applyTemplateVariables|interpolateVariablesInQueries in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki",
+    "grep addAdHocFilters\\s*\\(|private addAdHocFilters|addAdHocFilters\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki",
+    "grep class DataSourceWithBackend|applyTemplateVariables\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/packages/grafana-runtime/src",
+    "grep export function addLabelToQuery|export function lokiSpecialRegexEscape|export const lokiSpecialRegexEscape|export function escapeLabelValueInSelector in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki",
+    "grep replace|getVariables|export function createLokiDatasource in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki/mocks/datasource.ts",
+    "grep __auto in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/pkg/tsdb/loki",
+    "grep runSplitQuery\\(|runShardSplitQuery\\(|runSplitGroupedQueries\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public",
+    "grep filters\\?: AdHocVariableFilter\\[\\]|scopedVars: ScopedVars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/packages/grafana-data/src/types",
+    "grep function addFilterToStreamSelector|function addFilterAsLabelFilter|function toLabelFilter in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki/modifyQuery.ts",
+    "grep function labelExists in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki/modifyQuery.ts",
+    "grep export function requestSupportsSharding|export function getSelectorForShardValues|export function interpolateShardingSelector in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki/queryUtils.ts",
+    "grep interpolateVariables\\(|calculateStep|func .*[Ss]tep\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/pkg/tsdb/loki",
+    "grep lokiQuerySplitting|lokiShardSplitting in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/pkg/services/featuremgmt/registry.go",
+    "grep __auto in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app",
+    "grep export function interpolateShardingSelector in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki/queryUtils.ts",
+    "grep interpolateShardingSelector\\s*\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki",
+    "grep interpolateShardingSelector\\s*=|function interpolateShardingSelector in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki/queryUtils.ts",
+    "grep export class LokiDatasource in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534/public/app/plugins/datasource/loki/datasource.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 6795,
+  "diff_chars_injected": 6795,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 34,
+  "prompt_tokens": 1611029,
+  "cached_tokens": 1496500,
+  "cache_write_tokens": 114483,
+  "completion_tokens": 66091,
+  "reasoning_tokens": null,
+  "duration_seconds": 303.66941395774484,
+  "cost_usd": 0.16586398,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,113 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Null count violates the model contract",
+      "description": "The missing-model branch returns `null`, although `GroupModel.getSubGroupsCount()` explicitly guarantees a non-null result (`server-spi/src/main/java/org/keycloak/models/GroupModel.java:293-299`). Preserve that contract, for example by returning `0L` for a deleted group.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:275"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Regression assertion can miss reader failures",
+      "description": "Setting `deletedAll` does not wait for an in-flight read. The assertion can pass before that read throws and records its exception. Retain the reader thread and join it before asserting; also synchronize startup so the test cannot pass without performing a read.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:155-157"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deletion failure leaves the reader running",
+      "description": "If any `remove()` throws, `deletedAll` is never set, leaving the reader looping indefinitely. Stop and join the thread in a `finally` block so failure paths cannot leak background requests into subsequent tests.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:151-155"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Null count violates the model contract",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java:275",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Regression assertion can miss reader failures",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:155-157",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Deletion failure leaves the reader running",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java:151-155",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke40940",
+    "diff": "7fdb3b9b6b815577e65cb19ce2f2646e9a688e7a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:37:28.390606",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 5626,
+  "diff_chars_injected": 5626,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 46846,
+  "cached_tokens": 45056,
+  "cache_write_tokens": null,
+  "completion_tokens": 375,
+  "reasoning_tokens": 0,
+  "duration_seconds": 54.39362970832735,
+  "cost_usd": 0.0118356,
+  "cost_basis": "alias_pricing"
+}

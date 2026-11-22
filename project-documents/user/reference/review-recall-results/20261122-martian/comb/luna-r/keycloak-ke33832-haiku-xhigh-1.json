@@ -1,0 +1,42 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Equal top priorities make automatic selection nondeterministic and can select a non-FIPS provider in FIPS deployments."
+  ],
+  "F2": [
+   "KEEP",
+   "Malformed DER can trigger unchecked exceptions or be accepted incorrectly despite the decoder\u2019s IOException contract."
+  ],
+  "F3": [
+   "KEEP",
+   "Returning the default keystore provider violates the provider contract and can misidentify the crypto provider when this implementation is selected."
+  ],
+  "F4": [
+   "KEEP",
+   "Adding an abstract SPI method breaks source and binary compatibility for external implementations."
+  ],
+  "F5": [
+   "DROP",
+   "Missing test coverage is not itself a defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00272048
+}

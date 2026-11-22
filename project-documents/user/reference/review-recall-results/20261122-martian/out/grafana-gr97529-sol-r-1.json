@@ -1,0 +1,150 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Preserve per-key synchronization while building indexes",
+      "description": "Moving the cache lock to only the final assignment allows `GetIndex` to return a cache miss while an index for that same key is already being built. In `resource/search.go`, both search requests and write-event handling use the unsynchronized `getOrCreateIndex` check-and-build sequence.\n\nConsequently, concurrent requests can build separate indexes for the same key. A write event can update one completed index before another build overwrites its cache entry, leaving searches using an index without that update. Disk-backed builds can also compete to create the same directory.\n\nKeep builds for different keys parallel, but serialize or single-flight the complete lookup/build/publication operation for each key. Add a concurrent search/write regression test that verifies updates remain searchable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/search/bleve.go:137-139"
+    },
+    {
+      "severity": "FAIL",
+      "title": "New startup document count can race with index publication",
+      "description": "The new `TotalDocs()` call occurs after the event-consumer goroutine starts. An event for a resource not indexed during initialization can therefore build and publish another index concurrently with this call.\n\n`bleveBackend.TotalDocs` in `pkg/storage/unified/search/bleve.go:144-153` iterates `b.cache` without taking `cacheMu`, while `BuildIndex` writes to that map under the mutex. This is an unsafe concurrent map iteration/write and can terminate the process. The existing metrics collector also calls this method, so moving the log before the goroutine would not fully address the synchronization defect.\n\nProtect `TotalDocs` with the corresponding read lock, or copy the cached index pointers under that lock before counting. Cover concurrent building and counting with a race-detector test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/search.go:216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PostgreSQL integration coverage is disabled rather than repaired",
+      "description": "The unconditional PostgreSQL skip removes coverage of storage-server startup and instrumentation on a supported backend, including local environments where the comment says the test works. This is particularly relevant because this change moves database initialization and watcher startup into `NewResourceServer`.\n\nRepair the CI-specific configuration or startup synchronization instead of disabling the backend entirely. If temporary quarantine is necessary, narrowly scope it to the affected environment and link a tracked issue with a clear removal condition.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/server/module_server_test.go:35-38"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve per-key synchronization while building indexes",
+      "location": "pkg/storage/unified/search/bleve.go:137-139",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "New startup document count can race with index publication",
+      "location": "pkg/storage/unified/resource/search.go:216",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "PostgreSQL integration coverage is disabled rather than repaired",
+      "location": "pkg/server/module_server_test.go:35-38",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+    "diff": "d6b412dc9d6b98231d88be94ff5ae1f1dfa6877c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:36:02.155775",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "injected": [],
+  "files_read": [
+    "pkg/server/module_server_test.go",
+    "pkg/storage/unified/resource/search.go",
+    "pkg/storage/unified/resource/server.go",
+    "pkg/storage/unified/search/bleve.go",
+    "pkg/storage/unified/sql/backend.go",
+    "pkg/storage/unified/sql/server.go",
+    "pkg/storage/unified/sql/service.go",
+    "pkg/storage/unified/resource/server_test.go",
+    "pkg/storage/unified/search/bleve_test.go",
+    "pkg/storage/unified/apistore/restoptions.go",
+    "pkg/storage/unified/client.go",
+    "pkg/storage/unified/resource/metrics.go",
+    "pkg/storage/unified/resource/broadcaster.go",
+    "pkg/storage/unified/resource/cdk_backend.go",
+    "pkg/storage/unified/sql/db/dbimpl/db.go",
+    "pkg/storage/unified/resource/metrics_index.go",
+    "pkg/storage/unified/resource/bleve_index_metrics.go",
+    "pkg/storage/unified/sql/db/dbimpl/dbimpl.go"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep NewResourceServer\\( in pkg/storage",
+    "list_files *test* in pkg/storage/unified/resource",
+    "grep TotalDocs\\(|BuildIndex\\( in pkg/storage/unified/search",
+    "list_files *review* in .github",
+    "grep func .*TotalDocs|TotalDocs\\( in pkg/storage/unified",
+    "list_files * in pkg/storage/unified/sql/db/dbimpl",
+    "grep ^func Test|Init\\(|Stop\\( in pkg/storage/unified/sql/test/integration_test.go",
+    "grep b.cacheMu|b.cache\\[|for _, v := range b.cache in pkg/storage/unified/search/bleve.go",
+    "grep events, err :=|search index initialized|err := s.Init|dbType == \"postgres\" in pkg"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 2553,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9480,
+  "diff_chars_injected": 9480,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 9,
+  "prompt_tokens": 268716,
+  "cached_tokens": 225383,
+  "cache_write_tokens": null,
+  "completion_tokens": 1840,
+  "reasoning_tokens": 683,
+  "duration_seconds": 49.6893469998613,
+  "cost_usd": 0.1276043,
+  "cost_basis": "alias_pricing"
+}

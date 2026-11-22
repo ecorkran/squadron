@@ -1,0 +1,49 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6,
+  "F6": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Direct repository construction bypasses the feature gate, exposing cache status and deletion controls while caching is disabled."
+  ],
+  "F2": [
+   "KEEP",
+   "The ownership check throws a plain Error, which tRPC reports as an internal server error rather than an authorization denial."
+  ],
+  "F3": [
+   "KEEP",
+   "Hardcoding en-US formats the cache timestamp in US conventions regardless of the user's selected locale."
+  ],
+  "F4": [
+   "KEEP",
+   "When the dropdown returns null, its unconditional w-32 wrapper still reserves empty horizontal space."
+  ],
+  "F5": [
+   "KEEP",
+   "The relative ENV_FILE path targets the parent directory's .env when the script runs from the repository root."
+  ],
+  "F6": [
+   "KEEP",
+   "Both rate-limit and URL-extraction failures call cleanup, which always exits successfully with status 0."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.0375074
+}

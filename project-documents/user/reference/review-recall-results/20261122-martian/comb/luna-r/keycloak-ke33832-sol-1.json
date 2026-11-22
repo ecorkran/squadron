@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Equal top-priority providers are resolved by service discovery order, which can select a non-FIPS provider when FIPS is also present."
+  ],
+  "F2": [
+   "KEEP",
+   "The parser subtracts each child\u2019s full length and accepts a negative remainder, allowing child data beyond the declared sequence boundary."
+  ],
+  "F3": [
+   "DROP",
+   "This identifies a test-coverage gap, not a demonstrated defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0020715200000000003
+}

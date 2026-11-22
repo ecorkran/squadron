@@ -1,0 +1,17 @@
+{
+ "case": "sentry-ge80528",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The docstring is inaccurate, but it does not cause a behavioral defect and is low-value documentation cleanup."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.00025449
+}

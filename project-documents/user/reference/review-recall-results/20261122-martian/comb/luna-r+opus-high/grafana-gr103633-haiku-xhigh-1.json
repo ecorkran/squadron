@@ -1,0 +1,24 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The denial key at `cache.go:30-32` has no identity type, and `anonymous:0` and `render:0` both give UID `0`. A denied anonymous check is written at `service.go:154` and is read before the type dispatch at `service.go:117`, so renderer reads of the same resource are wrongly denied for 30s even though `getRendererPermissions` grants them."
+  ],
+  "F2": [
+   "DROP",
+   "The `_` collision is real, but it only bites if two resources have exactly mirrored name and folder UIDs, which is very unlikely. The shared prefix and the duplicate entries for numeric ID versus UID only waste cache space and never give a wrong answer."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.124068
+}

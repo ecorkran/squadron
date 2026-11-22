@@ -1,0 +1,216 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Reschedule cleanup loses error handling after `forEach(async ...)`",
+      "description": "The callback passed to `bookingRefsFiltered.forEach` was made `async` and now awaits `getCalendar(...)`. `forEach` ignores the returned promise, so the `try/catch` at lines 124-139 can no longer catch anything from the callback. Before this diff, a synchronous throw from `getCalendar` (for example, a CalendarService constructor failing) or from the video adapter factory was caught and logged at line 137. Now it becomes an unhandled promise rejection and the `catch` is dead code. `packages/app-store/wipemycalother/lib/reschedule.ts:124-139` has the identical change.\n\n`packages/trpc/server/routers/viewer/bookings.tsx:553-567` has the same pattern with no `try/catch` at all. A failure that used to fail the reschedule mutation is now swallowed, and the mutation proceeds to send emails and report success. Use `await Promise.all(bookingRefsFiltered.map(async ...))` so failures reach the existing `catch`. For `bookings.tsx`, decide explicitly whether a failed calendar delete should fail the request.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/app-store/vital/lib/reschedule.ts:124-139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Recurring-event calendar deletes are not awaited by the cancellation",
+      "description": "The recurring branch calls `.forEach(async (credential) => { ... })` and pushes each `deletedEvent` into `apiDeletes` (line 467) after an `await`. `forEach` does not wait for those callbacks. `apiDeletes` is snapshotted by `await Promise.all(prismaPromises.concat(apiDeletes))` at line 652, and on the non-paid path nothing awaits between the `forEach` and that snapshot. The deletes therefore finish, or fail, after the cancellation has already returned, and their rejections are unhandled.\n\nThe `forEach(async` line is unchanged context, so the race predates this diff. The diff does edit the callback (`getCalendar` is now awaited at line 461), so the code is in scope. The `else` branch in this same diff (lines 477-483) already uses `for...of` with `await`, which is the fix to apply here.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:458-470"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`app-store/index.ts` still loads every app eagerly",
+      "description": "Each entry is `import(\"./x\")` inside an object literal, and an object literal evaluates every expression when the module loads. All 28 app modules are therefore still requested at startup. The change makes every lookup asynchronous (which is why about 30 call sites changed) but defers no app load. If the goal is lazy loading, make each entry a loader, for example `applecalendar: () => import(\"./applecalendar\")`, and have callers invoke `appStore[key]()`. If the goal is breaking an import cycle through `_utils/getCalendar.ts`, which imports `..`, that is not verified here, and the commit message or PR should say so.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/app-store/index.ts:2-30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests cover the changed async paths",
+      "description": "The diff changes the async contract of `getCalendar`, `getVideoAdapters` and `deleteMeeting`, the payment-app lookups, the reschedule cleanup, and the cancellation flow, with no test changes. The only test file that touches these modules is `apps/web/test/lib/getSchedule.test.ts`, which mocks CalendarManager through `tests/config/singleton.ts`. No test exercises `getCalendar`, `videoClient`, `handleCancelBooking`, or the reschedule handlers. A test asserting that cancellation awaits calendar deletion, and that a failing `getCalendar` reaches the error path, would have caught the two findings above. At minimum add tests for `getCalendar` returning null for an unknown or keyless credential, and for `getVideoAdapters` skipping unknown apps.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`getCalendarCredentials` stores an unawaited promise in each entry",
+      "description": "`getCalendar(credential)` is now called without `await`, and the promise is stored in `calendar`. It runs for every credential, including those where `app.variant !== \"calendar\"`, whose results line 29 discards. The inferred return type changes from `Calendar | null` to `Promise<Calendar | null>`, which is not named anywhere. The only consumer, `getConnectedCalendars`, awaits `item.calendar` inside its `try` at line 48, so it is safe today. A discarded promise that rejects would be unhandled. Call `getCalendar` only in the calendar-variant branch, and name the return type.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/CalendarManager.ts:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`await apiDeletes` awaits an array, so it does nothing",
+      "description": "This is pre-existing and outside the diff hunks. Awaiting an array is a no-op, so the paid-branch return at line 618 does not wait for the deletes in `apiDeletes`. The comment above it says event deletion is intentionally skipped, so the right fix may be to remove the line rather than change it to `Promise.all`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:617"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commented-out example import points to a path that does not exist",
+      "description": "`// example: import(\"./example\")` refers to `./example`. Glob finds no `*xample*` entry under `packages/app-store`. The original line was `// import * as example from \"./_example\"`, which was already stale. Remove the comment rather than update it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/app-store/index.ts:2"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Reschedule cleanup loses error handling after `forEach(async ...)`",
+      "location": "packages/app-store/vital/lib/reschedule.ts:124-139",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Recurring-event calendar deletes are not awaited by the cancellation",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:458-470",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`app-store/index.ts` still loads every app eagerly",
+      "location": "packages/app-store/index.ts:2-30",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests cover the changed async paths",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`getCalendarCredentials` stores an unawaited promise in each entry",
+      "location": "packages/core/CalendarManager.ts:28",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`await apiDeletes` awaits an array, so it does nothing",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:617",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Commented-out example import points to a path that does not exist",
+      "location": "packages/app-store/index.ts:2",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "diff": "9246bad445bbd2085138c9b707f0c54eededc4d9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T15:11:56.926525",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "injected": [],
+  "files_read": [
+    "packages/core/CalendarManager.ts",
+    "packages/app-store/_utils/getCalendar.ts",
+    "packages/app-store/index.ts",
+    "packages/app-store/vital/lib/reschedule.ts",
+    "packages/trpc/server/routers/viewer/bookings.tsx",
+    "packages/features/bookings/lib/handleCancelBooking.ts",
+    "packages/core/videoClient.ts",
+    "packages/core/EventManager.ts",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/app-store/larkcalendar/lib/CalendarService.ts",
+    "packages/app-store/wipemycalother/lib/reschedule.ts"
+  ],
+  "searches": [
+    "grep appStore\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep getCalendar\\(|getVideoAdapters\\(|deleteMeeting\\(|getCalendarCredentials\\(|getConnectedCalendars\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep getCalendarCredentials|\\.calendar\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep import\\s+(\\w+|\\*\\s+as\\s+\\w+|\\{[^}]*\\})\\s+from\\s+[\"'](@calcom/app-store|\\.\\.?/?|\\.\\./\\.\\.|\\.\\./index|\\./index|@calcom/app-store/index)[\"']\\s*;?$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep apiDeletes|integrationsToDelete in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/features/bookings/lib/handleCancelBooking.ts",
+    "grep getCalendar|videoClient|CalendarManager|handleCancelBooking|app-store\"|appStore|getVideoAdapters|getBusyVideoTimes in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep getCalendar|videoClient|CalendarManager|app-store|appStore|getBusyVideoTimes|getCachedResults|vi\\.mock|jest\\.mock in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/apps/web/test/lib/getSchedule.test.ts",
+    "grep videoClient|CalendarManager|handleCancelBooking|getCalendar\\b|app-store/_utils|deleteMeeting|cancelBooking in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep getCalendar\\s+as\\b|import\\s*\\{[^}]*\\bgetCalendar\\b[^}]*\\}|from\\s+[\"']@calcom/core/CalendarManager[\"']|from\\s+[\"']@calcom/core/videoClient[\"']|from\\s+[\"']\\./videoClient[\"']|from\\s+[\"']\\./CalendarManager[\"'] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "list_files packages/app-store/*example*/ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "list_files packages/app-store/*xample* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 20721,
+  "diff_chars_injected": 20721,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 26,
+  "prompt_tokens": 852214,
+  "cached_tokens": 787377,
+  "cache_write_tokens": 64801,
+  "completion_tokens": 36845,
+  "reasoning_tokens": null,
+  "duration_seconds": 175.8599266661331,
+  "cost_usd": 0.04031197000000001,
+  "cost_basis": "provider"
+}

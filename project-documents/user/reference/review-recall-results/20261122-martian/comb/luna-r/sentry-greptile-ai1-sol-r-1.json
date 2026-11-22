@@ -1,0 +1,31 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies numeric rounding to datetime fields and does not convert timestamp cursors back to datetimes."
+  ],
+  "F2": [
+   "KEEP",
+   "The endpoint dereferences the optional member unconditionally, so requests without a membership can raise `AttributeError`."
+  ],
+  "F3": [
+   "KEEP",
+   "Advanced pagination passes negative offsets to queryset slicing, which Django rejects with `ValueError`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00128826
+}

@@ -1,0 +1,113 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Equal-priority crypto providers are silently selected",
+      "description": "Default, Elytron, and FIPS providers all return priority `200`. When multiple full providers are present, selection now depends on service discovery order instead of rejecting the ambiguity. A non-FIPS provider can therefore win over FIPS. Reject ties at the highest priority while allowing the lower-priority authz fallback.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Sequence parsing accepts incorrect content lengths",
+      "description": "The loop accepts a child extending beyond the declared sequence length because a negative remainder simply terminates parsing. For example, `30 05 02 01 01 02 01 02` is accepted as two integers despite declaring only five content bytes. Bound reads to the sequence content and require exact consumption; add malformed-length tests.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:55-62"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests do not exercise the larger signature curves",
+      "description": "All three tests use an unconfigured EC generator, so ES384 and ES512 do not explicitly exercise P-384 and P-521. This misses P-521\u2019s long-form DER sequence length. Generate the matching curve for each algorithm and verify the reconstructed DER signature with JCA, rather than relying only on the implementation\u2019s own round-trip.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:41-56"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Equal-priority crypto providers are silently selected",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Sequence parsing accepts incorrect content lengths",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:55-62",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests do not exercise the larger signature curves",
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:41-56",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "diff": "9e01551928c12485c55ca9e77d60d663de9966f9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:37:23.501926",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 31609,
+  "diff_chars_injected": 31609,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 78204,
+  "cached_tokens": 76032,
+  "cache_write_tokens": null,
+  "completion_tokens": 356,
+  "reasoning_tokens": 0,
+  "duration_seconds": 64.0741739156656,
+  "cost_usd": 0.015507200000000002,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,40 @@
+{
+ "case": "cal.com-ca10600",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The password check is skipped whenever `totpCode` is nonempty, and the new branch at lines 131-145 then logs the user in with just a backup code. A backup code plus any made-up `totpCode` gets past the password."
+  ],
+  "F2": [
+   "DROP",
+   "The race is real in theory, but exploiting it means firing concurrent logins with the same code inside a very small window, and rate limiting is in place, so the practical impact is low."
+  ],
+  "F3": [
+   "KEEP",
+   "The change moved `onEnable` behind the backup-codes Close button. Closing with Escape or an outside click goes through `onOpenChange`, which skips both `viewer.me` invalidation and `resetState`, so the settings switch shows two-factor as disabled when it is on."
+  ],
+  "F4": [
+   "DROP",
+   "The codes stay on screen and there is a Download button, so a failed clipboard write after a success toast is a minor UX issue, not a real risk of losing the codes."
+  ],
+  "F5": [
+   "DROP",
+   "Taking the show/hide password button out of the tab order looks like a deliberate UX choice. It is an accessibility nitpick, not a functional defect that should block the merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.1948356
+}

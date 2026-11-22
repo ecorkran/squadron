@@ -1,0 +1,30 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "ensure_loaded!` is only called from `set_locale`, and `translate` only loads `config.locale`, so jobs and `with_locale` paths never load the fallback locales. A miss is then cached under a key built from the locale alone."
+  ],
+  "F2": [
+   "KEEP",
+   "The site setting is read from memory after the first load, so \"a DB read on every lookup\" is wrong. But the new `SiteSetting.default_locale` call inside every fallback lookup has no guard: it refreshes from the DB when no settings are loaded and can raise from inside I18n. `db.rake` guards the same call with `rescue :en`."
+  ],
+  "F3": [
+   "DROP",
+   "set_locale` works today because `I18n.fallbacks` is always a `FallbackLocaleList`; the failure only happens if someone re-adds the config line later, which is not a current defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.160484
+}

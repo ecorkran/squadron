@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The denial key leaves out the identity type, so `anonymous:0` and `render:0` (both UID \"0\") build the same key. A cached anonymous denial would then wrongly deny a renderer request that should be allowed."
+  ],
+  "F2": [
+   "KEEP",
+   "The `_` delimiter is ambiguous and legacy UIDs may contain `_`, so `name=\"a_b\",folder=\"c\"` and `name=\"a\",folder=\"b_c\"` build the same denial key. A denial for one resource then wrongly denies the other."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.141292
+}

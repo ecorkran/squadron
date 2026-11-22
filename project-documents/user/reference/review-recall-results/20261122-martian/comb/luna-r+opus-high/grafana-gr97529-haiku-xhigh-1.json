@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Accurate, but after `Stop()` the backend lifecycle is already shut down, so late RPCs still fail. The only change is which error the caller sees, not wrong data."
+  ],
+  "F2": [
+   "KEEP",
+   "Removing the build-wide lock opens a real lost-update race. The watch goroutine can build index A and write an event to it, then a concurrent Search build (B, from an earlier snapshot) overwrites the cache entry at bleve.go:138, and B is missing that event."
+  ],
+  "F3": [
+   "KEEP",
+   "TotalDocs` ranges over `b.cache` with no lock, and the diff adds a startup call (search.go:216) that runs while the event goroutine may already be writing the map through `BuildIndex`. Concurrent map read and write is a fatal runtime error, and the fix is one RLock."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2
+ ],
+ "cost_usd": 0.15242050000000001
+}

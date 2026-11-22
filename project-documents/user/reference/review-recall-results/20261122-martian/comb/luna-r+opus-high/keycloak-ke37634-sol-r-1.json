@@ -1,0 +1,36 @@
+{
+ "case": "keycloak-ke37634",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The matcher reads `substring(3, 5)` instead of the grant at `[4, 6)`, and its check is inverted, so in practice it accepts IDs with any grant and the integration tests never really check the grant."
+  ],
+  "F2": [
+   "DROP",
+   "The test does pass because of an NPE, but production decoding correctly throws IllegalArgumentException for unknown shortcuts, so this is test-tightening on a path that already works."
+  ],
+  "F3": [
+   "KEEP",
+   "The interface docs suggest 3-letter shortcuts, but the decoder needs exactly 2 grant characters, so tokens from a custom grant with a 3-letter shortcut are issued and then always fail to decode."
+  ],
+  "F4": [
+   "KEEP",
+   "Line 73 null-checks `grantType` a second time instead of `rawTokenId`, so the intended invariant is never enforced and a null ID silently encodes as `...:null`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  3
+ ],
+ "cost_usd": 0.2334206
+}

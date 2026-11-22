@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` exposes the website host and sometimes path without applying the anonymous TL0 restriction."
+  ],
+  "F2": [
+   "KEEP",
+   "The predicate lacks `?`, so AMS ignores the presence check and serializes `website_name` even when it is null."
+  ],
+  "F3": [
+   "KEEP",
+   "Editing and saving updates `website` but never refreshes `website_name`, leaving the persistent profile header label stale."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0687214
+}

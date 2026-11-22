@@ -1,0 +1,31 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The empty update does not advance `SelectedCalendar.updatedAt`, so the intended refresh timestamp is never recorded."
+  ],
+  "F2": [
+   "KEEP",
+   "Delegated calendars expose credential ID `-1`, which cannot match cache status stored under a persisted credential ID."
+  ],
+  "F3": [
+   "KEEP",
+   "Without `onChanged`, successful deletion leaves the connected-calendar query stale and the cache controls visible."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.01291259
+}

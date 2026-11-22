@@ -1,0 +1,19 @@
+{
+ "case": "amoeba slice 260 task file at amoeba 1be45d3a, reviewed against its slice design",
+ "key": "17 items, squadron issue #383 comment of 2026-11-21",
+ "graded_by": "one reader (the assistant), finding text against the key; not blind; findings are indexes into out/amoeba260-<alias>-1.json",
+ "hits": {
+  "K01": {"haiku-xhigh": [4], "hy4": [5]},
+  "K08": {"hy4": [14]},
+  "K09": {"haiku-xhigh": [28], "hy4": [12]},
+  "K10": {"haiku-xhigh": [3], "hy4": [0], "mimo": [1]},
+  "K11": {"haiku-xhigh": [0], "hy4": [1], "mimo": [0]},
+  "K12": {"haiku-xhigh": [8]},
+  "K13": {"mimo": [1]}
+ },
+ "borderline": {
+  "K07": {"hy4": [6], "minimax31-flash": [10], "note": "both raise the Docker task that can block upstream of later tasks; hy4 names the final commit marker, the key names the container section's marker"}
+ },
+ "not_found": ["K02", "K03", "K04", "K05", "K06", "K14", "K15", "K16", "K17"],
+ "cost_usd": {"haiku-xhigh": 1.08, "hy4": 0.40, "mimo": 0.12, "minimax31-flash": 0.13}
+}

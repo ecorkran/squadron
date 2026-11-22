@@ -1,0 +1,97 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Refactor preserves the existing monitor failure behavior",
+      "description": "Inspected all four changed files and the existing `test_mark_failed.py` coverage. The extraction preserves threshold evaluation, incident creation, muting, occurrence payloads, and failure signaling. Existing tests exercise these behaviors through the unchanged `mark_failed` entry point. No actionable regressions were identified.\n\nThe available tools cannot execute commands, so this review used the supplied diff and verified source files; the requested `git diff` and tests were not run.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/mark_failed.py:79"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Refactor preserves the existing monitor failure behavior",
+      "location": "src/sentry/monitors/logic/mark_failed.py:79",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "diff": "b695d416e601becddb96a381968cc3b5c8f1bd40...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:35:59.174998",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "injected": [],
+  "files_read": [
+    "src/sentry/monitors/logic/incident_occurrence.py",
+    "src/sentry/monitors/logic/incidents.py",
+    "src/sentry/monitors/logic/mark_failed.py",
+    "src/sentry/monitors/types.py",
+    "tests/sentry/monitors/logic/test_mark_failed.py"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep mark_failed_threshold|create_issue_platform_occurrence|mark_failed\\.(get_failure_reason|get_monitor_environment_context)|from sentry.monitors.logic.mark_failed import in .",
+    "list_files * in tests/sentry/monitors",
+    "list_files *AGENTS* in .",
+    "grep mark_failed_threshold|create_issue_platform_occurrence|mark_failed\\.(get_failure_reason|get_monitor_environment_context)|from sentry.monitors.logic.mark_failed import in tests",
+    "grep ^from|^import in src/sentry/monitors/models.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 445,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21046,
+  "diff_chars_injected": 21046,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 53447,
+  "cached_tokens": 37067,
+  "cache_write_tokens": null,
+  "completion_tokens": 559,
+  "reasoning_tokens": 81,
+  "duration_seconds": 18.331766666378826,
+  "cost_usd": 0.042056699999999995,
+  "cost_basis": "alias_pricing"
+}

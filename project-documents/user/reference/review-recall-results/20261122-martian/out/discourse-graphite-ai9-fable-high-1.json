@@ -1,0 +1,191 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Fallback locales are only loaded on controller requests",
+      "description": "The accelerator makes locale loading explicit (`lib/freedom_patches/translate_accelerator.rb:25-29`), and `I18n.translate` only loads `config.locale` (line 68). The site-default and `:en` fallbacks are loaded only by `I18n.fallbacks.ensure_loaded!` in `set_locale`. Any path that never runs that filter gets fallback lookups against unloaded locales, which return nothing and yield \"translation missing\":\n\n- **Sidekiq jobs:** `app/jobs/base.rb:151` sets `I18n.locale = SiteSetting.default_locale` in a process that never serves a controller request.\n- **`with_locale` blocks:** `app/services/post_alerter.rb:138` and `lib/post_destroyer.rb:102` switch locale without loading its fallbacks.\n- **Rake tasks:** `lib/tasks/db.rake:3,28` set the locale directly.\n\nFix: do the loading inside `I18n.translate`, e.g. `I18n.fallbacks[config.locale].each { |l| ensure_loaded!(l) }` in place of line 68, so it is independent of the entry point. The controller call then becomes unnecessary.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/application_controller.rb:159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Translation cache key ignores the fallback chain",
+      "description": "The LRU key is `\"#{key}#{config.locale}#{config.backend.object_id}\"`, but the result now also depends on `SiteSetting.default_locale` via `FallbackLocaleList#[]` (`config/initializers/i18n.rb:17`). That setting is mutable at runtime and per-site in multisite.\n\n- **Stale after a setting change:** nothing outside the accelerator calls `I18n.reload!`, so a string cached via the old site locale keeps being served until evicted.\n- **Cross-site leakage:** in multisite, a string resolved through site A's default locale can be served to site B for the same user locale and key.\n- **Cached misses:** combined with the finding above, a \"translation missing\" result computed before the fallback locale was loaded is frozen into the cache.\n\nFix: include the site default locale (or the joined fallback chain) in the cache key.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "lib/freedom_patches/translate_accelerator.rb:72"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No specs for the new fallback behaviour",
+      "description": "Nothing under `spec/` references `FallbackLocaleList`, `I18n.ensure_loaded!` or fallback resolution. The existing locale tests in `spec/controllers/application_controller_spec.rb` (around lines 92-101) only cover locale selection. Missing cases:\n\n- the user \u2192 site \u2192 `:en` ordering, including de-duplication;\n- `ensure_loaded!` actually loading an unloaded locale;\n- `set_locale` loading the fallback chain;\n- a key missing in the user locale resolving from the site locale and then English.\n\nThe change also turns fallbacks on in development and test, where they were previously production/profile only, so existing specs now run under different lookup semantics with nothing pinning it.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:12-23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`FallbackLocaleList#[]` edge cases",
+      "description": "- **Dead `.compact`:** it cannot guard a nil site locale, because `SiteSetting.default_locale.to_sym` would raise first; it only strips a nil `locale` argument.\n- **No normalisation of `locale`:** a string such as the `locale: 'en'` passed at `app/mailers/user_notifications.rb:48` produces `['en', <site locale>, :en]`, which `uniq` does not de-duplicate. `locale && locale.to_sym` would fix it.\n- **Site setting read on every uncached lookup:** each backend lookup now reads `SiteSetting.default_locale`. `lib/tasks/db.rake:3` (`rescue :en`) suggests that read can raise when the DB is unavailable, so `I18n.t` may now fail there too; I did not confirm this.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:13-18"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ensure_loaded!` nil-guard is inconsistent with the rest of the module",
+      "description": "`ensure_loaded!` lazily initialises `@loaded_locales ||= []` outside `LOAD_MUTEX`, while `translate` (line 68) and `load_locale` (line 48) assume it is already set. Either the guard is unnecessary, or the other two can raise `NoMethodError` on nil. The method also duplicates the `include?` pre-check that `load_locale` already does under the mutex. Initialise the ivar once at definition time and have `ensure_loaded!` delegate.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "lib/freedom_patches/translate_accelerator.rb:62-65"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Initializer structure and conventions",
+      "description": "- **Ordering by comment:** the file relies on `# order: after 02-freedom_patches.rb`, whereas ordered initializers in this directory use numeric prefixes. It works only because `i18n.rb` sorts after the numbered files.\n- **Two ways to name the backend class:** line 5 includes into `I18n::Backend::Simple` and line 9 into `I18n.backend.class`. Use one.\n- **Unneeded `Hash` inheritance:** `FallbackLocaleList < Hash` overrides only `[]`, so `fetch`, `key?`, `each` and the rest silently behave as an empty hash. A plain object responding to `[]` would be more honest.\n- **Misplaced responsibility:** `ensure_loaded!` on the list reads the global `I18n.locale`, which belongs with the loader in the accelerator rather than on the fallback list.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "config/initializers/i18n.rb:1-24"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fallback locales are only loaded on controller requests",
+      "location": "app/controllers/application_controller.rb:159",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Translation cache key ignores the fallback chain",
+      "location": "lib/freedom_patches/translate_accelerator.rb:72",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No specs for the new fallback behaviour",
+      "location": "config/initializers/i18n.rb:12-23",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`FallbackLocaleList#[]` edge cases",
+      "location": "config/initializers/i18n.rb:13-18",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`ensure_loaded!` nil-guard is inconsistent with the rest of the module",
+      "location": "lib/freedom_patches/translate_accelerator.rb:62-65",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Initializer structure and conventions",
+      "location": "config/initializers/i18n.rb:1-24",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9",
+    "diff": "3bf663a6c4c82bf9a92dadde7cf9de567813f102...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:42:27.071302",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "injected": [],
+  "files_read": [
+    "lib/freedom_patches/translate_accelerator.rb",
+    "config/initializers/i18n.rb",
+    "app/controllers/application_controller.rb",
+    "app/jobs/base.rb",
+    "lib/js_locale_helper.rb",
+    "lib/tasks/db.rake",
+    "config/initializers/02-freedom_patches.rb",
+    "app/models/user.rb"
+  ],
+  "searches": [
+    "list_files config/initializers/* in .",
+    "grep fallbacks|ensure_loaded|loaded_locales|I18n\\.locale\\s*= in .",
+    "grep ^\\s+(i18n|rails|activesupport|rails-i18n|lru_redux) \\( in .",
+    "grep I18n\\.with_locale|locale:\\s|effective_locale|i18n\\.fallbacks|translate_accelerator|I18n\\.backend in .",
+    "grep I18n\\.reload!|default_locale in .",
+    "grep fallback|ensure_loaded|translate_accelerator|translation missing in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai9/spec",
+    "grep set_locale|table_exists in ."
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 4351,
+  "diff_chars_injected": 4351,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 83712,
+  "cached_tokens": 59440,
+  "cache_write_tokens": 24264,
+  "completion_tokens": 12284,
+  "reasoning_tokens": null,
+  "duration_seconds": 115.24399533309042,
+  "cost_usd": 0.8919004000000001,
+  "cost_basis": "provider"
+}

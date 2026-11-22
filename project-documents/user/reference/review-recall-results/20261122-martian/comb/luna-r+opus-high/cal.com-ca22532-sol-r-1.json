@@ -1,0 +1,31 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "SelectedCalendar.updatedAt` is `@updatedAt`, but Prisma only stamps it when the update has other fields, and `updateMany` with empty data writes nothing, so the timestamp the comment promises never moves."
+  ],
+  "F2": [
+   "KEEP",
+   "Delegated connections come back with in-memory credential id `-1` (`delegationCredential/server.ts:86`), while the cache is stored under the saved credential id, so `getCacheStatusByCredentialIds` never finds their cache and the status and delete controls stay hidden."
+  ],
+  "F3": [
+   "KEEP",
+   "deleteCacheMutation` refreshes only through the optional `onSuccess`, `EventAdvancedTab` gives the wrapper no `onChanged`, and the query has `refetchOnWindowFocus: false`, so the old timestamp and delete action stay on screen after a successful delete."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.2338703
+}

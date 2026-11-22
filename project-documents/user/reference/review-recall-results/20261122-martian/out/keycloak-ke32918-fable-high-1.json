@@ -1,0 +1,253 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Update invalidation is skipped for org-linked IDPs whose organization is disabled, leaving stale login caches",
+      "description": "`update()` passes `getById(...)` as `original` (line 91). With the organization feature on, that is the wrapper from `createOrganizationAwareIdentityProviderModel` (lines 432-446), whose `isEnabled()` is false when the organization or realm-level organizations are disabled. The cached ID sets, by contrast, come from the JPA query, which filters on the raw `enabled` column only. So the invalidation decision and the cache contents use different definitions of \"enabled\".\n\nFailure sequence:\n1. A public, enabled IDP X is linked to an org and its ID is in the `ORG_ONLY`/`ALL` login caches.\n2. The org is disabled. Nothing invalidates the login keys: `InfinispanOrganizationProvider.registerOrganizationInvalidation` (lines 300-308) only touches the org id, `cacheKeyOrgId` and domain keys.\n3. An admin updates X to `hideOnLogin=true`, `linkOnly=true`, or `kc.org.broker.public=false`.\n4. `getLoginPredicate().test(original)` is false (wrapper reports disabled) and `test(updated)` is false, so line 405 returns without invalidating.\n5. The org is re-enabled (again no login-cache invalidation).\n6. `getForLogin` serves X from the cached ID set. `OrganizationAwareIdentityProviderBean` (lines 75, 80) re-checks only `isEnabled()`, so a hidden, link-only or non-public broker appears on the login page until some unrelated change invalidates the key.\n\nA second gap in the same method: toggling `BROKER_PUBLIC` on an IDP not linked to any org skips invalidation at lines 409-411 (predicate true before and after, `organizationId` null on both sides). The delegate result for `ORG_ONLY`/`ALL` with a null organization does change, because the default `getForLogin` (`IdentityProviderStorageProvider.java:173-181`) filters only on `BROKER_PUBLIC=true` and does not require an organization link.\n\nSuggested fix: evaluate the predicate against the raw stored state (e.g. `idpDelegate.getById`, as `remove()` already does with `idpDelegate.getByAlias`) and include the `BROKER_PUBLIC` value in the \"unchanged\" comparison. Alternatively, have the consumer re-apply the full login predicate rather than only `isEnabled()`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:403-418"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test cleanup targets a non-existent alias, so the created IDPs leak into the shared realm",
+      "description": "Both cleanup registrations (line 381 inside the loop, and again around line 425 for `idp-alias-20`) use `testRealm().identityProviders().get(\"alias\")::remove`. No IDP has the literal alias `\"alias\"`; they should be `\"idp-alias-\" + i` and `\"idp-alias-20\"`. `TestCleanup.addCleanup` swallows every exception (`TestCleanup.java:65-72`), so the resulting 404 is silent and all the IDPs survive the test. The test realm is not re-imported per method (`AbstractKeycloakTest.isImportAfterEachMethod()` returns false).\n\nThis was copied from the same mistake in `testCacheIDPByOrg` (line 303). The new test asserts exact counts (5 / 5 / 10, then 6 / 5 / 11, then 5 / 6 / 11), so leftover login-eligible IDPs from another test in the class can make it order-dependent.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:381"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test coverage misses invalidation-critical paths and asserts only cache internals",
+      "description": "`testCacheIDPForLogin` inspects `IdentityProviderListQuery` contents but never asserts on the stream returned by `getForLogin`. The cached-hit path, the `idp == null` fallback (provider lines 247-250) and the in-transaction `isInvalid` path (lines 217-219) are therefore unverified. Scenarios not covered:\n- creating or removing an IDP that does qualify for login (only the non-qualifying case is asserted);\n- `ORG_ONLY`/`ALL` with a null organization, which is what `OrganizationAwareIdentityProviderBean` actually calls;\n- changing `BROKER_PUBLIC`, `linkOnly` or `enabled` on an org-linked IDP;\n- disabling an organization (the case behind the first finding);\n- the new `idp.isEnabled()` re-check in `OrganizationAwareIdentityProviderBean`, which has no test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:370-536"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`getForLogin` duplicates `getByOrganization` almost line for line",
+      "description": "Lines 214-255 repeat the list-query caching algorithm of lines 168-211: invalid check, load or extend `IdentityProviderListQuery`, resolve IDs through `getById`, fall back to the delegate on a miss. Only the cache key, search key and delegate call differ. A private helper taking the key, search key and a `Supplier<Stream<IdentityProviderModel>>` would remove about 40 duplicated lines of revision-sensitive logic.\n\nSmaller duplication in the same change:\n- the `for (FetchMode mode : FetchMode.values()) registerInvalidation(...)` loop appears at both 385-387 and 415-417;\n- `registerIDPLoginInvalidationOnUpdate` builds and evaluates `getLoginPredicate()` up to four times (lines 405, 409) instead of computing two booleans once.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:214-255"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`getLoginPredicate()` contract changed in the public SPI without documentation",
+      "description": "The predicate now also requires org-linked IDPs to have `BROKER_PUBLIC=true`. That condition is not one of the `LoginFilter` enum values, so `getLoginPredicate()` and `getLoginSearchOptions()` no longer describe the same rule. The enum Javadoc (\"contains all fields that are considered\u2026\", line 216) and the `getForLogin` Javadoc are unchanged, and the method itself has no Javadoc.\n\nThe change also affects an existing caller: `IdentityProviderBean.federatedProviderPredicate()` (`IdentityProviderBean.java:225-227`) will now filter out non-public org-linked IDPs for users with linked federated identities. In `OrganizationAwareIdentityProviderBean.federatedProviderPredicate()` (lines 86-97) the new clause partly duplicates the existing org check.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:252-256"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`remove()` now always hits the database, and the null-IDP path is still unguarded",
+      "description": "`idpDelegate.getByAlias(alias)` now runs unconditionally at line 100, where it previously ran only when the alias key was invalidated; the JPA `remove` then loads the same entity again. The comment at line 102 (\"lookup idp by alias in cache\u2026\") no longer describes the code.\n\nIf the alias does not exist, `registerIDPLoginInvalidation(null)` is safe thanks to the `Objects::nonNull` guard. But `registerIDPInvalidation(storedIdp)` at line 103 still throws a NullPointerException when the key is invalid. That behaviour predates this change; now that `storedIdp` is in hand, an early `if (storedIdp == null) return false;` would close it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:98-113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Login cache granularity is coarse for realms with many organizations",
+      "description": "Each `FetchMode` has a single cache entry holding a map of organization id to IDP IDs. The first lookup for every new organization invalidates the whole entry and re-adds a copy of the full map (lines 236-240). Any login-relevant IDP change in the realm drops all three entries for all organizations. A cache hit still costs one `getById` per IDP (lines 245-252). This matches the existing `getByOrganization` design, but it now sits on the login-page hot path.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:233-241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Consumer has to compensate for provider semantics",
+      "description": "The added `idp.isEnabled()` re-check is duplicated on lines 75 and 80, and is needed because `getForLogin` can return models whose org-aware `isEnabled()` is false. That makes \"returns IDPs available for login\" untrue for the caching provider, and every other caller must know to re-filter. Applying the filter inside `InfinispanIdentityProviderStorageProvider.getForLogin` would keep the contract in one place.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java:75-80"
+    },
+    {
+      "severity": "PASS",
+      "title": "Direct invalidation on create, remove and organization link/unlink",
+      "description": "`create` and `remove` register invalidation for all `FetchMode` keys when the IDP qualifies for login, and `remove` evaluates the predicate against the raw stored model. Organization link/unlink and organization removal go through `session.identityProviders().update(...)` (`JpaOrganizationProvider.java:141, 341-342, 368-371`), so they reach the `organizationId` comparison and invalidate correctly. The cache key and revision handling match the established `getByOrganization` pattern.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:82-113"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Update invalidation is skipped for org-linked IDPs whose organization is disabled, leaving stale login caches",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:403-418",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test cleanup targets a non-existent alias, so the created IDPs leak into the shared realm",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:381",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage misses invalidation-critical paths and asserts only cache internals",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java:370-536",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`getForLogin` duplicates `getByOrganization` almost line for line",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:214-255",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`getLoginPredicate()` contract changed in the public SPI without documentation",
+      "location": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java:252-256",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`remove()` now always hits the database, and the null-IDP path is still unguarded",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:98-113",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Login cache granularity is coarse for realms with many organizations",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:233-241",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Consumer has to compensate for provider semantics",
+      "location": "services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java:75-80",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Direct invalidation on create, remove and organization link/unlink",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:82-113",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "diff": "d7fe6b4e11d37a69fbabd9be670162f59430de44...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:38:27.761260",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [],
+  "files_read": [
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+    "services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java",
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/IdentityProviderListQuery.java",
+    "services/src/main/java/org/keycloak/forms/login/freemarker/model/IdentityProviderBean.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+    "model/jpa/src/main/java/org/keycloak/models/jpa/JpaIdentityProviderStorageProvider.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/admin/AbstractOrganizationTest.java"
+  ],
+  "searches": [
+    "list_files model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/*.java in .",
+    "grep getForLogin|getLoginPredicate in .",
+    "grep identityProviders\\(\\)\\.(update|remove|create)\\(|getIdentityProviders\\(|addIdentityProvider|removeIdentityProvider in .",
+    "grep ORGANIZATION_ID|BROKER_PUBLIC|getByAlias|public boolean remove|getLoginSearchOptions|HIDE_ON_LOGIN|LINK_ONLY in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/model/jpa/src/main/java/org/keycloak/models/jpa/JpaIdentityProviderStorageProvider.java",
+    "grep identityProviders\\(\\)|registerInvalidation|isEnabled|setEnabled in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/organization",
+    "grep identityProviders\\(\\)|BROKER_PUBLIC|setOrganizationId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/model/jpa/src/main/java/org/keycloak/organization/jpa",
+    "grep equals\\(|hashCode\\(|getConfig\\(\\)|Map<String, String> config|public boolean isEnabled|getOrganizationId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/server-spi/src/main/java/org/keycloak/models/IdentityProviderModel.java",
+    "list_files testsuite/integration-arquillian/tests/base/src/**/TestCleanup.java in .",
+    "list_files testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/admin/AbstractOrganizationTest.java in .",
+    "grep addCleanup|executeCleanup|NotFoundException|catch \\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/testsuite/integration-arquillian/tests/base/src/main/java/org/keycloak/testsuite/util/TestCleanup.java",
+    "grep OrganizationAwareIdentityProviderBean\\(|new IdentityProviderBean\\( in .",
+    "grep getCleanup\\(\\)|getCleanup\\(String|removeCleanup|importTestRealm|isImportAfterEachMethod in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AbstractKeycloakTest.java",
+    "grep isImportAfterEachMethod in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite",
+    "grep public boolean remove\\(OrganizationModel in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/model/jpa/src/main/java/org/keycloak/organization/jpa/JpaOrganizationProvider.java",
+    "grep registerOrganizationInvalidation\\(|public boolean (remove|addIdentityProvider|removeIdentityProvider) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/organization"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23352,
+  "diff_chars_injected": 23352,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 367470,
+  "cached_tokens": 281264,
+  "cache_write_tokens": 86194,
+  "completion_tokens": 20124,
+  "reasoning_tokens": null,
+  "duration_seconds": 192.69609479093924,
+  "cost_usd": 2.2415319,
+  "cost_basis": "provider"
+}

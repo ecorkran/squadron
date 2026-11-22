@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In dark themes the new background at line 239 is `scale-color($secondary, 30%)` (about `#4d4d4d`), but the text is still `$secondary` (black), so 11px badge counts are hard to read; the change caused this."
+  ],
+  "F2": [
+   "KEEP",
+   "mobile/topic-post.scss:182` sets light-theme h3 to `scale-color($primary, 50%)`, the same as h4, while the desktop equivalent keeps 20%/80%, so mobile topic-map headings are fainter in light themes than before."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0701506
+}

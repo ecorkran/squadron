@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Equal-priority providers leave selection dependent on service-discovery order, which can select a non-FIPS provider when FIPS is required."
+  ],
+  "F2": [
+   "KEEP",
+   "readSequence()` accepts children beyond the declared sequence length, allowing malformed signatures to be accepted."
+  ],
+  "F3": [
+   "DROP",
+   "The tests could better cover additional curves and signature validity, but this is a test-coverage gap rather than a demonstrated defect in the conversion code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00202679
+}

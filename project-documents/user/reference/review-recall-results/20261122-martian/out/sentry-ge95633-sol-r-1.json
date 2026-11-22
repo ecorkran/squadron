@@ -1,0 +1,173 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Strategy recreation reuses a permanently shut-down queue pool",
+      "description": "The factory creates its queue pool once during initialization and passes that same pool to every new strategy. However, `SimpleQueueProcessingStrategy.close()` permanently shuts down that pool. When a strategy is closed and recreated during partition reassignment, the replacement therefore receives stopped workers and shut-down queues.\n\nSubsequent submissions raise `queue.ShutDown`; the blanket exception handler in `submit()` then marks those messages complete without processing them, allowing their offsets to be committed. Create a fresh pool for each strategy lifecycle, or keep a factory-owned pool alive with explicit assignment isolation. Add a close-and-recreate regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/result_consumer.py:244-259"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Graceful shutdown abandons queued work and stops commits before draining",
+      "description": "`close()` stops and joins the commit thread before shutting down the workers, so messages completed afterward cannot receive a final commit. Furthermore, `FixedQueuePool.shutdown()` sets every worker's shutdown flag before calling `Queue.shutdown(immediate=False)`. Workers exit their processing loop after their current item instead of draining the queued items.\n\nConsequently, graceful shutdown can abandon accepted work and replay already processed messages on restart. Separate closing submissions from draining, wait for queued and active work within the join timeout, and commit the final completed offsets before returning. The shutdown test currently checks only that the factory clears its pool reference.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unbounded queues provide no consumer backpressure",
+      "description": "Each worker receives an unbounded `queue.Queue()`, and submission always enqueues without checking capacity or rejecting the message. If processing falls behind ingestion, decoded results, original Kafka messages, and offset-tracking sets can grow without bound until the consumer exhausts memory. This contradicts the strategy's documented backpressure guarantee.\n\nBound queued/in-flight work and signal Arroyo backpressure when capacity is exhausted. Ensure any rejection is propagated rather than caught by the blanket submission handler and marked complete.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:185"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Processing exceptions still make failed messages committable",
+      "description": "The worker logs processing exceptions but calls `complete_offset()` unconditionally in `finally`. For example, if offset 100 raises and 101 succeeds, both become eligible for commit, permanently skipping the failed result. Submission failures are similarly marked complete at lines 317\u2013326.\n\nThis contradicts the strategy's \u201conly commits offsets after successful processing\u201d guarantee and the new error-handling test's expectation. Define an explicit failure policy: propagate failures for replay, retry them, or deliberately route/drop them through an established mechanism rather than treating every exception as successful completion.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:144-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Error-handling test can pass before the faulty commit occurs",
+      "description": "The test waits only 0.2 seconds after both processor calls, then asserts that nothing was committed. The commit loop runs once per second, so the test can pass simply because the first commit cycle has not occurred\u2014even though the worker has already marked the failed message complete. It is also timing-dependent on slower runs.\n\nSynchronize the test with an actual commit-loop iteration or expose a deterministic commit step, then verify that the failed offset cannot be crossed. Close the strategy during cleanup as well; `factory.shutdown()` alone leaves its commit thread running.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py:1911-1924"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Strategy recreation reuses a permanently shut-down queue pool",
+      "location": "src/sentry/remote_subscriptions/consumers/result_consumer.py:244-259",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Graceful shutdown abandons queued work and stops commits before draining",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-345",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Unbounded queues provide no consumer backpressure",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:185",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Processing exceptions still make failed messages committable",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:144-149",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Error-handling test can pass before the faulty commit occurs",
+      "location": "tests/sentry/uptime/consumers/test_results_consumer.py:1911-1924",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "diff": "f438c4be9d36953d2bc72e0cce4c7eeb5e0b4016...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:36:24.179542",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "injected": [],
+  "files_read": [
+    "CLAUDE.md",
+    "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "src/sentry/consumers/__init__.py",
+    "tests/sentry/remote_subscriptions/consumers/test_queue_consumer.py",
+    "tests/sentry/uptime/consumers/test_results_consumer.py",
+    "tests/sentry/remote_subscriptions/__init__.py",
+    "tests/sentry/remote_subscriptions/consumers/__init__.py"
+  ],
+  "searches": [
+    "list_files * in .",
+    "list_files *arroyo* in .",
+    "grep def (close|join|terminate)\\(|MessageRejected in src/sentry",
+    "list_files * in src/sentry/remote_subscriptions",
+    "grep work_queue:.*queue.Queue|worker.shutdown =|def close|def join|self.queue_pool = FixedQueuePool|queue_pool=self.queue_pool|complete_offset\\(work_item|except Exception|def create_thread_queue in src/sentry/remote_subscriptions/consumers",
+    "grep def test_thread_queue_parallel_error_handling|time.sleep\\(0.2\\)|assert len\\(committed_offsets\\)|factory.shutdown\\(\\) in tests/sentry/uptime/consumers/test_results_consumer.py",
+    "grep MessageRejected in src/sentry"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 443,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 55882,
+  "diff_chars_injected": 55882,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 5,
+  "prompt_tokens": 161183,
+  "cached_tokens": 112050,
+  "cache_write_tokens": null,
+  "completion_tokens": 1816,
+  "reasoning_tokens": 504,
+  "duration_seconds": 35.788164666853845,
+  "cost_usd": 0.12763100000000002,
+  "cost_basis": "alias_pricing"
+}

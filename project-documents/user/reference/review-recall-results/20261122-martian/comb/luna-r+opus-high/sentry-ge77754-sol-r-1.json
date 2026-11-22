@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "queued: datetime = timezone.now()` at `assignment_source.py:18` runs once, when the module is imported. So every `AssignmentSource` built by `from_integration` gets the same stale timestamp, and `to_dict()` passes it into queued tasks. The fix is `field(default_factory=timezone.now)`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0306517
+}

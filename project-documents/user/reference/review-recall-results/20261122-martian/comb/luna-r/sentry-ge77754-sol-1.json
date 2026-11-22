@@ -1,0 +1,24 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The dataclass evaluates `timezone.now()` once at import, so later assignment sources receive a stale shared timestamp."
+  ],
+  "F2": [
+   "DROP",
+   "This requests tests for behavior the inbound source propagation and same-integration suppression already implement."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0013058500000000001
+}

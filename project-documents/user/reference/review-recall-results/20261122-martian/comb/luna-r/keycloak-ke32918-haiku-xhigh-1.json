@@ -1,0 +1,36 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Changes to `BROKER_PUBLIC` on a realm-level IDP can alter `ORG_ONLY` results without invalidating the login cache."
+  ],
+  "F2": [
+   "KEEP",
+   "The org-aware original model can mask an IDP-level change while its organization is disabled, leaving stale login results after re-enabling it."
+  ],
+  "F3": [
+   "DROP",
+   "Missing test coverage alone is not a defect requiring action before merge."
+  ],
+  "F4": [
+   "KEEP",
+   "The new cleanup callbacks target a nonexistent alias, leaving the created IDPs behind and potentially polluting later tests."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3
+ ],
+ "cost_usd": 0.0022177800000000004
+}

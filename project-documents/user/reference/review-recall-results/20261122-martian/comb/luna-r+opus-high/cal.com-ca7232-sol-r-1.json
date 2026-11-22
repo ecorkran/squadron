@@ -1,0 +1,30 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Booking cancellation now only sets `cancelled: true`, and the actual SendGrid cancel waits for the cron, which runs every 15 minutes, so a reminder due within about 25 minutes can miss SendGrid's 10-minute cancellation cutoff and still go out."
+  ],
+  "F2": [
+   "KEEP",
+   "The single `try` around the loop means one failed SendGrid request skips every later reminder, and the Prisma delete calls already collected never run because nothing awaits them, so each cron run hits the same failure again."
+  ],
+  "F3": [
+   "DROP",
+   "The calls do run without being awaited, but the database update starts right away and the handlers keep awaiting other work afterwards, and these cancellation calls were already left unawaited before the change, so the practical risk is speculative."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1752004
+}

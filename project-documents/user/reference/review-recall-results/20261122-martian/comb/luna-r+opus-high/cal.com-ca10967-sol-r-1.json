@@ -1,0 +1,49 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "When no destination calendar is set, `handleNewBooking.ts:1063-1067` passes `null`, so `mainHostDestinationCalendar` is undefined and `.integration` at `EventManager.ts:119` throws for Google Meet bookings."
+  ],
+  "F2": [
+   "KEEP",
+   "EventManager.ts:170` now drops `credentialId` from every video reference, and `handleCancelBooking.ts:491` only deletes a video meeting when that ID is present, so cancelled bookings leave their meetings running."
+  ],
+  "F3": [
+   "KEEP",
+   "CalendarManager.createEvent` hands each host's credential the full destination array, and Office365 (`CalendarService.ts:73-77`), Lark and CalDAV always pick the first entry, so other hosts' credentials are pointed at the main host's calendar."
+  ],
+  "F4": [
+   "KEEP",
+   "The fallback only runs when `externalCalendarId` is missing, yet it searches for `cal.externalId === externalCalendarId`, so it never matches: updates get an undefined `calendarId` and deletes silently fall back to `\"primary\"`."
+  ],
+  "F5": [
+   "KEEP",
+   "The recurring branch, now inside the per-reference loop, only uses the owner's credentials and only the first `_calendar` reference of each updated booking, so co-hosts' events created by the new multi-destination flow are never deleted."
+  ],
+  "F6": [
+   "KEEP",
+   "With billing disabled, `create.handler.ts:151-153` stores neither `slug` nor `requestedSlug`, but `publish.handler.ts:54` needs `requestedSlug` and `createTeams.handler.ts:67` needs one of the two, so onboarding breaks."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.2976416
+}

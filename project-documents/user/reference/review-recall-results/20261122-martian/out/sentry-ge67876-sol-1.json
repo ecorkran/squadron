@@ -1,0 +1,113 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "OAuth state is predictable and shared across sessions",
+      "description": "`pipeline.signature` is an MD5 of pipeline view class names (`src/sentry/pipeline/base.py`), not a session-specific secret. Every GitHub installation flow therefore accepts the same OAuth state, allowing an authorization code from another flow to pass validation. Generate and store a cryptographically random nonce per authorization attempt, as the existing `OAuth2LoginView` does, and validate it on callback.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:401-412"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Missing integrations bypass installer verification",
+      "description": "When no local integration exists, this branch advances without comparing the authenticated GitHub user to the installer. `build_integration()` subsequently fetches the supplied installation using app credentials, and `IntegrationPipeline` creates and attaches it without checking that user\u2019s access. Consequently, an installation whose webhook has not arrived can be claimed by an unrelated authenticated GitHub user. Fail closed until authoritative installer or installation-access information can be verified, and test this missing-record path.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:481-482"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reinstallation assumes optional sender metadata exists",
+      "description": "`build_integration()` includes `sender` only when supplied in pipeline state. Normal installation state does not supply it, and `ensure_integration()` replaces existing metadata with the resulting data. An integration retained without an organization association can therefore lack `sender`; attempting to reconnect it raises `KeyError` instead of displaying a controlled error. Preserve authoritative installer metadata and handle missing metadata explicitly, with a reconnect regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:500-503"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "OAuth state is predictable and shared across sessions",
+      "location": "src/sentry/integrations/github/integration.py:401-412",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Missing integrations bypass installer verification",
+      "location": "src/sentry/integrations/github/integration.py:481-482",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reinstallation assumes optional sender metadata exists",
+      "location": "src/sentry/integrations/github/integration.py:500-503",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "diff": "11980b40faffa3631be5733d29650675f30d54b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:46:14.759265",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19901,
+  "diff_chars_injected": 19901,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 53919,
+  "cached_tokens": 52096,
+  "cache_write_tokens": null,
+  "completion_tokens": 502,
+  "reasoning_tokens": 36,
+  "duration_seconds": 60.28886612504721,
+  "cost_usd": 0.013875600000000002,
+  "cost_basis": "alias_pricing"
+}

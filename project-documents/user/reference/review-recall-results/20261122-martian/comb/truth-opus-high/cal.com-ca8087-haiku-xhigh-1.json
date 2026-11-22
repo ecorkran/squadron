@@ -1,0 +1,24 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "forEach` ignores the promises from the new async callbacks, so if the now-async `getCalendar` fails (for example, the `CalendarService` constructor throws), the result is an unhandled rejection. The `try/catch` in both reschedule files can no longer catch it, and in `bookings.tsx` the mutation no longer fails."
+  ],
+  "F2": [
+   "DROP",
+   "The finding itself says the race comes from the unchanged `forEach(async` line, where `deleteEvent` was already awaited before the push. Adding `await` to `getCalendar` does not introduce the defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0974527
+}

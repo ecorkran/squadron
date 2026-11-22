@@ -1,0 +1,42 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The factory passes one `queue_pool` to every strategy, and each strategy's `close()` calls `queue_pool.shutdown()`; after a rebalance the next strategy gets a dead pool, so `put` raises `ShutDown` and the offset is still marked complete and committed even though the message was never processed."
+  ],
+  "F2": [
+   "KEEP",
+   "The worker's `finally` completes offset 100 even when processing fails, so the next 1s commit tick commits the partition; the assertion that nothing was committed passes only because the test exits early, and it contradicts its own docstring."
+  ],
+  "F3": [
+   "KEEP",
+   "get_committable_offsets` starts at `max(last_committed+1, min_offset)`, so after 100 is committed the next tick commits 103; the integration test's \"should not commit past the gap\" assertion holds only because the poll loop exits before that tick."
+  ],
+  "F4": [
+   "KEEP",
+   "queue.Queue()` has no `maxsize`, so `submit` never blocks; if processing falls behind, memory grows without limit, and the docstring's backpressure claim is false."
+  ],
+  "F5": [
+   "DROP",
+   "Processing is fast, but the main thread submits 10 items and calls `get_stats()` right away, before workers are likely to drain the queues; this is a low-probability flake in test code only."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.33665619999999996
+}

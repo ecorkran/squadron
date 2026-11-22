@@ -1,0 +1,63 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The substring check enables weighted counts for negated error filters and mixed queries that include non-error events."
+  ],
+  "F2": [
+   "KEEP",
+   "Alias-to-input remapping changes the result key while serialization still looks up the original `count()` key, yielding zero-valued buckets."
+  ],
+  "F3": [
+   "KEEP",
+   "Eligibility is checked against the outer dataset and raw query, so split queries can use different count semantics from equivalent direct queries."
+  ],
+  "F4": [
+   "KEEP",
+   "Equations and aliased counts containing `count()` bypass the rewrite and therefore return unweighted values alongside weighted counts."
+  ],
+  "F5": [
+   "DROP",
+   "The cache has a 60-second expiry consistent with the stated eventual-consistency policy, and hash collisions are too remote to warrant action."
+  ],
+  "F6": [
+   "KEEP",
+   "The function is exposed without the private-function ACL and can be called on projects where its sample-weight assumptions are not guaranteed."
+  ],
+  "F7": [
+   "DROP",
+   "The redundant assignments and repeated calls are maintainability concerns, not behavioral defects."
+  ],
+  "F8": [
+   "DROP",
+   "Missing tests and unrun tests are not themselves defects, and the substantive issues are evaluated separately."
+  ],
+  "F9": [
+   "DROP",
+   "The helper runs on normalized test events, and swallowing malformed optional sample-rate values does not establish a merge-blocking failure."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.012779000000000002
+}

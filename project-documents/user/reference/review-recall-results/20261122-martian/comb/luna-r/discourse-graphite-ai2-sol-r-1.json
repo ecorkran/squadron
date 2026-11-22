@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The GET action mutates the logged-in user\u2019s notification preference, enabling cross-site requests to change it without CSRF protection."
+  ],
+  "F2": [
+   "KEEP",
+   "When no TopicUser row exists, `tu` is nil and calling `notification_level` raises an error."
+  ],
+  "F3": [
+   "KEEP",
+   "The direct save leaves the automatic-tracking reason unset, allowing subsequent reading to promote the topic and undo the unsubscribe."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00555898
+}

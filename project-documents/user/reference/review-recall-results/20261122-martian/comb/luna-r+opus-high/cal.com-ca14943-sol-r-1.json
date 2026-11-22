@@ -1,0 +1,19 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new `prisma.workflowReminder.update` in the catch block (lines 190-197) has no guard. If the reminder was deleted mid-run, for example by `deleteScheduledSMSReminder`, Prisma throws \"record not found\", which escapes the loop and stops every remaining reminder from being scheduled. Before this change, the catch only logged the error."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0603876
+}

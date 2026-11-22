@@ -1,0 +1,31 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "checkIfIsAvailable` returns `true` at line 133-135 whenever an override exists for the day, so on override dates it never reaches the `busy.every(...)` check and can offer slots that overlap bookings or calendar events."
+  ],
+  "F2": [
+   "KEEP",
+   "workingHours.find` rejects a slot if any interval on that weekday excludes it, so split schedules like 09\u201312 plus 13\u201317 reject valid slots; also `end` is computed from `slotStartTime`, so slots that run past an interval's end are not caught."
+  ],
+  "F3": [
+   "KEEP",
+   "dateOverrides.find` returns \"unavailable\" as soon as any same-day override interval excludes the slot, so with two override intervals on one date, a slot inside one interval is still rejected because the other excludes it."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.055609099999999995
+}

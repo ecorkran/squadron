@@ -1,0 +1,48 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "V1 and V2 share the unversioned key `admin-fine-grained-authz`, and `Profile` throws if both versions are enabled, so the V1+V2 setup this finding needs cannot exist."
+  ],
+  "F2": [
+   "KEEP",
+   "ClientPermissionsV2.canExchangeTo` now throws `UnsupportedOperationException`. `V1TokenExchangeProvider` (enabled by `TOKEN_EXCHANGE`, which does not depend on the authz feature) can reach it under V2, so the request fails with a server error instead of being denied with false."
+  ],
+  "F3": [
+   "KEEP",
+   "Per-client resources are created without a `type`, so `findByType(server, \"Clients\")` matches only the all-clients resource. The method then returns the literal \"Clients\" as a client id and leaves out every per-client grant."
+  ],
+  "F4": [
+   "KEEP",
+   "init()` returns early for realms that already have the admin-permissions client, so the \"Clients\" resource can be missing. `getResourceTypeResource` then returns null, and `findByResource(server, null)` calls `resource.getId()` and throws a NullPointerException in `hasPermission(client, scope)`."
+  ],
+  "F5": [
+   "KEEP",
+   "The new per-client resources are named after the client UUID with the resource server as owner. No synchronizer or listener deletes them or their policies when the client is removed, so orphaned grants pointing at deleted clients remain (the V1+V2 crash part of this finding is wrong)."
+  ],
+  "F6": [
+   "KEEP",
+   "getResourceName` has no CLIENTS branch and returns `resource.getDisplayName()`, which is never set for client resources. `PolicyResourceService` therefore sends a null display name for client permission resources, including the all-clients one."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2,
+  3,
+  5,
+  6
+ ],
+ "cost_usd": 0.502179
+}

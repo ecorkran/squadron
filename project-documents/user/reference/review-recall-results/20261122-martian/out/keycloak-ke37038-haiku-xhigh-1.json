@@ -1,0 +1,296 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "V2 group-view lookup collects Resource UUIDs, not group IDs",
+      "description": "Group resources are created with `resourceStore.create(server, name, owner)` (server-spi-private/.../AdminPermissionsSchema.java:121). That delegates to `create(server, null, name, owner)` (ResourceStore.java:45-46), and the JPA store assigns a random UUID as the ID (JPAResourceStore.java:65-66). So `getName()` is the group ID and `getId()` is a random UUID.\n\nLine 122 passes `groupResource.getId()` into `hasPermission`, which calls `resourceStore.findByName(server, groupId)` (line 141). That lookup misses and falls back to the all-groups resource. Line 123 then adds `groupResource.getId()` to the result. The V1 version at GroupPermissions.java:313-315 correctly uses `getName()`.\n\nImpact:\n- `UsersResource.getUsersCount` (lines 425, 430) passes this set to `getUsersCount(realm, \u2026, groupIds)`. `JpaUserProvider` returns 0 for empty sets (lines 600-601, 683-684), so counts for group-scoped admins are 0.\n- `UsersResource.searchForUser` (lines 448-451) skips setting `UserModel.GROUPS` when the set is empty. The DB then returns the first `max` users realm-wide, and the in-memory `canView` filter (line 460) drops most of them. Pages come back short or empty. The filter prevents over-exposure, so this is a correctness failure rather than a leak.\n- `GroupResourceTypeEvaluationTest#testCanViewUserByViewGroupMembers` still passes, by my trace. The set is empty, so the group filter never applies, and the in-memory filter yields the expected single user. The test does not exercise the group filter.\n\nFix: use `groupResource.getName()` on lines 122-123. Add assertions on the user count and on paginated search for a group-scoped admin.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121-125"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`GroupPermissionsV2.canManage()` lets VIEW-only grants create groups",
+      "description": "`canManage()` returns `hasPermission(null, VIEW, MANAGE)`, so a VIEW grant counts as manage. Its one real caller is `GroupsResource.addTopLevelGroup` (GroupsResource.java:181, `auth.groups().requireManage()`), which gates `POST /groups`. With an all-groups VIEW grant, which the test file already creates via `createAllGroupsPermission(policy, Set.of(VIEW))`, a view-only admin passes the check and can create top-level groups.\n\nThe interface javadoc at GroupPermissionEvaluator.java:73-76 documents this VIEW behavior, so the doc needs the same fix. `testManageAllGroups` only covers a caller with no permission and a MANAGE grant, so nothing catches this.\n\nFix: `return hasPermission(null, AdminPermissionsSchema.MANAGE);`, correct the javadoc, and add a test that a VIEW-only all-groups caller gets 403 on `POST /groups`. VIEW belongs in `canView()` and `canList()`, not here.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:64-71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`/groups/count` is now reachable by view-only holders and returns unfiltered totals",
+      "description": "V2 `canList()` is now `QUERY_GROUPS || canView()` (GroupPermissions.java:147-150), and V2 `canView()` includes VIEW and MANAGE grants (GroupPermissionsV2.java:46-53). Before this diff, V2 `canList()` was role-only, so view-only callers got 403 here.\n\n`getGroupCount` calls `requireList()` and then returns `realm.getGroupsCount(...)` or `realm.getGroupsCountByNameContaining(search)` with no per-group filter. A caller with VIEW on one group can now read realm-wide totals and run name-prefix counts to enumerate group names they have no permission on.\n\nFix: apply the same per-group filter, or keep this endpoint behind a role check.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java:144-163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-element V2 policy checks now run before pagination",
+      "description": "The diff removed the `canViewGlobal` hoist here and in `GroupsResource.getGroups` (GroupsResource.java:113-114). Every subgroup now calls `auth.groups().canView(g)`. In V2 that means a role check, then `findByName`, possibly `findByResource` on the Groups all-resource, and a policy evaluation for each subgroup. `getSubGroups` applies the filter before `paginatedStream`, so the cost scales with the total subgroup count, not the page size. A caller with all-groups VIEW goes from one evaluation to N.\n\nFix: hoist the check again with `boolean all = auth.groups().canView();` and `filter(g -> all || auth.groups().canView(g))`. That is safe in V2. An all-groups grant also applies to a specific group resource, because DefaultPolicyEvaluator.java:73-74 pulls in type-level policies.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java:177-180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New V2 paths have no test coverage",
+      "description": "Missing coverage:\n1. A VIEW-only all-groups caller creating a group (FAIL 2).\n2. User count and pagination with a group-scoped VIEW_MEMBERS grant (FAIL 1).\n3. `/groups/count` for a view-only caller (CONCERN 3).\n\n`testCanViewUserByViewGroupMembers` checks only the result size, which hides the broken group filter.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ADMIN` dropped from V2 `canView(user)` and `canManage(user)` without explanation",
+      "description": "`AdminRoles.ADMIN` is a realm role. RealmManager.java:346 creates it with `realm.addRole`, and it appears in `ALL_ROLES` but not `ALL_REALM_ROLES` (AdminRoles.java:30, 57). So `hasOneAdminRole(ADMIN, \u2026)` was checking for a client role named \"admin\" on the admin client, which probably does not exist. Removing it is likely a no-op, but the change is not called out. Confirm the intent and mention it in the commit message.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java:48 and :57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Existing realms won't get the new \"Groups\" all-resource",
+      "description": "`init` returns early when the admin-permissions client already exists, so realms set up before this change never get the \"Groups\" resource-type resource. `GroupPermissionsV2.hasPermission` then passes `null` into `policyStore.findByResource` (GroupPermissionsV2.java:144-147), and the JPA policy lookup dereferences `resource.getId()` (JPAPolicyStore.java:215). The feature is EXPERIMENTAL (Profile.java:58), so the impact is limited. A null guard or a migration would close it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:250-252"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removing the `canView` post-filter in `searchForUser` is safe",
+      "description": "The diff removed `.filter(usersEvaluator::canView)` from `searchForUser`. Authorization is unchanged because `toRepresentation` applies the same filter (UsersResource.java:460). I checked this because the removal looked like a bypass.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:445-454"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two V2 evaluators use different resource-ID checks",
+      "description": "`UserPermissionsV2.hasPermission` only counts permissions whose `getResourceId()` matches the evaluated resource. `GroupPermissionsV2.hasPermission` does not apply that check. I did not determine which behavior is correct, but the two should match or the difference should be documented.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java:123"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Shared test realm now grants `QUERY_GROUPS` to every fgap test",
+      "description": "`myadmin` is shared by the whole fgap package through `AbstractPermissionTest`. Adding `QUERY_GROUPS` changes the baseline for every test in that package. Confirm this is intended, or grant the role per test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/RealmAdminPermissionsConfig.java"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Javadoc says `getGroupIdsWithViewPermission` returns a Stream",
+      "description": "The `@return` tag says \"Stream of IDs\", but the method returns `Set<String>`. The doc also does not mention the empty-result cases for cross-realm admins and missing resource servers.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:145"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "V2 group-view lookup collects Resource UUIDs, not group IDs",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121-125",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`GroupPermissionsV2.canManage()` lets VIEW-only grants create groups",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:64-71",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`/groups/count` is now reachable by view-only holders and returns unfiltered totals",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java:144-163",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Per-element V2 policy checks now run before pagination",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java:177-180",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New V2 paths have no test coverage",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/GroupResourceTypeEvaluationTest.java",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`ADMIN` dropped from V2 `canView(user)` and `canManage(user)` without explanation",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java:48 and :57",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Existing realms won't get the new \"Groups\" all-resource",
+      "location": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:250-252",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Removing the `canView` post-filter in `searchForUser` is safe",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java:445-454",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Two V2 evaluators use different resource-ID checks",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java:123",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Shared test realm now grants `QUERY_GROUPS` to every fgap test",
+      "location": "tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/RealmAdminPermissionsConfig.java",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Javadoc says `getGroupIdsWithViewPermission` returns a Stream",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java:145",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "diff": "adbf7e325f79be3b8e5cfa54483c962fd3f5683d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:43:33.878508",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "injected": [],
+  "files_read": [
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissions.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissions.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java",
+    "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissions.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionEvaluator.java",
+    "model/jpa/src/main/java/org/keycloak/models/jpa/JpaUserProvider.java",
+    "server-spi-private/src/main/java/org/keycloak/models/AdminRoles.java",
+    "rest/admin-ui-ext/src/main/java/org/keycloak/admin/ui/rest/BruteForceUsersResource.java",
+    "server-spi-private/src/main/java/org/keycloak/authorization/policy/evaluation/DefaultPolicyEvaluator.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java"
+  ],
+  "searches": [
+    "grep getGroupsWithViewPermission|getGroupIdsWithViewPermission|canManageDefault|canViewDefault|searchGroupModelsByAttributes|isImpersonatable\\(|groups\\(\\)\\.canManage\\(\\)|groups\\(\\)\\.requireManage\\(\\)|groups\\(\\)\\.canView\\(\\)|groups\\(\\)\\.requireView\\(\\)|groups\\(\\)\\.canList|groups\\(\\)\\.requireList in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep AdminRoles\\.ADMIN\\b|String ADMIN\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep public Resource create\\(ResourceServer|setId\\(KeycloakModelUtils|generateId\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep AdminPermissionsSchema\\.SCHEMA\\.init|SCHEMA\\.init\\(|\\.init\\(session, realm\\)|AdminPermissionsSchema\\.SCHEMA\\.init in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep Resource create\\(ResourceServer resourceServer, String name, String owner\\)|default Resource create|Resource create\\(ResourceServer in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep ADMIN_FINE_GRAINED_AUTHZ_V2|ADMIN_FINE_GRAINED_AUTHZ\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/common/src/main/java/org/keycloak/common/Profile.java",
+    "grep UserModel\\.GROUPS|getUsersCount\\(RealmModel realm, Set<String> groupIds|getUsersCount\\(RealmModel realm, Map<String, String> attributes, Set<String>|isEmpty\\(\\)\\) return|Set<String> groupIds in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/model/jpa/src/main/java/org/keycloak/models/jpa",
+    "grep \\.requireManage\\(\\)|\\.canManage\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/services/src/main/java/org/keycloak/services/resources/admin",
+    "grep Arrays\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/UserResourceTypeEvaluationTest.java",
+    "grep findByResourceType|getResourceType\\(\\)|ResourceType\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/services/src/main/java/org/keycloak/authorization",
+    "grep findByResourceType\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep ModelToRepresentation|Predicate|canViewGlobal in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/services/src/main/java/org/keycloak/services/resources/admin",
+    "grep public List<Policy> findByResource\\(ResourceServer resourceServer, Resource resource\\)|public void findByResource\\(ResourceServer resourceServer, Resource resource, Consumer in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAPolicyStore.java",
+    "grep RealmAdminPermissionsConfig in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/tests"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 66033,
+  "diff_chars_injected": 66033,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 38,
+  "prompt_tokens": 2167363,
+  "cached_tokens": 1991248,
+  "cache_write_tokens": 176081,
+  "completion_tokens": 90082,
+  "reasoning_tokens": null,
+  "duration_seconds": 385.8027650420554,
+  "cost_usd": 0.34951186,
+  "cost_basis": "provider"
+}

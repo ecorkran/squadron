@@ -1,0 +1,34 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 1,
+  "F2": 3,
+  "F3": 5,
+  "F4": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "With V2 admin permissions and V1 `TOKEN_EXCHANGE` both on (V1 token exchange doesn't depend on fine-grained authz), `AbstractTokenExchangeProvider.java:276` now calls a `canExchangeTo` that throws, so a client-to-client exchange returns a 500 where it used to get a clean 403."
+  ],
+  "F2": [
+   "DROP",
+   "The null fallback only bites realms that turned on the experimental V2 feature before this change, which don't get migrations; `UserPermissionsV2.java:121-123` already uses the same unguarded pattern."
+  ],
+  "F3": [
+   "DROP",
+   "V1 and V2 are versions of the same feature and can't both be on, so the claimed V1+V2 crash can't happen; nothing calls `getClientsWithPermission` yet, so the stale-id null dereference is hypothetical."
+  ],
+  "F4": [
+   "DROP",
+   "Only the display name is null; `PolicyResourceService.java:217` still sends the resource name, so this is a cosmetic gap in the console for an experimental feature, not a functional defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1
+ ],
+ "cost_usd": 0.3629587
+}

@@ -1,0 +1,113 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Preserve the requested column name during result translation",
+      "description": "With `transformAliasToInputFormat=1`, `BaseQueryBuilder.process_results` renames `count` to `upsampled_count() as count`. However, `get_event_stats_data` still requests `count()` during serialization. `SnubaTSResultSerializer` defaults the missing column to zero, producing zero-valued charts. Preserve the original column mapping and add an endpoint regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:95"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Substring matching does not establish an errors-only query",
+      "description": "The eligibility check returns true for `!event.type:error`, `event.type:error OR event.type:transaction`, and `message:\"event.type:error\"`\u2014verified by executing the actual helper. These queries do not exclusively select errors, yet receive the error-only aggregation. Determine eligibility from parsed query semantics and test negation, OR expressions, and quoted values.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:135-138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Top-event selection still ranks unweighted counts",
+      "description": "Only `timeseries_columns` is transformed. Both underlying `top_events_timeseries` implementations select the top groups using unchanged `selected_columns` and `orderby`. Consequently, `field=count()` with `orderby=-count` ranks sampled event counts rather than the upsampled counts displayed. Apply consistent aggregation semantics to ranking and timeseries queries; test groups with differing sample rates.\n\nTests could not run because Django is unavailable in the environment.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:253-259"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve the requested column name during result translation",
+      "location": "src/sentry/api/helpers/error_upsampling.py:95",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Substring matching does not establish an errors-only query",
+      "location": "src/sentry/api/helpers/error_upsampling.py:135-138",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Top-event selection still ranks unweighted counts",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:253-259",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "diff": "6ed572a59d2f51323f982a2cd7330cbaf12f890a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:45:33.654980",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 24916,
+  "diff_chars_injected": 24916,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 74918,
+  "cached_tokens": 73728,
+  "cache_write_tokens": null,
+  "completion_tokens": 434,
+  "reasoning_tokens": 0,
+  "duration_seconds": 79.32648779219016,
+  "cost_usd": 0.0140928,
+  "cost_basis": "alias_pricing"
+}

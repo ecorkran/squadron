@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The light value at line 291 is now 70%, not the original 30%, and dark is 30%, not the mirrored 70%. So the colors are inverted in both themes, unlike the 30/70 pairing that `.username a` uses."
+  ],
+  "F2": [
+   "KEEP",
+   "Mobile `h3` at line 182 is now 50/50 instead of 20/80, which differs from the desktop 20/80. It also now matches `h4` (line 190), so the two headings lose their hierarchy."
+  ],
+  "F3": [
+   "KEEP",
+   "Mobile `.custom-message-length` at line 102 is 30/70, while desktop `modal.scss:94` keeps 70/30. So both the light and dark values on mobile are inverted."
+  ],
+  "F4": [
+   "KEEP",
+   "group-member-info .name` is 50/50 in both `desktop/user.scss:522` and `mobile/user.scss:497`, the same as `.title`. It should be 30/70, which `.name` in `common/base/user.scss:124` uses."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.10725680000000001
+}

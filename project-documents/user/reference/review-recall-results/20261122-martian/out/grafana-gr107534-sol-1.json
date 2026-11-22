@@ -1,0 +1,77 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Split queries interpolate variable values more than once",
+      "description": "The new interpolation passes already-expanded targets to `datasource.runQuery()`. That calls `DataSourceWithBackend.query()`, which applies template variables again (`packages/grafana-runtime/src/utils/DataSourceWithBackend.ts:185`). Shard splitting adds another interpolation pass.\n\nInterpolation is not idempotent: given `{app=\"x\"} |= \"$search\"`, with `search` containing literal `$other` and `other` set to `replacement`, the backend receives a search for `replacement` instead of `$other`. Previously, ordinary time-split queries interpolated only once.\n\nUse interpolated targets for partitioning without re-interpolating their values during execution. Add a regression test through the real `runQuery()` path; the added tests mock that method and therefore miss this defect.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/plugins/datasource/loki/querySplitting.ts:299"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split queries interpolate variable values more than once",
+      "location": "public/app/plugins/datasource/loki/querySplitting.ts:299",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr107534",
+    "diff": "73393963d5aa54c83f0935cfd4408cab16d12e8f...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:49:51.231048",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 6795,
+  "diff_chars_injected": 6795,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 69037,
+  "cached_tokens": 67072,
+  "cache_write_tokens": null,
+  "completion_tokens": 359,
+  "reasoning_tokens": 58,
+  "duration_seconds": 76.30254729185253,
+  "cost_usd": 0.0142272,
+  "cost_basis": "alias_pricing"
+}

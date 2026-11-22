@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler leaves four inherited abstract members unimplemented, so accessing a metric_alert_fire detector\u2019s handler raises TypeError."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.020979400000000002
+}

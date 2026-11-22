@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "contents` is now `display: flex` (header.scss:17). Because `header-extra-info` sets no `tagName`, its `div.ember-view` wrapper is the flex item, and nothing gives it `min-width: 0`. It can't shrink below the full `white-space: nowrap` title width, so the ellipsis never shows."
+  ],
+  "F2": [
+   "KEEP",
+   "The change replaced the `4em` left padding on `.small-action-desc` with `0 1.5%` and made `.small-action` a flex row. The description box now starts after the 45px avatar, so the untouched mobile `margin-left: -40px` pushes the custom message out of the box into the avatar column, and a flex item no longer wraps text around the float."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1767518
+}

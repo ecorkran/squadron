@@ -1,0 +1,57 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Spawn-created processes bypass the `multiprocessing.Process` guard, so a hung flusher can remain alive alongside its replacement."
+  ],
+  "F2": [
+   "KEEP",
+   "The patched `time.sleep` returns immediately, leaving the test without a guarantee that flushing completes before `join()`."
+  ],
+  "F3": [
+   "DROP",
+   "Missing coverage alone is not a defect, and the finding identifies no incorrect behavior in the shard assignment code."
+  ],
+  "F4": [
+   "DROP",
+   "The repeated cluster-wide memory queries are redundant overhead, but the code notes that `submit` is not a hot path."
+  ],
+  "F5": [
+   "DROP",
+   "The unused helper is a cleanup concern, not a behavioral defect."
+  ],
+  "F6": [
+   "KEEP",
+   "A negative CLI value creates no process-map entries and can raise `KeyError` during flusher construction."
+  ],
+  "F7": [
+   "KEEP",
+   "The inconsistent shard tags prevent metrics for a multi-shard process from being queried by an individual shard."
+  ],
+  "F8": [
+   "DROP",
+   "The docstring and parameter documentation are inaccurate, but this does not cause incorrect behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5,
+  6
+ ],
+ "cost_usd": 0.00313805
+}

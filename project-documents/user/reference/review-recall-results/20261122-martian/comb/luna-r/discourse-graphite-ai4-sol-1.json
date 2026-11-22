@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The ERB conditional has no condition, so the template fails to compile."
+  ],
+  "F2": [
+   "KEEP",
+   "Imported feed HTML is stored and rendered raw, allowing feed content to execute as XSS."
+  ],
+  "F3": [
+   "KEEP",
+   "The embed stylesheet and script are not precompiled, so production deployments cannot serve them as standalone assets."
+  ],
+  "F4": [
+   "KEEP",
+   "Document-relative URLs remain unresolved and protocol-relative URLs are rewritten incorrectly."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00202565
+}

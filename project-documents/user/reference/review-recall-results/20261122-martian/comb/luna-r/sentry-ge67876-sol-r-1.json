@@ -1,0 +1,31 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The pipeline signature is shared across sessions, so it does not prevent OAuth callback forgery with an attacker-controlled authorization code."
+  ],
+  "F2": [
+   "KEEP",
+   "With no local integration record, the flow advances without verifying the authenticated user can access the GitHub installation."
+  ],
+  "F3": [
+   "KEEP",
+   "An active unassociated integration without `sender` metadata triggers a `KeyError` instead of a controlled invalid-installation response."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0038962700000000003
+}

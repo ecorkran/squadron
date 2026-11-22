@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "enableSqlExpressions` returns false regardless of the feature flag, so the reader rejects SQL expressions even when enabled."
+  ],
+  "F2": [
+   "KEEP",
+   "The database methods return \u201cnot implemented,\u201d preventing SQL parsing and execution through the new command."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0006001600000000001
+}

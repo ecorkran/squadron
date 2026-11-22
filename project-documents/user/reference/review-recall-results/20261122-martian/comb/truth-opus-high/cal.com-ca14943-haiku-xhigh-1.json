@@ -1,0 +1,41 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new `prisma.workflowReminder.update` inside `catch` (lines 190-197) has no guard, so if it throws, the error leaves the loop and the rest of the batch is skipped."
+  ],
+  "F2": [
+   "KEEP",
+   "When an account is locked, `scheduleSMS` returns `undefined`; the new `else` branch counts that as a failure, and once `retryCount` passes 1 the row is deleted, so locked accounts lose their pending reminders."
+  ],
+  "F3": [
+   "DROP",
+   "Reprocessing rows with no message or no destination until their send date is how the code already behaved before this change; the new cap just doesn't cover these paths, and the finding names no actual failure."
+  ],
+  "F4": [
+   "DROP",
+   "Only the SMS path increments `retryCount`, so the unscoped delete affects no live rows today; the rest is about the stale comment and a magic number, which are style and docs points."
+  ],
+  "F5": [
+   "KEEP",
+   "reminder.retryCount + 1` writes back the value read at the start of the run, so two overlapping cron runs can lose an increment, which is a real race in the added code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5
+ ],
+ "cost_usd": 0.0813187
+}

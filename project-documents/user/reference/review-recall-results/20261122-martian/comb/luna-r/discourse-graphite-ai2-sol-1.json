@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The GET unsubscribe action changes notification preferences, allowing a cross-site request to trigger the change for a logged-in user."
+  ],
+  "F2": [
+   "KEEP",
+   "TopicView` does not ensure a topic-user record exists, so `find_by` can return nil and the action then crashes."
+  ],
+  "F3": [
+   "KEEP",
+   "The Ember route only loads the normal topic view, so client-side navigation can display the unsubscribe message without changing preferences."
+  ],
+  "F4": [
+   "KEEP",
+   "Saving the notification level directly leaves the reason unset, allowing automatic tracking to override the unsubscribe later."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.004004789999999999
+}

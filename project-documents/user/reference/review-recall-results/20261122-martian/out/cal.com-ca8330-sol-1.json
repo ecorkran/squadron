@@ -1,0 +1,131 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Date overrides bypass busy-time checks",
+      "description": "A matching override returns `true` before `busy.every(...)` runs. Consequently, existing bookings, calendar conflicts, buffers, and booking-limit blocks are ignored on override dates. Continue through conflict validation after confirming override availability, and add a regression test with a booking inside an override.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:133-135"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Split working hours reject valid slots",
+      "description": "The predicate rejects a slot if it falls outside **any** working-hours interval. For a UTC schedule containing 09:00\u201312:00 and 13:00\u201317:00, a valid 10:00 slot is rejected against the afternoon interval, and afternoon slots are rejected against the morning interval. Instead, require the complete slot to fit within at least one applicable interval. Also calculate `end` from `slotEndTime`, not `slotStartTime`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:138-150"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Multiple date-override intervals reject each other",
+      "description": "The override search returns a rejection when any same-day interval excludes the slot, even when another interval contains it. With UTC overrides 09:00\u201312:00 and 14:00\u201317:00, both morning and afternoon slots are rejected. Accept containment within any applicable override interval, then perform busy-time checks.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:105-130"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Timezone conversion discards overrides crossing midnight",
+      "description": "Extracting only `.hour()` and `.minute()` loses the converted date rollover. For a UTC organizer\u2019s 16:00\u201320:00 override viewed at UTC+6, this produces `startTime = 1320` and `endTime = 120`. `buildSlots` skips that range because its start exceeds its end, removing valid availability. Split converted intervals across invitee days rather than wrapping both endpoints independently.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/lib/slots.ts:218-223"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Date overrides bypass busy-time checks",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:133-135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Split working hours reject valid slots",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:138-150",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Multiple date-override intervals reject each other",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:105-130",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Timezone conversion discards overrides crossing midnight",
+      "location": "packages/lib/slots.ts:218-223",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "diff": "4b23bcf8914b88da2d69aa44331baa835529f278...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:57:24.596464",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9104,
+  "diff_chars_injected": 9104,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 56458,
+  "cached_tokens": 51712,
+  "cache_write_tokens": null,
+  "completion_tokens": 629,
+  "reasoning_tokens": 163,
+  "duration_seconds": 49.88146866578609,
+  "cost_usd": 0.0209532,
+  "cost_basis": "alias_pricing"
+}

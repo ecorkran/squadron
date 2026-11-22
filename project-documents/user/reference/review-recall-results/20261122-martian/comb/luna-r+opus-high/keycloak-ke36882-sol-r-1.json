@@ -1,0 +1,17 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This is a documentation-accuracy point, not a runtime defect. The caution sits inside the preview \"Managing Keycloak Operator Updates\" section and only covers using the update strategies, not ordinary Operator deployments. The operator code is unchanged by this change, and nothing breaks at runtime."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.05658439999999999
+}

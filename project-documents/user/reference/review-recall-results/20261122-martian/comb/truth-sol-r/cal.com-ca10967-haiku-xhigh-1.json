@@ -1,0 +1,61 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Google Meet with a null or empty destination list dereferences an undefined first calendar and throws."
+  ],
+  "F2": [
+   "KEEP",
+   "The fallback compares destination IDs against the missing input, breaking updates and misrouting deletions to primary."
+  ],
+  "F3": [
+   "KEEP",
+   "Credential-less destinations fall back to primary, while the unhandled Meet patch receives an undefined calendar ID."
+  ],
+  "F4": [
+   "KEEP",
+   "These adapters use the first destination for every credential, causing failed writes or silent CalDAV omissions."
+  ],
+  "F5": [
+   "KEEP",
+   "The inverted condition omits organization slugs when billing is disabled, leaving those organizations unpublished."
+  ],
+  "F6": [
+   "KEEP",
+   "Wrapping Prisma errors in HttpError bypasses database-error redaction, and other original errors are discarded without logging."
+  ],
+  "F7": [
+   "KEEP",
+   "Optional chaining skips appending collective members\u2019 destinations when the organizer\u2019s destination list is null."
+  ],
+  "F8": [
+   "KEEP",
+   "Default webhook serialization exposes the new array directly, breaking the previous destinationCalendar object contract."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.1806518
+}

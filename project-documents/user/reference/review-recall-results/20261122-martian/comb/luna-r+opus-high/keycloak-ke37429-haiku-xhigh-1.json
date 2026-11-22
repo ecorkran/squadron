@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In the Lithuanian bundles, `totpStep1` (account, line 101) and `loginTotpStep1` (login, line 71) are both in Italian, so Lithuanian users get an Italian instruction on the TOTP pages."
+  ],
+  "F2": [
+   "KEEP",
+   "The `zh_CN` `totpStep1` uses Traditional characters (\u624b\u6a5f/\u5b89\u88dd/\u61c9\u7528\u7a0b\u5f0f), while the `zh_CN` login `loginTotpStep1` and the other steps are Simplified, so the Simplified locale shows the wrong script."
+  ],
+  "F3": [
+   "DROP",
+   "The pattern is looser than it should be, but it only strips tags that match the trusted English string exactly, and no English string contains such tags, so nothing breaks today; this is hardening, not a defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0783817
+}

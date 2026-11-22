@@ -1,0 +1,372 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Substring match upsamples negated and compound `event.type:error` queries",
+      "description": "`_is_error_focused_query` returns True when `\"event.type:error\" in query`. That is a substring test, so `!event.type:error` matches. With the default `discover` dataset, `_should_apply_sample_weight_transform` then returns True and `count()` becomes `upsampled_count() as count`, which sums `sample_weight` over rows the query was meant to exclude. The docstring at lines 105-107 says upsampling applies only to error events, so this contradicts the stated intent. The existing test (`tests/sentry/api/helpers/test_error_upsampling.py#test_is_error_focused_query`) only covers the exact strings `event.type:error` and `event.type:transaction`, so it misses this. Parse the query tokens, or match the condition exactly, and add a `!event.type:error` case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:137"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`transformAliasToInputFormat=1` silently zeroes the upsampled series",
+      "description": "The transform emits the alias `count`. The builder's result remapping (`search/events/builder/base.py:1566-1580`, applied to data rows at `:1613-1616`) rewrites that key to `function_alias_map[...].field`, which is the raw string `upsampled_count() as count`. When `transformAliasToInputFormat=1` is set (`organization_events_stats.py:205-207`), `resolve_axis_column` returns the original `count()` as the lookup key (`api/bases/organization_events.py:75-76`). `serializers/snuba.py:92` then does `r.get(column, 0)`, so every bucket comes back as `0` with no error. This affects allowlisted discover/errors queries that send the flag. The frontend sends this flag from 15 files under `static/app`, though the ones I checked are span datasets, so I have not confirmed that discover callers send it. Fix the key mismatch, and add an endpoint test that sends `transformAliasToInputFormat=1`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Eligibility uses the outer dataset and raw request query, not what actually runs",
+      "description": "`_get_event_stats` passes `dataset` (the outer variable from line 170) and `request.GET[\"query\"]` to the helper. The queries that actually run use `scoped_dataset`, `split_dataset`, and the rewritten `query` (lines 364, 383, 426). The split path (line 344) only runs when the outer dataset is a metrics dataset, and `_should_apply_sample_weight_transform` returns False for those, so split-path queries are never upsampled while the non-split path is. Two widgets with the same query can therefore use different count semantics. Pass the dataset and query that are actually executed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:220-222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Only the literal `count()` is rewritten",
+      "description": "The check is `column_lower == \"count()\"`, an exact match. Equations pass through the same `query_columns` list (`api/bases/organization_events.py:71` handles `is_equation`), so `equation|count() * 2` stays unweighted while plain `count()` on the same chart is upsampled. Aliased forms such as `count() as x` also skip the rewrite. The top-N selection query (`snuba/discover.py:489-505`) ranks by the request `orderby` over raw rows, while the series values are weighted. The docstring's \"aggregation functions\" overstates the coverage. Decide the scope explicitly and document it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Eligibility cache has no invalidation and an unmeasured justification",
+      "description": "`invalidate_upsampling_cache` has no callers in the repo (grep confirmed). Eligibility is cached for 60 seconds (line 38), so an allowlist change takes up to a minute to apply, and nothing invalidates the entry even though the docstring says it should be called on change. The performance rationale (lines 23-25) is not backed by anything in the diff. Either wire the invalidation into the option-change path or drop the cache. Separately, the key uses builtin `hash()` on a tuple (lines 27 and 73); a 64-bit collision would return another project set's eligibility, and a sorted string key avoids that.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`upsampled_count` is publicly callable",
+      "description": "The new function is registered without `private=True`, unlike the internal helper `column_hash` directly above it (line 1039). `is_accessible` (`search/events/fields.py:569`) gates private functions behind `functions_acl`, so this change makes the function callable by any API user on any project, including non-allowlisted projects where the comment says `sample_weight` is not guaranteed. Also, `toInt64` returns an integer, so `default_result_type=\"integer\"` would be more accurate than `\"number\"`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/search/events/datasets/discover.py:1041"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicated transform call sites and redundant variables",
+      "description": "`transform_query_columns_for_error_upsampling` is called at three sites (lines 233, 277, and 296), and the initial `final_columns = query_columns` is overwritten on every path. `upsampling_enabled = should_upsample` is a pointless alias. Compute once before branching, for example `final_columns = transform(...) if should_upsample else query_columns`, so a future branch cannot miss the transform.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:226-233"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test coverage misses the defects above, and the tests were not run",
+      "description": "Missing cases: `!event.type:error` (would have caught the first FAIL), `event.type:error OR event.type:transaction`, `transformAliasToInputFormat=1` through the endpoint (second FAIL), the `topEvents` branch of `_get_event_stats` (`organization_events_stats.py:229-272`), the cache hit and miss paths in `is_errors_query_for_error_upsampled_projects`, and direct resolution of `upsampled_count`. The endpoint test also depends on Snuba computing `sample_weight` from the factory's `sample_rate`, which I could not confirm here. I have not run any of these tests.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/api/helpers/test_error_upsampling.py#test_is_error_focused_query"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test factory swallows exceptions",
+      "description": "`_set_sample_rate_from_error_sampling` has two bare `except Exception: pass` blocks. The only failure the first one can hit is `contexts` being `None` or a non-dict, which should be a `None` guard (`normalized_data.get(\"contexts\") or {}`), not a swallowed exception. The helper also runs for every event that `store_event` creates. Keep this logic in the test class, or make it explicit rather than silent.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/testutils/factories.py:344-357"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated `topEvents` message change",
+      "description": "The message changes from \"If topEvents needs to be at least 1\" to \"topEvents needs to be at least 1\". This matches `organization_events_timeseries.py:134`, so it is a valid consistency fix, but it has nothing to do with upsampling. It is a public API string change, so clients that match on it will break. No test pins the old text. Ship it in a separate commit.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:124"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Trailing whitespace on blank lines",
+      "description": "Seven lines in `error_upsampling.py` contain trailing whitespace, and three in `organization_events_stats.py` (lines 223, 234, and 278). Run the formatter; ruff format normally strips these.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:22"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Comments contradict the code",
+      "description": "The `_are_all_projects_error_upsampled` docstring says it reads configuration fresh on every call, \"intentional\", while the caller caches that result for 60 seconds (lines 27-38). The endpoint comments at `organization_events_stats.py:218-219`, `224-225`, and `230-231` call the check an \"early\" \"performance optimization\" and claim a \"late transformation ensures we use the most current schema assumptions\". None of that is what the code does.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:50-53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Loose type on the dataset parameter",
+      "description": "`_should_apply_sample_weight_transform(dataset: Any, ...)` should use `ModuleType`, as its sibling `is_errors_query_for_error_upsampled_projects` does at line 16.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:103"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test setup reassigns the logged-in user",
+      "description": "`self.login_as(user=self.user)` runs at line 3559, then `self.user` is reassigned at line 3566. The requests therefore run as the original user, while the event tags reference the new one. `self.authed_user` (line 3560) is never used. Rename the variables so the setup reads clearly.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/snuba/api/endpoints/test_organization_events_stats.py#OrganizationEventsStatsErrorUpsamplingTest.setUp"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Direct `Organization.objects.create` in the unit test",
+      "description": "This is the only direct `Organization.objects.create` under `tests/sentry/api`. The neighboring tests use the `self.create_organization()` fixture, so this should follow the same convention.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/sentry/api/helpers/test_error_upsampling.py#ErrorUpsamplingTest.setUp"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Substring match upsamples negated and compound `event.type:error` queries",
+      "location": "src/sentry/api/helpers/error_upsampling.py:137",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`transformAliasToInputFormat=1` silently zeroes the upsampled series",
+      "location": "src/sentry/api/helpers/error_upsampling.py:95",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Eligibility uses the outer dataset and raw request query, not what actually runs",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:220-222",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Only the literal `count()` is rewritten",
+      "location": "src/sentry/api/helpers/error_upsampling.py:92",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Eligibility cache has no invalidation and an unmeasured justification",
+      "location": "src/sentry/api/helpers/error_upsampling.py:67",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`upsampled_count` is publicly callable",
+      "location": "src/sentry/search/events/datasets/discover.py:1041",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Duplicated transform call sites and redundant variables",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:226-233",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage misses the defects above, and the tests were not run",
+      "location": "tests/sentry/api/helpers/test_error_upsampling.py#test_is_error_focused_query",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Test factory swallows exceptions",
+      "location": "src/sentry/testutils/factories.py:344-357",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Unrelated `topEvents` message change",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:124",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Trailing whitespace on blank lines",
+      "location": "src/sentry/api/helpers/error_upsampling.py:22",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comments contradict the code",
+      "location": "src/sentry/api/helpers/error_upsampling.py:50-53",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Loose type on the dataset parameter",
+      "location": "src/sentry/api/helpers/error_upsampling.py:103",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test setup reassigns the logged-in user",
+      "location": "tests/snuba/api/endpoints/test_organization_events_stats.py#OrganizationEventsStatsErrorUpsamplingTest.setUp",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Direct `Organization.objects.create` in the unit test",
+      "location": "tests/sentry/api/helpers/test_error_upsampling.py#ErrorUpsamplingTest.setUp",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "diff": "6ed572a59d2f51323f982a2cd7330cbaf12f890a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:53:18.396629",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "injected": [],
+  "files_read": [
+    "src/sentry/api/helpers/error_upsampling.py",
+    "src/sentry/api/endpoints/organization_events_stats.py",
+    "src/sentry/search/events/datasets/discover.py",
+    "src/sentry/testutils/factories.py",
+    "src/sentry/search/events/constants.py",
+    "src/sentry/testutils/cases.py",
+    "tests/snuba/api/endpoints/test_organization_events_stats.py",
+    "src/sentry/snuba/discover.py",
+    "src/sentry/search/events/builder/base.py",
+    "tests/sentry/api/helpers/test_error_upsampling.py"
+  ],
+  "searches": [
+    "grep invalidate_upsampling_cache|issues\\.client_error_sampling\\.project_allowlist|upsampled_count|error_upsampling_eligible in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "grep sample_weight in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src",
+    "grep If topEvents needs to be at least 1|topEvents needs to be at least 1 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "grep ^[ \\t]+$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/helpers/error_upsampling.py",
+    "grep ^[ \\t]+$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/endpoints/organization_events_stats.py",
+    "grep \\bas\\b.*(alias|pattern|split|regex)|alias.*\\bas\\b|\\\\s\\+as\\\\s|\\\\bas\\\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep ^from sentry\\.snuba\\.dataset import|^from snuba_sdk import|^\\s+Column,|import.*\\bColumn\\b|^from .* import \\(?$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/datasets/discover.py",
+    "grep def top_events_timeseries|def timeseries_query|def get_timeseries_snuba_filter in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/snuba/discover.py",
+    "grep DiscoverDatasetConfig|class .*DatasetConfig|function_converter in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/snuba/errors.py",
+    "grep def get_dataset\\(|def get_dataset_from_request|dataset.*=.*discover in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/bases/organization_events.py",
+    "grep ^def |^from |^import |builder|QueryBuilder|discover\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/snuba/errors.py",
+    "grep DatasetConfig|function_converter|class Errors in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/builder",
+    "grep class .*DatasetConfig|DiscoverDatasetConfig\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/datasets",
+    "grep \\.private\\b|private=|if .*private in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep def store_event\\(|def wait_for_event_count in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/testutils",
+    "grep \"type\": \"transaction\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/tests/snuba/api/endpoints/test_organization_events_stats.py",
+    "grep def get_event_stats_data|query_columns|yAxis|\"count\\(\\)\"|'count\\(\\)' in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/bases/organization_events.py",
+    "grep def get_event_stats_data in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api",
+    "grep def resolve_axis_column in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/bases/organization_events.py",
+    "grep transform_alias_to_input_format in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/builder/base.py",
+    "grep FunctionDetails\\(|function_alias_map\\[.*\\] = |class FunctionDetails in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep transformAliasToInputFormat in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/static/app",
+    "grep def serialize\\(|\\.get\\(column|\\[column\\]|column\\] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/serializers/snuba.py",
+    "grep Organization\\.objects\\.create\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/tests/sentry/api"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 24916,
+  "diff_chars_injected": 24916,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 39,
+  "prompt_tokens": 1359906,
+  "cached_tokens": 1274737,
+  "cache_write_tokens": 85125,
+  "completion_tokens": 55043,
+  "reasoning_tokens": null,
+  "duration_seconds": 261.05407541571185,
+  "cost_usd": 0.05837506999999999,
+  "cost_basis": "provider"
+}

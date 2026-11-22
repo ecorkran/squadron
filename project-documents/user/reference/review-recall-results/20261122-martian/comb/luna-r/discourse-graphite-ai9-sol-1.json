@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache key omits the site fallback locale, so cached translations can return another site\u2019s fallback result."
+  ],
+  "F2": [
+   "KEEP",
+   "Translation lookup loads only the current locale, leaving fallback translations unavailable in a cold worker without the controller preload."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0012342100000000001
+}

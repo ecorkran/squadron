@@ -1,0 +1,17 @@
+{
+ "case": "cal.com-ca22345",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The looser type looks deliberate: it lets callers pass a dynamic scope with an optional `teamId`, which the discriminated union would reject at compile time. Bad combinations fail closed to `1=0` by design, and the test \"should return NOTHING for invalid options\" checks exactly that. Nothing in the repo outside the tests constructs `InsightsBookingService` yet, so no current caller gets wrong results."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0639424
+}

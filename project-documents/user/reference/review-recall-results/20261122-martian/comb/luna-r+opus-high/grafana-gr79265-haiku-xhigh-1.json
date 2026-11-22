@@ -1,0 +1,24 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache key is set at impl.go:87, before `CreateOrUpdateDevice` runs, so a device turned away with `ErrDeviceLimitReached` gets through on its next request for 29 minutes. That defeats the limit enforcement this change adds."
+  ],
+  "F2": [
+   "DROP",
+   "The count and insert are separate statements, so the race is real, but it only lets the count go over by a few during concurrent first visits to an approximate anonymous-device cap. That is low impact and not worth blocking the merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.08144380000000001
+}

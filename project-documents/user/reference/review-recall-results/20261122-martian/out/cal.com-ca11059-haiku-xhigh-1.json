@@ -1,0 +1,516 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Google refresh stores the SafeParse wrapper as the credential key",
+      "description": "`parseRefreshTokenResponse` returns the zod `SafeParse` result object (`{ success, data }`, see `parseRefreshTokenResponse.ts:29`), but Google assigns that return value directly to `key` and persists it at line 100. The old code persisted the parsed data. After one refresh the row holds `{ success: true, data: {...} }`. The next `GoogleCalendarService` construction runs `googleCredentialSchema.parse(credential.key)` (line 75), which requires top-level `scope`, `token_type`, `expiry_date`, `access_token`, and `refresh_token`, so every Google calendar operation for that user fails with a ZodError. Office 365 (`office365calendar/lib/CalendarService.ts:264`), Zoom (`zoomvideo/lib/VideoApiAdapter.ts:108-111`), and Salesforce read `.success`/`.data` correctly. Google should use `.data` after checking `.success`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:97"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Zoho Bigin sends the credential ID as the user ID to the sync endpoint",
+      "description": "`biginAuth` sets `credentialId = credential.id` (line 53), then passes `credentialId` in the `userId` argument of `refreshOAuthTokens` (line 93). In sync mode, `calcomUserId` becomes a credential ID, not a user ID, so the endpoint can return tokens for the wrong account. The `&& userId` guard is always truthy here, so team credentials (`userId` null) also take the sync path. The argument should be `credential.userId`, with `credential` passed into `refreshAccessToken`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts:93"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`parseRefreshTokenResponse` minimum schema rejects every real token response",
+      "description": "The sync-mode schema uses computed keys `[z.string().toString()]` and `[z.string().optional().toString()]`. These do not create pattern keys. They produce a string derived from a zod object's `toString()`, which is not a field any provider returns. The required key `[...]: z.number()` therefore fails on every real response, and the schema also strips every field it does not name (zod's default `strip`), including `refresh_token` and `expires_in`. In sync mode, Office 365 (`office365calendar/lib/CalendarService.ts:263`) and Zoom (`zoomvideo/lib/VideoApiAdapter.ts:104`) throw \"Invalid refreshed tokens were returned\" on every refresh. The comment \"Assume that any property with a number is the expiry\" needs `.passthrough()` plus a refinement, not computed keys. I could not confirm zod's exact `toString()` output because `node_modules` is absent, but the failure does not depend on it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Sync-mode return shape breaks Google, Zoho Bigin, Zoho CRM, and HubSpot",
+      "description": "In sync mode the helper returns a `fetch` `Response`, but callers still read the shape of the provider's own client (gaxios, axios, HubSpot SDK):\n- Google reads `res?.data` (`googlecalendar/lib/CalendarService.ts:94-95`). `.data` is undefined, so `token.access_token` throws a TypeError.\n- Zoho Bigin reads `tokenInfo.data.error` (`zoho-bigin/lib/CalendarService.ts:96`) and Zoho CRM reads `zohoCrmTokenInfo.data.error` (`zohocrm/lib/CalendarService.ts:217`). Both throw a TypeError.\n- HubSpot reads `expiresIn` and `accessToken` on the result (`hubspot/lib/CalendarService.ts:177-192`). On a `Response` these are undefined, so `expiryDate` becomes NaN and the bad object is persisted at lines 193-200.\n\nThe helper is typed `() => any` and returns `any`, so the compiler does not catch the mismatch. Lark, Webex, Zoom, and Office 365 treat the result as a `Response`, so the contract differs by caller. The sync branch also never checks `response.ok`. Pick one contract (a `Response` is the simplest), normalise every caller to it, and type the helper generically.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Salesforce service uses `prisma` without importing it",
+      "description": "The import block (lines 1-20) has no `@calcom/prisma` import, and `prisma` appears once in the file, at line 96 (`prisma.credential.update`). TypeScript reports \"Cannot find name 'prisma'\", and after a successful token refresh the runtime throws a ReferenceError. Add `import prisma from \"@calcom/prisma\";`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Salesforce token check relies on `statusText` and contains dead code",
+      "description": "`if (response.statusText !== \"OK\")` is unreliable. HTTP/2 responses carry no reason phrase, so `statusText` can be empty and a valid refresh throws. The check also discards the Salesforce error body behind a generic 400. Use `response.ok` and include the response body in the error. The branch at lines 92-94 (`if (!accessTokenParsed.success)`) is dead code, because `parseRefreshTokenResponse` throws before that point.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Salesforce refreshes on every construction and skips the sync mechanism",
+      "description": "`constructor` calls `getClient` (line 57), which now POSTs to `login.salesforce.com` and writes the credential row (lines 75-99) every time a service is built, so each calendar operation pays a token round trip and a DB write. The old code passed `refreshToken` to the jsforce `Connection` (line 107) and left refresh to the library. The new code also calls `fetch` directly instead of `refreshOAuthTokens`, so with `CALCOM_CREDENTIAL_SYNC_ENDPOINT` set, Salesforce still needs the client secret locally. Refresh should be lazy and go through the helper.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Placeholder `\"refresh_token\"` overwrites the stored refresh token",
+      "description": "When a response lacks `refresh_token`, the helper writes the literal string `\"refresh_token\"` into the data. Office 365 spreads that data over the stored credential (`office365calendar/lib/CalendarService.ts:264`), and its schema marks `refresh_token` as `.optional()` (line 56). If Microsoft omits the field, the real token is replaced by the sentinel, and every later refresh fails. In sync mode the minimum schema never declares `refresh_token`, so the sentinel is always written. Keep the existing token when the response does not supply one.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parse helper discards the zod error, and the Office 365 diagnostic log was removed",
+      "description": "The helper throws a generic `Error` and drops the zod issues and the response body. The diff also removes the Office 365 `console.error` that logged both (previously `office365calendar/lib/CalendarService.ts` logged the zod error and the MS response). Office 365 previously logged and continued with the stored credentials, and now the refresh throws, a behaviour change the diff does not mention. The `tokenResponse.success &&` guard at line 264 is now dead, and so is the Zoom check at `zoomvideo/lib/VideoApiAdapter.ts:108`. Log the issues before throwing, or document the new behaviour.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:21-23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Zoom passes `\"zoomvideo\"` as the app slug",
+      "description": "The app's slug is `zoom` (`packages/app-store/zoomvideo/_metadata.ts:16`). The sync endpoint receives `appSlug` and routes on it, so `\"zoomvideo\"` will not match the app. Use `\"zoom\"`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/zoomvideo/lib/VideoApiAdapter.ts:92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Webhook compares the secret with `!==`",
+      "description": "The shared-secret check uses a short-circuiting string comparison, which leaks timing information about the secret. Compare digests with `crypto.timingSafeEqual`. The header value can also be an array, so normalise it before comparing. The `APP_CREDENTIAL_SHARING_ENABLED` gate at line 19 prevents an `undefined === undefined` bypass when the secret is unset, which I verified.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:24-29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Webhook throws on bad input and returns 500 instead of a 4xx",
+      "description": "`appCredentialWebhookRequestBodySchema.parse(req.body)` throws a ZodError on a malformed body. `symmetricDecrypt` and `JSON.parse` (lines 57-59) also throw on wrong key length, bad ciphertext, or non-JSON plaintext. Nothing catches these, so each becomes a 500. Use `safeParse` for the body, wrap decryption in a try/catch, and return 400 or 422.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:31"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Decrypted credential payload is stored without schema validation",
+      "description": "The decrypted `keys` value is `JSON.parse` output (`any`) and is written straight to `credential.key` (lines 78 and 86). Readers validate later (for example `googleCredentialSchema.parse` in `googlecalendar/lib/CalendarService.ts:75`), so a malformed payload fails at use time instead of at write time. Validate against the target app's credential schema before writing.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:57-59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`APP_CREDENTIAL_SHARING_ENABLED` exposes the encryption key value",
+      "description": "`A && B` evaluates to `B` when both are set, so this exported constant holds the value of `CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY` itself, or `\"\"`/`undefined`. The AES key therefore sits in a widely imported module constant, and the type is `string | undefined` rather than boolean. `IS_STRIPE_ENABLED` (lines 83-87) uses `!!(...)` for this reason. Wrap this in `!!(...)`, and keep the key read only where it is used.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/lib/constants.ts:103-104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Outbound sync request carries no authentication",
+      "description": "The request to `CALCOM_CREDENTIAL_SYNC_ENDPOINT` sends `calcomUserId` and `appSlug` with no secret or signature header, and the response carries live access tokens. The receiving endpoint cannot verify that the caller is Cal.com. The inbound webhook does require a shared secret, so the two directions are asymmetric. Add a shared-secret header or HMAC signature to the outbound request.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests cover the new webhook, helpers, or sync mode",
+      "description": "The diff adds no test files. A search for existing tests that reference `refreshAccessToken`, `refreshOAuthTokens`, `parseRefreshTokenResponse`, or the sharing flag returned nothing. The bugs above (wrapper return, wrong user ID, sync-mode shape, minimum schema) would each be caught by a unit test of the helper or one caller. Add tests for both modes of `refreshOAuthTokens`, `parseRefreshTokenResponse`'s return value, and the webhook's auth and error paths.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Header name lookup is case-sensitive",
+      "description": "Node lowercases incoming header names, so a mixed-case `CALCOM_WEBHOOK_HEADER_NAME` silently produces a 403 on every request. The `.env.example` note says \"should be in lowercase\" but nothing enforces it. Call `.toLowerCase()` on the configured name.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:25"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Find-then-create in the webhook can create duplicate credentials",
+      "description": "The author notes that upsert is not possible. `Credential` has no unique constraint on `(userId, appId)` (`packages/prisma/schema.prisma:127-146`), so two concurrent webhook calls for the same user can both take the create branch. Consider a unique index on the pair, or a transaction.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:62-90"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Webhook accepts any HTTP method and has an empty doc comment",
+      "description": "The handler processes writes for any method, so a GET or PUT is treated the same as the intended POST. Return 405 for non-POST. The empty `/** */` at line 16 should describe the route's contract.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:16"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Relative import from inside the `oauth/` folder",
+      "description": "The file lives in `_utils/oauth/`, but imports its sibling `decodeOAuthState` as `../oauth/decodeOAuthState`. It should be `./decodeOAuthState`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated change to the Zoho Bigin redirect URI",
+      "description": "The redirect URI was changed from `${appConfig.slug}` to the literal `zoho-bigin`. The value is identical (`config.json` slug is `zoho-bigin`), but the same file still uses `appConfig` elsewhere, and the change is not related to this feature. Revert it or call it out in the description.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/app-store/zoho-bigin/api/add.ts:17"
+    },
+    {
+      "severity": "PASS",
+      "title": "Rename of OAuth helpers is complete",
+      "description": "A search across the repo finds no remaining references to `_utils/createOAuthAppCredential`, `_utils/decodeOAuthState`, or `_utils/encodeOAuthState`. All 22 importing files use the new `oauth/` paths.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth"
+    },
+    {
+      "severity": "PASS",
+      "title": "Webhook is disabled unless both secrets are set",
+      "description": "The `APP_CREDENTIAL_SHARING_ENABLED` gate runs before the header comparison, so an unset `CALCOM_WEBHOOK_SECRET` cannot match an unset header and bypass authentication.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:19"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google refresh stores the SafeParse wrapper as the credential key",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:97",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Zoho Bigin sends the credential ID as the user ID to the sync endpoint",
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts:93",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`parseRefreshTokenResponse` minimum schema rejects every real token response",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Sync-mode return shape breaks Google, Zoho Bigin, Zoho CRM, and HubSpot",
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Salesforce service uses `prisma` without importing it",
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:96",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Salesforce token check relies on `statusText` and contains dead code",
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:86",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Salesforce refreshes on every construction and skips the sync mechanism",
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:57",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Placeholder `\"refresh_token\"` overwrites the stored refresh token",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-27",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Parse helper discards the zod error, and the Office 365 diagnostic log was removed",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:21-23",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Zoom passes `\"zoomvideo\"` as the app slug",
+      "location": "packages/app-store/zoomvideo/lib/VideoApiAdapter.ts:92",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Webhook compares the secret with `!==`",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:24-29",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Webhook throws on bad input and returns 500 instead of a 4xx",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:31",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Decrypted credential payload is stored without schema validation",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:57-59",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`APP_CREDENTIAL_SHARING_ENABLED` exposes the encryption key value",
+      "location": "packages/lib/constants.ts:103-104",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Outbound sync request carries no authentication",
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-14",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests cover the new webhook, helpers, or sync mode",
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Header name lookup is case-sensitive",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:25",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Find-then-create in the webhook can create duplicate credentials",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:62-90",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Webhook accepts any HTTP method and has an empty doc comment",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:16",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Relative import from inside the `oauth/` folder",
+      "location": "packages/app-store/_utils/oauth/createOAuthAppCredential.ts:6",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Unrelated change to the Zoho Bigin redirect URI",
+      "location": "packages/app-store/zoho-bigin/api/add.ts:17",
+      "location_verified": true
+    },
+    {
+      "id": "F022",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Rename of OAuth helpers is complete",
+      "location": "packages/app-store/_utils/oauth",
+      "location_verified": null
+    },
+    {
+      "id": "F023",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Webhook is disabled unless both secrets are set",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:19",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "diff": "9a840be7da9c94c1ca453cf0c63bebebe835ab53...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T15:10:57.002246",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "injected": [],
+  "files_read": [
+    "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "apps/web/pages/api/webhook/app-credential.ts",
+    "packages/lib/constants.ts",
+    "packages/app-store/salesforce/lib/CalendarService.ts",
+    "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "packages/app-store/hubspot/lib/CalendarService.ts",
+    "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "packages/app-store/zohocrm/lib/CalendarService.ts",
+    "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+    "packages/app-store/zoomvideo/lib/VideoApiAdapter.ts",
+    "packages/app-store/office365video/lib/VideoApiAdapter.ts",
+    "packages/app-store/larkcalendar/lib/CalendarService.ts"
+  ],
+  "searches": [
+    "grep \"zod\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store/package.json",
+    "list_files node_modules/zod/package.json in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "grep prisma in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store/salesforce/lib/CalendarService.ts",
+    "grep _utils/(createOAuthAppCredential|decodeOAuthState|encodeOAuthState)|\\./(createOAuthAppCredential|decodeOAuthState|encodeOAuthState)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "grep (createOAuthAppCredential|decodeOAuthState|encodeOAuthState)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages",
+    "grep refreshTokenResponseSchema|zoomRefreshedTokenSchema in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store",
+    "grep \"slug\"\\s*:\\s*\"(google-calendar|hubspot|lark-calendar|office365-calendar|msteams|zoomvideo|webex|zoho-bigin|zohocrm)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store",
+    "grep appConfig in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store/zoho-bigin/api/add.ts",
+    "grep export (function|const) symmetricDecrypt|export (function|const) symmetricEncrypt in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/lib",
+    "grep googleCredentialSchema = |export const googleCredentialSchema in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store/googlecalendar",
+    "list_files apps/web/pages/api/webhook/**/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "list_files **/*{refresh,oauth,app-credential,OAuth}*.test.{ts,tsx} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages",
+    "grep slug:? ?[:=]? ?[\"'](google-calendar|hubspot|lark-calendar|office365-calendar|zoomvideo|msteams)[\"'] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store",
+    "grep \"slug\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store/googlecalendar",
+    "grep slug\"?\\s*:\\s*\"[^\"]*\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store/zoomvideo",
+    "grep type: \" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/app-store/googlecalendar/_metadata.ts",
+    "grep refreshAccessToken|refreshOAuthTokens|parseRefreshTokenResponse|APP_CREDENTIAL_SHARING in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "grep userId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/types/Credential.d.ts",
+    "grep userId|CredentialPayload = in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/types",
+    "grep ^model (App|Credential) \\{[\\s\\S]*?^\\} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059/packages/prisma/schema.prisma"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 45943,
+  "diff_chars_injected": 45943,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 23,
+    "in_fences": 0,
+    "in_section": 23,
+    "surviving": 23
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 38,
+  "prompt_tokens": 956254,
+  "cached_tokens": 866676,
+  "cache_write_tokens": 89550,
+  "completion_tokens": 55718,
+  "reasoning_tokens": null,
+  "duration_seconds": 251.80281316675246,
+  "cost_usd": 0.056679259999999995,
+  "cost_basis": "provider"
+}

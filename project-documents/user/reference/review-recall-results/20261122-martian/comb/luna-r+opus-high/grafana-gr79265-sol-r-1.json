@@ -1,0 +1,29 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "tagDeviceUI` writes the device to `localCache` before it calls `CreateOrUpdateDevice` (impl.go:87). If the store then returns `ErrDeviceLimitReached`, the cache entry stays, so the next request with that device ID returns nil and gets an anonymous identity even though the limit was reached."
+  ],
+  "F2": [
+   "DROP",
+   "Skipping requests that have no device ID is the existing behaviour of `TagDevice`, not something this change added. The device limit counts identified devices; it was never meant to be an access-control boundary for requests without the header."
+  ],
+  "F3": [
+   "DROP",
+   "The count-then-insert race is real, but with a soft device-count limit it only lets in a few extra devices under concurrent first-time admissions, so it isn't worth fixing before merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.1015612
+}

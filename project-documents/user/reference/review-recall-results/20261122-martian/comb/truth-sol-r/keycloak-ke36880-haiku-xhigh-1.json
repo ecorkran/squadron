@@ -1,0 +1,48 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Profile configuration prevents V1 and V2 admin-permissions features from being enabled together."
+  ],
+  "F2": [
+   "KEEP",
+   "V1 token exchange can run with V2 admin permissions and reaches the unconditional UnsupportedOperationException."
+  ],
+  "F3": [
+   "KEEP",
+   "The type query excludes untyped per-client resources and can return \u201cClients\u201d instead of a client UUID."
+  ],
+  "F4": [
+   "KEEP",
+   "Existing permission servers are not updated, and the missing Clients fallback resource is dereferenced without a null check."
+  ],
+  "F5": [
+   "KEEP",
+   "V2 client deletion leaves UUID-named permission resources and their associated grants behind."
+  ],
+  "F6": [
+   "KEEP",
+   "Client permission resources have no display name, so the console renders blank resource labels."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2,
+  3,
+  5,
+  6
+ ],
+ "cost_usd": 0.149195
+}

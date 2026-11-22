@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "canManage()` accepts `VIEW`, allowing view-only administrators to pass the group creation and movement authorization check."
+  ],
+  "F2": [
+   "KEEP",
+   "Group enumeration checks authorization-resource IDs instead of group IDs, and individual group resources are created without the type needed for discovery."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00251263
+}

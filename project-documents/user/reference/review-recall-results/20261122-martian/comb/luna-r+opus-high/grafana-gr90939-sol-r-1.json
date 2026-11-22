@@ -1,0 +1,17 @@
+{
+ "case": "grafana-gr90939",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The missing recheck after taking the lock is real, but the only cost is a few extra manifest reads in the brief startup window. Overwriting a good cache with nil would need the manifest file read to fail between loads. That is unlikely, and the next request would reload it anyway, so the effect is minor."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0467752
+}

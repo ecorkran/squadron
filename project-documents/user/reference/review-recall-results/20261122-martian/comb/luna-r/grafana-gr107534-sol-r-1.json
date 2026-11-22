@@ -1,0 +1,19 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Split and shard execution pre-expand targets before `runQuery`, whose backend path interpolates them again, so dollar-prefixed variable values can change the query\u2019s meaning."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0032935300000000002
+}

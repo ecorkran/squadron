@@ -1,0 +1,95 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "isTeamAdmin(...) && isTeamOwner(...)` (lines 46-48) only passes OWNER, because `isTeamOwner` checks OWNER alone, so team ADMINs get FORBIDDEN."
+  ],
+  "F2": [
+   "KEEP",
+   "The env list is lowercased, but guests are matched raw with `includes(guest)`, so case changes and plus-addressing get past the blacklist."
+  ],
+  "F3": [
+   "KEEP",
+   "The return value of `updateCalendarAttendees` is ignored, and `updateAllCalendarEvents` catches its own errors, so the handler returns \"Guests added\" after the DB write even when the calendar update fails."
+  ],
+  "F4": [
+   "DROP",
+   "The failure is still logged; leaving `err` out of the log hurts diagnosis but does not change behavior."
+  ],
+  "F5": [
+   "KEEP",
+   "The server schema has no uniqueness check, and the filter only compares against existing attendees, case-sensitively, so duplicate or case-variant guests in one request create duplicate attendee rows."
+  ],
+  "F6": [
+   "KEEP",
+   "The handler passes raw `guests` to `sendAddGuestsEmails`, so an existing attendee included in the request gets `AttendeeScheduledEmail` instead of the add-guests email."
+  ],
+  "F7": [
+   "KEEP",
+   "sendAddGuestsEmails` takes no event-type metadata and never checks the disable-host or disable-attendee email settings, unlike `sendLocationChangeEmails`."
+  ],
+  "F8": [
+   "KEEP",
+   "The handler checks only permissions, not booking status or end time, so a direct call can add guests to a cancelled or rejected booking and send invites."
+  ],
+  "F9": [
+   "DROP",
+   "Attendees adding guests is an intended product choice; a missing size cap or rate limit is hardening, not a specific behavior defect."
+  ],
+  "F10": [
+   "KEEP",
+   "you_do_not_have_permission` is not in common.json or anywhere else, and the dialog renders `t(err.message)`, so users see the raw key."
+  ],
+  "F11": [
+   "KEEP",
+   "The new templates pass the raw key as `subject`, BaseScheduledEmail uses `props.subject || subject`, and BaseEmailHtml puts that in `<title>`, so the email title is the untranslated key."
+  ],
+  "F12": [
+   "KEEP",
+   "The new organizer email builds `from` with `APP_NAME` instead of `EMAIL_FROM_NAME`, so deployments that set a custom sender name get the wrong one."
+  ],
+  "F13": [
+   "KEEP",
+   "isInvalidEmail` is reset only by Cancel, so the error shows again on the next open after a success or a close via `onOpenChange`, and the template-literal message is never empty, so the fallback can't run."
+  ],
+  "F14": [
+   "KEEP",
+   "The new MultiEmail component hardcodes the English tooltip \"Remove email\" while it localizes its other strings with `t()`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  6,
+  7,
+  9,
+  10,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 0.2501861
+}

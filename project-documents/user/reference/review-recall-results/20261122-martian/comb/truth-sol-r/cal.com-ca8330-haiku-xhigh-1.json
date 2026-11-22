@@ -1,0 +1,54 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Matching date overrides return true before busy-time checks, exposing slots that overlap bookings or calendar events."
+  ],
+  "F2": [
+   "KEEP",
+   "Any same-weekday row excluding the slot rejects it, eliminating valid slots in disjoint working-hour blocks."
+  ],
+  "F3": [
+   "KEEP",
+   "Each override can veto slots belonging to another window on the same date, removing valid availability."
+  ],
+  "F4": [
+   "KEEP",
+   "The identity comparison never matches, and server-local date formatting can misclassify overrides near UTC midnight."
+  ],
+  "F5": [
+   "KEEP",
+   "Both bounds use the slot start, allowing generated team slots to extend beyond a host\u2019s working hours."
+  ],
+  "F6": [
+   "KEEP",
+   "Override selection uses the unshifted date while shifted minutes discard day rollover, placing availability on the wrong invitee day."
+  ],
+  "F7": [
+   "DROP",
+   "Production override construction supplies timeZone, and the selected-slots call passes no overrides, so the optional type establishes no runtime defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.0827914
+}

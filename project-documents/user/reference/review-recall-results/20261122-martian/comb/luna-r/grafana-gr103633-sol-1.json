@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The denial-cache key omits identity type, so an anonymous denial can incorrectly deny a renderer request with the same UID and resource."
+  ],
+  "F2": [
+   "KEEP",
+   "Undelimited fields can produce identical denial-cache keys for distinct resource names and parent folders."
+  ],
+  "F3": [
+   "DROP",
+   "The test\u2019s false permission value weakens the precedence assertion, but this is a test-coverage issue rather than a defect in runtime behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00223884
+}

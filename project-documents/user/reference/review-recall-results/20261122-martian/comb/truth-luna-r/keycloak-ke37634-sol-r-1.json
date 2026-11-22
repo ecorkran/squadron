@@ -1,0 +1,37 @@
+{
+ "case": "keycloak-ke37634",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The matcher reads the wrong prefix positions and inverts the comparison, so it can accept the wrong grant or throw on short prefixes."
+  ],
+  "F2": [
+   "KEEP",
+   "The test catches the `NullPointerException` from the uninitialized session factory, so it can pass without testing unknown-grant rejection."
+  ],
+  "F3": [
+   "KEEP",
+   "Shortcuts are not length-checked, so a non-two-character shortcut produces token IDs the decoder rejects."
+  ],
+  "F4": [
+   "KEEP",
+   "The constructor checks `grantType` twice and permits a null `rawTokenId`, which is then encoded as `null`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00151719
+}

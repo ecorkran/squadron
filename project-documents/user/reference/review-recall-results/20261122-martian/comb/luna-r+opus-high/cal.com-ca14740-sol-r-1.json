@@ -1,0 +1,42 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler never checks booking status, so guests can be added to cancelled or rejected bookings, and they get invites hardcoded as `CONFIRMED` plus calendar updates."
+  ],
+  "F2": [
+   "KEEP",
+   "isTeamAdmin && isTeamOwner` means only owners pass, so team admins who aren't the organizer or an attendee are wrongly denied with FORBIDDEN."
+  ],
+  "F3": [
+   "DROP",
+   "Duplicates only get in through a direct API call that bypasses the dialog, and the only effect is a repeated attendee on the caller's own booking, so the impact is low."
+  ],
+  "F4": [
+   "KEEP",
+   "The blacklist entries are lowercased but submitted emails are not, so `Blocked@example.com` gets past the blacklist control."
+  ],
+  "F5": [
+   "KEEP",
+   "sendAddGuestsEmails` sends host and attendee emails unconditionally and ignores the event type's disable settings, unlike the neighbouring senders."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  4
+ ],
+ "cost_usd": 0.1120111
+}

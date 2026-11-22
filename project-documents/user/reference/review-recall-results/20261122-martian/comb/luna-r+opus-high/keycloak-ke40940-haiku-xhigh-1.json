@@ -1,0 +1,27 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The null only comes back for a group that was deleted while the request was running, which is the race this change fixes; its only caller just copies it onto a representation of the vanished group, so nothing is functionally harmed."
+  ],
+  "F2": [
+   "DROP",
+   "This is test cleanup for a failure path: if a `remove()` throws, the test fails anyway, and the surefire fork exits, so a non-daemon thread won't hang the build."
+  ],
+  "F3": [
+   "DROP",
+   "Not joining the reader and having no success counter only weakens the test; across 100 HTTP deletes the reader will almost certainly run many reads, so this is not a defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.0785787
+}

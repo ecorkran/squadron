@@ -1,0 +1,43 @@
+{
+ "case": "cal.com-ca10600",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A valid backup code plus any nonempty TOTP value skips password verification and authenticates."
+  ],
+  "F2": [
+   "KEEP",
+   "Concurrent requests can both redeem a code, and updates can overwrite each other\u2019s consumption."
+  ],
+  "F3": [
+   "KEEP",
+   "Dismissing the dialog after enablement without clicking Close leaves the parent\u2019s security status stale."
+  ],
+  "F4": [
+   "KEEP",
+   "The handler reports a successful copy even when the clipboard write fails."
+  ],
+  "F5": [
+   "KEEP",
+   "Removing the visibility button from sequential focus prevents keyboard users from activating it normally."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00281395
+}

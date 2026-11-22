@@ -1,0 +1,17 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This is a documentation-accuracy complaint, not a code defect. The caution is overstated (the operator never checks for `rolling-updates`), but its core advice to enable the feature is correct. Custom images failing under `--optimized` is the general, already-known behavior for any build-time option, not something this change introduced."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.1125347
+}

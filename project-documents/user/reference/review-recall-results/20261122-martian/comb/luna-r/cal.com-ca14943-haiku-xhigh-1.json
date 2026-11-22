@@ -1,0 +1,51 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A failed or stale-row counter update can escape the catch and abort processing of the remaining reminders."
+  ],
+  "F2": [
+   "KEEP",
+   "Locked-account returns are counted as failures, so the retry cleanup can permanently delete reminders before the account is unlocked."
+  ],
+  "F3": [
+   "DROP",
+   "These skipped rows are eventually removed by the existing scheduled-date cleanup, and repeated processing is a low-impact cost."
+  ],
+  "F4": [
+   "DROP",
+   "The new counter is only incremented for SMS today, so the unscoped branch does not currently delete other-channel reminders."
+  ],
+  "F5": [
+   "DROP",
+   "The scan concern is speculative without query-plan or scale evidence and does not establish a meaningful performance defect."
+  ],
+  "F6": [
+   "KEEP",
+   "Overlapping runs can overwrite each other\u2019s read-based increments and allow reminders to exceed the intended retry limit."
+  ],
+  "F7": [
+   "DROP",
+   "Missing tests alone do not establish a defect in behavior that the code already implements."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5
+ ],
+ "cost_usd": 0.0029878500000000002
+}

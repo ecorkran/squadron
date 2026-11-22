@@ -1,0 +1,22 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The Quarkus server picks its crypto provider explicitly with `CryptoIntegration.setProvider` (KeycloakRecorder.java:214), so auto-detection only matters for the misconfiguration of having several full providers on the classpath at once."
+  ],
+  "F2": [
+   "DROP",
+   "asn1derToConcatenatedRS` only receives DER output from the JDK's own `Signature.sign()` when signing, so the malformed sequence lengths described cannot actually reach it."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.13055070000000002
+}

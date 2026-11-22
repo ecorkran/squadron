@@ -1,0 +1,167 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Migration assumes an embedding category exists",
+      "description": "When `embed_category` is unset or references a deleted category, the query returns no rows. Accessing `[0]['id']` raises before the fallback executes, blocking migration even on sites that never enabled embedding. Handle empty results before indexing and test default installations.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-15"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Migrated hosts bypass required normalization",
+      "description": "The migration inserts legacy values such as `https://example.com` verbatim, bypassing the model\u2019s normalization callback. `EmbeddableHost.record_for_host` compares against only `example.com`, so previously working configurations stop authorizing embeds. Normalize migrated hosts and test scheme-prefixed legacy settings.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host values are interpolated directly into SQL",
+      "description": "Legacy setting values enter SQL without quoting or binding. An apostrophe can break migration, and SQL content can alter the statement. Use database quoting or parameterized insertion.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Accepted port-qualified hosts never match",
+      "description": "Validation accepts `example.com:8080`, but lookup compares it with `URI(...).host`, which returns `example.com` without the port. Saving this configuration succeeds while embedding remains denied. Apply a consistent port policy during normalization and lookup.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/embeddable_host.rb:14-17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Validation rejects valid longer domain suffixes",
+      "description": "The `{2,5}` suffix restriction rejects valid domains such as `example.technology`. Replace the arbitrary length restriction with appropriate hostname validation and add coverage for longer suffixes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/embeddable_host.rb:2"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New controller tests do not exercise endpoint behavior",
+      "description": "The only assertion checks inheritance; the embedding controller spec does the same. Add request coverage for authorization, create/update/delete, invalid input, missing records, and serialized responses. These tests currently cannot detect broken CRUD behavior.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5-7"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migration assumes an embedding category exists",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-15",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migrated hosts bypass required normalization",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:24-25",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Host values are interpolated directly into SQL",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:25",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Accepted port-qualified hosts never match",
+      "location": "app/models/embeddable_host.rb:14-17",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validation rejects valid longer domain suffixes",
+      "location": "app/models/embeddable_host.rb:2",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New controller tests do not exercise endpoint behavior",
+      "location": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5-7",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+    "diff": "7922902c7f148c6ed71d530b47565a9c106175f1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:52:19.543268",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32611,
+  "diff_chars_injected": 32611,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 72025,
+  "cached_tokens": 69504,
+  "cache_write_tokens": null,
+  "completion_tokens": 524,
+  "reasoning_tokens": 0,
+  "duration_seconds": 74.86847362481058,
+  "cost_usd": 0.017232400000000002,
+  "cost_basis": "alias_pricing"
+}

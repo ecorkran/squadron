@@ -1,0 +1,216 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Feature-disabled path reuses verdict exit code 4",
+      "description": "`FEATURE_DISABLED = 4` shares the exit-code space with upgrade verdicts. The docs table (docs/guides/server/update-compatibility.adoc:132-134) defines 4 as \"Rolling Upgrade is not possible\" and tells automation to rely only on the exit code. A pipeline that treats 4 as \"recreate\" will take the downtime path when the real problem is a missing `--features=rolling-updates`. The comment in the same file (lines 31-33) says 2 is a usage error, and the docs define 2 as \"Invalid CLI option\", which fits this case better. Suggest exiting with `CommandLine.ExitCode.USAGE` (or another non-verdict code) and updating the table. The constant also sits on `CompatibilityResult`, which models compatibility verdicts, so a CLI-level constant would fit better elsewhere.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:34-35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "RECREATE exit code changed from 4 to 3",
+      "description": "From the diff, the base code returned 4 for recreate. The base docs already listed 3 for \"Rolling Upgrade is not possible\u2026 shut down\" (the `m|3` row is unchanged context in the diff). So this change brings the code in line with the docs, which is the right direction. Anyone who scripted against the shipped 4 will now read 4 as \"feature disabled\" and will never see the recreate code. This should be called out in the change notes.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exit-code contract and the check-command guard are untested",
+      "description": "`testFeatureNotEnabled` launches only `update-compatibility metadata`. The identical guard in `UpdateCompatibilityCheck.run()` (UpdateCompatibilityCheck.java:46-50) has no test. The test asserts only the error text, not exit code 4. A repo-wide grep shows no test asserting `RECREATE_UPGRADE_EXIT_CODE` or `FEATURE_DISABLED`, so the changed value 3 is unverified. Suggested additions:\n- A `check` variant of the feature-disabled test that asserts exit code 4.\n- `assertEquals(3, result.exitCode())` in `testWrongVersions`, which already exercises the recreate path.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Operator docs claim a failure the code does not produce, and omit a build-time requirement",
+      "description": "- **Unimplemented claim.** The text says \"Otherwise, the {project_name} Operator will fail.\" Nothing in operator code checks this. `UpgradeLogicFactory.create` (operator/src/main/java/org/keycloak/operator/upgrade/UpgradeLogicFactory.java:36-42) chooses logic from the strategy alone, and `rolling-updates` appears nowhere under `operator/src/main`. The only effect is that `features.enabled` is passed to the server as `--features` (KeycloakDistConfigurator.java:122-123).\n- **Missing build-time requirement.** `features` is a build-time option (quarkus/config-api/src/main/java/org/keycloak/config/FeatureOptions.java:18). The operator adds `--optimized` when a custom image is set (KeycloakDeploymentDependentResource.java:296-300). Under `--optimized`, a build-time value that differs from the persisted build is rejected (Picocli.java:404-410, 435-437). So with a custom image not built with `--features=rolling-updates`, the documented CR example should fail at start with \"build time options have values that differ from what is persisted\". The stock-image path works because `start-optimized` defaults to `false` (operator/src/main/resources/application.properties:10), which triggers an auto-build.\n\nEither make the operator enforce the gate or correct the caution. Also document that custom images must be built with the feature.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "docs/guides/operator/advanced-configuration.adoc:448-449"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Feature guard is duplicated and the feature name is hard-coded",
+      "description": "The same five-line guard appears in `UpdateCompatibilityCheck.run()` and `UpdateCompatibilityMetadata.run()` (both lines 46-50). The check lives in the subclasses while its message lives in the base class. The message hard-codes `'rolling-updates'` instead of using `Profile.Feature.ROLLING_UPDATES.getKey()`, so a rename would drift. Suggest a shared helper in `AbstractUpdatesCommand` that prints the message and returns whether the feature is enabled.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java:83-85"
+    },
+    {
+      "severity": "PASS",
+      "title": "Feature registration and UpgradeTest update are consistent",
+      "description": "- The `ROLLING_UPDATES(\"Rolling Updates\", Type.PREVIEW)` entry has the trailing comma that is needed before `;` (Profile.java:134-137). Its key derives to `rolling-updates` (Profile.java:161), matching the docs, Dockerfile, and tests.\n- `UpgradeTest.java` imports `Profile`, `FeatureSpec`, and `List`, and no longer references `UnsupportedSpec`.\n- `--features` is accepted by `update-compatibility` at runtime, so the dist test's `ENABLE_FEATURE` argument is valid. The relevant logic is at Picocli.java:674-675.\n- The `HelpAll` approval files are unaffected, because `--features` help renders `<...>` rather than listing values (HelpCommandDistTest.testUpdateCompatibilityCheckHelpAll.approved.txt:151).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/Profile.java:136"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Feature-disabled path reuses verdict exit code 4",
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:34-35",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "RECREATE exit code changed from 4 to 3",
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:34",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Exit-code contract and the check-command guard are untested",
+      "location": "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java:46-50",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Operator docs claim a failure the code does not produce, and omit a build-time requirement",
+      "location": "docs/guides/operator/advanced-configuration.adoc:448-449",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Feature guard is duplicated and the feature name is hard-coded",
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java:83-85",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Feature registration and UpgradeTest update are consistent",
+      "location": "common/src/main/java/org/keycloak/common/Profile.java:136",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "diff": "bb4a51ac32539ad0d8b9f72bfd201ade75e95361...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:37:06.366450",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 41,
+  "injected": [],
+  "files_read": [
+    "common/src/main/java/org/keycloak/common/Profile.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractUpdatesCommand.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityMetadata.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java",
+    "docs/guides/server/update-compatibility.adoc",
+    "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+    "operator/src/main/java/org/keycloak/operator/upgrade/UpgradeLogicFactory.java",
+    "operator/src/main/java/org/keycloak/operator/crds/v2alpha1/deployment/spec/FeatureSpec.java",
+    "operator/src/main/java/org/keycloak/operator/upgrade/UpdateStrategy.java",
+    "quarkus/tests/integration/src/test/java/org/keycloak/it/cli/dist/UpdateCommandDistTest.java",
+    "quarkus/config-api/src/main/java/org/keycloak/config/FeatureOptions.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/AbstractCommand.java",
+    "operator/src/main/java/org/keycloak/operator/crds/v2alpha1/CRDUtils.java",
+    "operator/src/main/java/org/keycloak/operator/controllers/KeycloakDeploymentDependentResource.java",
+    "operator/src/main/java/org/keycloak/operator/Config.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/IncompatibleResult.java",
+    "docs/guides/operator/advanced-configuration.adoc",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java"
+  ],
+  "searches": [
+    "grep RECREATE_UPGRADE_EXIT_CODE|FEATURE_DISABLED|ROLLING_UPGRADE_EXIT_CODE in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "grep public static boolean isFeatureEnabled|static .* isFeatureEnabled\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/common/src/main/java/org/keycloak/common/Profile.java",
+    "grep void exit\\(|picocli\\.exit|ExitCode in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli",
+    "grep rolling-updates|ROLLING_UPDATES|rollingUpdates in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "grep picocli\\b.*=|Picocli picocli|exitCode\\(\\)|exit code|exit-code|Exit code in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli",
+    "grep update-compatibility|UpdateCompatibility|CompatibilityManager|IncompatibleResult in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "grep getUpdateSpec|UpdateStrategy|getUnsupported\\(\\)|getFeatureSpec|FeatureSpec|isFeatureEnabled in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/operator/src/main/java",
+    "grep getTestKeycloakDeployment|setFeatureSpec|setEnabledFeatures|setUnsupported|FeatureSpec|UnsupportedSpec in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/operator/src",
+    "grep Dockerfile-custom-image in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "grep user-event-metrics|ipa-tuura-federation|IPA_TUURA_FEDERATION in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "grep FEATURES|\"features\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus/config-api/src/main/java/org/keycloak/config",
+    "grep user-event-metrics|passkeys in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus/tests/integration/src/test/resources/org/keycloak/it/cli/dist/approvals/cli/help",
+    "grep --features in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus/tests/integration/src/test/resources/org/keycloak/it/cli/dist/approvals/cli/help/HelpCommandDistTest.testUpdateCompatibilityCheckHelpAll.appr\u2026",
+    "grep optimized|buildTime|features in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/operator/src/main/java/org/keycloak/operator/controllers/KeycloakDistConfigurator.java",
+    "grep includeRuntime|isRebuildCheck|isBuildTime|buildTime|rebuild|Rebuild in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java",
+    "grep optimized|\"start\"|\"build\"|OPTIMIZED in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/operator/src/main/java/org/keycloak/operator/controllers",
+    "grep @JsonProperty\\(\"(features|update|unsupported)\"\\)|JsonProperty\\(value = \"(features|update)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/operator/src/main/java/org/keycloak/operator/crds/v2alpha1/deployment/KeycloakSpec.java",
+    "grep ignoredBuildTime|startOptimized in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/Picocli.java",
+    "grep startOptimized in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/operator/src/main/java",
+    "grep kc\\.operator\\.keycloak\\.start-optimized|start-optimized in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/operator",
+    "grep exitCode\\(\\)\\s*[,)]|assertEquals\\(\\s*[34]\\s*,|exitCode\\(\\), [34] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882/quarkus"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 15161,
+  "diff_chars_injected": 15161,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 42,
+  "prompt_tokens": 1308585,
+  "cached_tokens": 1208013,
+  "cache_write_tokens": 100532,
+  "completion_tokens": 55075,
+  "reasoning_tokens": null,
+  "duration_seconds": 255.80058741709217,
+  "cost_usd": 0.09768830999999999,
+  "cost_basis": "provider"
+}

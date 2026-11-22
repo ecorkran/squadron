@@ -1,0 +1,24 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The registered handler inherits four abstract methods without implementing them, so accessing it raises `TypeError`."
+  ],
+  "F2": [
+   "DROP",
+   "The assertions are weak, but this is a test-coverage issue rather than a defect in changed behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0016836800000000001
+}

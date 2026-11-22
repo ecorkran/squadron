@@ -1,0 +1,19 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "getCalendar` is now async, so errors from loading the app or from the `CalendarService` constructor become unhandled rejections inside `forEach(async ...)`. The `try/catch` in vital and wipemycalother can no longer catch them, and in `bookings.tsx` they no longer fail the mutation, which now carries on as if the delete worked."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.065938
+}

@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "enableSqlExpressions` (reader.go:194-200) returns `false` on both branches, so turning `sqlExpressions` on has no effect and every SQL query fails at reader.go:131."
+  ],
+  "F2": [
+   "KEEP",
+   "The new `DB` methods in db.go return \"not implemented\", so `TablesList` fails and `NewSQLCommand` (sql_command.go:30-35) rejects every SQL query on the legacy `buildCMDNode` path, which checks no feature flag, as well as on the new-parser path."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1096594
+}

@@ -1,0 +1,30 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "timezone.now()` is evaluated at import time, so each instance gets a stale process-start timestamp."
+  ],
+  "F2": [
+   "KEEP",
+   "Status sync calls `should_sync` without a source, so the same-integration loop guard is not applied."
+  ],
+  "F3": [
+   "DROP",
+   "This finding identifies missing test coverage, not a behavior defect shown by the code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00202235
+}

@@ -1,0 +1,251 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Equal-order crypto providers are now chosen silently by classpath order",
+      "description": "The previous `foundProviders.size() > 1` \u2192 `IllegalStateException` guard is gone. Detection now sorts by `order()` descending and takes the first element.\n\n- **The tie:** `DefaultCryptoProvider`, `FIPS1402Provider` and `WildFlyElytronProvider` all return `200`. `Stream.sorted` is stable, so the winner among them is whatever `ServiceLoader` iterates first, i.e. classpath order.\n- **The impact:** a deployment with both `keycloak-crypto-default` and `keycloak-crypto-fips1402` on the classpath used to fail at startup. It now boots with an arbitrary one, possibly non-FIPS, and the only trace is a `debug` line.\n- **Where it applies:** the Quarkus server sets the provider explicitly (`KeycloakRecorder.java:214`), so this affects the `CryptoIntegration.init(...)` paths: adapters, testsuite, embedded use, and the new `AuthzClient.create`.\n- **Suggested fix:** keep the fail-fast when the top two providers share the same `order()`, or at least log at `warn`. Only the 100-vs-200 fallback needs to be silent.\n\nNo test covers the new ordering behaviour.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-72"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "ECDSAAlgorithmTest never exercises P-384/P-521 signatures or the long-form DER length paths",
+      "description": "The test generates one key pair with `KeyPairGenerator.getInstance(\"EC\").genKeyPair()`, which uses the JDK default curve (P-256 or P-384 depending on JDK version, never P-521). That key is reused for ES256, ES384 and ES512.\n\n- **Untested branches:** only a real P-521 signature produces a SEQUENCE body over 127 bytes. So `ASN1Encoder.writeLength` (`ASN1Encoder.java:67-79`) and the long-form branch of `ASN1Decoder.readLength` (`ASN1Decoder.java:137-164`) are never executed. These are the most error-prone parts of the new code.\n- **Self-consistent assertion:** the only check is `rsConcat == rsConcat2` after RS\u2192DER\u2192RS through the same new code. A symmetric bug passes.\n- **Silent truncation:** on a JDK whose default is P-384, the ES256 case truncates 48-byte r/s to 32 bytes in `integerToBytes` and still passes.\n\nSuggested fix: generate keys per curve (`ECGenParameterSpec(\"secp256r1\" / \"secp384r1\" / \"secp521r1\")`). Then assert the re-encoded DER verifies with `Signature.verify` against the public key, or equals the original JCA output. Negative tests for malformed DER are also missing.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:46-57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "ASN1Decoder leaks unchecked exceptions and is lenient on malformed input",
+      "description": "Several malformed inputs escape the declared `throws IOException` contract or are accepted:\n\n- `readLength()` returns `-1` for indefinite length (`0x80`); `readInteger()` passes it to `read(length)`, so `new byte[-1]` throws `NegativeArraySizeException`.\n- A zero-length INTEGER reaches `new BigInteger(new byte[0])` and throws `NumberFormatException`.\n- `readSequence()` (lines 49-63) checks only the low 5 tag bits, so primitive `0x10` or other-class tags pass as SEQUENCE.\n- `readSequence()` does not reject children that overrun the declared length, or trailing bytes.\n\nPractical impact is low today. The only caller path is `ECDSASignatureSignerContext.sign`, which feeds locally produced JCA output and wraps `Exception`. The class should still reject these with `IOException`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:65-74"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead statements in concatenatedRSToASN1DER",
+      "description": "`ASN1Encoder.create().write(rBigInteger);` and `ASN1Encoder.create().write(sBigInteger);` build encoders whose results are discarded. The same work is redone at lines 117-121. Remove the two lines.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:114-115"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`order()` added as an abstract method on a public SPI interface",
+      "description": "All four in-repo implementations are updated. Any out-of-tree `CryptoProvider` will fail to compile, or throw `AbstractMethodError` during the sort in `detectProvider`. A `default int order()` would avoid that. The literals `100` and `200` are repeated across four classes with no named constant explaining the tiers.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:39-44"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fallback provider fails with unhelpful \"Not supported yet.\" messages",
+      "description": "Most methods throw `UnsupportedOperationException(\"Not supported yet.\")`. Core code reaches several of them, for example `AsymmetricSignatureVerifierContext.java:63` (`getSignature`), `AbstractJWKParser.java:95-98` and `PemUtils`.\n\nBecause this provider is now auto-selected when no full provider is present, a user hitting one of those paths gets a message with no hint to add `keycloak-crypto-default`. The message should name the operation and the remedy.\n\nSeparately, `getBouncyCastleProvider()` (lines 61-67) returns the default KeyStore's JCA provider, not BouncyCastle. This feeds `BouncyIntegration.PROVIDER` and deserves a comment explaining it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:74-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor style and logging nits",
+      "description": "- `logger.debugf(builder.toString())` passes a dynamic string as a format string. Use `logger.debug(...)` or `debugf(\"Ignored crypto providers: %s\", ...)`.\n- The ignored-providers list ends with a trailing `\", \"` and concatenates inside `append`; `Collectors.joining(\", \")` would be cleaner.\n- `ASN1Encoder.java:42` uses `static public` instead of `public static`.\n- Both ASN.1 classes have empty Javadoc and `public` methods on package-private classes.\n- `authz/client/pom.xml:67-71` adds `hamcrest` as a test dependency, but the only test uses `org.junit.Assert` alone.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:64-70"
+    },
+    {
+      "severity": "PASS",
+      "title": "ASN.1 encode/decode and R\u2016S conversion logic",
+      "description": "The conversion mirrors the reference `BCECDSACryptoProvider.java:28-70`: a leading zero byte forces positive integers, and r/s are left-padded or sign-byte-stripped to `signLength / 2`. I also traced by hand:\n\n- `ASN1Encoder.writeLength` emits correct short and long-form lengths.\n- `ASN1Decoder.readNext`'s mark/reset/count bookkeeping returns each child TLV intact.\n- The `length >= limit` bound holds for a maximum-size ES512 signature.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:100-165"
+    },
+    {
+      "severity": "PASS",
+      "title": "AuthzClient initialisation and service registration",
+      "description": "The constructor is private (line 236) and every `create(...)` overload funnels through `create(Configuration)`, so `CryptoIntegration.init` always runs before use. `init` is idempotent under its double-checked lock. The `META-INF/services` entry names the correct class, and order `100` correctly yields to the `200` providers when one is present.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:94-97"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Equal-order crypto providers are now chosen silently by classpath order",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:56-72",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "ECDSAAlgorithmTest never exercises P-384/P-521 signatures or the long-form DER length paths",
+      "location": "authz/client/src/test/java/org/keycloak/authorization/client/test/ECDSAAlgorithmTest.java:46-57",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "ASN1Decoder leaks unchecked exceptions and is lenient on malformed input",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java:65-74",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead statements in concatenatedRSToASN1DER",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:114-115",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`order()` added as an abstract method on a public SPI interface",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoProvider.java:39-44",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Fallback provider fails with unhelpful \"Not supported yet.\" messages",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:74-97",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Minor style and logging nits",
+      "location": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java:64-70",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "ASN.1 encode/decode and R\u2016S conversion logic",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:100-165",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "AuthzClient initialisation and service registration",
+      "location": "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java:94-97",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "diff": "9e01551928c12485c55ca9e77d60d663de9966f9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:27:45.672323",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "injected": [],
+  "files_read": [
+    "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Encoder.java",
+    "authz/client/src/main/java/org/keycloak/authorization/client/AuthzClient.java",
+    "common/src/main/java/org/keycloak/common/util/BouncyIntegration.java",
+    "authz/client/pom.xml",
+    "crypto/default/src/main/java/org/keycloak/crypto/def/BCECDSACryptoProvider.java",
+    "core/src/main/java/org/keycloak/crypto/ECDSAAlgorithm.java",
+    "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/KeycloakRecorder.java"
+  ],
+  "searches": [
+    "grep implements CryptoProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep getBouncyCastleProvider\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep CryptoProvider|KeystoreFormat in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/common/src/main/java/org/keycloak/common/util/KeystoreUtil.java",
+    "grep asn1derToConcatenatedRS|concatenatedRSToASN1DER|getSignatureLength in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep Multiple crypto providers|only one cryptoProvider|CryptoIntegration\\.setProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep keycloak-authz-client in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "list_files authz/client/src/test/**/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832",
+    "grep CryptoIntegration\\.getProvider\\(\\)\\.(\\w+) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/core/src/main",
+    "grep CryptoIntegration|BouncyIntegration|KeystoreUtil|PemUtils|ECDSAAlgorithm|SignatureSignerContext|JWSBuilder|KeyUtils in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/authz/client/src/main",
+    "grep CryptoIntegration\\.getProvider\\(\\)\\.\\w+|BouncyIntegration\\.PROVIDER in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832/common/src/main",
+    "grep CryptoIntegration|order\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke33832"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 180,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 31609,
+  "diff_chars_injected": 31609,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 23,
+  "prompt_tokens": 164362,
+  "cached_tokens": 113239,
+  "cache_write_tokens": 51115,
+  "completion_tokens": 16643,
+  "reasoning_tokens": null,
+  "duration_seconds": 148.56896075000986,
+  "cost_usd": 1.507775,
+  "cost_basis": "provider"
+}

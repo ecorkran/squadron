@@ -1,0 +1,43 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The state is a deterministic hash of view names, allowing cross-session OAuth code injection that bypasses installer verification."
+  ],
+  "F2": [
+   "KEEP",
+   "A missing Integration row advances directly to creation without verifying the authenticated user against the installer."
+  ],
+  "F3": [
+   "KEEP",
+   "Active, unlinked integrations without sender metadata trigger an unhandled KeyError in the new installer check."
+  ],
+  "F4": [
+   "KEEP",
+   "Comparing mutable, reusable logins can authorize a different GitHub account after the installer renames."
+  ],
+  "F5": [
+   "KEEP",
+   "Token-request and user-lookup exceptions escape unhandled, while decoding failures are swallowed without logging."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.0640409
+}

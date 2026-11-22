@@ -1,0 +1,40 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Passing the raw secret to `updateCredential` is the normal user-storage contract, the same as for passwords and the OTP secret. How the codes are stored is up to the provider, and the plaintext store is only the test fixture."
+  ],
+  "F2": [
+   "DROP",
+   "The replay behaviour is only in the test-only `BackwardsCompatibilityUserStorage` fixture, so no production code is affected."
+  ],
+  "F3": [
+   "KEEP",
+   "When the user-storage path wins, `createRecoveryCodesCredential` skips `createCredential` and never deletes the old local codes. `UserCredentialManager.isValid` still runs the local validator on input the user storage rejects, so codes from before regeneration keep working."
+  ],
+  "F4": [
+   "KEEP",
+   "getCredential` now returns the federated model first, which has no local id. `removeStoredCredentialById` only acts on the local store, and its JPA lookup (`em.find`) throws when the id is null, so an exhausted federated credential is never removed and the call breaks instead."
+  ],
+  "F5": [
+   "DROP",
+   "This is only in the test fixture, whose users always come from its own `users` map. The swallowed `IOException` and the double space are logging and style issues, not product defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2,
+  3
+ ],
+ "cost_usd": 0.2840213
+}

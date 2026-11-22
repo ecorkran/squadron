@@ -1,0 +1,76 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "On a DB with no `embed_category` settings row (any install that never overrode it), the query returns no rows, so `[0]['id']` raises and the migration aborts."
+  ],
+  "F2": [
+   "KEEP",
+   "Legacy entries like `https://eviltrout.com` are inserted as-is, skipping the model's normalization; `record_for_host` compares against `uri.host`, so those sites quietly stop embedding after upgrade."
+  ],
+  "F3": [
+   "DROP",
+   "Hostnames can't contain apostrophes and the input is admin-entered, so this is hardening against input that won't arrive."
+  ],
+  "F4": [
+   "DROP",
+   "An irreversible data migration is normal practice and doesn't cause wrong behavior."
+  ],
+  "F5": [
+   "DROP",
+   "The client always sends `host`, and a missing `embeddable_host` key would fail before reaching the model anyway, so this is unrealistic hardening."
+  ],
+  "F6": [
+   "KEEP",
+   "The regex accepts `host:port`, which can never match `uri.host`, and its 2\u20135 letter TLD limit makes valid domains like `.photography` impossible to add."
+  ],
+  "F7": [
+   "DROP",
+   "Duplicate host rows are an admin data-hygiene issue with little practical impact."
+  ],
+  "F8": [
+   "DROP",
+   "Topic#ensure_topic_has_a_category` assigns `uncategorized_category_id` when the category is nil, so these topics don't end up with no category as claimed."
+  ],
+  "F9": [
+   "DROP",
+   "A 500 on a stale or unknown id in an admin-only endpoint is minor robustness, not a correctness defect."
+  ],
+  "F10": [
+   "DROP",
+   "No existing `rest_serializer` payload has `*_ids` fields without the matching side-loaded collection, and null arrays don't arrive, so the problem doesn't show up in practice."
+  ],
+  "F11": [
+   "DROP",
+   "A stale edit buffer only redisplays the admin's earlier input, and the server normalizes it again on save; this is cosmetic UX."
+  ],
+  "F12": [
+   "DROP",
+   "No feedback on a failed delete is a minor UX gap, not a defect that blocks merging."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5
+ ],
+ "cost_usd": 0.2705756
+}

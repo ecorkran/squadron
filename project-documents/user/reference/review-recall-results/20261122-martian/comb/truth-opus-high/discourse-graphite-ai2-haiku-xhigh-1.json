@@ -1,0 +1,36 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "unsubscribe` sets the level and calls `save!` directly, never setting `notifications_reason_id`. So `update_last_read` (topic_user.rb:161) can switch the topic back to tracking on a later read, and the MessageBus publish in `change` is skipped."
+  ],
+  "F2": [
+   "DROP",
+   "The Discourse resolver's `findTemplate` decamelizes `topicUnsubscribe` to `topic_unsubscribe` and replaces `_` with `/`, so it finds `topic/unsubscribe` (resolver.js.es6:158)."
+  ],
+  "F3": [
+   "KEEP",
+   "TopicUser.find_by` can return nil because nothing in `unsubscribe` creates the row, so `tu.notification_level` raises a NoMethodError."
+  ],
+  "F4": [
+   "KEEP",
+   "routes.rb:440-441 send a plain GET to an action that changes the user's notification level, and CSRF protection does not cover GET requests."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  3
+ ],
+ "cost_usd": 0.14178349999999998
+}

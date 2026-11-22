@@ -1,0 +1,360 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Migration crashes when no `embed_category` setting row exists",
+      "description": "The query result is indexed with `[0]['id']` without checking that a row came back. `site_settings` only stores non-default values, so on a fresh install or any site that never set `embed_category` (or set a name that matches no category) the result is empty. `PG::Result#[]` (pg 0.18.1) raises `IndexError` for an out-of-range tuple, so `db:migrate` aborts. The `category_id == 0` fallback on line 14 is unreachable in exactly the case it was written for. Line 15 has the same unguarded `[0]['value']` pattern. Guard with `cmd_tuples > 0`, as line 19 already does for the hosts query.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-16"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Migrated hosts are inserted un-normalised, so previously valid configs stop matching",
+      "description": "The old setting accepted values such as `http://eviltrout.com` or `https://example.com/1234`; the removed `SiteSetting.allows_embeddable_host?` and its specs covered them. The migration copies each line verbatim with raw SQL, bypassing the model's `before_validation` stripping in `app/models/embeddable_host.rb:5-8`. `EmbeddableHost.record_for_host` then compares `lower(host)` against a bare hostname, so those rows never match and embedding is rejected with \"invalid referer host\" after upgrade. Stray whitespace or `\\r` from the textarea setting has the same effect. Strip scheme, path and whitespace before inserting.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:22-27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Migration builds SQL by string interpolation",
+      "description": "`'#{h}'` is interpolated straight from a stored setting value. A value containing a single quote breaks the migration, and it is an injection vector from admin-controlled data. Quote the value (`ActiveRecord::Base.connection.quote`) or use a parameterised insert.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Migration is irreversible but declared as `change`, with `force: true`",
+      "description": "The method mixes `create_table` with data-moving `execute` calls and a `DELETE` of the old settings inside `change`, so rollback cannot work. `force: true` silently drops any existing `embeddable_hosts` table. Use explicit `up`/`down` (or raise `IrreversibleMigration`) and drop `force: true`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:2-3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host lookup and validation have several correctness gaps",
+      "description": "- **Case:** `where(\"lower(host) = ?\", host)` lowers the column but not the argument. Ruby's `URI#host` preserves case, so a mixed-case referer or embed URL fails to match.\n- **Nil host:** `self.host.sub!` in `before_validation` raises `NoMethodError` when `host` is nil, giving a 500 instead of a validation error.\n- **Ports:** the regex accepts `:port`, but `URI#host` never includes the port, so a host saved with a port can never match.\n- **TLD length:** `[a-z]{2,5}` rejects longer TLDs (`.museum`, `.photography`) and `localhost`.\n- **Dead and loose regex parts:** the `(\\/.*)?` branch is unreachable because paths are stripped first, and `\\Z` permits a trailing newline (use `\\z`).\n- **Duplicates:** there is no uniqueness validation or index on `host`, so duplicate hosts with different categories make `.first` (and the topic category chosen in `app/models/topic_embed.rb:36`) non-deterministic.\n- **Return type:** `record_for_host` returns `false` in two branches and a record or `nil` in the third. It works only because `false.try(:category_id)` is nil on Rails 4.1; return `nil` consistently.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/embeddable_host.rb:2-18"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Admin controller returns 500 for missing records or params",
+      "description": "`EmbeddableHost.where(id: ...).first` returns nil for an unknown id, after which `host.destroy` (line 16) and `host.host =` (line 23) raise `NoMethodError`. `params[:embeddable_host][:host]` also raises when the root key is absent. Use `find`/`find_by` with a 404, and `params.require(:embeddable_host)`. `category_id` is not checked to reference an existing category. The `before_filter :ensure_logged_in, :ensure_staff` on line 3 duplicates what `Admin::AdminController` already declares.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "app/controllers/admin/embeddable_hosts_controller.rb:9-25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New controllers have no behavioural tests",
+      "description": "Both new controller specs (this one and `spec/controllers/admin/embedding_controller_spec.rb`) assert only that the class inherits from `Admin::AdminController`. Create, update, destroy, validation failure, the uncategorized fallback, and the admin-only constraint are untested. The migration's data-moving logic also has no coverage, which is where the two FAIL findings sit.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5-7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`find embedded` JS test passes only because the stub ignores the id",
+      "description": "The test now requests `store.find('fruit', 2)` and asserts two colours with ids 1 and 2. Fruit 2 (banana) has `color_ids: [3]` in `test/javascripts/helpers/create-pretender.js.es6:43`. The assertions pass only because the `/fruits/:id` handler at line 227 of that file always returns `fruits[0]`. Either request id 1 or make the stub honour the id.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/javascripts/models/store-test.js.es6:111-117"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_ids` hydration is fragile and inconsistent with the singular branch",
+      "description": "- `obj[k].map` throws if any `*_ids` key in a rest-serialised payload is null or not an array; the regex now captures every such key.\n- `hydrated || []` is dead code, since `map` always returns an array.\n- Ids not found in the root are left as `undefined` holes in the array.\n- The original key is always deleted and replaced, whereas the singular branch only replaces when the lookup succeeds.\n\nGuard with `Array.isArray`, and filter or skip misses.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/models/store.js.es6:196-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Type-name drift patched with a single-underscore replace",
+      "description": "Side-loaded children are hydrated with the underscored subtype from the key (`embeddable_host`), while `createRecord('embeddable-host')` in `app/assets/javascripts/admin/controllers/admin-embedding.js.es6:10` uses the dasherised name. The same model therefore lives under two keys in the identity map and resolves two different `model:`/`adapter:` lookups. `type.replace('_', '-')` papers over this in `basePath` only, and replaces just the first underscore. Normalise the type once (for example `Ember.String.dasherize(subType)` in `_hydrateEmbedded`) rather than at the adapter.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/adapters/rest.js.es6:22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fabricator file contents are swapped",
+      "description": "`category_fabricator.rb` now holds the `:embeddable_host` fabricator, and `spec/fabricators/embeddable_host_fabricator.rb` holds all the category fabricators. It still loads, but it is misleading and makes the diff look like the category fabricators were deleted. Swap them back.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "spec/fabricators/category_fabricator.rb:1-4"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Saved host shows no category when none was chosen; delete errors are swallowed",
+      "description": "When a host is saved without a category, the server falls back to the uncategorized category and returns its `category_id`. The component then sets `category` from the local `categoryId` (null), so the row renders an empty category until reload; use the returned `host.get('category_id')` instead. Separately, `destroyRecord()` in `delete` has no `.catch(popupAjaxError)`, unlike `save`, so a failed delete gives the admin no feedback.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/components/embeddable-host.js.es6:37-49"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale test names and setup in `expandable_first_post?` specs",
+      "description": "`expandable_first_post?` no longer consults embeddable hosts, so \"is false if embeddable_host is blank\" passes only because of default settings and no longer tests what it names. `Fabricate(:embeddable_host)` in the nested `before` is irrelevant, and `'with an emeddable host'` has a typo. The describe label `\"allows_embeddable_host\"` in `spec/models/embeddable_host_spec.rb:23` also refers to the removed method.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/models/topic_spec.rb:1403-1409"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No-op update endpoint and unused pieces",
+      "description": "`Admin::EmbeddingController#update` only re-renders the same payload. Its `PUT` route and the `saveChanges` action in `admin-embedding.js.es6` are not wired to anything in `embedding.hbs`. The `admin.embedding.edit` locale key is unused. The explicit `id`/`host`/`category_id` methods in `EmbeddableHostSerializer` restate what `attributes` already does. `embeddable-host.js.es6` imports from `ember-computed-decorators` on two separate lines.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/controllers/admin/embedding_controller.rb:9-11"
+    },
+    {
+      "severity": "PASS",
+      "title": "Old setting references are fully removed from code",
+      "description": "A search of Ruby, JS and template sources finds no remaining callers of `SiteSetting.embeddable_hosts`, `SiteSetting.embed_category` or `allows_embeddable_host?`, and both settings are gone from `config/site_settings.yml`. `EmbedController#ensure_embeddable` and `TopicRetriever#invalid_host?` use the new `EmbeddableHost.host_allowed?`. The new routes carry `AdminConstraint`, and the `admin.embedding.*` keys used by the templates exist in `config/locales/client.en.yml:2494-2500`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/models/site_setting.rb"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migration crashes when no `embed_category` setting row exists",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:9-16",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migrated hosts are inserted un-normalised, so previously valid configs stop matching",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:22-27",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Migration builds SQL by string interpolation",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:25",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Migration is irreversible but declared as `change`, with `force: true`",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb:2-3",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Host lookup and validation have several correctness gaps",
+      "location": "app/models/embeddable_host.rb:2-18",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Admin controller returns 500 for missing records or params",
+      "location": "app/controllers/admin/embeddable_hosts_controller.rb:9-25",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New controllers have no behavioural tests",
+      "location": "spec/controllers/admin/embeddable_hosts_controller_spec.rb:5-7",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "`find embedded` JS test passes only because the stub ignores the id",
+      "location": "test/javascripts/models/store-test.js.es6:111-117",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_ids` hydration is fragile and inconsistent with the singular branch",
+      "location": "app/assets/javascripts/discourse/models/store.js.es6:196-201",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Type-name drift patched with a single-underscore replace",
+      "location": "app/assets/javascripts/discourse/adapters/rest.js.es6:22",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Fabricator file contents are swapped",
+      "location": "spec/fabricators/category_fabricator.rb:1-4",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Saved host shows no category when none was chosen; delete errors are swallowed",
+      "location": "app/assets/javascripts/admin/components/embeddable-host.js.es6:37-49",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Stale test names and setup in `expandable_first_post?` specs",
+      "location": "spec/models/topic_spec.rb:1403-1409",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "No-op update endpoint and unused pieces",
+      "location": "app/controllers/admin/embedding_controller.rb:9-11",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Old setting references are fully removed from code",
+      "location": "app/models/site_setting.rb",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+    "diff": "7922902c7f148c6ed71d530b47565a9c106175f1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:43:43.988847",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [],
+  "files_read": [
+    "app/models/embeddable_host.rb",
+    "app/assets/javascripts/discourse/models/store.js.es6",
+    "app/assets/javascripts/discourse/adapters/rest.js.es6",
+    "app/controllers/admin/embeddable_hosts_controller.rb",
+    "app/models/topic_embed.rb",
+    "app/controllers/embed_controller.rb",
+    "db/migrate/20150818190757_create_embeddable_hosts.rb",
+    "test/javascripts/models/store-test.js.es6",
+    "app/controllers/admin/admin_controller.rb",
+    "config/locales/client.en.yml",
+    "spec/fabricators/category_fabricator.rb",
+    "spec/fabricators/embeddable_host_fabricator.rb",
+    "test/javascripts/helpers/create-pretender.js.es6",
+    "app/assets/javascripts/discourse/models/rest.js.es6",
+    "spec/models/topic_spec.rb",
+    "spec/controllers/embed_controller_spec.rb"
+  ],
+  "searches": [
+    "grep embeddable_hosts|embed_category|allows_embeddable_host|admin\\.embedding|embedding: in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+    "list_files spec/fabricators/{category,embeddable_host}*.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+    "grep embeddable_host|embed_category|allows_embeddable_host in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+    "grep embed in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10/config/site_settings.yml",
+    "grep ^    (rails|activesupport|active_model_serializers|pg) \\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10/Gemfile.lock",
+    "grep rest_serializer|_ids\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10/app"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32611,
+  "diff_chars_injected": 32611,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 118342,
+  "cached_tokens": 71117,
+  "cache_write_tokens": 47219,
+  "completion_tokens": 13204,
+  "reasoning_tokens": null,
+  "duration_seconds": 126.93505700025707,
+  "cost_usd": 1.2996033,
+  "cost_basis": "provider"
+}

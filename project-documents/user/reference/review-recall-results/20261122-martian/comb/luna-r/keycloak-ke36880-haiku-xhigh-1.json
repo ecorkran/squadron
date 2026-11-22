@@ -1,0 +1,62 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "V1 and V2 are mutually exclusive versions of the same feature, so the listener cannot run with both enabled."
+  ],
+  "F2": [
+   "KEEP",
+   "V1 token exchange can run alongside V2, and the V2 stub turns a denied exchange into an exception."
+  ],
+  "F3": [
+   "DROP",
+   "The only caller is gated on V1, which cannot be enabled alongside V2."
+  ],
+  "F4": [
+   "KEEP",
+   "Existing authorization clients can skip schema initialization, leaving a missing resource type that the fallback dereferences."
+  ],
+  "F5": [
+   "DROP",
+   "This is a documentation discrepancy, and per-resource evaluation behavior is consistent with the users path."
+  ],
+  "F6": [
+   "KEEP",
+   "In V2-only mode client removal skips cleanup, leaving orphaned per-client resources and policies."
+  ],
+  "F7": [
+   "KEEP",
+   "Per-client client resources have no display name, so policy resource representations expose a null name."
+  ],
+  "F8": [
+   "DROP",
+   "Unused code and imports do not cause a runtime defect."
+  ],
+  "F9": [
+   "DROP",
+   "Missing tests alone are not a defect in changed behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  3,
+  5,
+  6
+ ],
+ "cost_usd": 0.00935701
+}

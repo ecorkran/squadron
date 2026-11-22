@@ -1,0 +1,83 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 12,
+  "F11": 13,
+  "F12": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Zipping IDs with reordered or deduplicated nodestore values can associate event details with the wrong IDs."
+  ],
+  "F2": [
+   "KEEP",
+   "Client field restrictions can remove error_ids and silently disable error context."
+  ],
+  "F3": [
+   "KEEP",
+   "Although the given example is rejected, supplying both age and timestamp as zero bypasses mutual exclusion."
+  ],
+  "F4": [
+   "KEEP",
+   "An unrecognized report type aborts validation before any valid reports in the batch are counted."
+  ],
+  "F5": [
+   "KEEP",
+   "The empty-search early return bypasses the hidden-attribute filter."
+  ],
+  "F6": [
+   "KEEP",
+   "Enabling the flag replaces actual table results with hardcoded empty columns and data."
+  ],
+  "F7": [
+   "KEEP",
+   "Organization-specific requests share a cache key when their query options match."
+  ],
+  "F8": [
+   "KEEP",
+   "Environment filtering is dropped even though the backend resolver supports it."
+  ],
+  "F9": [
+   "KEEP",
+   "An unresolved project triggers the not-found alert without checking whether projects have finished loading."
+  ],
+  "F10": [
+   "DROP",
+   "Graceful omission of optional environment enrichment is explicit, and no concrete logging failure is established."
+  ],
+  "F11": [
+   "KEEP",
+   "Unescaped event titles can terminate the generated Markdown link and alter PR-comment links."
+  ],
+  "F12": [
+   "DROP",
+   "The single-element wrappers are redundant but do not establish a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  4,
+  6,
+  7,
+  8,
+  9,
+  10,
+  13
+ ],
+ "cost_usd": 0.1578787
+}

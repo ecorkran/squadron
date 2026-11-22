@@ -1,0 +1,41 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "RPC methods no longer check the stopped state, so calls can reach the backend after `Stop()`."
+  ],
+  "F2": [
+   "KEEP",
+   "Concurrent builds for the same key can collide on disk or replace an index without closing it."
+  ],
+  "F3": [
+   "KEEP",
+   "TotalDocs` iterates the cache without a lock while index builds can write to it, risking a fatal concurrent map access."
+  ],
+  "F4": [
+   "DROP",
+   "Disabling Postgres test coverage alone does not establish a defect in the changed behavior."
+  ],
+  "F5": [
+   "DROP",
+   "The reported race is pre-existing and outside the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0022837200000000004
+}

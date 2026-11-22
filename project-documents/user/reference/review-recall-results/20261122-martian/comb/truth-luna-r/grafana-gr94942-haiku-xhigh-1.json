@@ -1,0 +1,45 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "enableSqlExpressions` returns false in both branches, so the new reader rejects SQL expressions regardless of the flag."
+  ],
+  "F2": [
+   "KEEP",
+   "The changed DB methods return \u201cnot implemented,\u201d breaking SQL table discovery and execution paths that call them."
+  ],
+  "F3": [
+   "DROP",
+   "The feature-toggle description is in an unchanged file, so this finding concerns code the change did not touch."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests are not a behavior defect under the review criteria."
+  ],
+  "F5": [
+   "DROP",
+   "The unused method, naming overlap, and missing comments are code-structure and documentation concerns, not behavior defects."
+  ],
+  "F6": [
+   "DROP",
+   "The finding identifies no verified behavior failure; stale sum entries and requests to run tidy/build are not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0037505200000000002
+}

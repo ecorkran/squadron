@@ -1,0 +1,36 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Concurrent builds can publish separate indexes, allowing an event update to be lost when another build replaces its index."
+  ],
+  "F2": [
+   "KEEP",
+   "TotalDocs` iterates the cache without a lock while the event consumer can write to it, risking a race or crash."
+  ],
+  "F3": [
+   "KEEP",
+   "Requests no longer check lifecycle state, so authenticated CRUD calls can still reach the backend after `Stop`."
+  ],
+  "F4": [
+   "DROP",
+   "Disabling PostgreSQL integration coverage is a test-coverage concern, not a demonstrated runtime defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00264893
+}

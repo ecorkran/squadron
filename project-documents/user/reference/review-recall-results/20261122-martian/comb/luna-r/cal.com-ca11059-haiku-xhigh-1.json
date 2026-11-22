@@ -1,0 +1,106 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The helper returns a SafeParse wrapper, which Google persists as the credential key and later fails schema validation."
+  ],
+  "F2": [
+   "KEEP",
+   "The sync helper receives a credential ID instead of the user ID, so it can request tokens for the wrong account."
+  ],
+  "F3": [
+   "KEEP",
+   "The sync schema requires a generated field no provider returns and strips unlisted token fields, causing refresh parsing to fail."
+  ],
+  "F4": [
+   "KEEP",
+   "Sync mode returns a Response, but these callers treat it as provider-client token data and fail or persist invalid credentials."
+  ],
+  "F5": [
+   "KEEP",
+   "Salesforce references `prisma` without importing it, causing a compile-time error or runtime ReferenceError."
+  ],
+  "F6": [
+   "KEEP",
+   "A valid response with empty `statusText` is rejected, and the parse-failure branch is unreachable because the helper throws."
+  ],
+  "F7": [
+   "KEEP",
+   "Salesforce refreshes and writes tokens on every service construction while bypassing the configured sync mechanism."
+  ],
+  "F8": [
+   "KEEP",
+   "When a refresh response omits `refresh_token`, the helper replaces the stored token with a literal placeholder."
+  ],
+  "F9": [
+   "DROP",
+   "Generic parse errors and removed diagnostics reduce debuggability, but the described behavior change is not itself a defect."
+  ],
+  "F10": [
+   "KEEP",
+   "The sync request uses `zoomvideo` instead of the registered app slug `zoom`."
+  ],
+  "F11": [
+   "KEEP",
+   "The webhook compares a shared secret with a short-circuiting string comparison, exposing a timing side channel."
+  ],
+  "F12": [
+   "KEEP",
+   "Invalid request bodies or ciphertext throw uncaught errors and produce server errors instead of client-error responses."
+  ],
+  "F13": [
+   "KEEP",
+   "The endpoint can persist malformed decrypted credential data, causing failures when the credential is later used."
+  ],
+  "F14": [
+   "DROP",
+   "The exported constant holds the key internally, but its consumers use only truthiness and no external exposure is shown."
+  ],
+  "F15": [
+   "KEEP",
+   "The outbound request has no authentication, so the receiving endpoint cannot verify the caller before returning access tokens."
+  ],
+  "F16": [
+   "DROP",
+   "Missing tests alone are not a defect when the code paths themselves are the subject of the other findings."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  9,
+  10,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 0.00769508
+}

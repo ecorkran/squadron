@@ -1,0 +1,31 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_item_key` calls `math.floor`/`math.ceil` on the `AuditLogEntry.datetime` value, which raises `TypeError` for any nonempty page, and `value_from_cursor` hands back the raw number instead of converting it to a datetime."
+  ],
+  "F2": [
+   "KEEP",
+   "member` is typed `RpcOrganizationMember | None`, and line 71 reads `.has_global_access` on it whether or not `optimized_pagination` was requested, so a request with no member raises `AttributeError` even on the default path."
+  ],
+  "F3": [
+   "KEEP",
+   "Cursor.from_string` accepts negative offsets, and with advanced features on they go straight into `queryset[negative:stop]`, which Django rejects with a `ValueError` (a 500 error) instead of a `BadPaginationError`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0867386
+}

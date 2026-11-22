@@ -1,0 +1,77 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Refactor preserves existing logic",
+      "description": "Read all four changed files and inspected callers and existing tests. AST comparison confirms extracted functions retain their logic after renaming. No actionable regressions found.\n\nTests were not run: Django and pytest are unavailable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incidents.py:14-104"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Refactor preserves existing logic",
+      "location": "src/sentry/monitors/logic/incidents.py:14-104",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "diff": "b695d416e601becddb96a381968cc3b5c8f1bd40...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:42:09.730800",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21046,
+  "diff_chars_injected": 21046,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 49996,
+  "cached_tokens": 49408,
+  "cache_write_tokens": null,
+  "completion_tokens": 135,
+  "reasoning_tokens": 0,
+  "duration_seconds": 59.4676585001871,
+  "cost_usd": 0.007466800000000001,
+  "cost_basis": "alias_pricing"
+}

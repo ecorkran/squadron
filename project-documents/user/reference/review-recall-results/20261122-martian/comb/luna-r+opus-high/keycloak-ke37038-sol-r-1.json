@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "canManage()` at `GroupPermissionsV2.java:70` accepts the `VIEW` scope, so an admin with view-only access to all groups passes `requireManage()` in `addTopLevelGroup`, which can create groups and move them to the top level."
+  ],
+  "F2": [
+   "KEEP",
+   "getGroupIdsWithViewPermission` returns authorization resource IDs, not group IDs; per-group resources carry the group ID in their name and have no `Groups` type, so they are never enumerated and the group-scoped user count comes out wrong."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1291503
+}

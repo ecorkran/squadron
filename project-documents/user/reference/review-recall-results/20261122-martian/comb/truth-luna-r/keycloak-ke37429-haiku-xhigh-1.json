@@ -1,0 +1,41 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Both changed Lithuanian TOTP instructions contain Italian text."
+  ],
+  "F2": [
+   "KEEP",
+   "The changed zh_CN account instruction uses Traditional Chinese forms."
+  ],
+  "F3": [
+   "KEEP",
+   "The anchor pattern also matches tags beginning with \u201ca,\u201d allowing identical disallowed tags to be stripped before sanitization."
+  ],
+  "F4": [
+   "DROP",
+   "This only weakens a test assertion and does not establish a behavior defect."
+  ],
+  "F5": [
+   "DROP",
+   "Missing positive tests and a malformed fixture are test-coverage concerns, not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00209091
+}

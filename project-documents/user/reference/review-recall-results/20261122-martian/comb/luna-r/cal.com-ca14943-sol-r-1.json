@@ -1,0 +1,19 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "If the reminder is deleted during scheduling, the catch block\u2019s update can also fail and abort the loop before later reminders are processed."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0005856
+}

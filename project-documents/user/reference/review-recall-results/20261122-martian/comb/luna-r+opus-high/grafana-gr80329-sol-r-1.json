@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The change adds error-level logs that run on every successful batch and dump the full ID list (up to the batch size). These look like leftover debug code, and they will show up as false failures and flood the logs during normal cleanup."
+  ],
+  "F2": [
+   "DROP",
+   "The quadratic `fmt.Sprintf` loop for SQLite was already there before this change. The cost only applies to SQLite with batch sizes over 999, and it is a performance point the change didn't introduce."
+  ],
+  "F3": [
+   "KEEP",
+   "Dropping the shared ticker from ten minutes to one minute makes every cleanup job run ten times as often, not just annotation cleanup. The timeout is still 9 minutes, so runs can pile up back to back. This looks like an accidental debug change to global behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.0642182
+}

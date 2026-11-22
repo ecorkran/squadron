@@ -1,0 +1,24 @@
+{
+ "case": "grafana-gr90939",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Production callers reload under the write lock without rechecking, causing redundant serialized reads and potentially replacing a valid cache with nil."
+  ],
+  "F2": [
+   "DROP",
+   "Missing regression tests alone are not a defect, and the cache access is protected by the mutex."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0009201200000000001
+}

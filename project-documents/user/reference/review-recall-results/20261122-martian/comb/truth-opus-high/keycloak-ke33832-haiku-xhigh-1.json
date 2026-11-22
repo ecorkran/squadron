@@ -1,0 +1,29 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The CLI example doesn't happen: `ClassLoaderUtil.resolveClassLoader` (lines 39-41) loads only the FIPS jars or only the default jars, never both, so the tie never reaches detection there; no other real path to a tie is shown."
+  ],
+  "F2": [
+   "KEEP",
+   "In `ASN1Decoder.readInteger`, an indefinite length (-1) reaches `new byte[-1]` and throws `NegativeArraySizeException`, and a zero-length INTEGER throws `NumberFormatException` from `new BigInteger`; both are unchecked exceptions in new code that is declared to throw `IOException`."
+  ],
+  "F3": [
+   "DROP",
+   "This stub only wins detection when no BouncyCastle-based provider is present, and returning `null` would make `BouncyIntegration` fall back to `Security.getProviders()[0]`, which is also a JDK provider (typically SUN); no real wrong behavior results."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1
+ ],
+ "cost_usd": 0.2148254
+}

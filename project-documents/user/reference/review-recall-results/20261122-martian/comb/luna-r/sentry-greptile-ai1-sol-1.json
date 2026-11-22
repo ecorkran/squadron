@@ -1,0 +1,31 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The endpoint dereferences `organization_context.member` unconditionally, so token-authenticated requests without a member can raise `AttributeError`."
+  ],
+  "F2": [
+   "KEEP",
+   "The optimized paginator rounds the `datetime` sort key numerically and does not convert cursor values to timestamps, so optimized requests can fail."
+  ],
+  "F3": [
+   "KEEP",
+   "Advanced pagination passes a negative start index to a Django queryset slice, which raises an exception rather than returning a page."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0012748100000000001
+}

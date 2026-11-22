@@ -1,0 +1,131 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Preserve per-key synchronization during index construction",
+      "description": "Moving the lock to cache assignment allows concurrent searches and watch events to build separate indexes for the same missing key. `searchSupport.getOrCreateIndex` provides no synchronization. An event can update one completed index before another build replaces it, losing the indexed update. Use per-key synchronization covering lookup, construction, and publication; add a concurrent search/watch regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/search/bleve.go:87-138"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Synchronize document counting with cache writes",
+      "description": "The new startup log calls `TotalDocs()` after starting the event-consumer goroutine. That goroutine can create indexes while Bleve's `TotalDocs` iterates `b.cache` without locking (`bleve.go:144-146`), causing a data race and potentially a concurrent-map-iteration/write crash. Protect iteration with `cacheMu.RLock()` and test concurrent counting and index creation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/search.go:216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Retain rejection of requests after shutdown",
+      "description": "Removing the request-time `Init` checks also removes the shutdown guard: `Stop` sets `initErr`, which those checks previously returned. Authenticated CRUD requests can now continue reaching the backend after shutdown, even though watch delivery has stopped. Replace lazy initialization checks with an explicit lifecycle-state check and test requests after `Stop`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:451-458"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Restore PostgreSQL integration coverage",
+      "description": "The unconditional PostgreSQL skip disables this integration test locally as well as in Drone. This removes coverage while resource-server startup behavior is changing. Fix the PostgreSQL fixture or isolate the verified CI-specific limitation rather than skipping every PostgreSQL execution.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/server/module_server_test.go:35-38"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Preserve per-key synchronization during index construction",
+      "location": "pkg/storage/unified/search/bleve.go:87-138",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Synchronize document counting with cache writes",
+      "location": "pkg/storage/unified/resource/search.go:216",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Retain rejection of requests after shutdown",
+      "location": "pkg/storage/unified/resource/server.go:451-458",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Restore PostgreSQL integration coverage",
+      "location": "pkg/server/module_server_test.go:35-38",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+    "diff": "d6b412dc9d6b98231d88be94ff5ae1f1dfa6877c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:41:08.403551",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9480,
+  "diff_chars_injected": 9480,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 65913,
+  "cached_tokens": 56960,
+  "cache_write_tokens": null,
+  "completion_tokens": 609,
+  "reasoning_tokens": 123,
+  "duration_seconds": 52.97370283305645,
+  "cost_usd": 0.029691999999999996,
+  "cost_basis": "alias_pricing"
+}

@@ -1,0 +1,395 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.2's grep claims 16 insert statements; the code has 18, and the twelve-table list does not cover the second `questions`/`answers` insert",
+      "description": "Task 3.2 says: \"Find them with `grep -rnE \"INSERT INTO (programs|members|dependency_pairs|releases|questions|answers|standing_answers|messages|deliveries|message_rejections|sessions|wakes)\\b\" src/amoeba` (16 statements at design time, in `store/sql.py`, `sql_messages.py`, `sql_held.py`, `sql_sessions.py`, `sql_standing.py`, `sql_wakes.py`)\". The grep as written actually returns **18** statements, not 16: `src/amoeba/store/sql.py:78` (programs), `:109` (members), `:163` (dependency_pairs), `:180` (releases), `:216` (questions), `:221` (answers), `:245` (questions, the `ON CONFLICT DO NOTHING` claim insert), `:345` (answers, `INSERT_RECORDED_ANSWER`), `src/amoeba/store/sql_held.py:18` (questions), `sql_messages.py:26` and `:58` (two `messages` inserts), `:135` (deliveries), `:209` (message_rejections), `sql_sessions.py:27` (sessions), `sql_standing.py:22` (standing_answers), `sql_wakes.py:22` (wakes) \u2014 17 \u2014 plus `sql.py:66` (`schema_meta`, matched only because of the alternation ordering, but the statement text is `INSERT INTO schema_meta`), making 18 hits. Two of these are *not* into the twelve record tables that D12 says get `owner_id`: the `questions` and `answers` inserts are into record tables and must be bound, but the task's count of \"16\" and its file list do not match reality, and `schema_meta` must be excluded explicitly. A junior AI following the count rather than the grep risks leaving `sql.py:245` (the claim insert, which writes a `questions` row) or `sql.py:345` (the recorded answer) without an `owner_id`, which the new `BEFORE INSERT` trigger would then abort. The task should state the exact statement list (with `schema_meta` and `pm_marker` excluded) rather than a count.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.4's \"114 files\" claim is wrong, and the exception list leaves several real insert paths uncovered",
+      "description": "Task 3.4 says `grep -rl --include='*.py' \"Store.open\" tests` \"lists 114 files at design time\". The actual grep over `tests/` returns **about 110 files**, and more importantly the plan's blanket replacement (\"Replace `Store.open(` with `open_local_store(` in every test module that calls it ... except `tests/store/test_schema_holds_no_mirrored_state.py`, which inserts no records and keeps `Store.open`\") is wrong about that exception: `tests/store/test_schema_holds_no_mirrored_state.py:193` calls `Store.open` only to read `PRAGMA table_info`, so it indeed inserts nothing \u2014 but the *same* reasoning applies to a large number of other modules the plan does not exempt, and the plan gives no rule for them. `tests/store/test_store.py` (`:49`, `:62`, `:65`, `:76`, `:83`, `:90`, `:91`, `:97`, `:112`, `:122`, `:126`, `:140`), `tests/store/test_store.py`'s deliberately concurrent writers, `tests/store/test_question_closing.py:145` (two open stores), `tests/store/test_schema.py:44`, `tests/store/test_migrations.py`, `tests/test_contract_docs.py:82` and `tests/store/test_schema_holds_no_mirrored_state.py:193` all open a store and *insert* records in some paths or are structural tests of `Store.open` itself. Replacing `Store.open` inside `tests/store/test_store.py` would rewrite the very tests that assert `Store.open`'s own behaviour (creating the directory, refusing a newer stamp, the busy timeout) and would break `tests/store/test_migrations.py`, which needs a raw store. The task needs an explicit keep-`Store.open` list (the `Store` unit tests, the migrations tests, the schema-inspection tests) alongside the insert-and-replace list.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 7.1/7.2 change two operation signatures but only name \"their tests' call sites\"; the real callers are `wiring._dispatch` and `wiring_standing.place_standing`",
+      "description": "Task 7.1 says `decisions(store, document, *, names)` replaces `Deps`, and task 7.2 says `standing` takes a resolver \"in place of the `cf` runner\", each with \"Update its tests' call sites only\". But the production callers are not tests: `src/amoeba/wiring.py:224` calls `decisions(store, document, deps=default_deps(layout))`, and `src/amoeba/wiring_standing.py:39-44` calls `standing(store, document, max_chars=..., run=deps.cf_run, now=...)`. Task 7.4 does route the six operations through `run_served`, but `wiring_standing.place_standing` is a *separate* module that task 7.4 does not mention, and `place_standing` also serves `withdraw` \u2014 which is one of the six served operations but is **not** among the six `run_served` is said to run in task 7.3 (\"`run_served(name, store, document, edges)` runs any of the six\"). `SERVED_OPERATIONS` in task 1.2 is \"the six names as plain strings (D11)\" and D11/D9 name `decisions`, `mark_read`, `dismiss`, `retract`, `standing`, `withdraw` \u2014 six \u2014 so `run_served` must cover `withdraw`, yet task 7.3's reader list (`id_names`, `id_resolver`) and task 7.4's \"the six cases become one call to `run_served`\" leave `place_standing` unaccounted for. As written, either `withdraw` is left out of the served list (breaking the slice's own `SERVED_OPERATIONS` definition and the \"six served operations\" criterion) or `place_standing` must be rewritten to route `withdraw` through `run_served`, which no task says.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13.2's `set_aside` leaves the WAL and SHM files of the renamed store in place; D4 requires them removed",
+      "description": "Task 13.2 says: \"`set_aside(store, hub_address, now)`: under the write lock write the closed mark, checkpoint the write-ahead log, rename to `amoeba.sqlite3.set-aside-<UTC stamp>`, remove the two side files, return the new path.\" The order as written renames the database file **first** and then removes \"the two side files\" \u2014 but the side files are named `amoeba.sqlite3-wal` and `amoeba.sqlite3-shm` (see `src/amoeba/store/relocate.py:31` `SIDECAR_SUFFIXES`), i.e. they are named after the *old* path, so after the rename they are still `amoeba.sqlite3-wal`/`amoeba.sqlite3-shm` and are removed by name \u2014 which works only if the removal happens after the rename (as written) and the checkpoint really emptied the WAL. The existing `store/relocate.py` shows the established pattern is to remove `Path(f\"{path}{suffix}\")` for each suffix, and `src/amoeba/store/relocate.py:166-172` `_discard` shows the same. The task's phrase \"remove the two side files\" is ambiguous about *which* two files and *when*, and nothing in the task states that the `-wal` and `-shm` files of the set-aside store must be removed by their old names, nor that `put_back` must not leave stale side files behind after the rename back. The task's own success criterion (\"pyright clean\") does not test this; the test in 13.5 checks \"the file holds the mark\" but never asserts the side files are gone. This is the one place in the plan where a state on disk (a stale WAL beside the set-aside store) is left with no named command that removes it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:348"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13.2's `put_back` deletes the `closed_mark` row on a plain connection but leaves the acting-machine question open",
+      "description": "\"`put_back(store_path)`: open the set-aside file by its path on a plain SQLite connection, delete the `closed_mark` row in one transaction, close, rename to the store path.\" The store was set aside with `owner_id` already bound on its existing rows, so clearing the mark is enough for the *existing* rows; but after `leave`, the restored store is opened again by `open_state_store`, which per task 3.3 calls `act_as_local(store)`. Task 3.1 says `act_as_local` \"find[s] the machine named `local` or create[s] it with the one owner and no token\" \u2014 but the set-aside store already has a `local` machine row (it was created by the first `open_state_store`), so this is the \"find\" path and is fine. However, the plan never states whether the *closed mark's* write in `set_aside` itself requires an acting machine: task 4.2 puts `write_closed_mark(transaction, hub_address, now)` in `store/machines.py`, and task 3.2 says \"Every insert into the twelve tables binds `owner_id` from `transaction.acting()`\" \u2014 `closed_mark` is not one of the twelve tables, so its insert binds no owner and needs no acting machine. That is consistent, but the task never says so, and a junior AI following task 3.2's blanket wording (\"every insert ... binds owner_id\") may add an `owner_id` column to `closed_mark`, which the design's D12 does not have and which `tests/test_contract_docs.py` would then require in `docs/store-contract.md`. The task should say explicitly that `closed_mark` takes no owner.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:349"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 10.1b's `handle_call` order is ambiguous about the plain-read token lookup and the hub's own store opener",
+      "description": "Task 10.1b describes `handle_call(request, *, open_store, clock, load_config, hooks)` and its step 1 as \"the token lookup as a plain read (miss is `bad_token`)\", then step 3 as \"one `call_scope`\". Task 10.1b also says \"A failure before the scope (the store not opening) goes through the same mapping without the touch.\" But `handle_call` opens *its own* store connection per D8 step 1 (\"`hub.calls.handle_call` runs in a worker thread and opens its own connection with the hub store opener it was given\"), so the plain token read and the `call_scope` must happen on **the same connection**, not two: the design's D8 says \"One `BEGIN IMMEDIATE` transaction, the call's only lock wait\" and the touch \"No row means the token ended since step 1\". Task 10.2's test (\"A token removed between the read and the scope ... is `bad_token`\") depends on both reads seeing the same connection state. The task never states that the plain read and the scope share one open store, nor that `open_store` returns a store the caller must close. A junior AI could open a second connection for the plain read, which would (a) double the connections per call against D14's \"Calls that have arrived wait for one of `anyio`'s 40 worker threads\" reasoning and (b) break the `remove_machine` race test's determinism.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:283"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 10.2 requires `tests/wire/test_times.py` to import a `hub` constant, which breaks the `wire`-imports-nothing rule the same task file sets",
+      "description": "Task 10.2 says \"`tests/wire/test_times.py` gains: `READ_SECONDS > HUB_LOCK_WAITS_PER_CALL * BUSY_TIMEOUT_SECONDS`\", while task 1.4 asserts \"each served name is an `OperationName` value\" and task 51 (Context Summary) sets the rule \"`wire` imports no other `amoeba` package\". The test file lives under `tests/wire/` but the import-boundary test in `tests/test_import_boundaries.py` only scans `src/amoeba`, so a *test* importing `amoeba.hub.calls` is not itself a boundary violation \u2014 but placing the assertion in `tests/wire/test_times.py` puts a hub constant into the wire test module, which contradicts the design's own statement (D7) that the relation is tested \"in task 10.2, where that constant is created\" only because the constant lives in `hub.calls`. The plan's own Context Summary (line 43) says `HUB_LOCK_WAITS_PER_CALL` (`hub.calls`) is one of the values \"defined once and imported\". The assertion is therefore better placed in `tests/hub/test_handle_call.py` or a dedicated `tests/hub/` module; as written it creates a `tests/wire/` \u2192 `hub` dependency that a later slice's import-boundary tightening could break.",
+      "file_ref": null,
+      "category": "import-boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:290"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11.2a's \"record the added `start` module in the design\" leaves the design edit to task 17.3, while the module is used from 11.2b",
+      "description": "Task 11.2a says \"The design's Component Structure lists only `serve`; record the added `start` module in the design under 17.3\". Task 17.3 does list `hub/start.py` among the \"modules added beyond Component Structure\" \u2014 but task 17.3 is in the *Documents and release script* section, six sections after `hub/start.py` has been created and used by `hub/serve.py` (11.2b) and by the admin commands (14.1, 14.2). The plan therefore leaves the design's Component Structure stale for the whole of sections 11 to 16, and the design is the document later slices (261\u2013264) are written against; they list `hub.calls`, `hub.app`, `hub.serve` as the modules that exist. Recording the added module at the end of the slice is a deliberate choice, but the task file should say so explicitly at 11.2a (it does not \u2014 it says \"record ... under 17.3\" without noting the staleness window), and 17.3's \"any design text changed under the small-conflict rule\" is the only mechanism that catches it.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15.1's fixture cannot run `amoeba hub serve` as the plan describes, because the hub's `PATH` has no `cf` and `sq`",
+      "description": "Task 15.1 says the fixture \"starts the venv's `amoeba hub serve` as a subprocess with `AMOEBA_HOME` set and a `PATH` on which `shutil.which(\"cf\")` and `shutil.which(\"sq\")` are `None`\". The `PATH` restriction is right for the *hub* (D11: \"The hub fixture runs with a `PATH` that has no `cf` and no `sq`\"). But the same fixture also \"invites two machines with the real CLI and joins two client homes with `amoeba join`\" \u2014 and `amoeba join`/`amoeba hub invite` need no `cf`, so that part is fine. The real gap is the *seed*: task 15.1 says the fixture seeds \"the hub's store while stopped with `tests/store/seed.py` functions under an `act_as`\". `tests/store/seed.py`'s `insert_question` writes a `questions` row and `insert_answer` an `answers` row, and after task 3.2 both inserts bind `owner_id` from `transaction.acting()`, so the seed must run under an `ActingMachine` \u2014 the fixture says \"under an `act_as`\" but does not say *which* machine, and the hub's store deliberately has **no** `local` machine (task 15.4 asserts \"the hub store holds no `local` machine\"). The fixture must create or pick a named machine (e.g. the invited machine's row) as the acting one, and the task never says that; a junior AI following it literally would call `act_as` with a machine the hub store does not have, and the trigger would abort every seeded insert. Task 15.4's \"the hub store holds no `local` machine\" also means the seed cannot simply use `act_as_local`.",
+      "file_ref": null,
+      "category": "test-infrastructure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:390"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 17.2's `update_live.py` test plan contradicts the slice design's \"the script already does this\" and leaves the pre-existing `FakeSteps` fixture unaccounted for",
+      "description": "Task 17.2 says: \"`tests/scripts/test_update_live.py`: call `update()` and `restore()` directly with the file's `FakeSteps`, never `PRODUCTION` or `main()` ... `FakeSteps._migrate` opens the store through `open_state_store(state_layout())`, as `amoeba list` does, so the schema-11 and `local`-row checks can pass. Run against a copy of a schema-10 store (built as in 2.2)\". The existing test file (`tests/scripts/test_update_live.py:60-66`, `:87-89`) has a `live` fixture that does `Store.open(store_path())` and seeds members through `tests/store/seed.py` \u2014 which, after task 3.2, binds `owner_id` and **will fail** without an acting machine, and a schema-10 store has no `owners` table at all. The task's instruction to change only `FakeSteps._migrate` does not cover the `live` fixture's `Store.open(store_path())` and `_seed_member`, which insert `programs` and `members` rows and will abort on the new triggers (or fail because `owner_id` cannot be bound on a schema-10 store). The existing fixture also opens the store directly, which task 3.4 rewrites to `open_local_store` \u2014 and `open_local_store` calls `act_as_local`, which needs the `owners` table that only exists after migration 011. Task 3.4's blanket replacement therefore breaks `tests/scripts/test_update_live.py` (and any other test that opens a *pre-migration* store), and neither task 3.4 nor 17.2 names that exception. This needs an explicit keep-`Store.open` list including the update-live and migration-fixture code.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:432"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 16.2 makes the container check a gate on the task file's own progress without a fallback that the plan records",
+      "description": "Task 16.2 says \"`docker version` succeeds. If it does not, write `BLOCKED: docker unavailable` under this task and stop this task. 17.3 waits on it; 17.1, 17.2 and 17.4 go on\". But 17.3's success criterion is \"the notes are in the design\", and 17.3's content requires \"the container output summary (16.2)\" to be in the design's Implementation Notes. So when Docker is unavailable, 17.3 cannot satisfy its own success criterion and the slice cannot complete, and the plan records no alternative (e.g. a note saying Docker was unavailable and the container walkthrough is deferred). The design's Verification Walkthrough (lines 676-682) treats the container run as a one-time manual demonstration, not a gate. Task 16.2 should say that 17.3 records \"the container was not run because Docker is unavailable\" when 16.2 is blocked, so the design stays truthful and 17.3 can still be checked.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:419"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15.6's load test is the only task whose success depends on a CI run the plan cannot make locally, and its bound of \"within 2 seconds\" is asserted per call without a stated timeout mechanism",
+      "description": "Task 15.6 requires \"16 client threads against the fixture hub ... no call refused or unknown, each within 2 seconds\" and \"100 calls from one thread on the idle hub: median under 200 ms\". The client's own `READ_SECONDS` is 10 and `RETRY_SECONDS` is 30 (D7), so a call that takes longer than 2 s is still *in flight* rather than failed; the test therefore needs its own per-call timeout (e.g. a client-side deadline or a bounded wait on the worker threads) to assert \"within 2 seconds\" without hanging the suite when the hub is slow. The task does not name that mechanism, and the \"note the measured figures\" step says only \"If CI fails a bound that passes locally, get the CI figures from its log before changing anything\" \u2014 which assumes the failure surfaces as a failed assertion rather than as a hung or timed-out suite. Given `tests/load/` files are collected by the bare `uv run pytest` in CI (confirmed by the task itself), a hanging load test would stall the whole `Tests` step rather than fail one assertion.",
+      "file_ref": null,
+      "category": "test-infrastructure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:406"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.4 is a single task spanning ~110 test modules and is not independently completable in one step",
+      "description": "Task 3.4 is \"Store fixtures set the acting machine (mechanical)\" and requires replacing `Store.open(` with `open_local_store(` in every test module that opens a store and inserts records \u2014 on the order of a hundred files, each with a different fixture shape (module-level `with Store.open(...)` blocks, fixtures yielding stores, helper modules under `tests/` used by other tests, concurrency tests that need two independent stores). The task's success criterion is \"the full suite is back to the baseline from 0.2\", which only becomes true when *every* module is converted, so it is a single all-or-nothing unit spanning the whole test suite; a junior AI will hit dozens of distinct fixture shapes, and the failure mode of one module silently not being converted is a trigger abort that only shows up in the suite run. This should be split by area (store tests, operations tests, cli/mcp tests, load/live tests) with the suite run at the end, and should carry the explicit exemption list that task 17.2's analysis shows is needed.",
+      "file_ref": null,
+      "category": "task-sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:139"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 12.3's \"either way that id is reused by every repeat\" is the right rule and is stated clearly; noting it because `client.call` has no test for a generated id",
+      "description": "Task 12.3 says \"`call(...)` ... With no `call_id` given it makes one `uuid4().hex`; either way that id is reused by every repeat. Tests pass their own `call_id` to repeat a call under the same id, and never patch `uuid`\". The rule is correct and consistent with D6/D9. The only observation is that no task pins the *generated* id's reuse (only the caller-supplied one is tested), so a regression where a retry mints a new id would not be caught by 12.4 as written.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:330"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 3.2's grep claims 16 insert statements; the code has 18, and the twelve-table list does not cover the second `questions`/`answers` insert",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:133",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 3.4's \"114 files\" claim is wrong, and the exception list leaves several real insert paths uncovered",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 7.1/7.2 change two operation signatures but only name \"their tests' call sites\"; the real callers are `wiring._dispatch` and `wiring_standing.place_standing`",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 13.2's `set_aside` leaves the WAL and SHM files of the renamed store in place; D4 requires them removed",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:348",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 13.2's `put_back` deletes the `closed_mark` row on a plain connection but leaves the acting-machine question open",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:349",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 10.1b's `handle_call` order is ambiguous about the plain-read token lookup and the hub's own store opener",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:283",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "import-boundaries",
+      "raw_category": null,
+      "summary": "Task 10.2 requires `tests/wire/test_times.py` to import a `hub` constant, which breaks the `wire`-imports-nothing rule the same task file sets",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:290",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 11.2a's \"record the added `start` module in the design\" leaves the design edit to task 17.3, while the module is used from 11.2b",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:301",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "test-infrastructure",
+      "raw_category": null,
+      "summary": "Task 15.1's fixture cannot run `amoeba hub serve` as the plan describes, because the hub's `PATH` has no `cf` and `sq`",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:390",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 17.2's `update_live.py` test plan contradicts the slice design's \"the script already does this\" and leaves the pre-existing `FakeSteps` fixture unaccounted for",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:432",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 16.2 makes the container check a gate on the task file's own progress without a fallback that the plan records",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:419",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "test-infrastructure",
+      "raw_category": null,
+      "summary": "Task 15.6's load test is the only task whose success depends on a CI run the plan cannot make locally, and its bound of \"within 2 seconds\" is asserted per call without a stated timeout mechanism",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:406",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "task-sizing",
+      "raw_category": null,
+      "summary": "Task 3.4 is a single task spanning ~110 test modules and is not independently completable in one step",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 12.3's \"either way that id is reused by every repeat\" is the right rule and is stated clearly; noting it because `client.call` has no test for a generated id",
+      "location": "project-documents/user/tasks/260-tasks.hub-and-door.md:330",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+    "against": "project-documents/user/slices/260-slice.hub-and-door.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/amoeba260"
+  },
+  "timestamp": "2026-11-22T16:02:07.946177",
+  "model": "minimax/minimax-m3.1-flash",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "injected": [
+    {
+      "key": "input",
+      "path": "project-documents/user/tasks/260-tasks.hub-and-door.md",
+      "chars": 58847,
+      "sha256": "b2f9f04a5699af0eb09aa40690f69fea14a01dacefec10acc4a801697f5d6c40",
+      "whole": true
+    },
+    {
+      "key": "against",
+      "path": "project-documents/user/slices/260-slice.hub-and-door.md",
+      "chars": 69666,
+      "sha256": "657c4287c65958ea4c55ada10e708445269122c2732629c435416fe472ffdcd2",
+      "whole": true
+    }
+  ],
+  "files_read": [
+    "src/amoeba/wiring.py",
+    "src/amoeba/store/store.py",
+    "src/amoeba/store/migrations.py",
+    "src/amoeba/store/errors.py",
+    "src/amoeba/operations/state_move.py",
+    "src/amoeba/operations/decisions.py",
+    "src/amoeba/operations/standing.py",
+    "src/amoeba/wiring_results.py",
+    "src/amoeba/config/home.py",
+    "pyproject.toml",
+    ".github/workflows/ci.yml",
+    "tests/test_import_boundaries.py",
+    "tests/test_store_opened_only_by_state_move.py",
+    "tests/store/test_migration_010.py",
+    "tests/test_contract_docs.py",
+    "tests/store/seed.py",
+    "tests/fault_injection.py",
+    "src/amoeba/store/relocate.py",
+    "src/amoeba/cli/main.py",
+    "src/amoeba/cli/parser.py",
+    "src/amoeba/mcp/in_process.py",
+    "src/amoeba/operations/deps.py",
+    "src/amoeba/operations/names.py",
+    "src/amoeba/store/sql_sessions.py",
+    "src/amoeba/store/sessions.py",
+    "scripts/update_live.py",
+    "tests/scripts/test_update_live.py",
+    "tests/store/test_schema_holds_no_mirrored_state.py",
+    "tests/test_wheel_contents.py",
+    "tests/store/test_migrations.py",
+    "tests/store/test_store.py",
+    "tests/store/test_schema.py",
+    "tests/config/test_home.py",
+    "tests/conftest.py",
+    "src/amoeba/store/models.py",
+    "src/amoeba/cli/wake_command.py",
+    "src/amoeba/mcp/server.py",
+    "docs/config-contract.md",
+    "src/amoeba/wiring_standing.py",
+    "src/amoeba/operations/withdraw.py",
+    "src/amoeba/operations/mark_read.py",
+    "src/amoeba/operations/dismiss.py",
+    "src/amoeba/operations/retract.py",
+    "docs/store-contract.md",
+    "tests/cli/test_parser_names.py",
+    "tests/test_old_command_names_gone.py",
+    "src/amoeba/config/user_config.py"
+  ],
+  "searches": [
+    "list_files * in .",
+    "list_files * in src/amoeba",
+    "list_files * in tests",
+    "grep INSERT INTO (programs|members|dependency_pairs|releases|questions|answers|standing_answers|messages|deliveries|message_rejections|sessions|wakes)\\b in src/amoeba",
+    "grep name = \"(cryptography|starlette|uvicorn)\" in uv.lock",
+    "grep Store.open in tests",
+    "grep ^ in src/amoeba/wiring.py",
+    "grep ^ in src/amoeba/store/sql.py",
+    "grep sql(_messages|_sessions|_standing|_wakes|_held)?\\.INSERT in tests",
+    "grep INSERT INTO in src/amoeba"
+  ],
+  "sections_in_document": 19,
+  "sections_not_covered": [],
+  "coverage_reported": true,
+  "categories_normalized": false,
+  "stop_reason": "stop",
+  "reasoning_chars": 385831,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": 524288,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "minimax/minimax-m3.1-flash",
+  "answering_models": [
+    "minimax/minimax-m3.1-flash"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 20,
+  "prompt_tokens": 1684024,
+  "cached_tokens": 1408512,
+  "cache_write_tokens": null,
+  "completion_tokens": 105942,
+  "reasoning_tokens": 97353,
+  "duration_seconds": 391.0601015421562,
+  "cost_usd": 0.12601967999999997,
+  "cost_basis": "alias_pricing"
+}

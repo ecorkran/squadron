@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` is not in `untrusted_attributes`, so nothing checks `restrict_user_fields?` for it, and anonymous viewers still get the host and path of a TL0 user's website."
+  ],
+  "F2": [
+   "KEEP",
+   "include_website_name` has no `?`, so AMS never calls it; the `website.present?` check never runs and `website_name` is always sent, as null when there is no website."
+  ],
+  "F3": [
+   "KEEP",
+   "model.website_name` is set only by the server, and `save` updates only `bio_excerpt`, so after editing the website the header label keeps the old value until a full reload."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.095729
+}

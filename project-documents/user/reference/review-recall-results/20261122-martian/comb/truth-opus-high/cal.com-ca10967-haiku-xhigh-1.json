@@ -1,0 +1,59 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "When there is no destination calendar, `evt.destinationCalendar ?? []` gives `undefined`, and line 119 then reads `.integration` on it, so a Google Meet booking crashes with a TypeError."
+  ],
+  "F2": [
+   "KEEP",
+   "The fallback only runs when `externalCalendarId` is falsy, but it then compares `cal.externalId` to that falsy value, so it never matches; update gets `calendarId: undefined` and delete falls back to \"primary\"."
+  ],
+  "F3": [
+   "KEEP",
+   "selectedCalendar` only matches a destination with the same `credentialId`, so credential-less destinations (which EventManager still handles at 375-382) get inserted into \"primary\", and the unguarded patch is passed a possibly undefined `calendarId`."
+  ],
+  "F4": [
+   "KEEP",
+   "The Office365 and CalDAV `createEvent` read `destinationCalendar[0]` for every credential, so a team member's token posts to the host's calendar, and CalDAV filters down to nothing yet still returns success."
+  ],
+  "F5": [
+   "KEEP",
+   "Line 151 now stores `slug` only when `IS_TEAM_BILLING_ENABLED` is true (the same condition as `requestedSlug`), so organizations created with billing disabled get no slug."
+  ],
+  "F6": [
+   "DROP",
+   "This is about error-message handling and dead code, not wrong functional behavior, and I could not confirm the change added the try/catch."
+  ],
+  "F7": [
+   "KEEP",
+   "When neither the event type nor the organizer has a destination, `destinationCalendar` is `null`, so `evt.destinationCalendar?.push(...teamDestinationCalendars)` does nothing and team members' calendars are dropped."
+  ],
+  "F8": [
+   "DROP",
+   "Making `destinationCalendar` an array is the change's intended data-model update; an unused `schedulingType` field and inconsistent e2e expectations are not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  6
+ ],
+ "cost_usd": 0.3233724
+}

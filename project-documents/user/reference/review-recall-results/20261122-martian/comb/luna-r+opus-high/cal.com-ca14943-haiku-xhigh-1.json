@@ -1,0 +1,30 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new `update` inside `catch` has no guard, so a DB error or a missing row (P2025) now escapes the loop and fails the rest of the batch with a 500, where the old catch only logged."
+  ],
+  "F2": [
+   "KEEP",
+   "scheduleSMS` returns `undefined` for a locked account, and the new `else` branch counts that as a failed attempt, so after two runs the `retryCount > 1` deleteMany removes those reminders for good without logging it; before this change they were sent once the account was unlocked."
+  ],
+  "F3": [
+   "DROP",
+   "A lost increment only happens when two cron runs overlap, and the worst result is one extra attempt, which is negligible."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0971031
+}

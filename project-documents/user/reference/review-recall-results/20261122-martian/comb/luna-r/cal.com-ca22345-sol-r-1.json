@@ -1,0 +1,17 @@
+{
+ "case": "cal.com-ca22345",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "This identifies missing database-backed coverage but does not demonstrate a defect in the changed authorization SQL."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.00076188
+}

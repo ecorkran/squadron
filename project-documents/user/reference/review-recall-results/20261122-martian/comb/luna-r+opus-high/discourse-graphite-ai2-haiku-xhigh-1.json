@@ -1,0 +1,36 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Verified: `unsubscribe` uses `save!` directly and never sets `notifications_reason_id`, so `update_last_read` (topic_user.rb:161) can set the topic back to tracking on a later read, and the MessageBus publish is skipped."
+  ],
+  "F2": [
+   "DROP",
+   "Wrong: the custom resolver's `findTemplate` turns `topicUnsubscribe` into `topic_unsubscribe` and then tries `topic/unsubscribe` (resolver.js.es6:158), so the template is found."
+  ],
+  "F3": [
+   "KEEP",
+   "TopicUser.find_by` can return nil for a topic the user never visited, and the next line calls `tu.notification_level` on it, which gives a 500."
+  ],
+  "F4": [
+   "KEEP",
+   "The new route is GET-only and changes the user's notification level with no token or CSRF check, so any third-party page can mute or downgrade topics for a logged-in user."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  3
+ ],
+ "cost_usd": 0.1340179
+}

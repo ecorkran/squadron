@@ -1,0 +1,37 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies floor/ceil directly to datetime values and lacks DateTimePaginator\u2019s cursor conversion."
+  ],
+  "F2": [
+   "KEEP",
+   "The endpoint dereferences optional `member` even when optimized pagination was not requested."
+  ],
+  "F3": [
+   "KEEP",
+   "Advanced pagination passes negative offsets into queryset slicing, which raises `ValueError` rather than `BadPaginationError`."
+  ],
+  "F4": [
+   "KEEP",
+   "The changed code uses sorted-set commands on the existing segment keys, so legacy set-backed buffers cause Redis `WRONGTYPE` errors."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00382992
+}

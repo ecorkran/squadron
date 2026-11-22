@@ -1,0 +1,224 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "ClientCredentialsGrantType never records its grant type, so client_credentials access tokens are encoded with the UNKNOWN shortcut \"na\" instead of \"cc\"",
+      "description": "`process` builds its token directly with `tokenManager.responseBuilder(...).generateAccessToken()` (lines 140-141) rather than through `createTokenResponse`. The `setAttribute(Constants.GRANT_TYPE, ...)` added in `OAuth2GrantTypeBase.createTokenResponse` (OAuth2GrantTypeBase.java:109) therefore never runs. The path continues through `generateAccessToken()` \u2192 `createClientAccessToken` (TokenManager.java:1203-1205, 611-613) \u2192 `initToken` (TokenManager.java:1052-1054). There, `getTokenContextFromClientSessionContext` reads the attribute as null and substitutes `UNKNOWN` (\"na\", DefaultTokenContextEncoderProvider.java:57-60). A transient client-credentials token is therefore issued with an ID like `trrtna:<uuid>`, not `trrtcc:<uuid>`, even though `ClientCredentialsGrantTypeFactory.getShortcut()` returns \"cc\". The `testSuccessClientCredentialsToken` unit test uses `trltcc` as its sample, which shows the intended value, but it only exercises the encoder and no test covers this real path.\n\nFix: call `clientSessionCtx.setAttribute(Constants.GRANT_TYPE, OAuth2Constants.CLIENT_CREDENTIALS)` before line 140. Do not use `context.getGrantType()` here. `PermissionGrantType.process` reuses the same `Context` and delegates to this grant (PermissionGrantType.java:118-122), so that value would be the UMA grant.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The base token-exchange path (V1, subject impersonation, external-token exchange) never records the grant, so those tokens are encoded with \"na\" instead of \"te\"",
+      "description": "Only the `exchangeClientToOIDCClient` override in `StandardTokenExchangeProvider` sets `Constants.GRANT_TYPE` (StandardTokenExchangeProvider.java:237). The base implementation at lines 409-410 builds the token with `responseBuilder(...).generateAccessToken()` and never sets the attribute. `exchangeClientToClient` (lines 288-299) dispatches to it, and it is reached from `V1TokenExchangeProvider.java:154`, `SubjectImpersonationTokenExchangeProvider.java:151`, and the external-token path (`AbstractTokenExchangeProvider.java:535`, reached from `V1TokenExchangeProvider.java:75` and `FederatedTokenExchangeProvider.java:68`). These exchanges get `na` in the token ID instead of `te` (`TokenExchangeGrantTypeFactory.getShortcut()`), so the same grant is tagged differently depending on which provider handled it.\n\nFix: set `Constants.GRANT_TYPE` to `OAuth2Constants.TOKEN_EXCHANGE_GRANT_TYPE` in the base method before line 409. The override's own line can stay.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java:409"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "UMA permission-grant RPTs are minted without recording the grant, so they are encoded with \"na\" instead of \"pg\"",
+      "description": "After creating `clientSessionCtx` (line 350 or 352), `AuthorizationTokenService` builds the RPT with `tokenManager.responseBuilder(...).generateAccessToken()` at lines 357-358. Nothing sets `Constants.GRANT_TYPE` on that context, so `initToken` encodes the RPT with `na`. The RPT is produced by the UMA grant (`PermissionGrantType.java:187` calls `AuthorizationTokenService.instance().authorize`), and `PermissionGrantTypeFactory` declares shortcut \"pg\". This is the same gap as the two findings above, on a different path.\n\nFix: set `Constants.GRANT_TYPE` to `OAuth2Constants.UMA_GRANT_TYPE` on `clientSessionCtx` before line 357.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authorization/authorization/AuthorizationTokenService.java:357"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "isAccessTokenId inverts its grant check, so it returns false exactly when the expected grant shortcut matches",
+      "description": "`if (items[0].substring(3, 5).equals(expectedGrantShortcut)) return false;` rejects a token ID when its grant matches and accepts it when it does not. The condition must be negated (`!...equals(...)`). Negating it alone would be wrong, though: because of the offset defect in the next finding, the check would then reject every correctly tagged token. The two fixes have to go together.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "isAccessTokenId reads the wrong characters, so its grant comparison never checks the grant",
+      "description": "The encoder places the grant shortcut at 0-based characters 4-5. `DefaultTokenContextEncoderProvider.java:78-81` decodes it with `substring(4, 6)`, and `encodeTokenId` writes `sessionType + tokenType + grant + ':' + rawId` (lines 114-117). The matcher reads `substring(3, 5)`, which is the second character of the token-type shortcut plus the first character of the grant. The comment on line 482 (\"4th char\") counts from 1 and lands on index 3 as well. For a real token ID such as `onrtcc:<uuid>` (an authorization-code token tagged `cc`), `substring(3, 5)` is `\"tc\"`, which is not `\"ac\"`, so `isAccessTokenId(\"ac\")` accepts it. The token-type second character is always `t` or `n`, so the matcher does not check the grant and verifies only the UUID shape.\n\nFix: use `substring(4, 6)` (together with the negation fix above).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "AccessTokenContext null-checks grantType twice and never checks rawTokenId",
+      "description": "Line 73 is `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\");`, a copy of line 72 with the wrong variable. A null `rawTokenId` is accepted. `encodeTokenId` then concatenates it (DefaultTokenContextEncoderProvider.java:117, `':' + getRawTokenId()`), yielding a token ID ending in `:null` with no error. No current caller passes null (TokenManager.java:1053 passes `KeycloakModelUtils.generateId()`), so the effect is latent.\n\nFix: `Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\");`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adding abstract getShortcut() to OAuth2GrantTypeFactory makes postInit fail for existing grant factories",
+      "description": "`OAuth2GrantTypeFactory` gains `String getShortcut();` with no default (server-spi-private/.../OAuth2GrantTypeFactory.java:33). `postInit` (lines 70-76) calls `gtf.getShortcut()` on every registered `OAuth2GrantType` factory and puts the result into a `ConcurrentHashMap`. All nine in-repo factories implement it. An extension grant factory compiled against the previous SPI will either fail to compile against the new one, or throw `AbstractMethodError` at line 74 at runtime. That aborts `postInit` and therefore server startup. A `default` method returning null would not help: `grantsByShortcuts.put(null, ...)` throws NPE on line 75, and a grant with no shortcut would later fail in `encodeTokenId` (DefaultTokenContextEncoderProvider.java:110-112).\n\nFix: if the method stays abstract, document it as a breaking SPI change. Otherwise make it `default`, have `postInit` skip null shortcuts, and have `encodeTokenId` fall back to UNKNOWN instead of throwing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:74"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "ClientCredentialsGrantType never records its grant type, so client_credentials access tokens are encoded with the UNKNOWN shortcut \"na\" instead of \"cc\"",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java:140",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The base token-exchange path (V1, subject impersonation, external-token exchange) never records the grant, so those tokens are encoded with \"na\" instead of \"te\"",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java:409",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "UMA permission-grant RPTs are minted without recording the grant, so they are encoded with \"na\" instead of \"pg\"",
+      "location": "services/src/main/java/org/keycloak/authorization/authorization/AuthorizationTokenService.java:357",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "isAccessTokenId inverts its grant check, so it returns false exactly when the expected grant shortcut matches",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "isAccessTokenId reads the wrong characters, so its grant comparison never checks the grant",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "AccessTokenContext null-checks grantType twice and never checks rawTokenId",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:73",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Adding abstract getShortcut() to OAuth2GrantTypeFactory makes postInit fail for existing grant factories",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java:74",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "diff": "fbd9543bab513d8f2124cf583d1b9388ec492635...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:47:24.166180",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 36,
+  "injected": [],
+  "files_read": [
+    "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/endpoints/TokenEndpoint.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeBase.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/PermissionGrantType.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/mappers/AbstractOIDCProtocolMapper.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java",
+    "services/src/main/java/org/keycloak/authorization/authorization/AuthorizationTokenService.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java"
+  ],
+  "searches": [
+    "grep GRANT_TYPE\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/server-spi-private/src/main/java/org/keycloak/models/Constants.java",
+    "grep ^import .*OAuth2Constants|^package  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/server-spi-private/src/main/java/org/keycloak/models/Constants.java",
+    "grep implements .*OAuth2GrantTypeFactory|extends OAuth2GrantTypeFactory in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep new OAuth2GrantType\\.Context\\(|new Context\\(|setFormParams\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep getShouldUseLightweightToken|setAttribute\\(Constants\\.GRANT_TYPE|GRANT_TYPE\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep createTokenResponse\\(|responseBuilder\\(|createClientAccessToken\\(|protected .*Context context|OAuth2GrantType\\.Context context in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java",
+    "grep createTokenResponse\\(|responseBuilder\\(|createClientAccessToken\\(|OAuth2GrantType\\.Context context|Context context\\)|grantType\\.equals|checkGrantType|getProvider\\(OAuth2GrantType in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc",
+    "grep setContext\\(|createTokenResponse\\(|tokenManager\\.responseBuilder|generateAccessToken\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/grants",
+    "grep TOKEN_ID|isUUID\\(\\)\\.matches|private static Matcher<String> isUUID|public static Matcher<String> isUUID|isAccessTokenId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "grep UUID\\.fromString|isUUID|KeycloakModelUtils\\.isUUID|isValidUUID in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak",
+    "grep responseBuilder\\(|exchangeClientToOIDCClient|exchangeToken\\(|extends (Standard|Abstract|V1)\\w*TokenExchangeProvider|class \\w+ extends AbstractTokenExchangeProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/tokenexchange",
+    "grep responseBuilder\\(|createClientAccessToken\\(|initToken\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/authorization",
+    "grep exchangeClientToClient\\(|getTokenContextFromTokenId\\(|encodeTokenId\\(|getTokenContextFromClientSessionContext\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep class \\w+ extends (Standard|V1|Federated|SubjectImpersonation)TokenExchangeProvider|exchangeClientToClient|exchangeExternalToken|exchangeExternalTokenV1 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/tokenexchange",
+    "grep ^import (org\\.keycloak\\.models\\.Constants|org\\.keycloak\\.OAuth2Constants|org\\.keycloak\\.protocol\\.oidc\\.grants\\.TokenExchangeGrantTypeFactory);|Constants\\.|TokenExchangeGrantTypeFactory in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java",
+    "grep AuthorizationTokenService|\\.authorize\\(|authorizationRequest in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/grants/PermissionGrantType.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 54272,
+  "diff_chars_injected": 54272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 37,
+  "prompt_tokens": 1503956,
+  "cached_tokens": 1363740,
+  "cache_write_tokens": 140184,
+  "completion_tokens": 78554,
+  "reasoning_tokens": null,
+  "duration_seconds": 343.82033987529576,
+  "cost_usd": 0.24669968,
+  "cost_basis": "provider"
+}

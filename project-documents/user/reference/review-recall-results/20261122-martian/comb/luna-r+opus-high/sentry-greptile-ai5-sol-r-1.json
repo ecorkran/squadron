@@ -1,0 +1,41 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The empty `TableWidgetVisualization` only renders behind the `use-table-widget-visualization` flag, which is off by default, so it reads as a deliberate placeholder while the integration is unfinished."
+  ],
+  "F2": [
+   "KEEP",
+   "The new query key is just a constant plus the filter options, with no organization, but the fetch hits an organization-specific URL, so two orgs with the same filters can share cached attribute keys."
+  ],
+  "F3": [
+   "KEEP",
+   "Nodestore error timestamps are in epoch seconds while rrweb recording timestamps are in milliseconds, so the comparison always places errors before every recording event; the tests only pass because they use seconds for both."
+  ],
+  "F4": [
+   "KEEP",
+   "Stored event data keeps the message under `logentry` (which is exactly what `BaseEvent.message` reads), so reading `data.get(\"message\")` from the top level returns an empty string."
+  ],
+  "F5": [
+   "DROP",
+   "No caller currently relies on a renderer returning `null`, `0` or `''` to mean \"show this\", so the truthiness check is an API-hardening nit, not a defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.25327500000000003
+}

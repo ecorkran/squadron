@@ -1,0 +1,46 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 1,
+  "F2": 2,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The value imports are real, but a `consistent-type-imports` lint violation is a style problem, not a behavior defect."
+  ],
+  "F2": [
+   "KEEP",
+   "Prisma delete promises are lazy and only run at `Promise.all` after the loop, so one SendGrid error stops all row deletes and leaves the remaining flagged reminders uncancelled, and they then get sent."
+  ],
+  "F3": [
+   "KEEP",
+   "deleteScheduledEmailReminder` / `deleteScheduledSMSReminder` are now called without `await` and only log their own errors, so a failed flag or delete write is lost while the cancel/reschedule/workflow update still reports success."
+  ],
+  "F4": [
+   "DROP",
+   "This is mainly about naming and structure, and dropping the SendGrid DELETE call (which removes a batch's cancel status) does not break anything."
+  ],
+  "F5": [
+   "KEEP",
+   "The immediate email cancel leaves the row as `scheduled: true` with a stale `referenceId` and any `cancelled` flag set by `requestReschedule`, so the cron cancels an already-cancelled batch again, while SMS deletes its row."
+  ],
+  "F6": [
+   "DROP",
+   "The outer try/catch does catch nothing, but both helpers handle their own errors, so no error goes unhandled and this is dead code rather than a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.1922581
+}

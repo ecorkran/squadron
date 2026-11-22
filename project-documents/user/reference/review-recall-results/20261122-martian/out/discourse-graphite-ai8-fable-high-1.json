@@ -1,0 +1,313 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`totalPages` is off by one when the member count is an exact multiple of the page size",
+      "description": "`Math.floor(user_count / limit) + 1` yields 2 pages for 50 members at limit 50 (and 3 for 100). `showingLast` is then false on the real last page, so `next` (lines 29-38) sets `offset` to `user_count` and loads an empty page shown as \"2/2\". The same empty page appears after removing the only member on a trailing page. Use `Math.ceil(user_count / limit)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:11-14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Re-adding an existing member raises a 500 and leaves the batch half-applied",
+      "description": "`group.add(user)` is `users.push(user)` (`app/models/group.rb:272-274`), which inserts a `group_users` row immediately on a persisted group. `group_users` has a unique index on `(group_id, user_id)` (`db/migrate/20130416004933_group_users.rb:9`), so an existing member raises `ActiveRecord::RecordNotUnique`. There is no transaction, so users earlier in the list stay added while the request fails.\n\nThis is easy to hit from the new UI: the input is never cleared (`// TODO` at `admin-group.js.es6:62`), so a second click on \"Add\" resends the same usernames. The old `usernames=` path diffed against current members and did not have this problem. Skip existing members (e.g. filter by `group.users.where(...)`) and wrap the loop in a transaction.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:71-75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Removing a member no longer clears the user's `primary_group_id`",
+      "description": "The old path went through `Group#usernames=` and `destroy_deletions`, which nulls `primary_group_id` for removed users (`app/models/group.rb:287-295`). The new `group.users.delete(user_id)` bypasses that, and `GroupUser` has no callbacks (`app/models/group_user.rb`). A removed user keeps the group as primary, and `PostSerializer` (`app/serializers/post_serializer.rb:97-103`) keeps showing that group name on their posts.\n\nTwo related points I could not confirm by reading alone:\n- **Counter cache:** a has-many-through `delete` removes join rows with `delete_all`, so the `user_count` counter cache on `GroupUser` may not be decremented. The spec only asserts `group.users.count`, not `user_count`.\n- **Non-member id:** deleting an id that is not a member will likely raise `RecordNotFound` rather than \"succeed silently\" as the removed spec required.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Public group members page now silently truncates at 50 members",
+      "description": "`GroupsController#members` now always paginates with a default limit of 50 (`app/controllers/groups_controller.rb:22-26`). Previously non-automatic groups returned every member and automatic groups returned 200. The public template (`app/assets/javascripts/discourse/templates/group/members.hbs:6`) renders `members` with no pager or load-more, so members past the first 50 are unreachable there. Paging controls exist only in the admin template. Also, `{{#if model}}` on line 1 of that template is now always true, since the model is the group rather than the member array.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/routes/group-members.js.es6:8-12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`limit` and `offset` on the public members endpoint are unvalidated",
+      "description": "`limit` and `offset` are taken from params with only `.to_i`, on an endpoint reachable by any user who can see the group.\n- A negative value reaches `.limit()`/`.offset()` and will error in PostgreSQL (500).\n- An arbitrarily large `limit` removes the pagination bound.\n- `limit=0` is echoed back in `meta.limit` and stored on the model (`app/assets/javascripts/discourse/models/group.js:33`), after which the `currentPage`/`totalPages` divisions produce `NaN`/`Infinity`.\n\nClamp to a range, e.g. `limit.clamp(1, MAX)` and `[offset, 0].max`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/controllers/groups_controller.rb:22-23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add and remove member requests have no failure handling in the client",
+      "description": "`removeMember` and `addMembers` chain only a success callback, and the controller actions (`admin-group.js.es6:51-65`) add no rejection handler. A 422 from `can_not_modify_automatic` or the 500 described above gives the admin no feedback. The `save` and `destroy` actions in the same controller both show a `bootbox.alert` on failure. Unknown usernames are also skipped silently server-side (`groups_controller.rb:72`) while the response reports success.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/models/group.js:40-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test coverage shrank and the new pagination contract is untested",
+      "description": "- **Removed cases not replaced:** adding a non-existent user, removing a non-member, and updating or renaming a non-automatic group.\n- **Missing new cases:** adding an already-present member (the 500 path above) and `user_count` / `primary_group_id` after removal.\n- **Wrong verb:** line 115 calls `remove_member` with `xhr :put` although the route is `DELETE` (`config/routes.rb:49`).\n- **Seeded ids:** lines 52, 94 and 115 rely on group id `1`, whereas the `.destroy` spec uses `Fabricate(:group, automatic: true)`.\n- **Stale pending spec:** the pagination spec at `spec/controllers/groups_controller_spec.rb:72-85` is still `pending` with the comment \"until we fix group truncation\". It also still parses the response as a bare array, though the endpoint now returns `{members:, meta:}`. Nothing exercises the new shape, `meta.total`, or the default limit.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/controllers/admin/groups_controller_spec.rb:91-132"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New JavaScript violates the project's JSHint settings",
+      "description": "`.jshintrc` sets `\"eqeqeq\": true`, but lines 7 and 12 use `== 0`. In `app/assets/javascripts/discourse/models/group.js`:\n- **Line 59:** missing semicolon after `})`.\n- **Line 82:** `{ return };` puts the semicolon outside the block.\n- **Line 21:** `findMembers` now returns `undefined` on an empty name, where it previously returned `Ember.RSVP.resolve([])`. The method returns a promise on one path and nothing on the other, and the `next`/`previous` actions return that value.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Model code left without a production caller",
+      "description": "After this change `Group#usernames=` and its `destroy_deletions` hook (lines 286-295) are referenced only from specs (`spec/models/group_spec.rb:149,153`, `spec/models/user_spec.rb:1011,1022`). `Group#remove` (lines 276-278) has no caller I could find; the new `remove_member` action does not use it either. Either route the controller through these methods, which would also restore the `primary_group_id` cleanup, or remove them.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/models/group.rb:244-266"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Admin and public group API contracts changed without a compatibility path",
+      "description": "- `create` and `update` now read top-level `name` / `visible` / `alias_level` instead of `group[...]`.\n- The `PATCH` `changes: {add, delete}` membership API is removed.\n- `GET /groups/:name/members` changed from an array to `{members, meta}`.\n\nIn-repo callers were updated (the only `findMembers` consumer is `group.js`), but external API clients and plugins using the old shapes will break without a clear error. For example, a `group[name]` create now fails name validation on an empty string.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:22-47"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New group styles use hard-coded colours and `!important`",
+      "description": "`.next, .previous` use literal `#333` / `#aaa` with `!important`, and `.ac-wrap` overrides use `!important`. These are the only occurrences of those literals in the file, so they will not follow colour-scheme customisation.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/admin/admin_base.scss:463-480"
+    },
+    {
+      "severity": "PASS",
+      "title": "New membership endpoints are correctly restricted and wired",
+      "description": "`add_members` and `remove_member` live in `Admin::GroupsController` (inherits `Admin::AdminController`), and their routes sit under `resources :groups, constraints: AdminConstraint.new` (`config/routes.rb:45-51`). Both use `params.require` and reject automatic groups with a 422 before mutating. The `ILIKE` search stays parameterised. The i18n keys the new templates use (`delete_member_confirm`, `name`, `add`, `add_members`) exist in `config/locales/client.en.yml:1630-1633`, and the `group-member` view's `templateName` follows the existing `admin/templates/...` convention.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:65-97"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`totalPages` is off by one when the member count is an exact multiple of the page size",
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:11-14",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Re-adding an existing member raises a 500 and leaves the batch half-applied",
+      "location": "app/controllers/admin/groups_controller.rb:71-75",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Removing a member no longer clears the user's `primary_group_id`",
+      "location": "app/controllers/admin/groups_controller.rb:90",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Public group members page now silently truncates at 50 members",
+      "location": "app/assets/javascripts/discourse/routes/group-members.js.es6:8-12",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`limit` and `offset` on the public members endpoint are unvalidated",
+      "location": "app/controllers/groups_controller.rb:22-23",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Add and remove member requests have no failure handling in the client",
+      "location": "app/assets/javascripts/discourse/models/group.js:40-60",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test coverage shrank and the new pagination contract is untested",
+      "location": "spec/controllers/admin/groups_controller_spec.rb:91-132",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "New JavaScript violates the project's JSHint settings",
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:7",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Model code left without a production caller",
+      "location": "app/models/group.rb:244-266",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Admin and public group API contracts changed without a compatibility path",
+      "location": "app/controllers/admin/groups_controller.rb:22-47",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "New group styles use hard-coded colours and `!important`",
+      "location": "app/assets/stylesheets/common/admin/admin_base.scss:463-480",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "New membership endpoints are correctly restricted and wired",
+      "location": "app/controllers/admin/groups_controller.rb:65-97",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "diff": "a9bdd78c37b33118c148364396308b8bba632563...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:45:08.300348",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 29,
+  "injected": [],
+  "files_read": [
+    "app/controllers/admin/groups_controller.rb",
+    "app/controllers/groups_controller.rb",
+    "app/assets/javascripts/discourse/models/group.js",
+    "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "app/models/group.rb",
+    "app/assets/javascripts/admin/routes/admin_group_route.js",
+    "spec/controllers/groups_controller_spec.rb",
+    "config/locales/client.en.yml",
+    "config/routes.rb",
+    "app/assets/javascripts/admin/templates/group.hbs",
+    "app/assets/javascripts/discourse/templates/group/members.hbs",
+    "app/assets/javascripts/discourse/routes/group-members.js.es6",
+    "spec/controllers/admin/groups_controller_spec.rb",
+    "app/models/group_user.rb",
+    "app/assets/javascripts/discourse/components/user-selector.js.es6"
+  ],
+  "searches": [
+    "grep findMembers|/members|saveWithUsernames|createWithUsernames|delete_member_confirm|add_members|admin\\.groups\\.add|groups/.*/users|usernames in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "grep group-members|GroupMembers|group/members|groupMembers in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts",
+    "grep def serialize_data|primary_group_id|def ensure_can_see|def can_see_group|def can_see\\? in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "list_files app/assets/javascripts/**/*group* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "grep group_users in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/db",
+    "grep def self\\.find_by_username|def self\\.find_by_username_or_email|\\.usernames\\s*=|\\.remove\\(|type: ?['\"]PATCH|changes: in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "grep templateName in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts/admin",
+    "grep propertyEqual in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts/discourse/lib/computed.js",
+    "grep eqeqeq|\"asi\"|curly in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/.jshintrc",
+    "grep ^\\.badges|^\\.groups|^// Groups area|!important|#333|#aaa in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/stylesheets/common/admin/admin_base.scss",
+    "grep class=\"groups|class='groups|groups in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts/admin/templates/groups.hbs",
+    "grep def self\\.find_by_username|def find_by_username in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/models/user.rb",
+    "grep \\.usernames\\s*=|group\\.remove\\(|\\.remove\\(user|\\.remove\\(@?\\w*user in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "grep rails \\(|^    rails  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/Gemfile.lock"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 29541,
+  "diff_chars_injected": 29541,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 30,
+  "prompt_tokens": 220744,
+  "cached_tokens": 169319,
+  "cache_write_tokens": 51415,
+  "completion_tokens": 15592,
+  "reasoning_tokens": null,
+  "duration_seconds": 151.7968334169127,
+  "cost_usd": 1.4816858,
+  "cost_basis": "provider"
+}

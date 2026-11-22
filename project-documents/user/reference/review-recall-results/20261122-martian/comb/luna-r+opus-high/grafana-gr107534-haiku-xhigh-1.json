@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "runSplitQuery` now calls `applyTemplateVariables` (querySplitting.ts:299), and `super.query` applies it again (DataSourceWithBackend.ts:185), so the shard path runs it three times. `addFilterAsLabelFilter` has no duplicate check, so parsed-label ad-hoc filters get added more than once, and variable values containing `$` get substituted a second time."
+  ],
+  "F2": [
+   "KEEP",
+   "The trace checks out. Because the code now filters before interpolating, a target that resolves to an empty expression survives into the non-sharded group. `runSplitQuery` then drops it, so `runSplitGroupedQueries` throws on `[0].partition` of an empty array inside the `.then`, and the observable never emits."
+  ],
+  "F3": [
+   "DROP",
+   "The finding admits this matches how the time-split path already treats `$__auto` (backend resolution) and only asks for confirmation, so there is no clear defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2294233
+}

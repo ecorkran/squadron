@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Execute organization and team authorization SQL in integration tests",
+      "description": "The organization- and team-scope tests compare generated `Prisma.Sql` objects against SQL constructed the same way, without executing those conditions. The only database query using `getBaseConditions()` exercises user scope, leaving the newly introduced `ANY(...)` array predicates and organization/team authorization combinations untested against PostgreSQL.\n\nBecause this change replaces ORM-generated authorization queries with handwritten SQL, add database-backed assertions for organization and team scopes. Include allowed and excluded bookings, authorization combined with filters, and a team without members. This would verify actual query execution and access boundaries rather than just the generated representation.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:278-345"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Execute organization and team authorization SQL in integration tests",
+      "location": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:278-345",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "diff": "ef0d5fb0fd4d6be99f3fc203a367d6f9957c1489...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:47:11.101708",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "injected": [],
+  "files_read": [
+    "packages/lib/server/service/insightsBooking.ts",
+    "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+    "packages/prisma/migrations/20250505135207_create_booking_time_status_denormalized/migration.sql",
+    "packages/lib/server/repository/membership.ts",
+    "packages/lib/server/repository/team.ts",
+    "packages/lib/package.json",
+    "CONTRIBUTING.md"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep InsightsBookingService|insightsBookingService in .",
+    "grep InsightsBookingService|insightsBookingService in packages",
+    "grep InsightsBookingService|insightsBookingService in apps",
+    "list_files * in .git",
+    "grep BookingTimeStatusDenormalized in packages/prisma"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1060,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17894,
+  "diff_chars_injected": 17894,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 68388,
+  "cached_tokens": 50551,
+  "cache_write_tokens": null,
+  "completion_tokens": 838,
+  "reasoning_tokens": 323,
+  "duration_seconds": 26.57867179205641,
+  "cost_usd": 0.049109099999999996,
+  "cost_basis": "alias_pricing"
+}

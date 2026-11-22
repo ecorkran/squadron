@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "canManage()` accepts `VIEW`, allowing view-only group grants to pass the manage check on group creation and movement."
+  ],
+  "F2": [
+   "KEEP",
+   "The method collects authorization resource IDs rather than group IDs, so group-scoped user counts and searches can omit authorized members."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0022318000000000004
+}

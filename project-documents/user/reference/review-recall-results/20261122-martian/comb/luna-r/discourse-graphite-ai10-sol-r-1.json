@@ -1,0 +1,42 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The migration indexes the first query result before checking whether a matching category exists, so an empty result raises."
+  ],
+  "F2": [
+   "KEEP",
+   "Migrated host values bypass model normalization, so URL-form entries will not match runtime host lookups."
+  ],
+  "F3": [
+   "KEEP",
+   "Interpolating legacy host values into SQL allows quotes to break the migration or alter its SQL."
+  ],
+  "F4": [
+   "KEEP",
+   "The validation regex rejects valid domains with top-level domains longer than five letters."
+  ],
+  "F5": [
+   "DROP",
+   "The specs lack endpoint coverage, but missing tests alone do not establish a defect in behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00050964
+}

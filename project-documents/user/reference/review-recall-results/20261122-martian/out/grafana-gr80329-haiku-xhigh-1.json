@@ -1,0 +1,303 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Success-path bookkeeping logged at Error level on every batch, with full ID lists",
+      "description": "The new cleanup paths log routine progress with `r.log.Error`. In the MaxAge branch, line 534 logs \"Annotations to clean by time\" at Error with `\"ids\", ids`, and line 537 logs \"cleaned annotations by time\" at Error. The same pattern appears at lines 554-557 (MaxCount) and 576-579 (orphaned tags). The `\"err\"` field is always nil at these points, because each function has already returned on error. These calls run on every batch, including the terminal empty batch. Once an operator sets `max_age` or `max_annotations_to_keep`, each configured type emits two ERROR lines per run even when nothing is deleted. The defaults in `conf/defaults.ini` leave those settings empty, so this only fires for operators who enable retention. Each line also dumps up to `AnnotationCleanupJobBatchSize` IDs; that size defaults to 100 and has no upper bound (`pkg/setting/setting.go:710`). The ticker change in `cleanup.go:77` makes these runs 10x more frequent, so this will flood ERROR logs and trigger false alerts. Remove these calls, or downgrade them to Debug, drop the ID list, and log once per run with the total affected.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:534-537"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Quadratic string building for the SQLite inline ID list",
+      "description": "`values = fmt.Sprintf(\"%s, %d\", values, v)` rebuilds the whole accumulated string on every iteration. For a 32,767-ID batch, which is the size the new test case at `cleanup_test.go:98-111` exercises, this copies roughly n\u00b2/2 \u00d7 ~8 bytes, on the order of 4-5 GB per batch. It runs on every cleanup cycle whenever the batch size exceeds 999 on SQLite. Use `strings.Builder` with `strconv.AppendInt`, or `strings.Join` over `strconv.FormatInt` results.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:609-612"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Bind-parameter limits are not handled for non-SQLite drivers",
+      "description": "The SQLite branch inlines IDs when the batch size exceeds 999. The `else` branch binds one placeholder per ID for MySQL, Postgres, and MSSQL. Those drivers cap bind parameters at about 65,535 for MySQL and Postgres and 2,100 for MSSQL. The batch size is read as an unbounded `int64` (`setting.go:710`). If an operator sets `cleanupjob_batchsize` above the cap, `deleteByIDs` fails on every batch once enough rows match, and cleanup never completes. The old single-statement DELETE had no such limit, so this is a new failure mode. Either validate or cap the batch size, or chunk the DELETE into bounded IN-lists for all dialects. The new tests only cover SQLite, so this path is untested.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:614-617"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Ticker change applies to every cleanup job, undocumented",
+      "description": "Changing the interval from `time.Minute * 10` to `time.Minute * 1` makes every job in `clean()` run 10x as often: snapshots, dashboard versions, images, invites, short URLs, query history, and temp files. The annotation change is the only reason given in the diff, and nothing documents the wider impact. The interval is hard-coded, not configurable. The \"Completed cleanup jobs\" Info log at `cleanup.go:120` also fires 10x as often. `clean()` is synchronous with a 9-minute timeout, so when there is a backlog the loop runs back-to-back and keeps the DB busy continuously. Also, `* 1` should just be `time.Minute`. If this cadence is needed for annotations, make it an annotation-specific setting, or state the reason in the commit message.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/services/cleanup/cleanup.go:77"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Running the max count delete again\" no longer runs against prior state",
+      "description": "Before this change, this case ran against the state left by the previous case (9 annotations, 3 per type), so it checked that a second run deletes nothing. Now `createTestAnnotations(9, 6)` seeds fresh rows. The assertion still holds, because MaxCount 3 keeps 3 per type and so affects 0 rows. The case no longer tests a second run, so either rename it or have it run against the prior state.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:82-96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cleanup is registered after the data it cleans up is created",
+      "description": "The `t.Cleanup` that empties `annotation` and `annotation_tag` is registered after `createTestAnnotations` and the first `assertAnnotationCount`. If either of those fails, `require` exits the subtest with rows still in the shared DB, and later subtests fail with confusing counts. `db.InitTestDB` returns a package-level singleton (`pkg/services/sqlstore/sqlstore.go:626-627`). Register the cleanup first. The two identical `batchsize := 500` loops at lines 274 and 284 could also use one helper.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:116-127"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Explicit IDs in test fixtures can desync Postgres sequences",
+      "description": "`ID: int64(i + 1)` is set explicitly so the tag rows can reference annotations without reading IDs back from the batched insert. On SQLite and MySQL this is fine. On Postgres, explicit IDs do not advance the `annotation` id sequence, and the singleton DB can run on Postgres via `GRAFANA_TEST_DB`. Nothing collides today because each subtest empties the table, so this is a latent hazard, not a current failure. Consider per-row inserts that return IDs, or resetting the sequence.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Comment about the SQLite limit is out of date",
+      "description": "The comment says \"SQLite has a parameter limit of 999.\" That was true only before SQLite 3.32.0, where the default limit moved to 32,766. The inline path is applied whenever the batch size exceeds 999, regardless of SQLite version. That is still safe because the IDs are `int64`, but the comment should say the path exists for older SQLite builds. The test name at `cleanup_test.go:98` (\"for SQLite >= 3.32.0\") describes a different situation.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:605-606"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`fetchIDs` accepts a raw SQL fragment",
+      "description": "`fetchIDs` takes `condition` as a raw SQL fragment, built with `fmt.Sprintf`. There is no injection today. The `annotationType` values are package constants (`cleanup.go:23-25`), `cutoffDate` is an `int64`, and the limit comes from the dialect. The `condition == \"\"` guard only rejects an empty fragment and does not constrain what a future caller passes in. Consider a narrower API with the limit and arguments as typed parameters. Also, the empty-condition check runs after the SQL string is already built (lines 585-589), so it should move up.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:584-595"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unclear names for locals and the helper",
+      "description": "`x, y := r.deleteByIDs(...)` (also at 556-557 and 578-579), followed by `return x, y`, is hard to read. Name them `affected, err`. `asAny` (lines 632-638) also doesn't say what it converts; a name like `int64sToAny` would be clearer.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:536-537"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration test naming and skip match repo convention",
+      "description": "Both renamed tests use the `TestIntegration` prefix and skip under `testing.Short()`. The Makefile selects integration tests with `-run \"^TestIntegration\"` (Makefile:181, 195, 201). Sibling tests in `annotations_test.go:34` follow the same pattern.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:18-21"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cleanup loop terminates correctly on all three call sites",
+      "description": "I traced `untilDoneOrCancelled` for MaxAge, MaxCount, and orphaned tags. Each iteration either deletes at least one row, so the matching set shrinks, or returns 0 (empty ID list, or rows already deleted by another writer), which ends the loop. Context cancellation returns `ctx.Err()`. Errors return the partial total, as before. The expected values in `cleanup_test.go` also check out against the per-type MaxAge/MaxCount math. For example, 40,003 rows across three types with MaxCount 1 gives 40,000 affected and 3 remaining.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:643-661"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Success-path bookkeeping logged at Error level on every batch, with full ID lists",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:534-537",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Quadratic string building for the SQLite inline ID list",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:609-612",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bind-parameter limits are not handled for non-SQLite drivers",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:614-617",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Ticker change applies to every cleanup job, undocumented",
+      "location": "pkg/services/cleanup/cleanup.go:77",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "\"Running the max count delete again\" no longer runs against prior state",
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:82-96",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Cleanup is registered after the data it cleans up is created",
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:116-127",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Explicit IDs in test fixtures can desync Postgres sequences",
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:241",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comment about the SQLite limit is out of date",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:605-606",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`fetchIDs` accepts a raw SQL fragment",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:584-595",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unclear names for locals and the helper",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:536-537",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Integration test naming and skip match repo convention",
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go:18-21",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cleanup loop terminates correctly on all three call sites",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:643-661",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329",
+    "diff": "2eb6310b796e3ca92bf2ad7de13cdecacb7c3469...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:56:08.043885",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "injected": [],
+  "files_read": [
+    "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+    "pkg/services/cleanup/cleanup.go",
+    "pkg/services/annotations/annotationsimpl/cleanup.go",
+    "pkg/services/sqlstore/migrator/types.go"
+  ],
+  "searches": [
+    "grep executeUntilDoneOrCancelled|untilDoneOrCancelled|fetchIDs|deleteByIDs|asAny in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep GetDBType\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/infra/db",
+    "grep AnnotationCleanupJobBatchSize|alertAnnotationType|dashboardAnnotationType|apiAnnotationType in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep SQLite\\s+(core\\.DbType\\s+)?=|SQLite\\s*=|DBType in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/sqlstore/migrator",
+    "grep func InitTestDB\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/infra/db",
+    "grep ^go \\d|^go [0-9] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/go.mod",
+    "grep \\.Find\\(&(ids|keys|[a-zA-Z]*IDs?)\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services",
+    "list_files pkg/services/cleanup/**/*_test.go in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329",
+    "grep func InitTestDB in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep ticker|Ticker|Run\\(|clean\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/cleanup/cleanup_test.go",
+    "grep func InitTestDB in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/sqlstore/sqlstore.go",
+    "grep TestIntegration|-short in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/Makefile",
+    "grep func TestIntegration in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/annotations",
+    "grep max_annotation_age|max_annotations|AlertingAnnotationCleanupSetting\\s*=|APIAnnotationCleanupSettings\\s*=|DashboardAnnotationCleanupSettings\\s*=|readAnnotationSettings|func.*AnnotationCleanup in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 15675,
+  "diff_chars_injected": 15675,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 21,
+  "prompt_tokens": 428053,
+  "cached_tokens": 356744,
+  "cache_write_tokens": 71293,
+  "completion_tokens": 47881,
+  "reasoning_tokens": null,
+  "duration_seconds": 210.33358912495896,
+  "cost_usd": 0.04270954,
+  "cost_basis": "provider"
+}

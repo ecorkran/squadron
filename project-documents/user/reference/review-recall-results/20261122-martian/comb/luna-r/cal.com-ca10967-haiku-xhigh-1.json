@@ -1,0 +1,77 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A Meet event without a destination dereferences `undefined` and can fail booking creation."
+  ],
+  "F2": [
+   "KEEP",
+   "The fallback compares the destination ID to a falsy value, so updates can fail and deletes target the wrong calendar."
+  ],
+  "F3": [
+   "KEEP",
+   "Credential-less destinations route inserts to `primary`, and the subsequent patch can reject unhandled."
+  ],
+  "F4": [
+   "KEEP",
+   "These adapters use the first destination rather than the destination associated with the calling credential."
+  ],
+  "F5": [
+   "KEEP",
+   "With team billing disabled, organizations lose their slug and are treated as unpublished."
+  ],
+  "F6": [
+   "KEEP",
+   "Known Prisma errors are returned with raw messages, exposing database details to the booking caller."
+  ],
+  "F7": [
+   "KEEP",
+   "Optional chaining makes the team-calendar append a no-op when the organizer has no destination."
+  ],
+  "F8": [
+   "KEEP",
+   "Spreading the event exposes the changed destination-calendar array in the webhook payload, breaking consumers expecting the prior shape."
+  ],
+  "F9": [
+   "DROP",
+   "Duplicated helper logic is a refactoring concern, not a behavioral defect."
+  ],
+  "F10": [
+   "KEEP",
+   "The recurring-delete work runs once per calendar reference, causing redundant deletion attempts."
+  ],
+  "F11": [
+   "DROP",
+   "Missing tests alone do not establish a defect in code that otherwise works."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  9
+ ],
+ "cost_usd": 0.00809049
+}

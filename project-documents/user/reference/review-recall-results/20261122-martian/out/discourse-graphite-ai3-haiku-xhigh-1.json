@@ -1,0 +1,277 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Blocklist lookup is case-sensitive, so mixed-case addresses bypass it",
+      "description": "`should_block?` runs `BlockedEmail.where(email: email).first` on the raw address. The signup path never normalizes the address. `User.new_from_params` (app/models/user.rb:84-91, called from users_controller.rb:160) assigns `params[:email]` as typed, and `User` has no before-validation normalization. PostgreSQL `=` is case-sensitive, so a blocked `bad@spamclub.com` can be registered as `Bad@SpamClub.com`. `Email.downcase` (lib/email.rb:19-22) is not sufficient on its own, because it lowercases only the domain. Normalize both the stored entry and the lookup (for example, full `downcase`), and add a spec with mixed-case input. The `change_email` path (users_controller.rb:269) already uses `Email.downcase`, so the two entry points are inconsistent.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/models/blocked_email.rb:11-12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Validator mutates match counters, so each attempt is counted twice",
+      "description": "`EmailValidator` calls `BlockedEmail.should_block?` (app/models/blocked_email.rb:11-18), which increments `match_count`, sets `last_match_at`, and saves. Validation should be side-effect free. In `UsersController#create`, `user.valid?` runs at users_controller.rb:168 and `user.save` runs at line 172, which validates again. Each blocked attempt therefore inflates `match_count` by 2. The read-modify-write (`match_count += 1; record.save`) also loses increments under concurrent requests, and a failed `save` is ignored silently. Keep `should_block?` a pure predicate, record the match in one place, and use an atomic counter update such as `BlockedEmail.update_counters`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "lib/validators/email_validator.rb:13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Domain restriction regex has no end anchor, so suffix domains pass the whitelist",
+      "description": "`Regexp.new(\"@(#{domains})\", true)` is unanchored at the end. With a whitelist of `vaynermedia.com`, `someone@vaynermedia.com.attacker.example` matches and is accepted. Registration requires confirming the address from the inbox, which the attacker controls on that domain. This logic is copied unchanged from `User#email_in_restriction_setting?`, so the flaw predates this diff. The diff moves it into a new file, and the existing whitelist specs (spec/models/user_spec.rb:535-552) do not cover the suffix case. I reasoned about this from the regex semantics and did not run it. The fix is to anchor with `\\z` and escape each domain with `Regexp.escape`. The current `gsub('.', '\\.')` leaves other metacharacters unescaped.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "lib/validators/email_validator.rb:18-21"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New blocklist and rejection behavior has no end-to-end or controller tests",
+      "description": "Both examples stub `BlockedEmail.should_block?`, so no test runs a real blocked row through `User#valid?`. The case-bypass and double-count issues above would pass this suite. In spec/controllers/users_controller_spec.rb:471-481, the `failed signup` examples assert only `success`, so the new `errors` and `values` keys are untested. No JavaScript test under `test/` references `createAccount` or `rejectedEmails`. Add a User-level spec with a real `BlockedEmail` row and mixed-case variants, a controller spec for the response shape, and a JS test for the rejection flow.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/components/validators/email_validator_spec.rb:9-21"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`rejectedEmails` is one array shared across all controller instances",
+      "description": "`rejectedEmails: Em.A([])` sits in the `extend()` literal, so every instance of the class shares one array. `pushObject` at line 275 mutates that shared array. The app uses the controller as a singleton, so the impact is latent today. Any second instance, such as a test that creates a fresh controller, inherits earlier rejections. Initialize the array in `init` with `this._super()` and `this.set('rejectedEmails', Em.A([]))`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/controllers/create_account_controller.js:17"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rejection UX is misleading and sticky",
+      "description": "A rejected address always shows the generic \"invalid\" reason, even when the server said \"not allowed\" or \"already taken\". Rejections also persist until the page reloads, so an address rejected for a reason that later changes stays blocked in this session. Consider showing the server's message on the field and clearing the list on modal open.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/controllers/create_account_controller.js:69-74"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`should_block?` returns `nil` rather than `false` when there is no record",
+      "description": "The spec says \"returns false\" (spec/models/blocked_email_spec.rb:22-24) but uses `be_false`, which also accepts `nil` in RSpec 2.13, so the spec does not check the contract. Use `record.present? && ...` to return a real boolean.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "app/models/blocked_email.rb:18"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor style issues in the new validator file",
+      "description": "Line 13 uses `and` where `&&` is the usual form in this codebase. The file has no trailing newline (line 24).",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "lib/validators/email_validator.rb:13"
+    },
+    {
+      "severity": "PASS",
+      "title": "Moving the domain restriction into a validator preserves behavior",
+      "description": "`validates :email, email: true, if: :email_changed?` keeps the same gating as the old `validate :email_validator, if: :email_changed?`. `lib/validators` is on the autoload path (config/application.rb:36). No code calls the removed `User#email_validator` or `email_in_restriction_setting?`. The existing blacklist and whitelist specs in spec/models/user_spec.rb:488-565 still exercise the logic through `User` validation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/user.rb:46-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "Migration and locale keys are consistent",
+      "description": "The timestamp is later than the newest existing migration (20130723212758). The repo has no `db/schema.rb` or `db/structure.sql`, so there is no schema file to keep in sync. The unique index matches the model's uniqueness validation. The `user.email.blocked` and `user.email.not_allowed` keys exist in config/locales/server.en.yml:733-734.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20130724201552_create_blocked_emails.rb:1-12"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Blocklist lookup is case-sensitive, so mixed-case addresses bypass it",
+      "location": "app/models/blocked_email.rb:11-12",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Validator mutates match counters, so each attempt is counted twice",
+      "location": "lib/validators/email_validator.rb:13",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Domain restriction regex has no end anchor, so suffix domains pass the whitelist",
+      "location": "lib/validators/email_validator.rb:18-21",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New blocklist and rejection behavior has no end-to-end or controller tests",
+      "location": "spec/components/validators/email_validator_spec.rb:9-21",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`rejectedEmails` is one array shared across all controller instances",
+      "location": "app/assets/javascripts/discourse/controllers/create_account_controller.js:17",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Rejection UX is misleading and sticky",
+      "location": "app/assets/javascripts/discourse/controllers/create_account_controller.js:69-74",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`should_block?` returns `nil` rather than `false` when there is no record",
+      "location": "app/models/blocked_email.rb:18",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Minor style issues in the new validator file",
+      "location": "lib/validators/email_validator.rb:13",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Moving the domain restriction into a validator preserves behavior",
+      "location": "app/models/user.rb:46-47",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migration and locale keys are consistent",
+      "location": "db/migrate/20130724201552_create_blocked_emails.rb:1-12",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "diff": "2ff4f3124a6dab409f1cb60714c0fc7bbae546db...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T15:01:02.216245",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 31,
+  "injected": [],
+  "files_read": [
+    "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+    "app/controllers/users_controller.rb",
+    "app/models/blocked_email.rb",
+    "app/models/user.rb",
+    "lib/validators/email_validator.rb",
+    "db/migrate/20130724201552_create_blocked_emails.rb",
+    "spec/components/validators/email_validator_spec.rb",
+    "spec/fabricators/blocked_email_fabricator.rb",
+    "spec/models/blocked_email_spec.rb",
+    "spec/models/user_spec.rb",
+    "lib/email.rb",
+    "lib/enum.rb",
+    "app/assets/javascripts/discourse/models/user.js",
+    "spec/controllers/users_controller_spec.rb"
+  ],
+  "searches": [
+    "grep email_in_restriction_setting|email_validator|EmailValidator|email_domains_(whitelist|blacklist) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "grep lib/validators|autoload_paths|eager_load_paths in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3/config",
+    "grep Email\\.downcase|def self\\.downcase in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "list_files db/{schema.rb,structure.sql,migrate/*.rb} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "grep class Enum|module Enum|def initialize in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3/lib",
+    "list_files db/{schema.rb,structure.sql} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "list_files db/migrate/201307*.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "grep blocked:|not_allowed:|^\\s+email:$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3/config/locales/server.en.yml",
+    "grep within_one_second_of|timecop|mocha|rspec \\(|rspec-core|rspec-mocks in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "grep createAccount|checkUsername in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "grep create_account|CreateAccount|rejectedEmails|Em\\.A\\(\\[\\]\\)|Ember\\.A\\(\\[\\]\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3",
+    "grep users/create|def create|login.errors|success.*false|\\['errors'\\]|\\['values'\\] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3/spec/controllers/users_controller_spec.rb",
+    "grep email in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3/Gemfile.lock",
+    "grep post :create|describe.*create|blocked|honeypot|suspicious in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3/spec/controllers/users_controller_spec.rb",
+    "grep contains: function|Em\\.A = |Ember\\.A = |VERSION\\s*=\\s*['\"] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai3/app/assets/javascripts/external_development/ember.js"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9743,
+  "diff_chars_injected": 9743,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 32,
+  "prompt_tokens": 456760,
+  "cached_tokens": 389720,
+  "cache_write_tokens": 67022,
+  "completion_tokens": 35994,
+  "reasoning_tokens": null,
+  "duration_seconds": 163.68632658291608,
+  "cost_usd": 0.0358913,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,35 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 4,
+  "F4": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache key is set at impl.go:87, before `CreateOrUpdateDevice` runs. So after a device gets `ErrDeviceLimitReached`, its next request hits the cache, gets nil back, and the new rejection in client.go:45-46 never fires."
+  ],
+  "F2": [
+   "KEEP",
+   "The new limit check counts devices (database.go:110) and then inserts in a separate statement with no transaction or lock. Concurrent requests from new devices can push the table past `deviceLimit`."
+  ],
+  "F3": [
+   "DROP",
+   "Repeating the 30-day constant under two names is a code-structure point; every definition has the same value, so nothing behaves wrongly."
+  ],
+  "F4": [
+   "DROP",
+   "number | undefined` and `= undefined` are a TypeScript typing choice. Boot config values replace them at runtime and nothing reads the field in a way that breaks, so there is no behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.1251907
+}

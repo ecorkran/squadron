@@ -1,0 +1,43 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The list item now passes only `promRule`, so `rulerRule` is always undefined there. Both the Delete gate (`canDelete && rulerRule`) and the Pause gate (`rulerRuleType.grafana.rule(rulerRule)`) are therefore always false, and users can no longer delete or pause from the list."
+  ],
+  "F2": [
+   "KEEP",
+   "Silence still shows up through the Grafana prom abilities, but the drawer only mounts when `rulerRuleType.grafana.alertingRule(rule)` is true. With `rule` undefined in the list, clicking Silence does nothing."
+  ],
+  "F3": [
+   "KEEP",
+   "useAllAlertRuleAbilities` now delegates to `useAllRulerRuleAbilities`, which hardcodes `isFederated = false`, and `isFederatedRuleGroup` is no longer used in `useAbilities.ts`. As a result, federated groups now show Edit, Delete and Pause abilities."
+  ],
+  "F4": [
+   "KEEP",
+   "The Grafana list item's view link no longer includes `returnTo`, while `DataSourceRuleListItem` still passes `createReturnTo()`. Going back from a Grafana rule therefore drops the list's search and filters."
+  ],
+  "F5": [
+   "KEEP",
+   "useAllGrafanaPromRuleAbilities` gates Export, Pause, Restore and DeletePermanently on `prometheusRuleType.grafana.alertingRule`, so Grafana recording rules lose those actions (for example, Export disappears in the list). The ruler path allowed them for all Grafana rules."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.3561259
+}

@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The second `downsize` definition overrides the five-argument version, so `ResizeEmoji#execute` raises `ArgumentError`."
+  ],
+  "F2": [
+   "KEEP",
+   "The client applies a fixed 10 MB cap to attachments, which can disagree with the server\u2019s configured attachment limit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00172571
+}

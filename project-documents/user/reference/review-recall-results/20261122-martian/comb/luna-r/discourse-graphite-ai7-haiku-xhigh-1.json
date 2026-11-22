@@ -1,0 +1,41 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The 70% light and 30% dark values make the links low-contrast in both themes."
+  ],
+  "F2": [
+   "KEEP",
+   "The mobile heading\u2019s 50% light value has insufficient contrast on white and matches the h4 color."
+  ],
+  "F3": [
+   "DROP",
+   "The mobile hint\u2019s darker light-theme color is more readable, and the desktop mismatch is low-value."
+  ],
+  "F4": [
+   "KEEP",
+   "The name now matches the title\u2019s color in both layouts, removing the intended visual distinction."
+  ],
+  "F5": [
+   "DROP",
+   "A helper would be a maintainability improvement, not a defect requiring action before merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3
+ ],
+ "cost_usd": 0.0027036
+}

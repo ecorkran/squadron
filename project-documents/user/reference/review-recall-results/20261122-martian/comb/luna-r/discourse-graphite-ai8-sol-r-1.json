@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The public group page fetches only the first 50 members and has no way to request later pages."
+  ],
+  "F2": [
+   "KEEP",
+   "Removing membership does not clear `primary_group_id` when it refers to the removed group."
+  ],
+  "F3": [
+   "KEEP",
+   "The page-count formula adds an extra page when the member count is an exact multiple of the limit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0018991400000000001
+}

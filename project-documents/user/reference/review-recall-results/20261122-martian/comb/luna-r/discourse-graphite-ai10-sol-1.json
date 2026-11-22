@@ -1,0 +1,48 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The migration indexes the category query\u2019s first result before checking whether a matching category exists, so it can crash when the setting is absent or stale."
+  ],
+  "F2": [
+   "KEEP",
+   "Migrated host values bypass the model\u2019s scheme-stripping callback, so scheme-prefixed values will not match host-only lookup."
+  ],
+  "F3": [
+   "KEEP",
+   "The migration interpolates legacy host values into SQL without escaping, allowing a quote to break the migration or alter the statement."
+  ],
+  "F4": [
+   "KEEP",
+   "Validation permits ports, but lookup compares against `URI#host`, which omits the port."
+  ],
+  "F5": [
+   "KEEP",
+   "The hostname validation regex rejects valid domains whose suffix exceeds five characters."
+  ],
+  "F6": [
+   "DROP",
+   "The tests are sparse, but a missing test alone is not a defect requiring a fix before merge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00067285
+}

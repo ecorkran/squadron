@@ -1,0 +1,29 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The dataclass captures the process import time, so serialized assignment sources carry stale queued timestamps."
+  ],
+  "F2": [
+   "DROP",
+   "The optional parameter is not required by the status-sync caller, and the cited signature mismatch causes no runtime failure."
+  ],
+  "F3": [
+   "DROP",
+   "Missing coverage is not a defect; the code permits other integrations to propagate assignments."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00171381
+}

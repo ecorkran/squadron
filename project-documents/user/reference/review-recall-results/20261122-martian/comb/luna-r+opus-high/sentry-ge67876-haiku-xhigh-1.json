@@ -1,0 +1,40 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "pipeline.signature` is a hash of the view class names, so `state` is the same for every session. That gives no CSRF protection and lets an attacker replay their own `code` against a victim's pipeline. The fix is a per-session `secrets.token_hex()` saved with `bind_state`, the same as in `OAuth2LoginView`."
+  ],
+  "F2": [
+   "DROP",
+   "Moving on when no Integration row exists is the existing fresh-install path, and failing closed there would break real installs whenever the webhook arrives late. This is a design limit, not a defect the change added."
+  ],
+  "F3": [
+   "KEEP",
+   "Rows created through the pipeline have no `sender` (it is set only when present, line 376-377). If such a row is ACTIVE and unlinked, `integration.metadata[\"sender\"][\"login\"]` raises KeyError and returns a 500 on a re-install that used to work."
+  ],
+  "F4": [
+   "DROP",
+   "Both values come from GitHub's API, so case matches. Exploiting a renamed and re-registered login is unlikely, and switching to the ID is optional hardening, not a merge blocker."
+  ],
+  "F5": [
+   "DROP",
+   "A GitHub network or HTTP failure causing a 500, plus an unlogged parse failure that still shows the error page, is a robustness and observability gap, not wrong behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.1025644
+}

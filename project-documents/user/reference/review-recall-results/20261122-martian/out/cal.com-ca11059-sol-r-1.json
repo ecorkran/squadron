@@ -1,0 +1,224 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Salesforce references Prisma without importing it",
+      "description": "The new `prisma.credential.update()` references `prisma`, but the full file contains no declaration or import for it. This fails TypeScript checking and would throw a `ReferenceError` when reached. Import the shared Prisma client before using it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:96-99"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Google refresh persists the parse result instead of credential data",
+      "description": "`parseRefreshTokenResponse()` returns the successful `safeParse()` result, shaped as `{ success: true, data: ... }`. Previously this code persisted the credentials returned directly by `.parse()`. Writing the new result as `key` nests all credentials under `data`, so the next `GoogleCalendarService` construction fails `googleCredentialSchema.parse(credential.key)`. Persist the parsed credential data rather than the result envelope.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:97-100"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The synchronization schema discards expiry and other token fields",
+      "description": "Computed property names such as `[z.string().toString()]` do not define wildcard validators. They produce literal object keys, and `z.object()` strips unrecognized properties by default. Consequently, normal fields such as `expires_in`, `expiry_date`, and `refresh_token` are discarded in sharing mode.\n\nFor example, Zoom subsequently calculates expiry from `newTokens.expires_in`, which is now undefined, while Office365 cannot update its stored expiry correctly. Define explicit expiry fields and preserve required provider fields, or normalize responses into a well-defined shared token schema.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Delegated refresh returns a Fetch response to callers expecting decoded tokens",
+      "description": "The delegated branch returns a raw Fetch `Response`, whereas the fallback returns whatever the provider callback produces. These contracts are not interchangeable:\n\n- Google reads `res.data.access_token`.\n- Zoho CRM and Bigin read `response.data.error`.\n- HubSpot reads decoded properties such as `expiresIn` and `accessToken`.\n\nA successful synchronization HTTP response therefore still fails these callers or supplies undefined token values. Decode and normalize the delegated response, adapt each provider explicitly, and replace the `any` return contract with types that enforce compatibility.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Webhook indexes metadata by slug although the map is keyed by directory name",
+      "description": "`appStoreMetadata` is keyed by names such as `googlecalendar`, `office365calendar`, and `office365video`, but the corresponding app slugs are `google-calendar`, `office365-calendar`, and `msteams`. Looking up the database slug directly therefore returns undefined for these supported integrations, causing valid credential synchronization requests to return 404. The type assertion does not change the runtime lookup. Resolve metadata by its `slug` value or use an existing slug-aware lookup.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts:50"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Bigin sends a credential ID as the synchronization user ID",
+      "description": "The third argument to `refreshOAuthTokens()` is a user ID, serialized as `calcomUserId`, but Bigin passes `credentialId`. Credential IDs and user IDs are unrelated. This can request another user's token or fail to find the correct account; it also bypasses the intended null-user fallback for team credentials. Pass `credential.userId` through the refresh method separately from the credential ID.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts:92-93"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Missing refresh tokens are replaced with a literal placeholder",
+      "description": "The helper injects `\"refresh_token\"` whenever the response omits a refresh token, including when sharing is disabled. Office365 explicitly allows refresh responses without that field, and its caller merges parsed data over the existing credentials. This now overwrites a valid stored refresh token with the placeholder, making the following refresh fail. Preserve the existing refresh token when the provider does not rotate it; do not fabricate one.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-27"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Salesforce references Prisma without importing it",
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts:96-99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google refresh persists the parse result instead of credential data",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:97-100",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The synchronization schema discards expiry and other token fields",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:5-11",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Delegated refresh returns a Fetch response to callers expecting decoded tokens",
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts:8-15",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Webhook indexes metadata by slug although the map is keyed by directory name",
+      "location": "apps/web/pages/api/webhook/app-credential.ts:50",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bigin sends a credential ID as the synchronization user ID",
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts:92-93",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Missing refresh tokens are replaced with a literal placeholder",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts:25-27",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "diff": "9a840be7da9c94c1ca453cf0c63bebebe835ab53...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:47:29.556497",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "injected": [],
+  "files_read": [
+    "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+    "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+    "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "packages/app-store/salesforce/lib/CalendarService.ts",
+    "packages/app-store/zoomvideo/lib/VideoApiAdapter.ts",
+    "apps/web/pages/api/webhook/app-credential.ts",
+    "packages/lib/constants.ts",
+    "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+    "packages/app-store/appStoreMetaData.ts",
+    "packages/app-store/hubspot/lib/CalendarService.ts",
+    "packages/app-store/larkcalendar/lib/CalendarService.ts",
+    "packages/app-store/_utils/oauth/createOAuthAppCredential.ts",
+    "packages/app-store/_utils/oauth/decodeOAuthState.ts",
+    "packages/app-store/_utils/oauth/encodeOAuthState.ts",
+    "packages/lib/crypto.ts",
+    "packages/app-store/googlecalendar/lib/googleCredentialSchema.ts",
+    "packages/app-store/apps.metadata.generated.ts",
+    "packages/app-store/office365video/lib/VideoApiAdapter.ts",
+    "packages/app-store/webex/lib/VideoApiAdapter.ts",
+    "packages/app-store/zohocrm/lib/CalendarService.ts",
+    "packages/app-store/getNormalizedAppMetadata.ts",
+    "packages/app-store/googlecalendar/_metadata.ts",
+    "packages/app-store/office365calendar/_metadata.ts",
+    "packages/app-store/office365video/config.json",
+    "packages/app-store/zoho-bigin/api/add.ts",
+    "packages/app-store/zoho-bigin/api/callback.ts"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep _utils/(createOAuthAppCredential|decodeOAuthState|encodeOAuthState)|APP_CREDENTIAL|parseRefreshTokenResponse|refreshOAuthTokens in .",
+    "list_files *RULE* in ."
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 1793,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 45943,
+  "diff_chars_injected": 45943,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 6,
+  "prompt_tokens": 207010,
+  "cached_tokens": 144126,
+  "cache_write_tokens": null,
+  "completion_tokens": 1690,
+  "reasoning_tokens": 239,
+  "duration_seconds": 32.69495941698551,
+  "cost_usd": 0.1570806,
+  "cost_basis": "alias_pricing"
+}

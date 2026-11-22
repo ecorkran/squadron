@@ -1,0 +1,17 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The finding is wrong: 3 is the \"recreate\" exit code (`RECREATE_UPGRADE_EXIT_CODE = 3`), and 4 is used only for the disabled-feature case, which the docs table describes as \"The feature `rolling-updates` is disabled\". So 4 does not overlap with any upgrade verdict, and automation can tell it apart from a recreate."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.06591079999999999
+}

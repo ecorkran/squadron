@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "should_block?` matches the raw address with `where(email: email)`, and nothing on the signup path lowercases it, so changing the case of a blocked address gets past the block."
+  ],
+  "F2": [
+   "KEEP",
+   "The validator calls `should_block?`, which increments and saves `match_count`; `create` runs validation in both `user.valid?` and `user.save`, so each blocked attempt counts twice, and the non-atomic `+= 1` drops increments under concurrent requests."
+  ],
+  "F3": [
+   "KEEP",
+   "The new validator file adds `Regexp.new(\"@(#{domains})\")` with no end anchor, so `x@vaynermedia.com.attacker.example` matches a whitelist entry of `vaynermedia.com`; the flaw is older, but this change re-adds the code."
+  ],
+  "F4": [
+   "KEEP",
+   "rejectedEmails: Em.A([])` sits on the class prototype in `extend`, so every controller instance shares one array, and `pushObject` changes it for all of them."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4
+ ],
+ "cost_usd": 0.0990629
+}

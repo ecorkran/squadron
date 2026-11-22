@@ -1,0 +1,41 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "event.type:error\" in query` is a plain substring check, so `!event.type:error` passes it, and on the discover dataset that query is upsampled even though it is meant to exclude errors."
+  ],
+  "F2": [
+   "KEEP",
+   "When `transformAliasToInputFormat=1` is sent, the builder renames the result key to `upsampled_count() as count`, but the serializer looks up `count()`, so every bucket silently comes back as 0."
+  ],
+  "F3": [
+   "KEEP",
+   "_get_event_stats` checks eligibility with the outer `dataset` instead of the `scoped_dataset` or split dataset that actually runs, so error-split discover queries on metrics-enhanced widgets are never upsampled."
+  ],
+  "F4": [
+   "DROP",
+   "Rewriting only the literal `count()` is a scope decision to make explicit, not a defect in what the code does."
+  ],
+  "F5": [
+   "DROP",
+   "Leaving the function non-private gives no access to data a user couldn't already query, and the result type being \"number\" instead of \"integer\" is cosmetic."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.25922829999999997
+}

@@ -1,0 +1,40 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` is serialized to anonymous viewers of TL0 profiles even when `website` is restricted."
+  ],
+  "F2": [
+   "DROP",
+   "The missing predicate only leaves a null `website_name` key for users without a website, which is low-value."
+  ],
+  "F3": [
+   "KEEP",
+   "Saving an edited website leaves the displayed label stale because the save handler does not refresh `website_name`."
+  ],
+  "F4": [
+   "DROP",
+   "Missing test coverage and the described subdomain asymmetry do not establish a defect in the working behavior."
+  ],
+  "F5": [
+   "DROP",
+   "The parsing and string-concatenation concerns are cleanup, not merge-blocking defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.00284002
+}

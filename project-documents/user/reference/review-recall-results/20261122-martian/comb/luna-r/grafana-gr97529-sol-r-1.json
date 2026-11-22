@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Concurrent builds can overwrite an index after a write event updates another instance, losing the update."
+  ],
+  "F2": [
+   "KEEP",
+   "TotalDocs` iterates the cache without a lock while index publication writes to it, risking a concurrent-map panic."
+  ],
+  "F3": [
+   "DROP",
+   "Disabling PostgreSQL integration coverage is a test gap, not a demonstrated defect in changed runtime behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0024680199999999996
+}

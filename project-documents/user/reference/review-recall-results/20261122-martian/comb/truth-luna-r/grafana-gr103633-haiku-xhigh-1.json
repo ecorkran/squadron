@@ -1,0 +1,35 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Anonymous and renderer requests with UID `0` share denial keys, so an anonymous denial can falsely deny renderer access."
+  ],
+  "F2": [
+   "KEEP",
+   "Undelimited key fields can collide, causing a denial for one resource to deny a different resource."
+  ],
+  "F3": [
+   "DROP",
+   "This identifies a nondiscriminating test and missing coverage, not a behavior defect in the changed code."
+  ],
+  "F4": [
+   "DROP",
+   "Disabling the in-process client cache is a performance concern, not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00252562
+}

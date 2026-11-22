@@ -1,0 +1,48 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The constant pipeline signature does not bind OAuth state to the initiating session, enabling forged callbacks."
+  ],
+  "F2": [
+   "KEEP",
+   "A missing integration row bypasses sender verification and allows setup to continue without validating the installer."
+  ],
+  "F3": [
+   "KEEP",
+   "The changed check directly indexes optional sender metadata, so an active integration without it causes a 500."
+  ],
+  "F4": [
+   "KEEP",
+   "Comparing mutable, case-sensitive logins can accept a different GitHub account instead of verifying the installer\u2019s immutable ID."
+  ],
+  "F5": [
+   "KEEP",
+   "Unhandled token-exchange and user-lookup failures can produce 500s, while parse failures are silently discarded."
+  ],
+  "F6": [
+   "DROP",
+   "These are test-coverage gaps; they do not establish incorrect behavior in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.0051069800000000005
+}

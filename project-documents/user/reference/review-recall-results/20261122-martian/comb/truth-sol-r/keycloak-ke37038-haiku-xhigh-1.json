@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The lookup and returned set use authorization resource UUIDs instead of group IDs, breaking group-scoped user counts and pagination."
+  ],
+  "F2": [
+   "KEEP",
+   "Global canManage accepts VIEW grants, allowing view-only administrators to pass the top-level group creation check."
+  ],
+  "F3": [
+   "DROP",
+   "Group-specific VIEW grants do not satisfy canList; the no-argument canView checks the all-groups resource, not individual groups."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.047349499999999996
+}

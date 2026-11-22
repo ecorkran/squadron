@@ -1,0 +1,36 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "sol-r",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_item_key` calls `math.floor`/`math.ceil` on a `datetime` value (`order_by=\"-datetime\"`), so any nonempty optimized response raises `TypeError` while its cursors are built."
+  ],
+  "F2": [
+   "KEEP",
+   "organization_context.member.has_global_access` runs on every request from a non-superuser, even without `optimized_pagination`, so requests with no member (e.g. org-level API keys) now crash."
+  ],
+  "F3": [
+   "KEEP",
+   "The changed `cursors.py` now allows negative offsets, and Django's `queryset[-1:...]` raises `ValueError` instead of `BadPaginationError`, so a crafted cursor returns a 500."
+  ],
+  "F4": [
+   "DROP",
+   "This is a one-time deployment concern, not a code defect: legacy set keys expire within `redis_ttl` (1h), and `ZUNIONSTORE` accepts plain sets as inputs, so any `WRONGTYPE` errors stop on their own."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.13099170000000002
+}

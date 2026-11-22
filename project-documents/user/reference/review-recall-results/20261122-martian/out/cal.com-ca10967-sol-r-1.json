@@ -1,0 +1,210 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Missing destination calendar crashes Google Meet bookings",
+      "description": "When `destinationCalendar` is null, undefined, or empty, destructuring leaves `mainHostDestinationCalendar` undefined. Selecting Google Meet then dereferences `.integration` and throws instead of falling back to Cal Video. `handleNewBooking.ts` explicitly supplies null when neither the event type nor organizer has a destination calendar.\n\nRestore optional chaining on `mainHostDestinationCalendar?.integration` and add coverage for absent and empty destinations.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts:119"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Video references lose their credential IDs",
+      "description": "The new mapping sets `credentialId` to undefined for every non-calendar result, discarding the credential returned by `createMeeting()` in `packages/core/videoClient.ts`.\n\n`handleCancelBooking.ts` only deletes the video meeting when its reference contains a credential ID. Consequently, newly created video meetings can remain active after their bookings are cancelled. Preserve `result.credentialId` for video results and test creation followed by cancellation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts:170"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Non-Google providers route every host to the first destination",
+      "description": "`EventManager.createAllCalendarEvents()` now invokes each host\u2019s credential with the complete destination array. Office365 still unconditionally selects the first entry, so another host\u2019s credentials are used against the main host\u2019s calendar ID. This fails when that calendar is inaccessible and targets the wrong calendar when it is shared.\n\nThe same first-entry assumption exists in Lark\u2019s creation and attendee creation methods and in `packages/lib/CalendarService.ts`; CalDAV can filter out all calendars and report success without creating an event.\n\nSelect the destination matching the current credential, as the Google adapter does, or pass a destination-specific event to each adapter. Cover two-host and mixed-provider bookings.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/office365calendar/lib/CalendarService.ts:73-77"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Google update and delete fallbacks cannot select a destination",
+      "description": "The fallback runs only when `externalCalendarId` is absent, but searches for a destination whose required string `externalId` equals that absent value. It therefore cannot find a destination. Updates receive an undefined `calendarId`; the analogous deletion logic at lines 315\u2013317 silently targets `\"primary\"`.\n\nBookings without a stored external calendar ID previously fell back to the event\u2019s configured destination. Restore a meaningful fallback and test updates and deletion of a secondary-calendar event without `externalCalendarId`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:254-256"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Cancelling a recurring collective booking leaves co-host events behind",
+      "description": "Although the outer loop now processes every calendar reference and can fetch another host\u2019s credential, the recurring cancellation branch ignores that resolved credential. It loops only over the booking owner\u2019s credentials and selects only the first calendar reference from each updated booking.\n\nFor a collective booking with multiple host calendar events, this repeatedly attempts deletion of the first event while leaving the other hosts\u2019 events active. Match each updated booking\u2019s references to their credentials and delete every matching event. Add a recurring collective cancellation regression test.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:449-454"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Organization creation discards the slug when billing is disabled",
+      "description": "With `IS_TEAM_BILLING_ENABLED` false, the changed conditions now store neither `slug` nor `metadata.requestedSlug`, losing the supplied organization URL.\n\n`organizations/createTeams.handler.ts` rejects organizations lacking both fields, and `organizations/publish.handler.ts` requires `requestedSlug` in its billing-disabled path. This breaks subsequent onboarding steps. Preserve the submitted slug according to the billing configuration and cover organization creation and onboarding with billing both enabled and disabled.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151-153"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Missing destination calendar crashes Google Meet bookings",
+      "location": "packages/core/EventManager.ts:119",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Video references lose their credential IDs",
+      "location": "packages/core/EventManager.ts:170",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Non-Google providers route every host to the first destination",
+      "location": "packages/app-store/office365calendar/lib/CalendarService.ts:73-77",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google update and delete fallbacks cannot select a destination",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:254-256",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cancelling a recurring collective booking leaves co-host events behind",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:449-454",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Organization creation discards the slug when billing is disabled",
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151-153",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967",
+    "diff": "57d246df47d552209a38d3fcba638b19a91fb909...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:48:24.577498",
+  "model": "openai/gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "injected": [],
+  "files_read": [
+    "packages/core/EventManager.ts",
+    "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+    "packages/types/Calendar.d.ts",
+    "CONTRIBUTING.md",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/features/bookings/lib/handleCancelBooking.ts",
+    "packages/core/CalendarManager.ts",
+    "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "packages/app-store/larkcalendar/lib/CalendarService.ts",
+    "packages/trpc/server/routers/viewer/bookings/confirm.handler.ts",
+    "packages/core/videoClient.ts",
+    "packages/features/ee/organizations/lib/orgDomains.ts",
+    "packages/core/builders/CalendarEvent/builder.ts",
+    "packages/core/builders/CalendarEvent/class.ts",
+    "packages/emails/src/templates/BrokenIntegrationEmail.tsx",
+    "packages/types/EventManager.d.ts",
+    "packages/core/CalendarManager.test.ts",
+    "apps/web/pages/api/cron/bookingReminder.ts",
+    "apps/web/playwright/webhook.e2e.ts",
+    "packages/features/ee/payments/api/paypal-webhook.ts",
+    "packages/features/ee/payments/api/webhook.ts",
+    "packages/trpc/server/routers/viewer/bookings/editLocation.handler.ts",
+    "packages/trpc/server/routers/viewer/bookings/requestReschedule.handler.ts",
+    "packages/trpc/server/routers/viewer/organizations/createTeams.handler.ts",
+    "packages/trpc/server/routers/viewer/organizations/publish.handler.ts",
+    "packages/lib/CalendarService.ts",
+    "packages/trpc/server/routers/loggedInViewer/deleteCredential.handler.ts"
+  ],
+  "searches": [
+    "list_files * in .",
+    "grep requestedSlug|IS_TEAM_BILLING_ENABLED in packages/features/ee/organizations",
+    "list_files *test* in packages/core",
+    "grep requestedSlug|slug:.*requestedSlug in packages/features/ee/payments",
+    "grep mainHostDestinationCalendar.integration|credentialId: isCalendarType|const promises = bookingToDelete.user.credentials|const bookingRef = updBooking.references|IS_TEAM_BILLING_ENABLED \\? \\{ slug|cal.externalId === externalCalendarId|const \\[mainHostDestinationCalendar\\]|const eventsUrl in packages",
+    "grep requestedSlug in packages/trpc/server/routers/viewer/organizations"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "stop",
+  "reasoning_chars": 495,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 50324,
+  "diff_chars_injected": 50324,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "openai/gpt-6.1-sol",
+  "answering_models": [
+    "openai/gpt-6.1-sol"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "openrouter",
+  "turns": 8,
+  "prompt_tokens": 429070,
+  "cached_tokens": 334997,
+  "cache_write_tokens": null,
+  "completion_tokens": 2088,
+  "reasoning_tokens": 532,
+  "duration_seconds": 45.739366291090846,
+  "cost_usd": 0.2425257,
+  "cost_basis": "alias_pricing"
+}

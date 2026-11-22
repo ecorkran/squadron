@@ -1,0 +1,31 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache is populated before the database write, so a failed admission is bypassed on retries using the same device ID."
+  ],
+  "F2": [
+   "KEEP",
+   "Missing device IDs skip tagging and its limit check, allowing anonymous authentication without a recorded device."
+  ],
+  "F3": [
+   "KEEP",
+   "The separate count and insert operations let concurrent requests admit distinct devices beyond the configured limit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0038020700000000003
+}

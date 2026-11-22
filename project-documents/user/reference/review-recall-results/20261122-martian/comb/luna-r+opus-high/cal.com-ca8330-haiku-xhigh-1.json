@@ -1,0 +1,42 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "checkIfIsAvailable` returns `true` as soon as a slot falls inside a date override (slots.ts:133-135), before the `busy.every` check runs, so bookings and calendar events on override days no longer block slots for fixed or loose hosts."
+  ],
+  "F2": [
+   "KEEP",
+   "getWorkingHours` emits one entry per availability row, and `workingHours.find` rejects a slot if any same-weekday row doesn't contain it, so split schedules like 09-12 and 13-17 lose every slot that day."
+  ],
+  "F3": [
+   "KEEP",
+   "dateOverrides.find` uses the same \"any row doesn't contain the slot\" logic, and each override range is its own row, so two disjoint windows on one date reject every slot on that date."
+  ],
+  "F4": [
+   "DROP",
+   "the `===` check is dead but harmless, since zero-length overrides already reject slots through the start/end checks and `getSlots` makes no slots from them; the local-time formatting only misbehaves on non-UTC hosts."
+  ],
+  "F5": [
+   "KEEP",
+   "the override's day is picked from the unshifted UTC-labelled organizer time, then reduced to hour and minute after the shift, so an early-morning override for an organizer east of UTC (e.g. Kolkata 00:30) is placed on day D instead of D-1."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  6
+ ],
+ "cost_usd": 0.17280679999999998
+}

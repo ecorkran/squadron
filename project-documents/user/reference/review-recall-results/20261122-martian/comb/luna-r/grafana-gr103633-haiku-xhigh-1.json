@@ -1,0 +1,35 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Denial entries are keyed without identity type, so an anonymous denial can incorrectly block a renderer request."
+  ],
+  "F2": [
+   "KEEP",
+   "Undelimited caller-controlled fields can collide and cause a denial for one resource to block another."
+  ],
+  "F3": [
+   "DROP",
+   "The test is non-discriminating, but this is a test gap rather than a defect in the changed behavior."
+  ],
+  "F4": [
+   "DROP",
+   "Disabling the in-process client cache may affect performance, but server-side caching remains and no concrete defect is shown."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00249898
+}

@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Denial keys omit identity type, so an anonymous denial for UID 0 also denies the renderer before its wildcard grant is checked."
+  ],
+  "F2": [
+   "KEEP",
+   "Unescaped underscores let distinct name/folder pairs share a denial key, causing an allowed resource to be falsely denied."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0459307
+}

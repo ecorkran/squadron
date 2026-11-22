@@ -1,0 +1,42 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "update_last_read` can overwrite the directly saved unsubscribe level while its notification reason remains null."
+  ],
+  "F2": [
+   "KEEP",
+   "The top-level `topicUnsubscribe` route does not match the `topic/unsubscribe` template path, and the view sets no template name."
+  ],
+  "F3": [
+   "KEEP",
+   "A user without a `TopicUser` row reaches `tu.notification_level` on nil and gets a 500."
+  ],
+  "F4": [
+   "KEEP",
+   "The GET route mutates notification state, allowing a cross-site request to change it for a logged-in user."
+  ],
+  "F5": [
+   "DROP",
+   "Missing tests alone are not a defect when no incorrect behavior is established by the finding."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00800782
+}

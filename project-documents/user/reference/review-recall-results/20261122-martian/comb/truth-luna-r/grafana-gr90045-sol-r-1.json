@@ -1,0 +1,43 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The legacy goroutines derive their timeout contexts from the request context, so request cancellation can abort replication."
+  ],
+  "F2": [
+   "KEEP",
+   "Legacy Update receives the original `objInfo` and recomputes the mutation against its own stored object."
+  ],
+  "F3": [
+   "KEEP",
+   "Each write launches an independent goroutine, allowing legacy writes for the same resource to execute out of order."
+  ],
+  "F4": [
+   "KEEP",
+   "The code records several primary-storage observations as legacy, labels successful deletes with the object name, and records legacy collection deletes as storage."
+  ],
+  "F5": [
+   "KEEP",
+   "The tests share one mock between both backends and do not wait for or assert asynchronous legacy calls."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.0022502800000000003
+}

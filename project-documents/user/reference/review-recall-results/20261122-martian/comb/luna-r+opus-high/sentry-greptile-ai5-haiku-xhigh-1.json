@@ -1,0 +1,55 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 6,
+  "F6": 8,
+  "F7": 10,
+  "F8": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_multi` drops duplicate IDs and appends cache hits after the fetched items, so pairing `zip(error_ids, events.values())` can give one error another event's details."
+  ],
+  "F2": [
+   "DROP",
+   "the only caller (the frontend AI tab) never sends `field`, so this needs a hand-made request that doesn't happen."
+  ],
+  "F3": [
+   "DROP",
+   "sending `age=0` together with a timestamp is a contrived payload, and this endpoint only records metrics, so the impact is negligible."
+  ],
+  "F4": [
+   "DROP",
+   "rejecting the whole batch and using a fixed type list are deliberate design choices for an experimental endpoint, not defects."
+  ],
+  "F5": [
+   "KEEP",
+   "HIDDEN_ATTRIBUTES` is applied only after the empty-search early return, so the hidden attributes show by default and disappear only while searching, which is the opposite of what was intended."
+  ],
+  "F6": [
+   "DROP",
+   "a cross-org collision needs identical filters and an in-app org switch, and react-query's default staleTime of 0 refetches on mount, so at most stale data shows briefly."
+  ],
+  "F7": [
+   "DROP",
+   "projects are normally loaded with the organization before the replay record arrives, so at worst this is a brief, unlikely flash."
+  ],
+  "F8": [
+   "DROP",
+   "the old bold-only template already rendered user-controlled markdown such as links, and titles are capped at 50 characters, so this adds no real new injection risk."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  6
+ ],
+ "cost_usd": 0.34632
+}

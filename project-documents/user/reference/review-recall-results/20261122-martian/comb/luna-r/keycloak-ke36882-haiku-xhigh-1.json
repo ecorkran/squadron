@@ -1,0 +1,29 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Exit code 4 is distinct from the recreate verdict and the documentation explicitly identifies it as the feature-disabled case."
+  ],
+  "F2": [
+   "DROP",
+   "Missing assertions are a test-coverage gap, not evidence of a defect in paths that are already implemented."
+  ],
+  "F3": [
+   "KEEP",
+   "The docs falsely say the Operator fails without the feature and omit that custom images must include the build-time feature."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  3
+ ],
+ "cost_usd": 0.00468992
+}

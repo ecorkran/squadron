@@ -1,0 +1,41 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "RPCs no longer check the stopped state and can reach the backend after `Stop()`."
+  ],
+  "F2": [
+   "KEEP",
+   "Concurrent builds for one key can create colliding file indexes or replace a cached index without closing it."
+  ],
+  "F3": [
+   "KEEP",
+   "TotalDocs` iterates the cache without a lock while startup event handling can add entries."
+  ],
+  "F4": [
+   "DROP",
+   "Skipping the Postgres integration test reduces coverage but is not a behavior defect."
+  ],
+  "F5": [
+   "DROP",
+   "The reported worker race is pre-existing and concerns code the change did not touch."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0024038600000000003
+}

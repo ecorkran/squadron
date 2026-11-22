@@ -1,0 +1,19 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "sol",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The light-theme author links are rendered as low-contrast `#bdbdbd` against a light background."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00085179
+}

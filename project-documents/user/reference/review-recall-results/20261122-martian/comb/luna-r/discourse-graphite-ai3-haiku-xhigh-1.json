@@ -1,0 +1,40 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Raw case-sensitive lookup lets mixed-case variants bypass the blocklist."
+  ],
+  "F2": [
+   "KEEP",
+   "Validation runs during both `valid?` and `save`, incrementing the match counter twice per blocked signup."
+  ],
+  "F3": [
+   "DROP",
+   "The finding says the unanchored restriction regex predates this change."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests alone do not establish a defect that should block merging."
+  ],
+  "F5": [
+   "DROP",
+   "The shared array affects only additional controller instances, with no demonstrated impact in the singleton app."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00209968
+}

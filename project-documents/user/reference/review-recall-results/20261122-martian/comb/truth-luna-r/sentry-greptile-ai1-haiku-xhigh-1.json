@@ -1,0 +1,69 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_item_key` applies `math.floor`/`ceil` to the datetime field, causing non-empty optimized pages to fail."
+  ],
+  "F2": [
+   "KEEP",
+   "enable_advanced` dereferences `organization_context.member` before checking whether the optimized path is enabled."
+  ],
+  "F3": [
+   "KEEP",
+   "Negative offsets reach a negative-start QuerySet slice on the advanced branch, which Django rejects."
+  ],
+  "F4": [
+   "KEEP",
+   "The changed base paginator clamps negative next-cursor offsets, altering behavior for its other paginator subclasses."
+  ],
+  "F5": [
+   "KEEP",
+   "value_from_cursor` returns the epoch-millisecond integer unchanged for a datetime filter."
+  ],
+  "F6": [
+   "KEEP",
+   "The advanced branch accepts negative client cursor offsets and passes them to a slice that rejects them."
+  ],
+  "F7": [
+   "DROP",
+   "The finding concerns class structure and optimization claims without identifying a separate behavior defect."
+  ],
+  "F8": [
+   "DROP",
+   "Inaccurate comments and docstrings are not behavior defects."
+  ],
+  "F9": [
+   "DROP",
+   "Missing tests alone do not establish a behavior defect."
+  ],
+  "F10": [
+   "DROP",
+   "Whitespace and blank-line issues are formatting concerns, not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.00488581
+}

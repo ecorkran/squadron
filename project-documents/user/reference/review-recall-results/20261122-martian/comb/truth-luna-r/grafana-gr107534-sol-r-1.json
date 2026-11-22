@@ -1,0 +1,19 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Split and shard execution interpolate targets before `DataSourceWithBackend.query()` interpolates them again, so variable values containing another variable reference can change the executed query."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.005527939999999999
+}

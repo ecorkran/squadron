@@ -1,0 +1,60 @@
+{
+ "case": "cal.com-ca10600",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The password check at line 121 is skipped whenever `totpCode` is non-empty, and the new backup-code branch at line 131 never checks the password, so email + any `totpCode` + a valid backup code logs in without a password."
+  ],
+  "F2": [
+   "KEEP",
+   "Codes are read at line 73, nulled in memory and written back with a plain `update` (lines 148\u2013156), so two concurrent logins can both use the same code or undo each other's consumption."
+  ],
+  "F3": [
+   "KEEP",
+   "req.body.backupCode.replaceAll` throws a TypeError (500) when the body value is a non-string, and with no trim or lowercase, uppercase or space-padded input fails against the lowercase hex codes (`setup.ts:61`), even though the placeholder shows `XXXXX-XXXXX`."
+  ],
+  "F4": [
+   "KEEP",
+   "Only the Close button calls `onEnable`, and the parent's `onOpenChange` just flips the modal state, so pressing Escape or clicking outside on the new backup-codes step never invalidates `viewer.me` and loses the codes."
+  ],
+  "F5": [
+   "KEEP",
+   "PasswordField` spreads `{...props}` after its own computed `type`, so the caller's `type=\"password\"` always wins and the reveal toggle does nothing."
+  ],
+  "F6": [
+   "KEEP",
+   "The form has `noValidate` and the zod schema ignores `backupCode`, so an empty code goes to the TOTP branch, which throws `SecondFactorRequired`; the client handles that by setting `twoFactorRequired`, which is already true, and shows no error."
+  ],
+  "F7": [
+   "KEEP",
+   "The `navigator.clipboard.writeText` promise is not awaited or caught, so the success toast shows even when the write fails, and the rejection goes unhandled."
+  ],
+  "F8": [
+   "DROP",
+   "The component's function name and the missing `htmlFor` are naming and accessibility-labeling points, not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.23797610000000002
+}

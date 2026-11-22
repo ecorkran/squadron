@@ -1,0 +1,31 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The optimized paginator applies floor/ceil directly to the datetime field, causing a TypeError for nonempty results."
+  ],
+  "F2": [
+   "KEEP",
+   "The endpoint dereferences the optional member unconditionally, so requests without a membership raise AttributeError."
+  ],
+  "F3": [
+   "KEEP",
+   "With advanced features enabled, a negative cursor offset is used as a Django queryset slice bound, which raises ValueError."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0030085999999999997
+}

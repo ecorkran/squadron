@@ -1,0 +1,24 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "optimized_image.rb:149` redefines `downsize` with four parameters, which silently replaces the five-parameter version at line 145, so the five-argument call at `resize_emoji.rb:14` now raises `ArgumentError`."
+  ],
+  "F2": [
+   "DROP",
+   "Reusing the animated-thumbnail setting is a design choice, not a defect. The gifsicle `80%` point is only a hedged aside and isn't what the finding is about."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.06490370000000001
+}

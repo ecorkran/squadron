@@ -1,0 +1,34 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 5,
+  "F4": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "mp_context.Process` from the spawn context creates a `SpawnProcess`, and that class does not inherit from `multiprocessing.Process`, so the `isinstance` check fails and `kill()` never runs; a hung flusher keeps running next to its replacement on the same shards."
+  ],
+  "F2": [
+   "DROP",
+   "True that the patched `time.sleep` makes the added sleep a no-op, but it only affects timing in a test, not the code being shipped."
+  ],
+  "F3": [
+   "DROP",
+   "Rejecting 0 or negative values for an operator CLI flag that defaults to 1 is hardening against misconfiguration, not a defect in normal use."
+  ],
+  "F4": [
+   "DROP",
+   "Inconsistent metric tag names and meanings are an observability tidy-up and cause no wrong behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.1814758
+}

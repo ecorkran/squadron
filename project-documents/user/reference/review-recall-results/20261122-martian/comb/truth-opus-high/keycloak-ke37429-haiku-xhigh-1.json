@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "haiku-xhigh",
+ "comb": "opus-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The change set Lithuanian `totpStep1` (account, line 101) and `loginTotpStep1` (login, line 71) to Italian text (\"Installa una delle seguenti applicazioni sul tuo cellulare:\"), so Lithuanian users get the wrong language."
+  ],
+  "F2": [
+   "KEEP",
+   "The `zh_CN` `totpStep1` at line 112 uses Traditional characters (\u624b\u6a5f/\u5b89\u88dd/\u61c9\u7528\u7a0b\u5f0f), while `totpStep2` in the same file and the `zh_CN` login string are Simplified."
+  ],
+  "F3": [
+   "KEEP",
+   "ANCHOR_PATTERN` `</?a[^>]*>` also matches `<abbr>`, `<aside>` and similar tags, so `santizeAnchors` removes them before the policy check whenever English has the identical tag; English files are checked against themselves, so such tags pass the check there too."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.12333559999999999
+}

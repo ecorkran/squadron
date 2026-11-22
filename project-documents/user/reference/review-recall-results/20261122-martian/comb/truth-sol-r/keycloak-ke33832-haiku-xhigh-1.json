@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "haiku-xhigh",
+ "comb": "sol-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The CLI classloader selects either FIPS or default jars before detection, so the claimed ambiguous CLI selection does not occur."
+  ],
+  "F2": [
+   "KEEP",
+   "Malformed DER can cause unchecked exceptions, bypass sequence boundaries, or silently truncate oversized integers."
+  ],
+  "F3": [
+   "KEEP",
+   "The method violates its provider contract by returning a default KeyStore provider, which BouncyIntegration then caches."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2
+ ],
+ "cost_usd": 0.042817299999999996
+}

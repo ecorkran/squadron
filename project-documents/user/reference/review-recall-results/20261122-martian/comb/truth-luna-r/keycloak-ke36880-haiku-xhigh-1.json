@@ -1,0 +1,64 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "With both flags enabled, the removal listener selects V2 management and calls a method that throws."
+  ],
+  "F2": [
+   "KEEP",
+   "The V2 token-exchange method throws when the inter-client exchange path calls it."
+  ],
+  "F3": [
+   "KEEP",
+   "Per-client resources lack the `Clients` type, so this lookup misses their grants and can return `Clients` as a client ID."
+  ],
+  "F4": [
+   "KEEP",
+   "Initialization skips existing admin-permissions clients, leaving the new type and scopes unavailable and allowing a null resource to be dereferenced."
+  ],
+  "F5": [
+   "DROP",
+   "The finding concerns inaccurate Javadoc; it does not establish a behavior defect."
+  ],
+  "F6": [
+   "KEEP",
+   "In V2-only mode the removal listener is gated off, leaving V2 client resources and their policies behind after client deletion."
+  ],
+  "F7": [
+   "KEEP",
+   "The client resource-name branch is absent, so client resources fall through to a display name that is not set."
+  ],
+  "F8": [
+   "DROP",
+   "Dead code and unused imports are not behavior defects."
+  ],
+  "F9": [
+   "DROP",
+   "Missing test coverage is not itself a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5,
+  6
+ ],
+ "cost_usd": 0.008238170000000001
+}

@@ -1,0 +1,77 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Retry bookkeeping can abort the remaining batch",
+      "description": "The update inside `catch` can itself throw. For example, `deleteScheduledSMSReminder` can delete a reminder while this handler is scheduling it; both the success update and this retry update then target a missing row. The second exception escapes the loop, skipping all remaining reminders and the original error log. Make retry bookkeeping tolerate deleted records and isolate its failures so processing continues.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:190-197"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Retry bookkeeping can abort the remaining batch",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:190-197",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "diff": "b521f3a8ec35ec1e90b28075046b369b6eff5554...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T14:57:53.997611",
+  "model": "gpt-6.1-sol",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": null,
+  "tool_calls_made": null,
+  "injected": [],
+  "read_record": "unreported",
+  "categories_normalized": true,
+  "stop_reason": null,
+  "reasoning_chars": null,
+  "failed_tool_calls": null,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "n/a (non-SDK)",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 2947,
+  "diff_chars_injected": 2947,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "gpt-6.1-sol",
+  "answering_models": [],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "openai-oauth",
+  "turns": 1,
+  "prompt_tokens": 41996,
+  "cached_tokens": 39808,
+  "cache_write_tokens": null,
+  "completion_tokens": 384,
+  "reasoning_tokens": 176,
+  "duration_seconds": 50.21371391694993,
+  "cost_usd": 0.0121968,
+  "cost_basis": "alias_pricing"
+}
