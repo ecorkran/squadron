@@ -14,16 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261121
 dateUpdated: 20261121
-reviewedSha: ce420b84bf669073152217ee30b1092ef108c57c
-reviewedBlob: 09b713cd9fcdc3d26ce52f53fa18db1ae6cb8d27
+reviewedSha: 325c5e7be2330ed92777d2b08e1befd6842bb66f
+reviewedBlob: c3812acb117e898f47ac4f7db01ca0b9531e72ec
 reviewedBlobCurrent: false
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 82
+toolCallsMade: 94
 injected:
   - key: input
     path: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md"
-    chars: 39534
-    sha256: 90d95936ad03c6890a98131ae9c3e43004ed3c43ddb0a293c6c343a22dec9b8d
+    chars: 49626
+    sha256: 6ad59eec56c54410975d7e834e02e3a0913cff60f2c027b4c51efaa514d0e9ba
     whole: true
   - key: against
     path: "project-documents/user/architecture/420-arch.model-benchmark.md"
@@ -31,254 +32,237 @@ injected:
     sha256: 3b909db8ad85dd24d2d2195772f10ecf022a254653af1faaa958b1f54dc13b07
     whole: true
 filesRead:
-  - "project-documents/user/slices/430-slice.real-bug-review-recall.md"
-  - "src/squadron/metrology/recall_case_models.py"
   - "src/squadron/benchmark/recall/kinds.py"
+  - "src/squadron/benchmark/recall/stage_identity.py"
+  - "src/squadron/benchmark/recall/scoring.py"
+  - "src/squadron/benchmark/recall/hit_rule.py"
+  - "src/squadron/benchmark/recall/label_candidates.py"
+  - "src/squadron/metrology/recall_case_models.py"
   - "src/squadron/metrology/recall_run_models.py"
   - "src/squadron/metrology/recall_label_models.py"
-  - "src/squadron/benchmark/recall/hit_rule.py"
-  - "src/squadron/benchmark/recall/stage_identity.py"
   - "src/squadron/benchmark/recall/label_precedence.py"
-  - "src/squadron/benchmark/recall/review_sandbox.py"
+  - "src/squadron/benchmark/recall/case_models.py"
+  - "src/squadron/recipes/decisions.py"
+  - "src/squadron/recipes/stage_config.py"
   - "src/squadron/replay/history_free_sandbox.py"
   - "src/squadron/review/task_gate.py"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/cases.tsv"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-320-arch-fable-medium-1.json"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-197-tasks-fable-medium-1.json"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/grade/map.json"
-  - "src/squadron/benchmark/recall/hand_run_import.py"
-  - "src/squadron/benchmark/recall/import_plan.py"
-  - "src/squadron/benchmark/recall/hand_run_reviews.py"
-  - "src/squadron/benchmark/recall/review_output.py"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-320-arch/r01.json"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-320-arch/flaws.json"
-  - "tests/benchmark/recall/test_decisions.py"
-  - "tests/benchmark/recall/test_report_json_schema.py"
-  - "src/squadron/benchmark/recall/scoring.py"
-  - "src/squadron/data/templates/comb.yaml"
-  - "src/squadron/review/review_client.py"
+  - "src/squadron/benchmark/recall/review_sandbox.py"
+  - "src/squadron/cli/commands/review.py"
   - "src/squadron/cli/commands/benchmark_recall_stage.py"
-  - "src/squadron/benchmark/recall/real_work.py"
+  - "src/squadron/benchmark/recall/stage_command.py"
+  - "src/squadron/recipes/comb_call.py"
+  - "src/squadron/benchmark/recall/import_plan.py"
+  - "src/squadron/benchmark/recall/hand_run_import.py"
+  - "src/squadron/benchmark/recall/review_output.py"
+  - "src/squadron/benchmark/recall/hand_run_reviews.py"
+  - "src/squadron/benchmark/recall/hand_run_labels.py"
+  - "project-documents/user/reference/review-recall-results/20261116-mined/cases.tsv"
+  - "project-documents/user/reference/review-recall-results/20261116-mined/against.tsv"
+  - "project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-320-arch/hits.json"
+  - "project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-320-arch/flaws.json"
+  - "project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-320-arch/r01.json"
+  - "src/squadron/benchmark/recall/stage_runner.py"
+  - "src/squadron/benchmark/recall/run_plan.py"
+  - "src/squadron/benchmark/recall/stage_ingest.py"
+  - "src/squadron/benchmark/recall/case_intake.py"
+  - "tests/benchmark/recall/test_report_json_schema.py"
+  - "project-documents/user/reference/review-recall-recipes/haiku-opus.yaml"
+  - "project-documents/user/reference/review-recall-recipes/luna.yaml"
+  - "src/squadron/data/templates/comb.yaml"
   - "src/squadron/benchmark/recall/live_services.py"
+  - "src/squadron/benchmark/recall/run_loop.py"
+  - "tests/benchmark/recall/test_kinds.py"
+  - "project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-197-tasks-fable-medium-1.json"
+  - "project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-320-arch-fable-medium-1.json"
+  - "src/squadron/benchmark/recall/run_bound.py"
+  - "src/squadron/benchmark/recall/scoring_select.py"
   - "project-documents/user/reference/review-recall-results/RESULTS.md"
-  - "src/squadron/benchmark/recall/leak_check.py"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/prepare.py"
-  - "project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-400-arch/hits.json"
 searches:
-  - "list_files src/squadron/benchmark/**/*.py in ."
-  - "list_files project-documents/user/slices/430* in ."
-  - "list_files project-documents/user/reference/review-recall-results/* in ."
-  - "list_files project-documents/user/reference/review-recall-recipes/* in ."
-  - "list_files **/templates/**/*.yaml in ."
-  - "list_files tests/benchmark/recall/**/* in ."
   - "list_files src/squadron/benchmark/recall/**/*.py in ."
-  - "list_files src/squadron/metrology/recall*.py in ."
-  - "grep ^#+ |^### D1[0-9]|^### D[0-9] in project-documents/user/slices/430-slice.real-bug-review-recall.md"
-  - "grep STAGE_TEMPLATES|live_stage_config|LiveStageResolver|\\.resolve\\( in /Users/manta/source/repos/manta/squadron/src"
-  - "grep def builtin_template_hash|COMB_TEMPLATE_NAME\\s*=|def stage_config|def stage_config\\( in /Users/manta/source/repos/manta/squadron/src/squadron/recipes"
-  - "grep @.*command|add_parser|\\\"--against\\\"|'--against'|\\\"--no-save\\\"|\\\"--output-path\\\"|\\\"--cwd\\\"|\\\"--model\\\"|\\\"--output\\\" in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands"
-  - "list_files src/squadron/cli/commands/review*.py in ."
-  - "grep TASK_GATE_MODEL|class TemplateOutput|DECISIONS\\b|def run_review_with_profile in /Users/manta/source/repos/manta/squadron/src/squadron"
-  - "grep template|task_gate|TASK_GATE in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/review.py"
-  - "grep \\\"arch\\\"|\\\"slice\\\"|\\\"tasks\\\"|BuiltinReviewTemplate\\.(ARCH|SLICE|TASKS) in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/review.py"
-  - "list_files * in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined"
-  - "list_files project-documents/user/reference/review-recall-results/20261116-mined/grade*/* in ."
-  - "grep ^  \"(model|profile|template_name|effort|tools_given|max_output_tokens|squadron_version|tool_calls_made|input_files|verdict_source|cost_usd|template_hash|effort_sent)\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-320-arch-fable-medium-1.json"
-  - "grep ^  \"(model|profile|template_name|effort|tools_given|max_output_tokens|squadron_version|tool_calls_made|input_files|verdict_source|cost_usd|template_hash|effort_sent)\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-197-tasks-fable-medium-1.json"
-  - "list_files * in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/grade"
-  - "list_files * in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/grade5"
-  - "grep ^#+ .*16|12\\.7|14\\.0|19\\.7 in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/RESULTS.md"
-  - "list_files **/hits.json in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined"
-  - "grep SCORED_SEVERITIES|DECIDED_MISS|GateResult|locations=\\(\\)|locations=\\[\\]|\"locations\": \\[\\]|base=None|ValidationError|recall_fetch_timeout_s|review_timeout_s|auth_probe_timeout_s in /Users/manta/source/repos/manta/squadron"
-  - "grep keys|== \\{|set\\(|sorted\\(|schema|top_level|assert .*\\.keys\\(\\) in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall/test_report_json_schema.py"
-  - "grep glob|rglob|user/reference|review-recall-cases in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall"
-  - "grep gate\\(|locations|CANDIDATE|DECIDED|base=|base\\\"|RecallCaseKind|StageKind|LabelerKind|register_kind|registered_kind|get_kind|SCORED|STAGE_TEMPLATES|Cannot|ValidationError in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall"
-  - "grep SCORED_SEVERITIES\\s*=|^def run_bound|^def run_plan|^def run_loop|^def stage_runner|class ReviewBudget|class StageIdentityResolver|def parse_decisions|class LeakVerdict|def build_leak_rules|def run_auth_check|def _stage|\"_stage\"|_auth-probe|_auth_probe in /Users/manta/source/repos/manta/squadron/src"
-  - "grep GIT_AUTHOR_DATE|GIT_COMMITTER_DATE|case_file|write_text|def build|commit in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall/fixtures/bug_repo/build.py"
-  - "grep SCORED_SEVERITIES|resolve\\(|StageIdentityResolver in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall"
-  - "grep def finding_id_at|return f\"F|F\\{|ConfigFor\\s*=|class ConfigFor|def run_comb_stage|def _sandbox|SandboxError in /Users/manta/source/repos/manta/squadron/src/squadron/recipes/comb_call.py"
-  - "grep SandboxError|ConfigFor|harness_failure|HARNESS_FAILURE in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall"
-  - "list_files *-arch-*.json in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out"
-  - "grep version|def |unchanged|no change|identical in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall/case_intake.py"
-  - "grep version|RecallCaseSet\\(|def _write|def add|def cases_add|no new version|already in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands"
-  - "grep \\b(hy4|mimo|luna-r|fable-medium|opus-high|fable-haiku)\\b in /Users/manta/source/repos/manta/squadron/src/squadron"
-  - "grep LeakInputs\\(|repo_root=|distribution_name=|host_owner= in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall"
-  - "grep ^\\[?(hy4|mimo|luna-r|fable-medium|opus-high|haiku-xhigh|fable|luna|sol)\\]?|^(hy4|mimo|luna-r|fable-medium|opus-high)\\s*=|\\[aliases\\.(hy4|mimo|luna-r|fable-medium|opus-high)\\] in /Users/manta/source/repos/manta/squadron/src/squadron/data/models.toml"
-  - "list_files .gitattributes in /Users/manta/source/repos/manta/squadron"
-  - "list_files .gitattributes in /Users/manta/source/repos/manta/context-forge"
-  - "list_files .gitattributes in /Users/manta/source/repos/manta/migratory"
-  - "grep \"severity\": \"PASS\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out"
-  - "grep \"i\": (\\d+) in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-320-arch/hits.json"
-  - "grep \"severity\": \"PASS\"|\"title\":  in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-400-arch-fable-medium-1.json"
-  - "grep squadron-400-arch/ in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/grade/map.json"
-  - "grep \"severity\": \"PASS\"|\"title\":  in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-360-arch-fable-medium-2.json"
-  - "grep squadron-360-arch/ in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/grade2/map.json"
+  - "list_files tests/benchmark/recall/**/* in ."
+  - "list_files src/squadron/recipes/**/*.py in ."
+  - "list_files src/squadron/replay/history_free_sandbox.py in ."
+  - "list_files src/squadron/review/task_gate.py in ."
+  - "grep SCORED_SEVERITIES|class Severity|NOTE\\s*=|TASK_GATE_MODEL in /Users/manta/source/repos/manta/squadron/src"
+  - "grep \"(arch|slice|tasks|code)\"|--against|--no-save|--output-path|--cwd|def review_(arch|slice|tasks|code)|@review_app|review_app\\.command in /Users/manta/source/repos/manta/squadron/src/squadron/cli"
+  - "list_files src/squadron/data/templates/*.yaml in ."
+  - "grep DECISIONS|def run_review_with_profile|class TemplateOutput|class BuiltinReviewTemplate|ARCH\\s*=|SLICE\\s*=|TASKS\\s*=|CODE\\s*= in /Users/manta/source/repos/manta/squadron/src"
+  - "grep recall_fetch_timeout_s|recall_timeout|max_cost|call_cost in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "grep class DocumentKind|DocumentKind\\b in /Users/manta/source/repos/manta/squadron/src"
+  - "grep parse_decisions\\(|call_comb\\(|run_comb_stage\\(|live_stage_config\\(|STAGE_TEMPLATES|config_for\\(|ConfigFor|\\.resolve\\( in /Users/manta/source/repos/manta/squadron"
+  - "grep BENCHMARK_RECALL_FETCH_TIMEOUT_KEY\\s*=|recall_fetch_timeout_s in /Users/manta/source/repos/manta/squadron/src"
+  - "grep parse_decisions\\(|call_comb\\(|run_comb_stage\\(|live_stage_config\\(|STAGE_TEMPLATES|config_for\\b|ConfigFor\\b in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "grep parse_decisions|live_stage_config|STAGE_TEMPLATES|config_for|ConfigFor|StageIdentityResolver|ImportOnlyResolver|StubKind|register_kind|scoring_support in /Users/manta/source/repos/manta/squadron/tests"
+  - "list_files project-documents/user/reference/review-recall-results/20261116-mined/**/*.{json,tsv,md,yaml} in ."
+  - "list_files project-documents/user/reference/review-recall-results/20261116-mined/grade*/**/map.json in ."
+  - "list_files project-documents/user/reference/review-recall-results/20261116-mined/grade/squadron-320-arch/* in ."
+  - "list_files project-documents/user/reference/review-recall-results/20261116-mined/* in ."
+  - "grep . in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/grade/map.json"
+  - "grep \"hits\":\\{\"r in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined"
+  - "grep .{0,200}\"hits\":\\{\"r in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/grade"
+  - "grep \\.base\\b|\\.head\\b|case\\.base|case\\.head in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "list_files project-documents/user/reference/review-recall-recipes/* in ."
+  - "grep ^\\[?(opus-high|fable-medium|fable-haiku|hy4|mimo|luna-r|haiku-xhigh|sonnet-medium|sol)\\]?\\s*$|^(opus-high|fable-medium|fable-haiku|hy4|mimo|luna-r|haiku-xhigh)\\s*= in /Users/manta/source/repos/manta/squadron"
+  - "grep luna-r|fable-medium|opus-high|\\bhy4\\b|\\bmimo\\b|fable-haiku in /Users/manta/source/repos/manta/squadron/src"
+  - "grep ^\\s*\\[?\\s*(luna-r|fable-medium|opus-high|hy4|mimo|fable-haiku|haiku-xhigh|sol|luna|neon-medium|neon)\\s*\\]?\\s*(=|$)|^\\[(models|aliases)\\.(luna-r|fable-medium|opus-high|hy4|mimo|haiku-xhigh|neon-medium)\\] in /Users/manta/source/repos/manta/squadron/src/squadron/data/models.toml"
+  - "grep ^\\[[^\\]]+\\] in /Users/manta/source/repos/manta/squadron/src/squadron/data/models.toml"
+  - "grep allowed_tools|model_allows_tools|tools in /Users/manta/source/repos/manta/squadron/src/squadron/review/review_client.py"
+  - "grep class TemplateOutput|output:|DECISIONS|def get_template|def load_all_templates|class ReviewTemplate|tools: in /Users/manta/source/repos/manta/squadron/src/squadron/review/templates/__init__.py"
+  - "list_files src/squadron/cli/commands/benchmark_recall*.py in ."
+  - "grep class ReviewBudget|def run_bound|def plan_bound|call_cost|max_plan_calls|def .*bound in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall/run_bound.py"
+  - "grep ReviewBudget|class .*Budget in /Users/manta/source/repos/manta/squadron/src"
+  - "grep def run_loop|def run_plan|class .*Sandbox|def .*sandbox|KindSandboxFactory|SandboxFactory in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall/run_loop.py"
+  - "grep recipe_outputs\\(|undecided_candidates\\(|reviewer_output\\(|label_candidates|scored_severities|SCORED_SEVERITIES in /Users/manta/source/repos/manta/squadron/tests"
+  - "grep has no proof|no locations|locations=\\(\\)|locations=\\[\\]|gate\\(|CANDIDATE|DECIDED_MISS|def test_.*(bug|location) in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall"
+  - "grep \"(squadron_version|model|template_name|profile|max_output_tokens|tools_given|effort)\": in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out/squadron-197-tasks-fable-medium-1.json"
+  - "grep \"squadron_version\": \"[^\"]*\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out"
+  - "grep \"squadron_version\": \"0\\.24\\.(2[0-9]|30|3[2-9])\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out"
+  - "grep \"squadron_version\": \"0\\.24\\.31\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out"
+  - "grep version|No changes|def cases_add|def add_cases|next_version|case_set_version in /Users/manta/source/repos/manta/squadron/src/squadron/cli/commands/benchmark_recall.py"
+  - "grep version|No changes|def |identical|unchanged in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall/import_writer.py"
+  - "grep ^#+ .*16|fable-medium \\||haiku-xhigh \\||opus-high \\| in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/RESULTS.md"
+  - "grep recipe_outputs\\(|undecided_candidates\\(|reviewer_output\\(|matching_reviews\\(|matching_chains\\(|entry_matches\\(|resolved_labels\\( in /Users/manta/source/repos/manta/squadron/src/squadron"
+  - "grep \"model\": \"squadron-task-gate\" in /Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/out"
+  - "list_files project-documents/user/reference/review-recall-results/20261116-mined/out/*-tasks-{fable-high,luna-r-high,terra,terra-r,sol,deepseek4-flash}-*.json in ."
+  - "grep run_comb_stage|call_comb|parse_decisions|comb_call|recipes\\.decisions|reviewer_output in /Users/manta/source/repos/manta/squadron/tests"
+  - "grep --diff|--template|--model|invoke\\(|def test_|_stage in /Users/manta/source/repos/manta/squadron/tests/benchmark/recall/test_stage_command.py"
+  - "grep def leak_judgeable|def is_plan_billed|CONFINED|confined|jailed in /Users/manta/source/repos/manta/squadron/src/squadron/benchmark/recall"
 sectionsInDocument: 41
-sectionsCovered: 30
+sectionsCovered: 40
 sectionsNotCovered:
-  - "D1 \u2014 A document case is the reviewed document, its commit and its verified flaws"
-  - "D2 \u2014 Three kinds, one implementation, and the kind carries its traits"
-  - "D3 \u2014 The sandbox is the reviewed tree with saved reviews removed and no history"
-  - "D4 \u2014 A bug with no locations is not gated"
-  - "D5 \u2014 Document kinds score NOTE findings"
-  - "D6 \u2014 One kind per case set"
-  - "D7 \u2014 Import of the mined review outputs"
-  - "D8 \u2014 Import of the grading passes: the first pass to grade a review wins"
   - "D9 \u2014 `match`: an agent matches findings to flaws, blind, for document kinds"
-  - "D10 \u2014 Failure modes and how each is observed"
-  - "D11 \u2014 More architecture cases are mined by hand and added as files (#373)"
 effort: xhigh
-turns: 83
-promptTokens: 6018624
-cachedTokens: 5736145
-cacheWriteTokens: 282411
-completionTokens: 162087
-durationSeconds: 733.7
-costUsd: 0.838514
+turns: 95
+promptTokens: 7564882
+cachedTokens: 7272801
+cacheWriteTokens: 291999
+completionTokens: 182802
+durationSeconds: 808.8
+costUsd: 1.000682
 costBasis: provider
 runId: run-20261121-p4-9ad65e46
 squadronVersion: 0.24.37
 findings:
   - id: F001
     severity: fail
-    category: correctness
-    summary: "`--recheck` cannot \"change no score\" under the precedence rule the design states"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:257-260"
+    category: architecture
+    summary: "The match stage cannot run on the loop, stage runner and ingest the design says it reuses"
+    location: "src/squadron/benchmark/recall/run_loop.py:211"
   - id: F002
     severity: fail
-    category: architecture-alignment
-    summary: "Document flaws with no later commit contradict the architecture's ground-truth rule"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:148"
+    category: state-management
+    summary: "Agent labels have no exit, and two agent verdicts for one finding have no rule"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:285"
   - id: F003
     severity: concern
-    category: correctness
-    summary: "The matcher prompt uses one `F` namespace for both findings and flaws"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:250-253"
+    category: integration
+    summary: "The case-file loader refuses the design's YAML, and D1 does not say which spec loads it"
+    location: "src/squadron/benchmark/recall/case_models.py:95"
   - id: F004
     severity: concern
-    category: architecture-alignment
-    summary: "The document sandbox departs from 430 D7 and the 420 amendment without saying so"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:196-199"
+    category: data-model
+    summary: "`source` and `base` are specified inconsistently, and an optional `base` breaks pyright at its call sites"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:157"
   - id: F005
     severity: concern
     category: integration
-    summary: "`report --json` gains fields in a schema test that is pinned for slice 433"
-    location: "tests/benchmark/recall/test_report_json_schema.py:7-17"
+    summary: "The design changes the parser that production recipes use without listing the production comb path"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:114"
   - id: F006
     severity: concern
-    category: under-specification
-    summary: "The changed-module table omits the call sites that carry the stage kind"
-    location: "src/squadron/benchmark/recall/run_plan.py:33"
+    category: architecture
+    summary: "The generalised parser cannot express the matcher's output as designed"
+    location: "src/squadron/recipes/decisions.py:31"
   - id: F007
     severity: concern
-    category: consistency
-    summary: "Scored severities are defined twice, and one consumer is missing from the change list"
-    location: "src/squadron/benchmark/recall/real_work.py:18"
+    category: architecture
+    summary: "The matcher would get read tools through the comb path"
+    location: "src/squadron/recipes/comb_call.py:80"
   - id: F008
     severity: concern
     category: integration
-    summary: "Integration calls the 430 changes \"additive\"; several are signature or type changes"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:346"
+    summary: "The template and scored severities are not threaded through the matching helpers"
+    location: "src/squadron/benchmark/recall/scoring_select.py:49"
   - id: F009
     severity: concern
-    category: duplication
-    summary: "A second lenient line parser duplicates `parse_decisions`"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:253"
+    category: testing
+    summary: "The test changes named in the design are incomplete, and existing tests it says keep passing will fail"
+    location: "tests/benchmark/recall/test_stage_command.py:61"
   - id: F010
     severity: concern
-    category: testing
-    summary: "Matcher fixtures placed in the existing decisions folder would break a comb test"
-    location: "tests/benchmark/recall/test_decisions.py:77-83"
+    category: integration
+    summary: "`plan_import(results_dir, context, plan)` cannot express the code plan's overrides step"
+    location: "src/squadron/benchmark/recall/hand_run_import.py:24"
   - id: F011
     severity: concern
-    category: error-handling
-    summary: "Resume re-spends on every partial or failed matcher call"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:250-255"
+    category: consistency
+    summary: "D8's first-pass rule reverses 430's grading import and duplicates its conflict code"
+    location: "src/squadron/benchmark/recall/hand_run_labels.py:7"
   - id: F012
     severity: concern
-    category: state
-    summary: "Labels and the match entry are written separately, so a crash between them loses the call"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:254-258"
+    category: architecture
+    summary: "Live gate-only entries would be sent to the matcher"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:268"
   - id: F013
     severity: concern
-    category: architecture-alignment
-    summary: "The matcher's identity is its alias, and mixed matchers are not flagged"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:254"
+    category: operator-walkthrough
+    summary: "Walkthrough step 6 cannot run as written"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:502"
   - id: F014
     severity: concern
-    category: architecture-alignment
-    summary: "Absent grader keys are recorded as MISS, which the \"Absent is not zero\" principle rules out"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:239"
+    category: operator-walkthrough
+    summary: "Walkthrough step 1 cannot show what its expectation promises"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:458"
   - id: F015
     severity: concern
-    category: architecture-alignment
-    summary: "Agent-matched hits enter the primary recall with no separate reporting or threshold"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:262"
+    category: architecture
+    summary: "Proofless flaws weaken the ground-truth rule the architecture names, and the report does not show them"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:155"
   - id: F016
     severity: concern
-    category: scope
-    summary: "Arch mining is open-ended human work inside an implementation task, and 430 D13 does not cover it"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:289"
+    category: architecture
+    summary: "Counting absent keys as misses runs against \"absent is not zero\" and narrows recall ranges"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:253"
   - id: F017
     severity: concern
-    category: operability
-    summary: "Walkthrough step 4 asks to inspect a sandbox that is removed on exit"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:429"
+    category: nfr
+    summary: "Record size is not restated, and document findings are not short"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:375"
   - id: F018
     severity: concern
-    category: operability
-    summary: "The fixture's commit shas are unstable, so the committed case folder cannot match a fresh build"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:422-423"
+    category: scope
+    summary: "Three mechanisms have no consumer and can be cut"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:297"
   - id: F019
     severity: concern
-    category: error-handling
-    summary: "`exclude` paths are not checked when cases are added, and the design gives two handlings"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:200"
+    category: consistency
+    summary: "`DocumentKind` already names an enum in the review package"
+    location: "src/squadron/review/document_target.py:18"
   - id: F020
     severity: concern
     category: error-handling
-    summary: "Two new I/O paths have no failure rows"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:270-282"
+    summary: "Matcher failures are final, which leaves recall ranges open with no retry"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:316"
   - id: F021
     severity: concern
-    category: proportionality
-    summary: "A new hidden matcher command duplicates the existing stage command"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:309"
+    category: scope
+    summary: "Mining arch cases from squadron's history conflicts with the 20261115 amendment, and the decision is not on record"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:332"
   - id: F022
-    severity: concern
-    category: testing
-    summary: "No walkthrough step produces matcher fixtures from two providers"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:253"
+    severity: note
+    category: architecture
+    summary: "`DOCUMENT_SCORED_SEVERITIES` is a benchmark constant placed in a production module"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:226"
   - id: F023
-    severity: note
-    category: accuracy
-    summary: "Gate-only outputs do not \"record no model\""
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:228"
+    severity: pass
+    category: traceability
+    summary: "The mined counts and section 16 figures check out"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:412"
   - id: F024
-    severity: note
-    category: consistency
-    summary: "Flaw text carries curator annotations that the matcher will read"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:145"
-  - id: F025
-    severity: note
-    category: testing
-    summary: "The `i` mapping assumes grader indices equal the output's finding indices"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:238"
-  - id: F026
     severity: pass
-    category: dependencies
-    summary: "Interfaces the design relies on exist as described"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:74-82"
-  - id: F027
-    severity: pass
-    category: correctness
-    summary: "The hit-rule claim holds, and the case-level change is needed"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:204-207"
-  - id: F028
-    severity: pass
-    category: correctness
-    summary: "The sandbox comparability claim holds"
-    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:195"
+    category: traceability
+    summary: "The existing contracts the design relies on are present"
+    location: "project-documents/user/slices/432-slice.document-review-recall-from-real-corrections.md:76"
 ---
 
 # Review: slice — slice 432
@@ -288,178 +272,160 @@ findings:
 
 ## Findings
 
-### [FAIL] `--recheck` cannot "change no score" under the precedence rule the design states
+### [FAIL] The match stage cannot run on the loop, stage runner and ingest the design says it reuses
 
-Line 257 says the newest agent label wins and imports stay in force. Line 260 stores `--recheck` labels under the agent labeler "so they do not change any score". Neither holds:
+Design lines 80, 275–276 and 287 say the match stage dispatches through `run_loop`, `stage_runner`, `run_plan` and `run_bound` and writes `RecallRun.matches`. The code does not support that, and none of these modules is in the changed-modules table (design 101–120):
+- `run_loop._run_case` opens the case's sandbox before every stage (`run_loop.py:134`). A matcher needs no tree (design 275), but a missing repo or unreachable commit (design 313–314) fails every match as a harness failure.
+- `_store` writes REVIEW entries to `run.reviews` and every other stage to `run.combs` (`run_loop.py:211`). A MATCH entry lands among comb slots, and the comb supersede path (`:218–220`) runs on it. Nothing writes `matches`.
+- `_run_one` skips only empty COMB input (`run_loop.py:165`). Match needs its own nothing-to-match rule.
+- `stage_ingest.ingest_output` parses every non-REVIEW output as comb decisions (`stage_ingest.py:108–111`, `:146`).
+- `stage_runner.run_stage` builds input only for COMB (`stage_runner.py:122–126`), and `ingest_orphan` re-reads input only for COMB (`:178`). The orphan rule (design 292) cannot re-read a match input.
+- `stage_runner._argv` hard-codes `--template comb` and `--diff stage.case.base` (`stage_runner.py:191–198`).
+- `stage_command` requires `--diff` and calls `changed_files` before the model call (`benchmark_recall_stage.py:52`, `:63`). The design's match call (design 275–276) has no `--diff`, so it fails at option parsing.
+- `run_bound.observed_costs` reads only reviews, combs and superseded entries (`run_bound.py:103`). The match cost figure in design 299 has no source.
 
-- For a finding with no import label, an agent label is the only label and is in force. A recheck that labels it turns an undecided candidate into a decided one, which moves the row's recall.
-- `labels_record_id` (`src/squadron/metrology/recall_label_models.py:68-72`) keys one record per (case, labeler). Writing recheck labels under the existing agent labeler replaces the record that scores.
-- If they go under a new labeler, newest-wins (`src/squadron/benchmark/recall/label_precedence.py:53-58`) makes them win.
+Fix: list each module with the MATCH branch it needs, or specify a separate match loop and state which of these it does not reuse.
 
-The acceptance criterion at line 371 cannot be met as written. Give recheck output its own record that is never in force, or drop the claim and print only the disagreement.
+### [FAIL] Agent labels have no exit, and two agent verdicts for one finding have no rule
 
-### [FAIL] Document flaws with no later commit contradict the architecture's ground-truth rule
+Line 285 refuses `match` when a case holds agent labels from a different matcher. Nothing in the design removes or replaces agent labels. `label` writes person labels (`label_candidates.record_person_hit`), and precedence (line 286) only lets persons override them. An operator who ran the wrong matcher on `doc-flaws-arch` can proceed only by editing the store. That is a state only a person editing files can end.
 
-D1 lets `proof` be empty, citing "all of migratory's" flaws, and substitutes a mining-file `source`. The 420 architecture says "A bug counts only when a later commit or issue shows it was real" (`420-arch.model-benchmark.md:142`). Migratory is 13 of the 43 cases (`cases.tsv` rows 31–43). The 430 code-case schema requires a proof. The design does not name this as a deviation and does not amend 420.
+There is also no same-key rule for agent labels. D8 has one for imports (line 263). A content key covers location, title and description, so two reviews of one case can share a finding text and be matched in separate calls. `RecallLabels.hits` is keyed by content key, so the second call's verdict silently overwrites the first.
 
-Either the PM amends 420 with the reason documents cannot meet the rule, or the proof-less flaws are excluded and the flaw totals (19/32/31) and the section 16 reproduction are recomputed. The decision is needed before the case files are written. D11's 40-flaw target depends on it.
+Fix: name a supported exit (for example, a reset that deletes one matcher's labels and match entries) and a same-key rule.
 
-### [CONCERN] The matcher prompt uses one `F` namespace for both findings and flaws
+### [CONCERN] The case-file loader refuses the design's YAML, and D1 does not say which spec loads it
 
-Finding ids are positional `F1…Fn` (`src/squadron/recipes/comb_call.py:29-31`). Flaw ids are `F1…Fk` from `flaws.json` (line 145). The matcher input carries both, and each output line is "the finding id, then the ids of the flaws it matches". A line `F3: F1 — …` is ambiguous. A finding id that falls inside the flaw range parses as a flaw match, and the unknown-flaw-id rule (line 256) cannot catch it. The labels land silently in `RecallLabels`.
+D1's YAML (design 163–182) uses `commit`, `document`, `against`, `exclude`, `source` and `proof: []`, and has no `base` or `head`. The existing spec refuses each file:
+- `CaseFileSpec` is `extra="forbid"` (`case_models.py:95`) and requires `base` and `head` (`:102–103`).
+- `BugSpec` refuses an empty proof (`:78–79`).
+- No mapping turns `commit` into `head`, though design 159 says `commit` is stored in `head`.
 
-Use distinct prefixes for the two namespaces and say so in the prompt rule (line 252). Add a fixture where the namespaces overlap.
+Design 93 gives `document_case.py` "the document case-file spec and its validation", but the changed-modules table does not touch `case_models.py`. The design must say whether the document spec is new or an extension, and whether it reuses `BugSpec`. Reusing it refuses every document file; copying its validators duplicates them. Tests of the 43 committed files must not call git (design 435). The existing committed-case test reads captured proofs (`tests/benchmark/recall/fixtures/proof_files.json`), and the design should say the document equivalent does too.
 
-### [CONCERN] The document sandbox departs from 430 D7 and the 420 amendment without saying so
+### [CONCERN] `source` and `base` are specified inconsistently, and an optional `base` breaks pyright at its call sites
 
-D3 rebuilds a one-commit repository. Line 383 says `HistoryFreeSandbox` is unchanged. Neither mentions that reviewer recall's sandbox differs from 430 D7, which holds head and its ancestry back to base (`src/squadron/benchmark/recall/review_sandbox.py:1-6`). The 420 amendment (`420-arch.model-benchmark.md:36`) says "one commit" describes the replay sandbox.
+Line 157 says `source` is required on every case. Line 106 makes it optional on `RealBugCase`. If it is required on code cases, the 17 committed code YAMLs fail, since `CaseFileSpec` forbids extra keys (design 434 says the code case ids stay unchanged, not that the files do). Pick one and say which files change.
 
-The rebuild is a sound leak fix: ancestry would keep excluded files, such as earlier reviews, reachable by `git show`. But the design must call it a deliberate exception and propose the amendment line, as 430 D7 did. The `--diff` reason in 430 D7 does not apply to `sq review arch`, which needs no merge base. Say so.
+Making `base` optional (design 106, 160) also breaks typing at these call sites, which pass `str`: `kinds.py:71` and `:85` (`review_sandbox(base: str)`, and the argv), `stage_runner.py:197`, and `recall_case_models.py:156` (`compute_recall_case_id(base: str)`). Design 434 requires pyright with zero errors. The design does not say how these are narrowed.
 
-### [CONCERN] `report --json` gains fields in a schema test that is pinned for slice 433
+### [CONCERN] The design changes the parser that production recipes use without listing the production comb path
 
-The test asserts exact key sets at the top level and per row, and its docstring says "fixed for slice 433". The design adds `kind` and `gate_only_entries` at the top level and `label_sources` per row (line 328), so the test fails unchanged. Line 353 says "430's report reproduction tests pass unmodified", which does not cover this test. Slice 433 consumes `report --json` for its answers (line 342). Name this as a 433 contract change, update the test in the same change, and list 433 under Consumes from Other Slices.
+Line 114 changes `recipes/decisions.py` so `parse_decisions` takes a required vocabulary (also line 397). Its production caller is `recipes/comb_call.py:87`, used by the 434 recipe reviews. `hand_run_combs.py:148` and `stage_ingest.py:146` also call it. `comb_call.py` is not in the changed-modules table.
 
-### [CONCERN] The changed-module table omits the call sites that carry the stage kind
+The 20261118 architecture amendment says the one production behaviour change is limited to the review path (arch lines 38–44). The design must state that the production comb path is behaviour-neutral, list `comb_call.py`, and name the production tests that pin it: `tests/recipes/test_recipe_review.py`, `tests/recipes/test_recipe_runner.py` and `tests/pipeline/actions/test_review_recipe.py`.
 
-Line 188 moves the review template into traits, but several signatures receive no kind:
+### [CONCERN] The generalised parser cannot express the matcher's output as designed
 
-- `StageIdentityResolver.resolve(alias, stage_kind)` (`scoring_select.py:32-35`)
-- `live_stage_config(alias, stage_kind)` (`stage_identity.py:35-41`)
-- `ConfigFor` (`run_plan.py:33`)
-- `LiveRunServices.config_for` (`live_services.py:63`)
+Lines 278–279 and 318 describe a verdict that is a flaw-id list or the none word, read by one parser through "a function from the text after the id".
+- Both regexes capture the verdict as a single letter run (`[A-Za-z]+\b`, `decisions.py:31` and `:36`). `F1, F3` never matches. Only the none word would.
+- `CombDecision.verdict` is the closed `CombVerdict` enum (`recall_run_models.py:120`). A set of flaw ids does not fit it.
+- Line 318 requires an unknown flaw id to discard the line and be counted. `DecisionParse` counts only unknown finding ids (`decisions.py:45–47`), and a vocabulary function can only return a value.
 
-A document run therefore cannot pick `arch`, `slice` or `tasks`. `recall_services.py` and `scoring_select.py` are missing from the changed-module table (lines 101–116). Test doubles pin the two-argument form: `tests/benchmark/recall/scoring_support.py:129`, `test_run_end_to_end.py:72`, and `test_stage_identity.py:48-72`. `RecallKind` gaining required `traits` and `plan_import` also breaks the `StubKind` at `test_run_end_to_end.py:183`. Name the new parameter and list each changed module and double.
+Fix: give the list line grammar (separator and reason delimiter), the vocabulary function's return type, and how an unknown flaw id is signalled and counted.
 
-### [CONCERN] Scored severities are defined twice, and one consumer is missing from the change list
+### [CONCERN] The matcher would get read tools through the comb path
 
-The trait table (lines 180–184) gives code the set CONCERN, FAIL, which already exists as `SCORED_SEVERITIES` (`src/squadron/review/models.py:39`). The trait should reference that constant. `real_work.py:18,50` imports it too, and D5 (line 213) names only `scoring.py` and `label_candidates.py`. A comparison value must be defined once. Make the code trait reference the constant, and add `real_work.py` to D5 or justify leaving it out.
+Line 275 says the flaw-match template has "no tools". `call_comb` always passes `allowed_tools=list(COMB_ALLOWED_TOOLS)` (`comb_call.py:80`), and `run_review_with_profile` uses an explicit list over the template's own (`review_client.py:183`). `_stage` reaches the model through `run_comb_stage` (`benchmark_recall_stage.py:65–73`), so a matcher routed that way gets read_file, list_files and grep. The design should say the match path passes an empty tool list and does not go through `call_comb`.
 
-### [CONCERN] Integration calls the 430 changes "additive"; several are signature or type changes
+### [CONCERN] The template and scored severities are not threaded through the matching helpers
 
-The changes are not additive:
+Lines 110–113 give the resolver a template argument and say `scoring.py` takes the severities. They do not cover the helpers that call the resolver: `entry_matches` (`scoring_select.py:49–55`), `matching_reviews` (`:58–66`) and `matching_chains` (`:69–82`). Each calls `resolver.resolve(alias, kind)` and needs the case's template. They are called from `scoring._pair_variants` (`scoring.py:148–150`). `stage_runner.comb_input_findings` calls `scoring.reviewer_output` (`stage_runner.py:114`), which needs the severities argument, so `stage_runner.py` changes too.
 
-- `scoring.py` and `label_candidates.py` gain a required severity argument.
-- `RecallKind` gains two required members.
-- `StageIdentityResolver` and `ConfigFor` change arity.
-- `RealBugCase.base` becomes optional.
-- `resolve_labels` changes order.
-- `split_output_name` (`src/squadron/benchmark/recall/hand_run_reviews.py:44-50`) changes behaviour, since it stops splitting at the first hyphen.
+### [CONCERN] The test changes named in the design are incomplete, and existing tests it says keep passing will fail
 
-Line 190 also reverses 430 D14's stated contract ("432 adds DocumentKind … without changing them"). List that reversal in Consumes from Other Slices, with its consequences for 430's seam.
+Design 122 names five test doubles, and 438 says "no other 430 test changes its expectations". The signature changes break more than that:
+- Two-argument `ConfigFor` doubles: `stage_support.py:30` and `:127`, `test_run_plan_expand.py:23`, and `support.py:85`. `test_run_plan.py:131` and `tests/cli/test_benchmark_recall_run.py:127` pass `live_stage_config` directly.
+- `StubKind` in `test_kinds.py:21` lacks `traits` and `plan_import`, which design 393 makes required. Passing it to `registered_kind` (`:45`) fails pyright.
+- `test_stage_command.py:61–63` invokes `_stage` without `--stage-kind`, which design 398 makes required. Every invocation fails at option parsing.
+- `test_decisions.py` calls `parse_decisions` with two arguments at lines 33–80. Design 437 says it "still passes" with a required vocabulary argument.
+- Calls to `recipe_outputs` and the resolvers in `test_scoring_outputs.py` (ten call sites), `test_scoring_metrics.py`, `test_scoring_paired.py`, `test_report_render.py`, `test_reproduce_results.py` and `test_stage_runner.py` use the changed signatures.
 
-### [CONCERN] A second lenient line parser duplicates `parse_decisions`
+### [CONCERN] `plan_import(results_dir, context, plan)` cannot express the code plan's overrides step
 
-`src/squadron/recipes/decisions.py:55` already parses lenient `<id>: VERDICT — reason` lines, with markdown, separators, prose rejection, and duplicate and unknown-id counting (`tests/benchmark/recall/test_decisions.py:17-61`). The matcher line needs the same tolerances with a different verdict vocabulary: a flaw-id list or a none word. Generalise the existing parser by vocabulary and keep one implementation. `match_lines.py` then becomes a thin mapping. The general rules require that logic not be duplicated.
+Line 197 says `CodeKind.plan_import` is "the existing reviews, combs, labels and overrides plan", with the signature `(results_dir, context, plan)`. The current builder takes `overrides_path` (`hand_run_import.py:24`) and passes `plan_labels`' output into `plan_overrides` (`:35–37`). `ImportContext` holds only `cases_by_hand_id` and `case_set` (`import_plan.py:44–49`). As written, the code import would silently lose person overrides. Widen the context or the signature.
 
-### [CONCERN] Matcher fixtures placed in the existing decisions folder would break a comb test
+### [CONCERN] D8's first-pass rule reverses 430's grading import and duplicates its conflict code
 
-`test_real_comb_outputs_parse_fully` globs every `*.json` under `fixtures/decisions/` and reads `raw_output`, `finding_ids` and `expected`. Matcher captures placed there fail with a KeyError. Line 253 does not say where the captures go. Name a separate folder (for example `fixtures/match/`).
+430's grading import already reads the grading passes for the code set. Its docstring says the later pass wins (`hand_run_labels.py:7–8`), implemented in `_set_value` and `_set_hit` (`:219–226`, `:238–245`) and reported with the same `LabelConflict` type (`import_plan.py:30–41`). D8 says the first pass wins (design 249, 257, 263). Two importers with opposite rules and one conflict type is an easy source of error. The design does not mention `hand_run_labels.py` (design 390–402).
 
-### [CONCERN] Resume re-spends on every partial or failed matcher call
+The formats differ (flaws.json and hits.json against issues and members), so a separate parser is justified. The merge and conflict logic should be shared, or the reversal stated and tested.
 
-The unit at line 250 is "when the entry has a scored finding with no hit label from any labeler". A partial output (lines 255 and 277) or a timed-out call (line 276) leaves findings unlabelled, so the entry qualifies again on every rerun and each rerun makes paid calls. Walkthrough step 4's "a second `match` prints `0 calls to make`" (line 429) therefore holds only after a complete output.
+### [CONCERN] Live gate-only entries would be sent to the matcher
 
-430 D8 (`430-slice.real-bug-review-recall.md:343`) treats config failures as results that are not retried, but this rule retries them. "No hit label" is also ambiguous. An imported MISS is not a hit label, so read literally, every import-labelled finding is re-matched. Define the unit explicitly, keep config failures as recorded results, and state whether MISS counts as labelled.
+The match unit (lines 268–270) has no exclusion for gate-only entries. Line 245 says a live tasks run on squadron-197 or -917 can produce a gate-only output, whose findings are rule-based and whose footer says "no model call" (line 246). Under the unit as written, such an entry has unlabelled FAIL findings and goes to a model. Exclude gate-only entries from the unit, or say why they are matched.
 
-### [CONCERN] Labels and the match entry are written separately, so a crash between them loses the call
+### [CONCERN] Walkthrough step 6 cannot run as written
 
-Labels go to `RecallLabels` and the call goes to `RecallRun.matches`, with no stated order or atomicity. If labels are written and the process dies before the match entry, the next run sees labelled findings and skips the review (line 250). No entry then records the call's cost, `raw_ref` or `input_ref`, so the per-call cost used for the bound comes from fewer entries. The orphan rule in 430 D8 (line 328) covers an output file with no entry, not labels with no entry.
+Step 6 runs `match --set doc-flaws-arch --runs 3 --model <matcher alias> --max-cost <USD>` with no `--call-cost`. The bound needs a figure for each pending matcher config, either observed or `--call-cost` (`run_bound.py:143–148`). Observed costs come from reviews, combs and superseded entries only (`run_bound.py:103`), and `--recheck` writes no match entry (design 297). For a matcher not yet called on that set, the step refuses with "no observed cost". Add `--call-cost` to step 6, or make match entries a cost source (which needs the `observed_costs` change in the first finding).
 
-State the order (entry first, then labels, or re-derive labels from the stored output on resume) and the resume behaviour for each interrupted state.
+### [CONCERN] Walkthrough step 1 cannot show what its expectation promises
 
-### [CONCERN] The matcher's identity is its alias, and mixed matchers are not flagged
+Step 1 lists only `doc-flaws-arch` (line 456), then expects "9, 17 and 17 cases at v1, and commit=unreferenced on squadron-403-design, context-forge-260-arch and context-forge-268-tasks" (line 458). The arch list cannot show slice or tasks cases, so only context-forge-260-arch can appear, and the 9/17/17 counts need three lists. Correct the command or the expectation.
 
-The labeler is `agent:<alias>@<hash8>`. The 420 design goals say the alias is for display only, and results must name the config (`420-arch.model-benchmark.md:55`). Alias identity also makes two aliases that resolve to one model into two graders.
+### [CONCERN] Proofless flaws weaken the ground-truth rule the architecture names, and the report does not show them
 
-The unit is per finding, so a run cut by a cap and resumed with a different `--model` gives one report row labels from two matchers, and nothing flags it. 430 D4 splits and flags a row only when stage identities differ. Key the labeler on `config_key`, and make matcher identity part of the row, or refuse a different matcher on a set that already has agent labels.
+The architecture says "A bug counts only when a later commit or issue shows it was real" (arch line 142) and names a fix commit or issue as 432's ground truth (arch line 161). D1 relaxes this for the 82 flaws (lines 155–158), and D11 adds arch flaws under the same relaxed rule, so new arch cases can be entirely proofless. The design proposes an amendment and records `proof` per flaw, which is the right move.
 
-### [CONCERN] Absent grader keys are recorded as MISS, which the "Absent is not zero" principle rules out
+But the report splits rows by labeler only (line 300), not by proof status. A reader cannot see how much of a row's recall rests on flaws no later commit corrected. The risk section (511–514) does not list this. Add the split to the row output and the header, and leave the amendment with the PM.
 
-Line 239 turns every (review, flaw) pair missing from `hits.json` into a stored MISS, in any case that has a `hits.json`. The 420 principle "Absent is not zero" (`420-arch.model-benchmark.md:82`) requires recording why. Here the reason is an inference about the graders' habit. The summary counts the absences, but no row shows which MISS labels are inferred. Step 3's reproduction cannot catch a dropped hit, because the same rule produced the 38/57 figure. Record inferred MISS as a distinct value, or state the inference as a decision with its evidence.
+### [CONCERN] Counting absent keys as misses runs against "absent is not zero" and narrows recall ranges
 
-### [CONCERN] Agent-matched hits enter the primary recall with no separate reporting or threshold
+The architecture's "Absent is not zero" principle (arch line 82) says absence must not be counted as a value. D8 reads 671 absent flaw-and-review pairs as graded misses (lines 253–255). Bug-hit counts depend only on HITs, so the section 16 reproduction holds. But each inferred MISS decides a pair that would otherwise be UNDECIDED, which narrows the recall range (430 D3). The inference is recorded in notes and the summary, but the report does not separate inferred MISS labels from graded ones. Show them separately, or say why the principle does not apply.
 
-The report counts label sources per row (line 262), but a document row's recall mixes imported, agent and person hits in one figure. The 420 principles say LLM signals are "reported beside [objective signals] with their own noise floors, never folded into them" (`420-arch.model-benchmark.md:51`) and call for "Breakdown, not a score" (line 84). The agent-only share of recall should therefore be shown separately, with the matcher's disagreement stated against a noise floor.
+### [CONCERN] Record size is not restated, and document findings are not short
 
-The recheck prints two numbers and "passes no judgment" (line 260). Line 436 names the yardstick "11 of 574" (line 240). That figure is grader-versus-regrader disagreement across 172 reviews. Step 5 compares the matcher against first-pass labels on nine reviews, a different population. Set the yardstick and threshold in the design, or present the number as informational only.
+The architecture says "Normalized review findings stay inline; they are short" (arch line 144) and that the store "reads every file on every query" (arch line 80). This slice does not restate either NFR, and its inputs break the first assumption. `20261116-mined/out/squadron-320-arch-fable-medium-1.json` has findings whose descriptions run to several paragraphs. The design imports 1,281 review outputs inline (design line 37). Give a record-size target for a run record, then either move finding text to sidecars or measure the import before accepting inline text.
 
-### [CONCERN] Arch mining is open-ended human work inside an implementation task, and 430 D13 does not cover it
+### [CONCERN] Three mechanisms have no consumer and can be cut
 
-Line 289 cites 430 D13 for reading squadron's history. That ruling covers four commits for three cases and "takes seconds" (`430-slice.real-bug-review-recall.md:427-430`). D11 instead reads every architecture document with a saved review across five or more repos, until 40 flaws are found or none remain. Development Approach step 6 (line 469) runs it as an implementation task. The 420 amendment says no task "needs hours" (`420-arch.model-benchmark.md:34`). Line 454 expects fewer than 21 new valid flaws, so the stop rule may run to exhaustion.
+- `--recheck` prints the hashes of its stored input and raw output (line 297). Nothing in the design reads them. Print the comparison only.
+- `report --json` gains `kind`, `matcher`, `gate_only_entries` and per-row `bug_hits_by_label`, and a pinned schema test changes (line 373, `test_report_json_schema.py:1`). Its named consumer, 433, was dropped on 20261119, and the model answers are updated by hand. Keep the text report and defer the JSON keys.
+- `_stage --stage-kind` (line 276) duplicates `--template`, which already names the call. Derive the kind from the template so the two selectors cannot disagree.
 
-Move the mining out of the implementation task, as 430 D11 did for the live run, or bound it by time and candidate count. State that the 430 D13 ruling is being extended.
+### [CONCERN] `DocumentKind` already names an enum in the review package
 
-### [CONCERN] Walkthrough step 4 asks to inspect a sandbox that is removed on exit
+Line 94 adds `DocumentKind` in `benchmark/recall/document_kind.py`. `src/squadron/review/document_target.py:18` already defines `DocumentKind` (SLICE, TASKS and so on), and `review.py:57` imports it. Two classes with one name in adjacent packages, one used by the review command, will be confused in review and imports. Rename the new class.
 
-Line 429 says "Confirm the sandbox tree has no reviews directory and `git log` in it shows one commit." Sandboxes are removed on exit (`src/squadron/replay/history_free_sandbox.py:116-123`, unless `keep()` is called). Nothing in the design keeps them, and the existing test asserts they are gone (`tests/benchmark/recall/test_run_end_to_end.py:139`). The step cannot run as written. Add a keep option for the fixture run, or assert the tree shape in a test.
+### [CONCERN] Matcher failures are final, which leaves recall ranges open with no retry
 
-### [CONCERN] The fixture's commit shas are unstable, so the committed case folder cannot match a fresh build
+D10 makes a matcher timeout or unparseable output a `config_failure` that is "not called again" (line 316). D9 retries only harness failures (line 272). In 430, `config_failure` means the reviewed config failed (`stage_runner.py:5–6`). For the matcher, the failure is the judge's, and the reviewed config is blameless. Every review the matcher times out on stays undecided, and its range never narrows without a person's label. Make matcher config failures retryable. The design also names no timeout for the matcher call.
 
-Step 4 builds `doc_repo`, then runs `cases add` on the committed `cases/slice/` folder. `cases add` refuses a commit that `git cat-file -e` cannot find (line 146). The existing `tests/benchmark/recall/fixtures/bug_repo/build.py` writes its case file into `out_dir` at build time (lines 101-102) and sets no commit dates, so every build produces new shas. Either `doc_repo/build.py` rewrites the committed case file, which makes the folder a build output, or it pins author and committer dates. Say which.
+### [CONCERN] Mining arch cases from squadron's history conflicts with the 20261115 amendment, and the decision is not on record
 
-### [CONCERN] `exclude` paths are not checked when cases are added, and the design gives two handlings
+The 20261115 amendment says "No task runs against squadron's own history or needs hours" (arch line 34). D11 reads squadron's documents and history for new arch cases, citing #373 as its authority (line 332). Nineteen of the 43 cases are squadron's, and step 6 is several hundred serial calls. The design acknowledges both, but the override is not recorded as a PM decision. Record it in the amendment, or scope D11 to the other repos.
 
-Line 200 says an absent `exclude` path "fails the sandbox (`harness_failure`): the case file is wrong". D10 (line 273) says WARNING, with the case dropped from every recipe and counted. `cases add` (line 146) checks `document` and `against` only, and the refusal table (line 272) omits `exclude`. A wrong exclude path is a case-file error. Refuse it at `cases add`, as line 272 does for a wrong `document`, instead of counting it at run time.
+### [NOTE] `DOCUMENT_SCORED_SEVERITIES` is a benchmark constant placed in a production module
 
-### [CONCERN] Two new I/O paths have no failure rows
+Line 226 defines `DOCUMENT_SCORED_SEVERITIES` beside `SCORED_SEVERITIES` in `review/models.py` (line 39), a production module. The set is used only by the benchmark. It can live with the kind traits in `kinds.py`, importing `SCORED_SEVERITIES` from `review/models.py`.
 
-- **Case checks.** `cases add` now runs git checks on each document case (`git cat-file -e`, line 146), and `cases list` determines the unreferenced status (line 201). The D10 table has a row for "document missing at commit" but none for git failing, a repo path missing, or a timeout. 430 D8 has such a row only for `git show`.
-- **Matcher lines.** A line that names a finding id absent from the input, and a finding with two lines, have no row. Line 278 covers only unknown flaw ids.
+### [PASS] The mined counts and section 16 figures check out
 
-Add rows for each, with level and outcome.
+The 43 cases split 9/17/17 (`20261116-mined/cases.tsv`). The flaws split 19/32/31 (RESULTS.md section 16, line 317). Seventy outputs are gate-only, all in squadron-197-tasks and squadron-917-tasks, with `"model": "squadron-task-gate"` (`20261116-mined/out/`). Section 16's per-run figures (12.7, 14.0, 19.7; 9.7, 16.0, 18.0; 11.7, 13.7, 17.3) match the table at lines 414–416, and the "any of 3 runs" totals (55, 58, 53) equal the per-kind sums. The absent-key evidence holds: `grade/squadron-320-arch/hits.json` has an empty `hits` and a note naming the reviews judged no-hit. Each gate-only alias has sibling model-call outputs in the tasks set.
 
-### [CONCERN] A new hidden matcher command duplicates the existing stage command
+### [PASS] The existing contracts the design relies on are present
 
-`src/squadron/cli/commands/benchmark_recall_stage.py:47-53` already takes `--template`, `--input`, `--output` and `--model`. It runs in a scrubbed home with cwd set to the sandbox, and writes the output file the runner reads. `_match` (line 309) takes the same four options and would repeat that plumbing. Generalise `_stage`: make `--diff` optional for templates that do not need changed files, and dispatch by template. Otherwise justify a second entry point.
-
-### [CONCERN] No walkthrough step produces matcher fixtures from two providers
-
-Line 253 requires parser fixtures "captured from the fixture run (walkthrough step 4), from at least two providers". Step 4 passes one `--model <matcher alias>` (line 426) and runs one recipe at `--runs 1`. Add a step that runs `match` with a second matcher from a different provider, and say where the captures are stored.
-
-### [NOTE] Gate-only outputs do not "record no model"
-
-The gate result records `model: squadron-task-gate`, `profile: null`, `tools_given: null` and `template_name: tasks` (`src/squadron/review/task_gate.py:161-174`; see `out/squadron-197-tasks-fable-medium-1.json`). `_review_config` (`src/squadron/benchmark/recall/hand_run_reviews.py:109-117`) reads `model` and `profile` unchanged, so the special case must not use them. Also `effort` is null in these files, not the alias's effort. State the field values so the special case is explicit.
-
-### [NOTE] Flaw text carries curator annotations that the matcher will read
-
-`grade/squadron-320-arch/flaws.json` F1 reads "**VALID** … Raised by the original review (F004)" and cites line numbers in sibling documents. The design passes flaw text through unchanged so the matcher sees what the graders saw. That supports reproduction, but it puts provenance into the matcher input while the design calls the matcher blind. Decide whether the matcher gets the text as-is or stripped, and say which.
-
-### [NOTE] The `i` mapping assumes grader indices equal the output's finding indices
-
-Eight arch outputs contain PASS findings. In the two I checked (`squadron-400-arch-fable-medium-1` and `squadron-360-arch-fable-medium-2`), the PASS finding is last, so the mapping is undisturbed there. A PASS in the middle would shift indices if the grader numbered the filtered list. Each grader file (`rNN.json`) carries a `title` per `i`. The importer should check that the title matches the output's finding at `i` and refuse on mismatch. The refusal list at lines 241–244 has no such check.
-
-### [PASS] Interfaces the design relies on exist as described
-
-Confirmed: the three `sq review` commands and their options (`src/squadron/cli/commands/review.py`); `RecallKind`, `register_kind` and `KindContext`; `HistoryFreeSandbox`; `ImportPlan`, `ImportContext` and `folder_date`; `read_findings`, `read_usage` and `read_effort`; `TASK_GATE_MODEL`; `TemplateOutput.DECISIONS`; `run_review_with_profile`; `builtin_template_hash`; and `benchmark.recall_fetch_timeout_s`. The shipped templates `arch.yaml`, `slice.yaml` and `tasks.yaml` exist. `flaw-match.yaml` does not yet, as expected. The recipe aliases `opus-high`, `fable-medium`, `luna-r`, `mimo` and `hy4` are in `models.toml`.
-
-### [PASS] The hit-rule claim holds, and the case-level change is needed
-
-`hit_rule.gate` returns DECIDED_MISS for any path-citing finding when a bug has no locations (`src/squadron/benchmark/recall/hit_rule.py:78-81`), so D4's change is required. Committed code cases already assert that every bug has locations (`tests/benchmark/recall/test_committed_cases.py:37`), so the `CodeKind` refusal in D4 should not break them.
-
-### [PASS] The sandbox comparability claim holds
-
-`prepare.py` exports each commit with `git archive`, removes `project-documents/user/reviews`, and commits the rest as a one-commit repository (`20261116-mined/prepare.py:18-36`). The rebuild in D3 produces the same tree shape, plus the exclusions for each case. The root `.gitattributes` check found no `export-ignore` in squadron or migratory, so `git archive` and the fetch path yield the same files there.
+Verified present with the signatures used: `sq review arch` (no `--against`), and `review slice` and `review tasks` with `--against`, each with `--model`, `--output`, `--output-path`, `--no-save` and `--cwd` (`src/squadron/cli/commands/review.py:978–1233`). Also present: `TemplateOutput.DECISIONS` and `run_review_with_profile` (`review/templates/__init__.py:32`, `review/review_client.py:147`); `TASK_GATE_MODEL` and the gate result (`review/task_gate.py:24`, `:161–174`); `HistoryFreeSandbox(start_sha=…)` (`replay/history_free_sandbox.py:71–82`); `ReviewBudget` (`benchmark/grade_budget.py:25`); `benchmark.recall_fetch_timeout_s` (`config/keys.py:48`); all six new aliases and the recipe format (`data/models.toml`, `review-recall-recipes/haiku-opus.yaml`). The sandbox exception (design 209–211) is flagged with amendment text, as it should be.
 
 ### Run Digest
 
-- Response length: 34332 chars
+- Response length: 36302 chars
 - Response is newline-free: no
-- Tool calls made: 82
-- Tool calls failed: 1
+- Tool calls made: 94
+- Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: none
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 83
-- Tokens — prompt / cached / cache write / completion / reasoning: 6018624 / 5736145 / 282411 / 162087 / not computed
-- Duration: 733.7 s
-- Cost: $0.84 (provider)
+- Turns: 95
+- Tokens — prompt / cached / cache write / completion / reasoning: 7564882 / 7272801 / 291999 / 182802 / not computed
+- Duration: 808.8 s
+- Cost: $1.00 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 28
+- Finding-shaped matches — whole response: 24
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 28
-- Finding-shaped matches — surviving validation: 28
+- Finding-shaped matches — in findings section: 24
+- Finding-shaped matches — surviving validation: 24
