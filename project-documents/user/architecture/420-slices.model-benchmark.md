@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 420-arch.model-benchmark.md
 project: squadron
 dateCreated: 20261104
-dateUpdated: 20261119
+dateUpdated: 20261121
 status: not_started
 ---
 
@@ -183,9 +183,10 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
 13. [ ] **(432) Document Review Recall from Real Corrections** — 430's method on documents: architecture documents, slice designs and task files. A case is a document as its review passed it, plus the flaws corrected later (a "correct the design" commit, a task rewrite after a blocked run). The spike is done (amended 20261119): the hand-run mining found 82 valid flaws in 43 cases from squadron, context-forge and migratory (19 arch, 32 slice, 31 tasks), far past the stop line of five, and the hand-run grids answered the first question (`review-recall-results/RESULTS.md` sections 16-20). What remains is making that repeatable, so a new model is measured on documents with one command instead of a hand-run grid and its grading agents.
    - **Value:** Shows which model reviews architecture documents, designs and task breakdowns, the checks that run before code is written, and re-measures cheaply when a new model arrives.
    - **Success Criteria:**
-     - The 43 mined cases and their flaws (`reference/design-review-recall-cases*.md`) load as 430 cases of a document kind (arch, slice, tasks), reviewed with the matching template, and scored by 430's report per kind.
-     - The hand-run results import as stored outputs, and the report reproduces section 16's per-kind table for haiku-xhigh, opus-high and fable-medium with no new calls.
-     - More architecture cases are added as records (#373): the 19 arch flaws cannot separate the top configs.
+     - Document case kinds (arch, slice, tasks) load as 430 cases, reviewed with the matching template in 430's sandbox, and scored by 430's report.
+     - Two cases are checked in: amoeba slice 260's task file with the #383 key, and one slice design. Every flaw has a later correcting commit.
+     - One agent matcher labels hits under a cost bound taken from observed costs, so no person reads findings to score a run (#383).
+     - Reduced 20261121 (PM): the import of the 43 mined cases, the section 16 reproduction, the added architecture cases (#373) and the question of flaws with no later commit moved to [#387](https://github.com/ecorkran/squadron/issues/387).
    - **Dependencies:** [430].
    - **Interfaces:** Consumes 430's case records, recipes and report.
    - **Risk Level:** Medium (document flaws are matched by agent grading, not by file location)
