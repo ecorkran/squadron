@@ -3,11 +3,26 @@ docType: slice-design
 slice: document-review-recall-from-real-corrections
 project: squadron
 parent: user/architecture/420-slices.model-benchmark.md
-dependencies: [430]
+dependencies:
+- 430
 interfaces: []
 dateCreated: 20261121
-dateUpdated: 20261121
+dateUpdated: 20261122
 status: not_started
+turns: 39
+promptTokens: 3810675
+cachedTokens: 3595551
+cacheWriteTokens: 215074
+completionTokens: 51209
+durationSeconds: 573.6
+costUsd: 6.209406
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-fable-5-2:
+    rounds: 1
+    costUsd: 6.2094063
+    completionTokens: 51209
 ---
 
 # Slice Design: document-review-recall-from-real-corrections
