@@ -1,0 +1,83 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 8,
+  "F9": 10,
+  "F10": 11,
+  "F11": 12,
+  "F12": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "0]` on the empty result for a missing `embed_category` row raises (pg raises IndexError rather than returning nil, but the migration still aborts)."
+  ],
+  "F2": [
+   "KEEP",
+   "the migration inserts legacy lines verbatim via raw SQL, so scheme-prefixed entries never equal `uri.host` in `record_for_host`; the old matcher's scheme tolerance is from memory, as the pre-change code was not readable here."
+  ],
+  "F3": [
+   "KEEP",
+   "the host value is interpolated unquoted into the INSERT, so an apostrophe breaks the migration and the SQL is injectable."
+  ],
+  "F4": [
+   "KEEP",
+   "self.host.sub!` in `before_validation` raises NoMethodError on a nil host, and `save_host` assigns the param unguarded, giving a 500."
+  ],
+  "F5": [
+   "KEEP",
+   "the regex accepts a `:port` suffix that is never stripped and never matches `uri.host`, and `[a-z]{2,5}` rejects valid longer TLDs."
+  ],
+  "F6": [
+   "DROP",
+   "duplicates are possible, but on Rails 4.1 `.first` orders by primary key, so the lookup is deterministic and the claimed nondeterminism is wrong."
+  ],
+  "F7": [
+   "KEEP",
+   "unlisted hosts yield a nil category, so imported topics (including feed polling) no longer land in the configured embed category; they fall to Uncategorized via `ensure_topic_has_a_category`."
+  ],
+  "F8": [
+   "KEEP",
+   "where(id:).first` returns nil for an unknown id, so `update` and `destroy` raise NoMethodError and return 500."
+  ],
+  "F9": [
+   "KEEP",
+   "the `_ids` branch maps ids that are not side-loaded to `undefined`, throws on a null value, and rewrites any `*_ids` key in a rest-serializer payload."
+  ],
+  "F10": [
+   "KEEP",
+   "save()` never applies or discards the buffer, so `buffered.host` keeps the raw input while the record holds the server-normalized value, and re-editing shows the stale text."
+  ],
+  "F11": [
+   "KEEP",
+   "destroyRecord().then(...)` has no rejection handler, so a failed delete is silent to the user."
+  ],
+  "F12": [
+   "DROP",
+   "the fabricator contents are swapped between the two files, but both still load, so this is file organisation and not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  7,
+  8,
+  10,
+  11,
+  12
+ ],
+ "cost_usd": 0.921236
+}

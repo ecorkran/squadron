@@ -1,0 +1,167 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cache not re-checked after acquiring the write lock",
+      "description": "The fast-path check at line 45 is the only cache check. After `entryPointAssetsCacheMu.Lock()` at line 48, the code goes straight into the manifest load (lines 51-67) without checking whether another goroutine already populated `entryPointAssetsCache`. Goroutines that all saw nil at line 42 therefore run the load one after another, and each overwrites the cache. The original code ran these loads concurrently, so the lock adds latency for queued callers without removing the duplicate work it was meant to prevent. In dev mode, where every call recomputes by design, the write lock now serializes all requests, which the old code did not. Fix: re-check right after line 48, e.g. `if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:45-49"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lock held across manifest I/O, including a CDN branch with no timeout",
+      "description": "The write lock covers the whole load, including `readWebAssetsFromCDN` at line 56. `cdn` is hard-coded to `\"\"` at line 54, so that branch is unreachable today and the lock only guards a local file read. If the CDN source is enabled later, two things combine badly. `http.DefaultClient` (line 90) has no timeout, and `sync.Mutex.Lock` ignores `ctx`. A slow CDN would then block every caller, including callers whose request contexts were already cancelled. Consider a timeout on the client, or fetching outside the lock and taking it only to publish.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:54-56"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests for the cache or concurrency behavior",
+      "description": "The test file covers only `readWebAssetsFromFile` parsing and a skipped CDN test (`TestReadWebassetsFromCDN`, which calls `t.Skip()`). `GetWebAssets` is untested: the cache-hit path, the dev-mode recompute path, and concurrent first access are all unexercised. A test that starts concurrent `GetWebAssets` calls under `go test -race` would have guarded this change directly. It is feasible with `cfg.StaticRootPath` pointing at a fixture and `licensingtest.FakeLicensing`, which already exists. The tests will need to reset the package-level `entryPointAssetsCache` under the lock between cases.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets_test.go"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Return statement re-reads the guarded global",
+      "description": "`entryPointAssetsCache = result` followed by `return entryPointAssetsCache, err` reads the shared variable instead of the local `result`. This is safe only because the deferred `Unlock` runs after the return expression is evaluated. Returning `result` would make the locking easier to verify.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:69-70"
+    },
+    {
+      "severity": "PASS",
+      "title": "Data race on the cache pointer is fixed; published value is read-only",
+      "description": "The lock-free read of the global pointer that the original code performed is now guarded by `RWMutex`. The `EntryPointAssets` value is fully built, including `SetContentDeliveryURL` at line 64, before it is published at line 69. The callers I inspected (`pkg/api/index.go:82`, `pkg/api/frontendsettings.go:62`, `pkg/middleware/recovery.go:141`) only read the result. A grep finds no `SetContentDeliveryURL` call outside `webassets.go`, so no post-publication mutation was found.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/api/webassets/webassets.go:40-49"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Cache not re-checked after acquiring the write lock",
+      "location": "pkg/api/webassets/webassets.go:45-49",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Lock held across manifest I/O, including a CDN branch with no timeout",
+      "location": "pkg/api/webassets/webassets.go:54-56",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests for the cache or concurrency behavior",
+      "location": "pkg/api/webassets/webassets_test.go",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Return statement re-reads the guarded global",
+      "location": "pkg/api/webassets/webassets.go:69-70",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Data race on the cache pointer is fixed; published value is read-only",
+      "location": "pkg/api/webassets/webassets.go:40-49",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "diff": "bdd7e6ed4882870360dbca20ece7a8d430ecc35d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:17:38.727171",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "injected": [],
+  "files_read": [
+    "pkg/api/webassets/webassets.go",
+    "pkg/api/dtos/index.go",
+    "pkg/api/webassets/webassets_test.go",
+    "pkg/api/index.go",
+    "pkg/api/frontendsettings.go",
+    "pkg/middleware/recovery.go"
+  ],
+  "searches": [
+    "grep GetWebAssets|EntryPointAssets|SetContentDeliveryURL in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939/pkg",
+    "list_files pkg/api/webassets/**/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939",
+    "grep func \\(.*\\) ContentDeliveryPrefix|func \\(cfg \\*Cfg\\) GetContentDeliveryURL|func \\(.*\\) GetContentDeliveryURL in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90939/pkg"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 1187,
+  "diff_chars_injected": 1187,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 88378,
+  "cached_tokens": 67440,
+  "cache_write_tokens": 20928,
+  "completion_tokens": 15197,
+  "reasoning_tokens": null,
+  "duration_seconds": 70.7266057911329,
+  "cost_usd": 0.0126971,
+  "cost_basis": "provider"
+}

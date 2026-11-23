@@ -1,0 +1,61 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "mainHostDestinationCalendar` is undefined when `evt.destinationCalendar` is null, and `EventManager.ts:119` dereferences `.integration` without optional chaining for Meet locations."
+  ],
+  "F2": [
+   "KEEP",
+   "the fallback at `CalendarService.ts:254-256` and `:315-317` only runs when `externalCalendarId` is falsy and then matches `externalId` against it, so it always yields undefined."
+  ],
+  "F3": [
+   "KEEP",
+   "selectedCalendar` only matches by `credentialId`, so credential-less destinations insert into `primary`, and the callback-less `events.patch` at line 168 gets an undefined `calendarId`."
+  ],
+  "F4": [
+   "KEEP",
+   "the Office365, Lark and CalDAV `createEvent` methods all use `destinationCalendar[0]` whichever credential calls them, and CalDAV returns success after filtering to zero calendars."
+  ],
+  "F5": [
+   "KEEP",
+   "create.handler.ts:151` sets the slug only when billing is enabled (alongside `requestedSlug`), so with billing disabled the org has a null slug and `getPublicEvent.ts` treats it as unpublished; the \"previous code\" half of the claim could not be diffed here."
+  ],
+  "F6": [
+   "KEEP",
+   "the catch at `handleNewBooking.ts:757-761` rewraps Prisma errors as an `HttpError` with the raw message, which bypasses `redactError`, and replaces every other error with a generic 500 without logging the cause."
+  ],
+  "F7": [
+   "KEEP",
+   "destinationCalendar` is `null` when neither the event type nor the organizer has one, so the optional-chained `push` at line 1078 discards the collected team destinations."
+  ],
+  "F8": [
+   "KEEP",
+   "webhookData` spreads `evt` at `handleNewBooking.ts:2297`, so the payload's `destinationCalendar` is now an array (plus `schedulingType`), changing the outgoing webhook shape."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 1.0667921999999999
+}

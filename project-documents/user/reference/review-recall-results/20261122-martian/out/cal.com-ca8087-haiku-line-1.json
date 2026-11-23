@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`forEach(async ...)` drops the deleteEvent promise and escapes the surrounding try/catch in reschedule",
+      "description": "The callback passed to `bookingRefsFiltered.forEach` is now `async`, and the `return calendar?.deleteEvent(...)` value is discarded because `forEach` ignores callback return values. Any rejection from `getCalendar` or `deleteEvent` becomes an unhandled promise rejection instead of reaching the `try` block. The reschedule can complete before calendar events are deleted. The same pattern appears at `packages/app-store/wipemycalother/lib/reschedule.ts:125` and `packages/trpc/server/routers/viewer/bookings.tsx:553`. Replacing `forEach` with `for...of` (as done in `handleCancelBooking`) or `Promise.all(map(...))` would make the deletes awaited and errors catchable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/vital/lib/reschedule.ts:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Async `forEach` in handleCancelBooking pushes into `updatedBookings` after the handler may have moved on",
+      "description": "In the recurring-event branch, `.forEach(async (credential) => { const calendar = await getCalendar(credential); ... })` performs the calendar update after an await. Nothing awaits the callbacks, so the update may finish after the response is sent, and rejections are unhandled. The sibling else-branch was correctly converted to `for...of`, so the two branches are now inconsistent.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts#handler"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`appStore` entries are now Promises, which breaks any synchronous consumer",
+      "description": "Each entry changed from a module namespace to `import(\"./...\")`, so `appStore[key]` is a `Promise`. Every changed call site adds `await`, but any consumer that reads `appStore[key].metadata` or similar synchronously will now get `undefined` or a type error. Those consumers are outside this diff and could not be inspected here, so they need a check. Typing the map as `Record<string, Promise<AppModule>>` would make the contract explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/app-store/index.ts:3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unawaited `getCalendar` promise is stored in a returned object typed as a resolved Calendar",
+      "description": "`getCalendarCredentials` now stores `calendar = getCalendar(credential)` (a `Promise`) in the returned item. `getConnectedCalendars` awaits `item.calendar`, which works, but any other consumer of `getCalendarCredentials` that treats `item.calendar` as `Calendar | null` will break. The item's type should say `Promise<Calendar | null>`, or the item should be built after resolving.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/CalendarManager.ts:30"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated blank line added inside getCalendarCredentials",
+      "description": "A blank line was inserted before `return credentials.length ? credentials : [];`. It is harmless, but it is unrelated to the async conversion and adds diff noise.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/core/CalendarManager.ts:31"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`forEach(async ...)` drops the deleteEvent promise and escapes the surrounding try/catch in reschedule",
+      "location": "packages/app-store/vital/lib/reschedule.ts:125",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Async `forEach` in handleCancelBooking pushes into `updatedBookings` after the handler may have moved on",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts#handler",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`appStore` entries are now Promises, which breaks any synchronous consumer",
+      "location": "packages/app-store/index.ts:3",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Unawaited `getCalendar` promise is stored in a returned object typed as a resolved Calendar",
+      "location": "packages/core/CalendarManager.ts:30",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Unrelated blank line added inside getCalendarCredentials",
+      "location": "packages/core/CalendarManager.ts:31",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "diff": "9246bad445bbd2085138c9b707f0c54eededc4d9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:58:14.249483",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 20721,
+  "diff_chars_injected": 20721,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 11849,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 9876,
+  "completion_tokens": 4889,
+  "reasoning_tokens": null,
+  "duration_seconds": 22.30802808282897,
+  "cost_usd": 0.00549151,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

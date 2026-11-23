@@ -1,0 +1,35 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The async `forEach` callbacks reject outside the surrounding `try/catch`, leaving calendar or video cleanup failures unhandled."
+  ],
+  "F2": [
+   "KEEP",
+   "The recurring cleanup callbacks are not awaited, so their deletes may be missing from `apiDeletes` when it is passed to `Promise.all`."
+  ],
+  "F3": [
+   "DROP",
+   "The imports are eager, but this is only a performance concern and no required lazy-loading behavior is established."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests are not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0020049
+}

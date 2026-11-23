@@ -1,0 +1,319 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Empty `data: {}` update is unlikely to bump `updatedAt`, and nothing reads that timestamp",
+      "description": "`fetchAvailabilityAndSetCache` calls `SelectedCalendarRepository.updateManyByCredentialId(this.credential.id, {})` to \"Update SelectedCalendar.updatedAt\". Two problems:\n\n- **The write probably does nothing.** `SelectedCalendar.updatedAt` is `DateTime? @updatedAt` (`schema.prisma:860`). As far as I recall, Prisma only injects `@updatedAt` when the update payload is non-empty, so `{}` is a no-op. I did not run this against a database. Either pass `{ updatedAt: new Date() }` explicitly or add a test that pins the behaviour.\n- **The value is never consumed.** The UI's \"Last updated\" comes from `CalendarCache.updatedAt` via `getCacheStatusByCredentialIds`, which the upsert in `upsertCachedAvailability` already bumps. The new `updatedAt`/`googleChannelId` selects in `packages/lib/server/repository/user.ts:899-900` and the widened `UserWithCalendars` type have no readers in `getConnectedDestinationCalendars.ts`.\n\nSo this adds a credential-wide `updateMany` on every Google webhook, plus two extra columns on every session-user load (`findUnlockedUserForSession`), for no observable effect. Remove it, or wire it to an actual consumer.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:1023-1024"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`updateManyByCredentialId` takes the wrong Prisma input type",
+      "description": "The parameter is typed `Prisma.SelectedCalendarUpdateInput`, which is the single-record type and includes nested relation writes (`user`, `credential`, `eventType`). `prisma.selectedCalendar.updateMany` does not support those. Because the argument is not a fresh literal, a caller could pass relation fields that compile and then fail at runtime. Use `Prisma.SelectedCalendarUpdateManyMutationInput` (or the unchecked variant).",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/lib/server/repository/selectedCalendar.ts:400-405"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cache status stays stale after \"Delete cached data\" where no `onChanged` is passed",
+      "description": "`deleteCacheMutation.onSuccess` only shows a toast and calls `onSuccess?.()`. Unlike `disconnectMutation`, whose `onSettled` invalidates `connectedCalendars` and `integrations`, it never invalidates `viewer.calendars.connectedCalendars`.\n\n- `CalendarListContainer.tsx:79-88` passes an `onChanged` that invalidates, so that page refreshes.\n- `EventAdvancedTab.tsx:372-384` passes no `onChanged`, so the dropdown keeps showing \"Cache Status / Last updated\" and the delete action after the cache is gone.\n\nInvalidate `utils.viewer.calendars.connectedCalendars` inside the component, as the disconnect mutation does.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:42-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`connectedCalendars` handler bypasses the `calendar-cache` feature flag, leaving the new mock method unused",
+      "description": "The handler instantiates `new CalendarCacheRepository()` directly instead of going through `CalendarCache.init(...)` (`calendar-cache.ts:22-29`), which returns `CalendarCacheRepositoryMock` when the feature is globally disabled. Consequences:\n\n- `CalendarCacheRepositoryMock.getCacheStatusByCredentialIds` has no caller.\n- With the flag off, leftover cache rows still surface a cache status and delete action in the UI.\n- Every `connectedCalendars` query now issues an extra `groupBy`, including for users with no Google credential or an empty `credentialIds` list.\n\nRoute through `CalendarCache.init(null)` and short-circuit when there are no Google credential ids.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:27-29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`deleteCacheHandler` throws a plain `Error` and bypasses the repository layer",
+      "description": "- **Error type.** `throw new Error(\"Credential not found or access denied\")` surfaces to clients as `INTERNAL_SERVER_ERROR` (500) for what is a not-found/forbidden condition. The sibling `setDestinationCalendar.handler.ts:77` uses `TRPCError` with an explicit code.\n- **Layering.** The handler calls `prisma.credential.findFirst` and `prisma.calendarCache.deleteMany` directly. The same diff adds a read method to `ICalendarCacheRepository`, and the mock already has a `deleteManyByCredential` stub that is not on the interface. The delete belongs on the repository.\n- **Schema placement.** The input schema is inlined in `_router.tsx:29` rather than in a `deleteCache.schema.ts` like the sibling procedures.\n\nThe ownership check itself (`userId: user.id`) is correct.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:24-30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Disconnect is now hidden for broken connections when `disableConnectionModification` is set",
+      "description": "The error/`Alert` branch previously gated the disconnect button only on `!connectedCalendar.delegationCredentialId`. It now passes `disableConnectionModification` into `CredentialActionsDropdown`, where `canDisconnect` requires it to be false. `EventAdvancedTab.tsx:375` sets it to `true`, so a broken calendar connection can no longer be removed from that screen. If intentional, say so; otherwise keep the old gating for the error branch.\n\nTwo related side effects of the same refactor:\n- On that same tab, a Google credential with cache now exposes the credential-wide \"Delete cached data\" action, although connection modification is meant to be disabled there.\n- The `<div className=\"flex w-32 justify-end\">` wrapper is always rendered, even when the dropdown returns `null`, reserving empty space where there was none.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx:122-133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests for any of the new behaviour",
+      "description": "A search of `*.test.*` / `*.spec.*` files finds no references to `deleteCache`, `getCacheStatusByCredentialIds`, `updateManyByCredentialId`, or `CredentialActionsDropdown`. Gaps that matter:\n\n- The authorization path of `deleteCacheHandler` (another user's credential must be rejected). The same directory already has `setDestinationCalendar.handler.test.ts` as a pattern.\n- The `_max(updatedAt)` aggregation in `getCacheStatusByCredentialIds`.\n- The `updatedAt` bump in `fetchAvailabilityAndSetCache`. The existing tests at `CalendarService.test.ts:664` and `:733` would be the place, and would settle the empty-data question above.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dev script is macOS-only, CWD-dependent, and reports success on failure",
+      "description": "- **Line 70:** `sed -i '' -E ...` is BSD syntax. On GNU sed the `''` is taken as the script and the substitution as a filename, so it fails. The script still prints \"\u2705 Updated GOOGLE_WEBHOOK_URL\" because there is no `set -e` or status check.\n- **Line 5:** `ENV_FILE=\"../.env\"` resolves against the caller's working directory. Run from the repo root, it creates or edits a `.env` outside the repository. Resolve from `$(dirname \"$0\")` instead.\n- **Lines 11-18:** `cleanup` always does `exit 0`, so the rate-limit and \"Failed to extract Tunnelmole URL\" paths exit successfully.\n- **Lines 28-31:** when reusing a running `tmole`, the URL is read from `/tmp/tmole.log`, which may be missing or stale from an earlier session.\n- **Name:** the file is called `test-\u2026` but only starts a tunnel and rewrites an env var. Nothing references it from `package.json`, docs or other scripts.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:70"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Disconnect logic duplicated from `DisconnectIntegration`",
+      "description": "The `trpc.viewer.credentials.delete` mutation (toasts, `onSettled` invalidations) is copied from `DisconnectIntegration.tsx:26-40` rather than shared, so the two will drift. The copy already drops the `teamId` forwarding and the `isDelegationCredential({ credentialId })` guard. Extract a shared hook. The file also has two separate imports from `@calcom/ui/components/dialog` (lines 9-10).",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:52-65"
+    },
+    {
+      "severity": "NOTE",
+      "title": "UI conventions in `CredentialActionsDropdown`",
+      "description": "- The timestamp is formatted with a hard-coded `\"en-US\"` locale rather than the user's locale from `useLocale()`.\n- Raw palette classes (`text-gray-900 dark:text-white`, `text-gray-500 dark:text-white`) are used instead of the semantic tokens (`text-emphasis`, `text-subtle`) used elsewhere in the wrapper.\n- The read-only \"Cache Status\" block is rendered as a `DropdownMenuItem`, so it is focusable and selectable, and clicking it closes the menu. A label or plain container would be more appropriate.\n- The icon-only trigger button has no accessible label.\n- `hasCache` evaluates to `\"\" | Date | null | undefined | false` rather than a boolean; `Boolean(...)` is safer for JSX `&&`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:83-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Migration header contradicts the SQL; backfilled timestamps are synthetic",
+      "description": "The auto-generated warning says the column is added \"without a default value. This is not possible if the table is not empty\", but the statement adds `NOT NULL DEFAULT NOW()`. Drop the stale warning. Existing cache rows will show the migration time as \"Last updated\" until they are next refreshed. The schema's `@default(now()) @updatedAt` matches the migration.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql:1-9"
+    },
+    {
+      "severity": "PASS",
+      "title": "Ownership check on `deleteCache`, and type widening is compatible with other callers",
+      "description": "- The mutation is behind `authedProcedure` and scopes the credential lookup to `userId: user.id` before deleting, so one user cannot purge another's cache.\n- The widened `UserWithCalendars` type is still satisfied by API v1 (`findManyByIdsIncludeDestinationAndSelectedCalendars` uses `include: { selectedCalendars: true }`) and API v2 (`findByIdWithCalendars` likewise).\n- All new i18n keys exist in `apps/web/public/static/locales/en/common.json` (lines 1382-1386, 3381-3387).\n- `GOOGLE_CALENDAR_TYPE` resolves to `\"google_calendar\"` in `packages/platform/constants/apps.ts:1`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:17-22"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Empty `data: {}` update is unlikely to bump `updatedAt`, and nothing reads that timestamp",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:1023-1024",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`updateManyByCredentialId` takes the wrong Prisma input type",
+      "location": "packages/lib/server/repository/selectedCalendar.ts:400-405",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cache status stays stale after \"Delete cached data\" where no `onChanged` is passed",
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:42-50",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`connectedCalendars` handler bypasses the `calendar-cache` feature flag, leaving the new mock method unused",
+      "location": "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts:27-29",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`deleteCacheHandler` throws a plain `Error` and bypasses the repository layer",
+      "location": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:24-30",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Disconnect is now hidden for broken connections when `disableConnectionModification` is set",
+      "location": "packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx:122-133",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests for any of the new behaviour",
+      "location": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dev script is macOS-only, CWD-dependent, and reports success on failure",
+      "location": "scripts/test-gcal-webhooks.sh:70",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Disconnect logic duplicated from `DisconnectIntegration`",
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:52-65",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "UI conventions in `CredentialActionsDropdown`",
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:83-97",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Migration header contradicts the SQL; backfilled timestamps are synthetic",
+      "location": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql:1-9",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Ownership check on `deleteCache`, and type widening is compatible with other callers",
+      "location": "packages/trpc/server/routers/viewer/calendars/deleteCache.handler.ts:17-22",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "diff": "74608dcfae2592562c1b07b0b24a783d6f80659a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:50:45.560522",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "injected": [],
+  "files_read": [
+    "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "packages/lib/server/repository/selectedCalendar.ts",
+    "packages/features/calendar-cache/calendar-cache.repository.ts",
+    "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+    "packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx",
+    "packages/features/apps/components/DisconnectIntegration.tsx",
+    "packages/features/calendar-cache/calendar-cache.repository.interface.ts",
+    "packages/features/calendar-cache/calendar-cache.ts",
+    "packages/lib/server/repository/user.ts",
+    "packages/trpc/server/routers/viewer/calendars/_router.tsx",
+    "apps/web/components/apps/CalendarListContainer.tsx",
+    "packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx",
+    "apps/api/v1/pages/api/connected-calendars/_get.ts",
+    "apps/api/v2/src/ee/calendars/services/calendars.service.ts"
+  ],
+  "searches": [
+    "grep model (SelectedCalendar|CalendarCache) \\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/prisma/schema.prisma",
+    "grep cache_deleted_successfully|error_deleting_cache|cache_status|cache_last_updated|delete_cached_data|yes_delete_cache|confirm_delete_cache|\"yes_remove_app\"|\"error_removing_app\"|\"app_removed_successfully\"|\"are_you_sure_you_want_to_remove_this_app\"|\"remove_app\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/apps/web/public/static/locales/en/common.json",
+    "grep GOOGLE_CALENDAR_TYPE in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/platform/constants",
+    "grep deleteManyByCredential|getCacheStatusByCredentialIds|updateManyByCredentialId|cacheUpdatedAt in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep disableConnectionModification in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep TRPCError in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/trpc/server/routers/viewer/calendars",
+    "grep fetchAvailabilityAndSetCache|SelectedCalendarRepository in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/app-store/googlecalendar",
+    "list_files packages/trpc/server/routers/viewer/calendars/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep updatedAt|googleChannelId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/getConnectedDestinationCalendars.ts",
+    "grep allSelectedCalendars|userLevelSelectedCalendars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/server/repository/user.ts",
+    "grep getConnectedDestinationCalendarsAndEnsureDefaultsInDb\\(|UserWithCalendars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep selectedCalendars|SelectedCalendar in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/getConnectedDestinationCalendars.ts",
+    "grep onChanged|SelectedCalendarsSettingsWebWrapper in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/apps/web",
+    "grep DropdownMenuItem|DropdownItem in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/ui/components/dropdown/Dropdown.tsx",
+    "grep connectedCalendars|SelectedCalendarsSettingsWebWrapper in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx",
+    "grep deleteCache|getCacheStatusByCredentialIds|CredentialActionsDropdown|updateManyByCredentialId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep delegationCredentialId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/getConnectedDestinationCalendars.ts",
+    "grep Intl\\.DateTimeFormat\\(\"en-US\"|i18n\\.language in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/features",
+    "grep test-gcal-webhooks|tmole|tunnelmole in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep findManyByIdsIncludeDestinationAndSelectedCalendars|withSelectedCalendars = |export function withSelectedCalendars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/server",
+    "grep findByIdWithCalendars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/apps/api/v2/src/modules/users/users.repository.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23017,
+  "diff_chars_injected": 23017,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 36,
+  "prompt_tokens": 339624,
+  "cached_tokens": 282720,
+  "cache_write_tokens": 56890,
+  "completion_tokens": 17435,
+  "reasoning_tokens": null,
+  "duration_seconds": 161.78571254201233,
+  "cost_usd": 1.6654860999999999,
+  "cost_basis": "provider"
+}

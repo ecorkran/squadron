@@ -1,0 +1,41 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` is not restricted for anonymous viewers, exposing a TL0 user\u2019s website host and path."
+  ],
+  "F2": [
+   "KEEP",
+   "include_website_name` lacks the predicate `?`, so it does not suppress the attribute when the website is blank."
+  ],
+  "F3": [
+   "KEEP",
+   "Saving a changed website updates `model.website` but does not refresh `model.website_name`, leaving the displayed label stale."
+  ],
+  "F4": [
+   "DROP",
+   "This finding reports missing test coverage rather than a behavior defect."
+  ],
+  "F5": [
+   "DROP",
+   "The cited parsing and string-concatenation choices do not establish a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0035794
+}

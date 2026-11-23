@@ -1,0 +1,24 @@
+{
+ "case": "cal.com-ca22345",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the auth-only path at `insightsBooking.ts:74-75` returns the org/team `(A) OR (B)` fragment unwrapped, so composing it with `AND` lets the user branch escape the extra predicate; no caller does this yet."
+  ],
+  "F2": [
+   "DROP",
+   "the claim is accurate, but runtime behaviour is the intended, tested fail-closed `1=0` for invalid options; the complaint is compile-time strictness and missing logging, not a behaviour defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.40026379999999995
+}

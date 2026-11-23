@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "No line-level slips found in the changed hunks",
+      "description": "Read line by line, the changed lines have no wrong-variable use, inverted conditions, or misspelled symbols. The state check (`!= pipeline.signature`), the `access_token` and `login` presence checks, and the `installation_id is None` redirect all test the intended thing. The imports added in `integration.py` are all used. In the test changes, the test names (`test_github_user_mismatch`, the \"Invalid installation request.\" assertions) match the behavior they exercise. The `pipeline_advancer.py` change keeps the same condition with `provider_id == \"github\"` in place of the removed constant.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py#OAuthLoginView.dispatch"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Identity-provider OAuth helper methods were not verified against their definitions",
+      "description": "`OAuthLoginView.dispatch` calls `ghip.get_oauth_client_id()`, `get_oauth_client_secret()`, `get_oauth_authorize_url()`, and `get_oauth_access_token_url()`, and `get_user_info` from `sentry.identity.github`. I could not open those definitions in this session, so I have not confirmed they exist with these names and signatures. This is a verification gap, not a detected defect.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py#OAuthLoginView.dispatch"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "No line-level slips found in the changed hunks",
+      "location": "src/sentry/integrations/github/integration.py#OAuthLoginView.dispatch",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Identity-provider OAuth helper methods were not verified against their definitions",
+      "location": "src/sentry/integrations/github/integration.py#OAuthLoginView.dispatch",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "diff": "11980b40faffa3631be5733d29650675f30d54b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:55:22.477643",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19901,
+  "diff_chars_injected": 19901,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10503,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8530,
+  "completion_tokens": 4643,
+  "reasoning_tokens": null,
+  "duration_seconds": 19.87924658320844,
+  "cost_usd": 0.004966310000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

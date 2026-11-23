@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Test comment says \"Allow\" but the fixture denies dash1",
+      "description": "In the \"Should deny on explicit cache deny entry\" subtest, the comment reads \"Allow access to the dashboard to prove this is not checked\", but the line below it sets `permCache` to `map[string]bool{\"dashboards:uid:dash1\": false}`. The fixture denies access, so the comment contradicts the code. The test still passes for the right reason only if the denial cache is checked first, which is the behavior under test. The comment should say the permission cache denies (or allows the opposite of the denial entry) so the test's intent is clear.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service_test.go#TestService_CacheCheck"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Denial cache key depends on `ParentFolder` while the test populates `Folder`",
+      "description": "`Check` builds `permDenialKey` from `checkReq.ParentFolder`, while the subtest sets `Folder: \"fold1\"` on the `CheckRequest` and seeds the denial entry with `\"fold1\"` as the parent. The test only exercises the intended path if `checkReq.ParentFolder` is populated from `req.Folder`. I could not verify that mapping from the diff. If it is not populated that way, the denial-cache subtest would pass for the wrong reason or fail.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go#Check"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removed `newRBACClient` helper may have other callers",
+      "description": "The diff deletes `newRBACClient` and inlines its construction in two places. The diff shows only the two call sites it replaced. If other files in the package still call `newRBACClient`, the build will break. A repository-wide search for the symbol would settle it.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test comment says \"Allow\" but the fixture denies dash1",
+      "location": "pkg/services/authz/rbac/service_test.go#TestService_CacheCheck",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Denial cache key depends on `ParentFolder` while the test populates `Folder`",
+      "location": "pkg/services/authz/rbac/service.go#Check",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "Removed `newRBACClient` helper may have other callers",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633",
+    "diff": "e1285b747878f75e0e1248bec2e80263ab046fbe...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:55:03.847840",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 16281,
+  "diff_chars_injected": 16281,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 11190,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 9217,
+  "completion_tokens": 4475,
+  "reasoning_tokens": null,
+  "duration_seconds": 21.49261741619557,
+  "cost_usd": 0.00508941,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

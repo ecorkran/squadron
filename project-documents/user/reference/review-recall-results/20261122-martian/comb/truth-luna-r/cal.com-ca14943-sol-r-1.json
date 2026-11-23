@@ -1,0 +1,19 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The catch-block update can throw if the reminder was deleted, aborting the loop before later reminders are processed."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.00032470000000000003
+}

@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The Ember wrapper is a flex item with an automatic min-content width, so a nowrap title can prevent the inner ellipsis from constraining it."
+  ],
+  "F2": [
+   "KEEP",
+   "The mobile negative margin shifts the custom message left into the adjacent 45px avatar column."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00263205
+}

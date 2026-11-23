@@ -1,0 +1,35 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Non-request translation lookups do not load the fallback locales, allowing missing results to be cached before those locales are loaded."
+  ],
+  "F2": [
+   "DROP",
+   "Missing test coverage is not a behavior defect."
+  ],
+  "F3": [
+   "KEEP",
+   "Each fallback lookup calls the unguarded `SiteSetting.default_locale`, which can raise if the setting read fails."
+  ],
+  "F4": [
+   "DROP",
+   "The current configuration installs `FallbackLocaleList`; the claimed failure depends on a hypothetical future configuration change."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.00304525
+}

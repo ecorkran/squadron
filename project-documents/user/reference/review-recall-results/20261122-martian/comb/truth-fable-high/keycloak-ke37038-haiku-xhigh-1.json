@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke37038",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "getGroupIdsWithViewPermission` passes and collects `groupResource.getId()` (a random resource UUID, while the group ID is the resource name), so the set never holds group IDs and group-scoped user counts and filters break."
+  ],
+  "F2": [
+   "KEEP",
+   "V2 `canManage()` accepts the `VIEW` scope, so an all-groups view-only grant passes `requireManage()` in `addTopLevelGroup` and can create or move top-level groups."
+  ],
+  "F3": [
+   "DROP",
+   "no-arg V2 `canView()` evaluates only the all-groups resource and returns false when no all-groups permission exists, so a one-group VIEW holder is not admitted to `/groups/count` as claimed."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 2.9059638999999997
+}

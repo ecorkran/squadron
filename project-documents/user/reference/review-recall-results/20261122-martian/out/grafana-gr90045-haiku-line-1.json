@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Delete builds a contextual logger but passes the unscoped `d.Log` into the context",
+      "description": "In `Delete`, `log` is built with `name`, `kind`, and `method`, but the next line is `ctx = klog.NewContext(ctx, d.Log)`. The enriched `log` is never placed in the context, so downstream logging in the storage call loses those values. Every other method in this diff uses `klog.NewContext(ctx, log)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Delete passes `name` where the kind value belongs to the storage duration metric",
+      "description": "After a successful storage delete, the code calls `d.recordStorageDuration(false, mode3Str, name, method, startStorage)`. The third argument is the kind label, but `name` is passed where the other methods pass `options.Kind`. This mislabels the metric series.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Update records a storage failure as a legacy duration",
+      "description": "In the error branch after `d.Storage.Update`, the code calls `d.recordLegacyDuration(true, ...)`. The failed call was to storage, so this should be `recordStorageDuration`. The legacy and storage metrics are now swapped for this path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Update"
+    },
+    {
+      "severity": "FAIL",
+      "title": "DeleteCollection records the legacy goroutine duration with the storage recorder",
+      "description": "Inside the goroutine, `d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy)` records a legacy call with the storage recorder. It should be `recordLegacyDuration`, matching the Create, Delete, and Update goroutines.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.DeleteCollection"
+    },
+    {
+      "severity": "FAIL",
+      "title": "TestMode3_Create failure case sets up the legacy mock but not the storage mock",
+      "description": "The case named \"error when creating object in the unified store fails\" configures `setupLegacyFn` with a `Create` expectation and leaves `setupStorageFn` nil. The code under test calls `d.Storage.Create` first, so the storage mock has no expectation for it. The fixture does not match the path the test claims to exercise.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Create"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "TestMode3_List case name says List is not implemented, but List is now implemented",
+      "description": "The first case is named \"error when listing an object in the unified store is not implemented\", but this diff replaces the stub with a real `d.Storage.List` call. The name contradicts what the case now checks: a storage error propagates.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_List"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Update test references `updatedObjInfoObj` while the removed commented test used `UpdatedObjInfoObj`",
+      "description": "The new test calls `updatedObjInfoObj{}` with a lowercase initial. The removed code used `UpdatedObjInfoObj`. I could not check the other test files in this session. If no lowercase type is defined in the package, this will not compile. Please confirm the identifier.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Update"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delete builds a contextual logger but passes the unscoped `d.Log` into the context",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delete passes `name` where the kind value belongs to the storage duration metric",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Delete",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Update records a storage failure as a legacy duration",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.Update",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "DeleteCollection records the legacy goroutine duration with the storage recorder",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go#DualWriterMode3.DeleteCollection",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "TestMode3_Create failure case sets up the legacy mock but not the storage mock",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Create",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "TestMode3_List case name says List is not implemented, but List is now implemented",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_List",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Update test references `updatedObjInfoObj` while the removed commented test used `UpdatedObjInfoObj`",
+      "location": "pkg/apiserver/rest/dualwriter_mode3_test.go#TestMode3_Update",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045",
+    "diff": "77572e87ff64663c748ff103d92d3d53650d37dd...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:55:49.450764",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32103,
+  "diff_chars_injected": 32103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 20067,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 18094,
+  "completion_tokens": 5725,
+  "reasoning_tokens": null,
+  "duration_seconds": 25.480761541053653,
+  "cost_usd": 0.00837701,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

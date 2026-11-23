@@ -14,7 +14,7 @@ Squadron's code reviewers run on the 50 public PRs of [Code Review Bench](https:
 
 - `prs.py`, `prs.json`: base and head commit of each PR, from the GitHub API.
 - `setup.py`, `cases.json`: one two-commit sandbox per PR (merge base, then PR head), no history. Sandboxes are scratch and are rebuilt by `setup.py WORK_DIR`; `cases.json` holds their paths.
-- `run.sh`, `batch.py`: one `sq review code --diff <base>` per case and reviewer. Outputs in `out/`, logs in `logs/`.
+- `run_review.sh`, `batch.py`: one `sq review code --diff <base>` per case and reviewer; `RUN`, `REVIEW_LABEL`, `REVIEW_RULES` and `REVIEW_NO_TOOLS` select a repeat run or a prompt variant. `run.sh` is the first version, kept because the earliest runs used it. Outputs in `out/`, logs in `logs/`.
 - `comb.py`: the code comb of `../20261113-comb/comb.yaml`, one call per review. Decisions in `comb/<comb>/`; `comb/luna-r+opus-high/` is opus-high over what luna-r kept.
 - `convert.py`: adds one squadron entry to the harness's `benchmark_data.json`. `judge.sh` runs the harness's extract, dedup and judge steps for that entry with a judge model on OpenRouter.
 - `harness-results/`: the harness's result files for the squadron entries, copied from the harness checkout.

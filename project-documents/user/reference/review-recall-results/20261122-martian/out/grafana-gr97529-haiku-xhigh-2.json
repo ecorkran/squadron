@@ -1,0 +1,287 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "BuildIndex no longer serialized, so concurrent builds for the same key can run in parallel",
+      "description": "The diff removes `b.cacheMu.Lock()` from the top of `BuildIndex` and takes the lock only around the final cache write. That lock was the only thing serializing builds. `getOrCreateIndex` (pkg/storage/unified/resource/search.go:287-307) has a check-then-build race: `GetIndex` returns nil, then `build` runs. Callers can overlap. A gRPC `Search` and the `handleEvent` goroutine (search.go:237) can both build the same missing key. Two consequences follow:\n- For file-backed indexes (`size > FileThreshold`, bleve.go:97-98), two concurrent `bleve.New(dir, ...)` calls target the same directory.\n- For memory indexes, the second `b.cache[key] = idx` replaces the first. Writes that `handleEvent` sends to the replaced index are lost from search.\n\nThe overwrite race predates the diff, because the old code also rebuilt after a nil `GetIndex`. The old lock made the second build wait; now the two builds run in parallel. Dropping the lock across the build is the right idea, since it also stops `GetIndex` from blocking behind unrelated builds. What's missing is per-key coordination. `golang.org/x/sync` is already imported (search.go:14), so a `singleflight` keyed on `NamespacedResource` in `getOrCreateIndex` would fit. Re-checking the cache under the lock before inserting is the other option.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/search/bleve.go:72-141"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "TotalDocs reads the cache map without a lock, and the new startup log calls it",
+      "description": "`bleveBackend.TotalDocs` ranges over `b.cache` with no lock, while `BuildIndex` writes the map under `cacheMu` (bleve.go:137-139). The diff adds a new caller: `searchSupport.init` logs `s.search.TotalDocs()` at search.go:216. By that point the `handleEvent` goroutine is already running (search.go:207-213) and can call `BuildIndex` for a new key. A concurrent map read and write is a fatal runtime error in Go. The metrics scrape at `bleve_index_metrics.go:96` already had this exposure before the diff. Take `cacheMu.RLock()` in `TotalDocs`, or count from a snapshot.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/search/bleve.go:144-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Data race on `totalBatchesIndexed` and `err` in the init worker closures",
+      "description": "Each `group.Go` closure does `totalBatchesIndexed++` and `_, _, err = s.build(...)`. That writes outer variables from up to `initWorkers` goroutines at once. This predates the diff, but it sits in the function the diff edits, and that function now runs eagerly at construction. Use an `atomic.Int64` for the counter, and return the build error locally (`if _, _, err := s.build(...); err != nil { return err }`). `errgroup` already reports the first error.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/search.go:186-193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Constructor error path leaks the context and leaves a watch goroutine running",
+      "description": "`NewResourceServer` creates a cancelable `ctx` at server.go:229. On `Init` failure (new at 258-262), it returns `nil, err` without calling `cancel`. If `initWatcher` fails after `search.init` succeeds, the goroutine started at search.go:207-213 loops on `<-events` forever, because its context is `context.Background()` (search.go:202). Call `cancel()` on the error path, and derive the watch context from `s.ctx` so it can be stopped. The existing `search` error return at server.go:253-255 leaks the same way and should be fixed in the same pass.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:258-262"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Postgres integration test skipped with no tracking issue",
+      "description": "The new skip disables `TestIntegrationWillRunInstrumentationServerWhenTargetHasNoHttpServer` for every Postgres run. The TODO has no issue link or owner, so nothing will bring the test back. The skip is also unrelated to the storage changes in the rest of the diff. Link a tracking issue in the comment, or fix the test. If the test cannot run on Drone, state which CI job still covers Postgres here.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/server/module_server_test.go:35-38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removing the per-request Init guard also drops the post-Stop rejection",
+      "description": "Before the diff, each handler called `s.Init`, which returned `s.initErr`. `Stop` sets `initErr` to \"service is stopped\", so handlers rejected requests after shutdown. They no longer check that. `Stop` is not on the `ResourceServer` interface (server.go:27-32) and has no callers under `pkg/storage`, so nothing reachable hits this today. If `Stop` is ever exposed, add an explicit closed check.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:320-342"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The watcher now starts after the index build, so writes during the build are invisible to it",
+      "description": "`initWatcher` moved to after `search.init`. The SQL backend's `WatchWriteEvents` takes its baseline from the latest RV at subscription time (sql/backend.go:558-568). Writes during the index build are therefore not delivered to the broadcaster or reflected in `mostRecentRV` (server.go:764, 811). No Watch client can connect before construction returns, so the impact is small. Add a comment explaining the ordering, or confirm it is intended.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:300-311"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Init failure is logged twice",
+      "description": "`Init` logs the error at server.go:313-315, and the constructor logs the same error again at 259-261. Keep one.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/storage/unified/resource/server.go:259-261"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead `log` field in the bleve backend",
+      "description": "The diff deletes the only `b.log` use, the \"TODO, check last RV\" Info log. A grep of the search package now finds no `.log.` calls, so the `log` field (bleve.go:40, set at :50) is write-only. Remove it, or use it. The TODO now sits as a free-floating comment with no log behind it.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/storage/unified/search/bleve.go:40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Watcher test comment is stale",
+      "description": "\"Issue a health check to ensure the server is initialized\" no longer holds, because construction now initializes the server. The health check is harmless, but the comment misleads. Update or remove it.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/storage/unified/apistore/watcher_test.go:127-129"
+    },
+    {
+      "severity": "PASS",
+      "title": "Trace context now propagates into child spans, and the grafana-cli logger is removed",
+      "description": "`GetResourceStats` (backend.go:126), `init` (search.go:173), and `build` (search.go:310) now assign the span context back to `ctx`, so the downstream DB and build calls are children of the new span. The old `_` discarded it. `ctx` is used below in each: `WithTx` at backend.go:136, and `GetResourceStats`/`s.build`/`BuildIndex` in search.go. The `grafana-cli/logger` import is gone from search.go, and `logger.Warn` at search.go:280 now uses `s.log`, which `newSearchSupport` sets (search.go:113). The only `searchSupport` literal in the package is that one, so `s.log` is always set.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/storage/unified/sql/backend.go:126"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "BuildIndex no longer serialized, so concurrent builds for the same key can run in parallel",
+      "location": "pkg/storage/unified/search/bleve.go:72-141",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "TotalDocs reads the cache map without a lock, and the new startup log calls it",
+      "location": "pkg/storage/unified/search/bleve.go:144-154",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Data race on `totalBatchesIndexed` and `err` in the init worker closures",
+      "location": "pkg/storage/unified/resource/search.go:186-193",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Constructor error path leaks the context and leaves a watch goroutine running",
+      "location": "pkg/storage/unified/resource/server.go:258-262",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Postgres integration test skipped with no tracking issue",
+      "location": "pkg/server/module_server_test.go:35-38",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Removing the per-request Init guard also drops the post-Stop rejection",
+      "location": "pkg/storage/unified/resource/server.go:320-342",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The watcher now starts after the index build, so writes during the build are invisible to it",
+      "location": "pkg/storage/unified/resource/server.go:300-311",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Init failure is logged twice",
+      "location": "pkg/storage/unified/resource/server.go:259-261",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead `log` field in the bleve backend",
+      "location": "pkg/storage/unified/search/bleve.go:40",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Watcher test comment is stale",
+      "location": "pkg/storage/unified/apistore/watcher_test.go:127-129",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Trace context now propagates into child spans, and the grafana-cli logger is removed",
+      "location": "pkg/storage/unified/sql/backend.go:126",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+    "diff": "d6b412dc9d6b98231d88be94ff5ae1f1dfa6877c...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:05:02.877478",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "injected": [],
+  "files_read": [
+    "pkg/storage/unified/resource/server.go",
+    "pkg/storage/unified/resource/search.go",
+    "pkg/storage/unified/search/bleve.go",
+    "pkg/storage/unified/sql/backend.go",
+    "pkg/server/module_server_test.go",
+    "pkg/storage/unified/sql/server.go",
+    "pkg/storage/unified/sql/service.go",
+    "pkg/storage/unified/resource/server_test.go",
+    "pkg/storage/unified/client.go",
+    "pkg/storage/unified/apistore/restoptions.go",
+    "pkg/storage/unified/apistore/watcher_test.go",
+    "pkg/storage/unified/sql/test/integration_test.go"
+  ],
+  "searches": [
+    "grep . in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/resource/server.go",
+    "grep func \\(s \\*server\\) Init|func NewResourceServer|initErr|func \\(s \\*server\\) initWatcher in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/resource",
+    "grep NewResourceServer\\(|TotalDocs\\(\\)|\\.Stop\\(ctx|service is stopped|&server\\{|&searchSupport\\{|searchSupport\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg",
+    "grep Init\\(ctx|Stop\\(|initErr|service is stopped|ErrServerStopped|Init\\(context in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified",
+    "grep type ResourceServer interface|type ResourceStoreServer|Stop\\(context|ResourceServer\\)\\.Stop|server\\.Stop\\(|rs\\.Stop\\(|srv\\.Stop\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg",
+    "grep \\.Stop\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage",
+    "grep ^go |b\\.log\\.|\\.log\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/search",
+    "grep ^go \\d|^go [0-9] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529",
+    "grep func \\(b \\*backend\\) WatchWriteEvents in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr97529/pkg/storage/unified/sql"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9480,
+  "diff_chars_injected": 9480,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 25,
+  "prompt_tokens": 570017,
+  "cached_tokens": 496676,
+  "cache_write_tokens": 73319,
+  "completion_tokens": 41285,
+  "reasoning_tokens": null,
+  "duration_seconds": 193.65060162497684,
+  "cost_usd": 0.040924959999999996,
+  "cost_basis": "provider"
+}

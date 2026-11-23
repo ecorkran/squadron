@@ -1,0 +1,211 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Move preserves behavior; no stale references",
+      "description": "I compared the removed `-` lines in the diff with the new modules. `mark_failed_threshold` became `try_incident_threshold` (incidents.py:14-104) and `create_issue_platform_occurrence` became `create_incident_occurrence` (incident_occurrence.py:28-113), with no other changes to the bodies. `mark_failed.py` still uses all of its remaining imports (`Q`, `datetime`, `CheckInStatus`, `MonitorCheckIn`, `MonitorEnvironment`). A repo-wide grep finds no remaining `mark_failed_threshold` references. The `create_issue_platform_occurrence` in `uptime` is a different function. `SimpleCheckIn` now lives in `src/sentry/monitors/types.py:105`, and no caller imported it from `mark_failed`. No `mock.patch` strings reference the old module paths.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/mark_failed.py:79"
+    },
+    {
+      "severity": "PASS",
+      "title": "Moved behavior is covered by existing mark_failed tests",
+      "description": "The new modules have no direct unit tests, but `test_mark_failed_default_params` asserts the full occurrence and event payload, including the singular failure reason (line 91) and the monitor context (lines 114-127). `test_mark_failed_issue_threshold` (line 310) and `test_mark_failed_issue_threshold_timeout` (line 443) assert the multi-status reason and the per-check-in occurrence count. That is adequate coverage for a move-only change.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/monitors/logic/test_mark_failed.py:26-145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dead `schedule_type` display computation in `get_monitor_environment_context`",
+      "description": "Lines 160-162 rewrite `schedule_type` on the copy `config`. Line 168 then returns `monitor_environment.monitor.config`, so the copy is discarded and the branch has no effect. The intent is unclear. Either the event context should show the display string, which means returning `config` and changing the payload, or the branch should be deleted. `tests/sentry/monitors/logic/test_mark_failed.py:119` pins the raw `\"schedule_type\": 2`, so the test encodes the current behavior either way. This was copied unchanged from `mark_failed.py`, but it now lives in a new file, so it is worth resolving now.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:159-171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`get_failure_reason` docstring contradicts the code",
+      "description": "The multi-status example does not match the output. The code produces `\"2 missed, 1 timeout and 1 error check-ins detected\"`, as the test at test_mark_failed.py:310 shows (`\"3 timeout, 3 missed and 2 error check-ins detected\"`). The docstring instead says \"2 missed check-ins, 1 timeout check-in and 1 error check-in were detected\". The singular examples are also wrong. A single failure yields \"An error check-in was detected\", \"A missed check-in was detected\", or \"A timeout check-in was detected\" (lines 123-127). No code path produces \"A failed check-in was detected\". The docstring also has the typo \"humam readible\".",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:131-137"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No-recognized-status case renders a reason with no subject",
+      "description": "If no failed check-in has an ERROR, MISSED, or TIMEOUT status, `status_counts` is empty. The `== 1` branch is skipped and `get_text_list` receives an empty list. The evidence value then becomes `\" check-ins detected\"` with a leading space and no subject. Production callers pass only ERROR (monitor_consumer.py:876-880), TIMEOUT (check_timeout.py:106, 124), or MISSED (check_missed.py:130), so the consumer path cannot reach this. Direct calls can: `test_mark_failed_issue_assignment` (test_mark_failed.py:517-519) sends an IN_PROGRESS check-in through an unmuted monitor, which produces an occurrence with this value, and the test does not assert on it. The docstring's \"A failed check-in was detected\" suggests a fallback that was planned but never implemented. I did not verify Django's `get_text_list([])` return value against source, since Django is not vendored in this sandbox. I'm relying on knowledge of the library.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:139-156"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused module-level `logger` in the split modules",
+      "description": "`logger = logging.getLogger(__name__)` appears in `incidents.py:11`, `incident_occurrence.py:25`, and still in `mark_failed.py:11`. None of the three modules calls `logger`. The split copied the dead definition into the two new files. Remove it, or add logging where the status transitions happen.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incidents.py:11"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Occurrence fan-out issues per-check-in queries (pre-existing)",
+      "description": "When a monitor enters ERROR, the loop at lines 93-100 re-queries `MonitorCheckIn` and calls `create_incident_occurrence` once per check-in. Inside, `failed_checkin.monitor_environment` (incident_occurrence.py:37) is a lazy FK on a fresh queryset with no `select_related`, so each iteration issues its own query. `get_last_successful_checkin()` (incident_occurrence.py:46) runs once per check-in even though its result does not change across iterations. `failure_issue_threshold` can be as high as `MAX_THRESHOLD = 720` (`src/sentry/monitors/constants.py:13`, `validators.py:142-149`). One incident can therefore issue many queries and one Kafka produce per check-in. The tests (test_mark_failed.py:300) require one occurrence per check-in, so the fix is in query shape (`select_related`, hoisting the last-successful lookup), not in behavior. This was carried over from `mark_failed.py`. The diff does not make it worse.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incidents.py:89-100"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Move preserves behavior; no stale references",
+      "location": "src/sentry/monitors/logic/mark_failed.py:79",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Moved behavior is covered by existing mark_failed tests",
+      "location": "tests/sentry/monitors/logic/test_mark_failed.py:26-145",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead `schedule_type` display computation in `get_monitor_environment_context`",
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:159-171",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`get_failure_reason` docstring contradicts the code",
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:131-137",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "No-recognized-status case renders a reason with no subject",
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:139-156",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused module-level `logger` in the split modules",
+      "location": "src/sentry/monitors/logic/incidents.py:11",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Occurrence fan-out issues per-check-in queries (pre-existing)",
+      "location": "src/sentry/monitors/logic/incidents.py:89-100",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "diff": "b695d416e601becddb96a381968cc3b5c8f1bd40...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:07:23.110956",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "injected": [],
+  "files_read": [
+    "src/sentry/monitors/logic/mark_failed.py",
+    "src/sentry/monitors/logic/incidents.py",
+    "src/sentry/monitors/logic/incident_occurrence.py",
+    "src/sentry/monitors/types.py",
+    "tests/sentry/monitors/logic/test_mark_failed.py",
+    "src/sentry/monitors/consumers/monitor_consumer.py",
+    "src/sentry/monitors/clock_tasks/check_timeout.py",
+    "src/sentry/monitors/validators.py"
+  ],
+  "searches": [
+    "grep mark_failed_threshold|create_issue_platform_occurrence|SimpleCheckIn|try_incident_threshold|create_incident_occurrence|get_failure_reason|get_monitor_environment_context|HUMAN_FAILURE_STATUS_MAP|SINGULAR_HUMAN_FAILURE_MAP in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "grep monitors\\.logic\\.mark_failed|monitors\\.logic\\.incidents|monitors\\.logic\\.incident_occurrence|monitors\\.types import|logic import mark_failed in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "grep check-ins detected|Failure reason|schedule_type|produce_occurrence_to_kafka|monitor_environment_failed|create_issue_platform_occurrence|create_incident_occurrence|mark_failed_threshold|occurrence in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/tests/sentry/monitors",
+    "grep monitors[/.]logic|monitors\\.types in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "grep TCH|flake8-type-checking|select\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/pyproject.toml",
+    "grep mark_failed\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/src/sentry/monitors",
+    "grep CheckInStatus\\.MISSED|failure_issue_threshold|def get_last_successful_checkin|def get_environment\\b|def active_incident in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/src/sentry/monitors",
+    "grep ^MAX_THRESHOLD\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/src/sentry/monitors",
+    "list_files **/django/utils/text.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21046,
+  "diff_chars_injected": 21046,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 567548,
+  "cached_tokens": 500630,
+  "cache_write_tokens": 66896,
+  "completion_tokens": 30859,
+  "reasoning_tokens": null,
+  "duration_seconds": 138.52787150023505,
+  "cost_usd": 0.034834800000000006,
+  "cost_basis": "provider"
+}

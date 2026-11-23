@@ -1,0 +1,153 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Reminders for SMS-locked accounts are hard-deleted about 30 minutes after the first locked attempt, even if the lock is later lifted",
+      "description": "`scheduleSMS` returns `undefined` without throwing when `isLockedForSMSSending` is true (`packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts:90-95`). The new `else` branch treats that return as a failed attempt and increments `retryCount`. The lock is set by a rate-limit breach (`packages/lib/checkRateLimitAndThrowError.ts:40-44`) and can be reversed by an admin (`packages/trpc/server/routers/viewer/admin/setSMSLockState.handler.ts:24`). The cron runs every 15 minutes (`.github/workflows/cron-scheduleSMSReminders.yml:8`). Trace for one queued reminder on a locked account: run 1 sets `retryCount` to 1; run 2 sets it to 2; run 3's `deleteMany` at lines 38-41 (`retryCount > 1`) hard-deletes the row. The deletion is not logged. Before this change, a locked reminder survived until the account was unlocked or its `scheduledDate` passed. If losing these reminders is not intended, the lock case needs to be distinguished from a Twilio failure and must not count toward the retry cap.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An unguarded update in the catch block can throw and abort the whole reminder batch with a 500",
+      "description": "The `prisma.workflowReminder.update` at lines 190-197 is not wrapped in its own try, and it runs inside the per-reminder `catch`. If it throws, for example Prisma P2025 because an overlapping run's `deleteMany` already removed the row, or a transient DB error, the exception leaves the `for` loop (lines 67-200). It then escapes `handler` to `defaultHandler` (`packages/lib/server/defaultHandler.ts:17-23`), which returns 500. Every reminder after that one is skipped for this run. Before this change the catch only logged, so one reminder's failure could not stop the batch. The same exposure applies to the `else` update at lines 179-186, because it runs inside the `try` and so routes into this catch.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-199"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `retryCount > 1` delete branch is not scoped to SMS, so any non-SMS reminder that reaches a retry count above 1 would be deleted",
+      "description": "The second `OR` branch `{ retryCount: { gt: 1 } }` has no `method: WorkflowMethods.SMS` filter, and it has no `scheduledDate` filter either. A grep for `retryCount` found no writer other than this handler, so no non-SMS row matches today. The predicate would still delete an EMAIL or WhatsApp reminder if one ever got `retryCount > 1`. Adding `method: WorkflowMethods.SMS` to that branch would close the gap.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`retryCount` is set from the batch snapshot, so overlapping cron runs can undercount retries",
+      "description": "Both increments write `reminder.retryCount + 1`, using the value read by `findMany` at line 48. If two runs overlap and read the same value, both write the same number and one failure is lost. The effect is one extra attempt before the cap applies, not a wrong result. Prisma's `{ increment: 1 }` would make the write atomic.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184, 195"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reminders for SMS-locked accounts are hard-deleted about 30 minutes after the first locked attempt, even if the lock is later lifted",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:178-187",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "An unguarded update in the catch block can throw and abort the whole reminder batch with a 500",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:189-199",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `retryCount > 1` delete branch is not scoped to SMS, so any non-SMS reminder that reaches a retry count above 1 would be deleted",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:38-42",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`retryCount` is set from the batch snapshot, so overlapping cron runs can undercount retries",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:184, 195",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "diff": "b521f3a8ec35ec1e90b28075046b369b6eff5554...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:40:18.976312",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "injected": [],
+  "files_read": [
+    "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+    "packages/features/ee/workflows/lib/getWorkflowReminders.ts",
+    "packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts",
+    "packages/lib/checkRateLimitAndThrowError.ts",
+    ".github/workflows/cron-scheduleSMSReminders.yml"
+  ],
+  "searches": [
+    "grep retryCount in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "grep export (async )?function scheduleSMS|export const scheduleSMS|scheduleSMS\\s*=|async function scheduleSMS in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943/packages/features/ee/workflows/lib/reminders/providers/twilioProvider.ts",
+    "list_files packages/prisma/migrations/2024* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "list_files packages/prisma/migrations/2024*/migration.sql in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "grep isLockedForSMSSending|checkSMSRateLimit in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943/packages",
+    "grep SMSLockState\\.(NOT_LOCKED|REVIEW_NEEDED)|scheduleSMSReminders in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "grep smsLockState|SMSLockState in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943/packages/trpc/server/routers/viewer/admin",
+    "grep export function defaultHandler|export const defaultHandler in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943/packages/lib/server"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 2947,
+  "diff_chars_injected": 2947,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 243421,
+  "cached_tokens": 209509,
+  "cache_write_tokens": 33894,
+  "completion_tokens": 21222,
+  "reasoning_tokens": null,
+  "duration_seconds": 101.46592787466943,
+  "cost_usd": 0.019787190000000003,
+  "cost_basis": "provider"
+}

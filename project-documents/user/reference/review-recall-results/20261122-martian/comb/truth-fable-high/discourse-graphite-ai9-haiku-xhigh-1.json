@@ -1,0 +1,29 @@
+{
+ "case": "discourse-graphite-ai9",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2,
+  "F3": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "ensure_loaded!` is called only from `set_locale`; jobs, `PostAlerter` and `PostDestroyer` set a locale without loading fallback locales, so the fallback finds nothing and the \"translation missing\" string is cached by the locale-only key."
+  ],
+  "F2": [
+   "DROP",
+   "SiteSetting.default_locale` reads an in-memory per-site hash populated at class load, not the DB on each lookup, and the provider already guards the pre-migration case with `table_exists?`."
+  ],
+  "F3": [
+   "DROP",
+   "hypothetical only: no `config.i18n.fallbacks` line remains anywhere in config, so `I18n.fallbacks` is always the `FallbackLocaleList` and nothing raises in the code as changed."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.6089908
+}

@@ -1,0 +1,58 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Prisma` is unused in the workflows router, violating the configured error-level unused-import rule."
+  ],
+  "F2": [
+   "KEEP",
+   "The cited names are used only as types, violating the configured error-level `consistent-type-imports` rule."
+  ],
+  "F3": [
+   "KEEP",
+   "A SendGrid error aborts the loop before lazy database deletes execute, leaving flagged reminders to be retried."
+  ],
+  "F4": [
+   "KEEP",
+   "The reminder helpers are not awaited and swallow database errors, so cancellation can succeed while reminders remain unflagged."
+  ],
+  "F5": [
+   "DROP",
+   "The concern is about helper naming and consistency, not a demonstrated behavior defect."
+  ],
+  "F6": [
+   "KEEP",
+   "Immediate email cancellation leaves its reminder row in the database, unlike SMS cancellation, causing stale rows and later cancellation attempts."
+  ],
+  "F7": [
+   "DROP",
+   "The outer catch is ineffective, but the helper catches and logs its own errors, so this does not establish a behavior defect."
+  ],
+  "F8": [
+   "DROP",
+   "Duplicated dispatch and inconsistent modes are structural concerns without a demonstrated behavior defect in this finding."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.0045871
+}

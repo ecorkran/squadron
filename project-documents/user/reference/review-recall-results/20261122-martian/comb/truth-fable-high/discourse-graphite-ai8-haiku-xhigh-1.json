@@ -1,0 +1,61 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "add_members` pushes each user via `Group#add` with no membership check or rescue, so an existing member hits the unique `(group_id, user_id)` index, raises a 500, and leaves earlier names added."
+  ],
+  "F2": [
+   "KEEP",
+   "group.users.delete(user_id)` bulk-deletes the join row in Rails 4.1.8, so the `user_count` counter cache is not decremented and `primary_group_id` is never cleared on this path."
+  ],
+  "F3": [
+   "KEEP",
+   "Math.floor(user_count / limit) + 1` reports 2 pages for 50 members, so `showingLast` is false on the real last page and \"next\" moves to offset 50, an empty page."
+  ],
+  "F4": [
+   "KEEP",
+   "findMembers` clamps against the pre-removal `user_count`, so removing the 51st member re-requests offset 50 and leaves an empty page 2 with no automatic step back."
+  ],
+  "F5": [
+   "KEEP",
+   "the public members route calls `findMembers()` with offset 0 and limit 50, and `group/members.hbs` has no pager or load-more, so members past the first 50 cannot be seen."
+  ],
+  "F6": [
+   "KEEP",
+   "members` passes `params[:limit].to_i` and `params[:offset].to_i` straight into `.limit/.offset` with no clamping, so negative values produce a PostgreSQL error (500) and limit is uncapped."
+  ],
+  "F7": [
+   "KEEP",
+   "the `addMembers` and `removeMember` actions and their model methods chain only success handlers, so 422/404/500 responses give the admin no feedback, and `usernames` is not cleared after a successful add."
+  ],
+  "F8": [
+   "KEEP",
+   "the `create` action sets only `name` and `visible` while the JS posts `alias_level` and the new-group form offers the selector, so the chosen alias level is discarded."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.7079014
+}

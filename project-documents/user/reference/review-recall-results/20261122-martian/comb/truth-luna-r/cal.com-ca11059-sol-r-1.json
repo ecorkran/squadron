@@ -1,0 +1,55 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "prisma.credential.update()` is used without an import or declaration, causing a reference error."
+  ],
+  "F2": [
+   "KEEP",
+   "The safe-parse result envelope is saved as the credential key, which fails the Google credential schema on reload."
+  ],
+  "F3": [
+   "KEEP",
+   "The schema\u2019s computed keys do not preserve arbitrary token fields, so sharing-mode parsing strips expiry and provider fields."
+  ],
+  "F4": [
+   "KEEP",
+   "The delegated branch returns a raw `Response`, which callers use as though it were decoded token data."
+  ],
+  "F5": [
+   "KEEP",
+   "The webhook indexes metadata by the database slug, but metadata keys are directory names, so supported slug mismatches return 404."
+  ],
+  "F6": [
+   "KEEP",
+   "Bigin passes the credential ID where `refreshOAuthTokens()` expects the user ID."
+  ],
+  "F7": [
+   "KEEP",
+   "When a response omits `refresh_token`, the helper substitutes a placeholder that overwrites Office365\u2019s stored token."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.00571048
+}

@@ -1,0 +1,410 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Public group members page is silently truncated to 50 with no pagination",
+      "description": "`members` now defaults `limit` to 50. Before this change, non-automatic groups returned every member. The public template `app/assets/javascripts/discourse/templates/group/members.hbs:6` renders `{{#each m in members}}` with no next/previous controls, and nothing in this diff adds them. For any group with more than 50 members, the public page shows only the first 50 and gives no way to reach the rest. The pending spec's comment says \"Pending until we fix group truncation\", so this change lands the truncation rather than fixing it. Either add pagination controls to the public template or keep the public response uncapped.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/groups_controller.rb:22"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`add_members` raises a unique-index violation when a user is already a member",
+      "description": "The loop calls `group.add(user)` for every username, and `Group#add` (`app/models/group.rb:272-274`) is `self.users.push(user)`. Nothing checks existing membership first. Rails 4.1 inserts a `group_users` row for each push, and `db/migrate/20130416004933_group_users.rb:9` creates a unique index on `[group_id, user_id]`. Adding someone who is already in the group therefore raises `ActiveRecord::RecordNotUnique`, which returns a 500. Batches are not wrapped in a transaction, so names processed before the duplicate stay added. The old `usernames=` setter avoided this by diffing against current members. The new endpoint has no such guard, and the UI does not exclude existing members. The client's `addMembers` has no error callback, so the admin sees nothing. Fix: skip users already in `group.users`, or rescue and report per-user.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:71-75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`remove_member` bypasses GroupUser callbacks and skips primary-group cleanup",
+      "description": "`group.users.delete(user_id)` on a has_many :through deletes the join row with a query. That means `GroupUser`'s `belongs_to :group, counter_cache: \"user_count\"` (`app/models/group_user.rb:2`) never runs, so `groups.user_count` goes stale. This also drops behavior the old path had. Removal through the old `usernames=` setter queued the row in `@deletions`, and `destroy_deletions` (`app/models/group.rb:287-295`) then set `primary_group_id` to NULL for that user. The new path does not clear it, so a removed user keeps a primary group they no longer belong to. That name still renders on their posts via `post_serializer.rb:96-102`. `Group#remove` (`group.rb:276-278`) destroys each join row, which runs the counter callback, so it is the natural base. It also needs the primary-group clear added.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`totalPages` is off by one when the member count is an exact multiple of the page size",
+      "description": "`totalPages` computes `Math.floor(user_count / limit) + 1`. With 50 members and a limit of 50 it returns 2, so the page shows \"1/2\" and Next requests offset 50. That returns an empty list, and the view shows \"2/2\" with nothing in it. The same happens at 100, 150, and so on. `Math.ceil(user_count / limit)` gives the correct count and matches the non-multiple cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Public members endpoint accepts negative offsets and unbounded limits",
+      "description": "`limit` and `offset` come straight from `params` with `.to_i` and no bounds. `offset=-1` reaches `.offset(-1)`, and Postgres rejects a negative OFFSET, so the request returns a 500. `limit` has no maximum, so a single request can return an entire large group. The client clamps offset, but the API does not. Clamp both server-side, for example `limit` to 1..100 and `offset` to 0 or more.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/controllers/groups_controller.rb:22-23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Admin member add and remove have no error handling, and failures are silent",
+      "description": "`removeMember` and `addMembers` call the model methods without an error callback. The model methods (`app/assets/javascripts/discourse/models/group.js:40-60`) also have none. I found no global `ajaxError` handler under `app/assets/javascripts`. A failed add or remove therefore shows the admin nothing. `addMembers` also never clears the input (the TODO acknowledges this), so a retry after failure re-sends the same names. Add a failure handler with a `bootbox.alert`, following the pattern `save` and `destroy` already use in this file.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:51-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Creating a group silently drops `alias_level`",
+      "description": "The client sends `alias_level` on create (`group.js:62-75`). The server's `create` sets only `name` and `visible`. The base version never set it either, so this is pre-existing, but the rewrite touched this block and the form shows the alias combo box on new groups too (`group.hbs`, not gated by `id`). An admin who picks an alias level on a new group has it discarded without any signal. Set `alias_level` in `create` the same way `update` does.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:22-32"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pending spec for pagination still asserts the old array response and is left pending",
+      "description": "The members pagination test is still `pending`. It expects a JSON array (`members.map { |m| m['username'] }`), but the endpoint now returns `{members, meta}`. Under RSpec's `pending` block the body raises on the Hash, so it stays pending without failing. As a result, the new response shape, the `meta` fields, and offset paging have no active coverage. Nothing covers adding an existing member or removing a member's counter and primary group either. The `describe \"members\"` block also calls `:posts` instead of `:members` (lines 65-69), which is pre-existing.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/controllers/groups_controller_spec.rb:71-85"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Members endpoint response shape and removed admin params are breaking API changes",
+      "description": "`GET /groups/:name/members.json` changed from a bare array to `{members, meta}`. The admin PATCH `changes` interface and the `group[usernames]` param on create and update were removed. I found no other consumer in the repo (`group.js` is the only caller), but external plugins or scripts that use these routes would break. Call this out in the change description.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "app/controllers/groups_controller.rb:19"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Shared group instance keeps paging state across visits, and responses can race",
+      "description": "The admin group `model` comes from the cached `adminGroups` list, so `offset`, `members`, and `user_count` live on the same object across visits. Returning to a group reopens the last page it was on rather than page 1. Rapid Next/Previous clicks can also return out of order and set `offset` from a stale response.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/routes/admin_group_route.js:11-14"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Enter in the name field on an existing group triggers \"add members\"",
+      "description": "The form's buttons have no `type`, so they default to submit. Implicit submission from the name input fires the first submit button in tree order, which is the Add button on existing groups. The Enter press then goes to `addMembers`, which returns early on empty input, so it does nothing. On new groups it submits via Save. Add `type=\"button\"` to the non-submit buttons.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/templates/group.hbs:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `automatic` check in the member row may not resolve to the group's flag",
+      "description": "`{{#unless automatic}}` is rendered inside an item view created by `{{each ... itemView=\"group-member\"}}`. Depending on how Ember 1.9 sets the item view's context, `automatic` may resolve against the member instead of the group, which would show remove links on automatic groups. The server returns 422 either way. I could not confirm this without running the app.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/templates/group_member.hbs:1"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`add_members` calls `.split` on the raw param",
+      "description": "If `usernames` arrives as an array (for example `usernames[]=a&usernames[]=b`), `.split` raises `NoMethodError` and returns a 500. The endpoint is admin-only, so impact is low. Accept only a string, or normalize with `Array(...)`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:71"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`Group#create` and `Group#save` read like Ember constructors and persistence helpers",
+      "description": "Instance `create()` POSTs to the server, while `Discourse.Group.create(...)` constructs the object. Both appear in the same file. Names such as `persistNew` and `update` would avoid confusion.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/models/group.js:70"
+    },
+    {
+      "severity": "PASS",
+      "title": "Admin member routes match the JS request URLs",
+      "description": "`delete \"members\"` and `put \"members\"` inside `resources :groups` nest under `/admin/groups/:group_id/members`. The controller reads `params.require(:group_id)`, and `group.js:42` and `:53` post to `/admin/groups/:id/members.json`. The paths and params match.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "config/routes.rb:49-50"
+    },
+    {
+      "severity": "PASS",
+      "title": "Automatic groups are rejected before any mutation on add and remove",
+      "description": "`add_members` (line 69) and `remove_member` (line 88) both return the 422 before touching membership, and the new spec covers both cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/groups_controller.rb:69"
+    },
+    {
+      "severity": "PASS",
+      "title": "New admin i18n keys are present in the locale file",
+      "description": "`groups.delete_member_confirm`, `groups.add_members`, `groups.name`, and `groups.add` all exist, so the new template strings will not render as missing keys. The YAML was excluded from the diff scope, so I checked it directly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "config/locales/client.en.yml:1630-1633"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Public group members page is silently truncated to 50 with no pagination",
+      "location": "app/controllers/groups_controller.rb:22",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`add_members` raises a unique-index violation when a user is already a member",
+      "location": "app/controllers/admin/groups_controller.rb:71-75",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`remove_member` bypasses GroupUser callbacks and skips primary-group cleanup",
+      "location": "app/controllers/admin/groups_controller.rb:90",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`totalPages` is off by one when the member count is an exact multiple of the page size",
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Public members endpoint accepts negative offsets and unbounded limits",
+      "location": "app/controllers/groups_controller.rb:22-23",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Admin member add and remove have no error handling, and failures are silent",
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:51-65",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Creating a group silently drops `alias_level`",
+      "location": "app/controllers/admin/groups_controller.rb:22-32",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Pending spec for pagination still asserts the old array response and is left pending",
+      "location": "spec/controllers/groups_controller_spec.rb:71-85",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Members endpoint response shape and removed admin params are breaking API changes",
+      "location": "app/controllers/groups_controller.rb:19",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Shared group instance keeps paging state across visits, and responses can race",
+      "location": "app/assets/javascripts/admin/routes/admin_group_route.js:11-14",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Enter in the name field on an existing group triggers \"add members\"",
+      "location": "app/assets/javascripts/admin/templates/group.hbs:29",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `automatic` check in the member row may not resolve to the group's flag",
+      "location": "app/assets/javascripts/admin/templates/group_member.hbs:1",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "`add_members` calls `.split` on the raw param",
+      "location": "app/controllers/admin/groups_controller.rb:71",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`Group#create` and `Group#save` read like Ember constructors and persistence helpers",
+      "location": "app/assets/javascripts/discourse/models/group.js:70",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Admin member routes match the JS request URLs",
+      "location": "config/routes.rb:49-50",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Automatic groups are rejected before any mutation on add and remove",
+      "location": "app/controllers/admin/groups_controller.rb:69",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "New admin i18n keys are present in the locale file",
+      "location": "config/locales/client.en.yml:1630-1633",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "diff": "a9bdd78c37b33118c148364396308b8bba632563...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:32:03.148137",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "injected": [],
+  "files_read": [
+    "app/controllers/admin/groups_controller.rb",
+    "app/controllers/groups_controller.rb",
+    "app/assets/javascripts/discourse/models/group.js",
+    "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+    "config/routes.rb",
+    "app/assets/javascripts/discourse/templates/group/members.hbs",
+    "app/models/group.rb",
+    "app/assets/javascripts/admin/routes/admin_group_route.js",
+    "app/controllers/application_controller.rb",
+    "app/models/group_user.rb",
+    "spec/controllers/groups_controller_spec.rb",
+    "app/assets/stylesheets/common/admin/admin_base.scss",
+    "app/assets/javascripts/admin/templates/groups.hbs",
+    "app/assets/javascripts/discourse/components/user-selector.js.es6",
+    "config/locales/client.en.yml"
+  ],
+  "searches": [
+    "grep GroupMembers|group-members|group_members in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts",
+    "grep saveWithUsernames|createWithUsernames|findMembers|\\.usernames|_usernames|asJSON in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app",
+    "grep groups/.*members|/members|members\\.json|admin/groups in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "grep computed\\.propertyEqual|propertyEqual in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts",
+    "grep serialize_data in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app",
+    "grep class=['\"]groups['\"]|class=['\"]badges['\"]|\\.groups\\b|\\.badges\\b|section\\.details|class=['\"]details in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets",
+    "grep form-horizontal in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets",
+    "grep members|group in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/spec",
+    "grep primary_group in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app",
+    "grep computed\\.lte|computed\\.gte|Ember\\.computed\\.(lt|gt)\\b|\\.version\\s*=|@version|Ember JavaScript Application|VERSION =  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/vendor/assets",
+    "grep classNames.*groups|class=['\"]groups|'groups'|\"groups\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts/admin",
+    "grep adminGroups|AdminGroupsRoute|Discourse\\.Group\\.findAll in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts",
+    "grep Discourse\\.ajax\\s*=|Discourse\\.ajax = function|function ajax\\(|AjaxError in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts/discourse",
+    "grep automatic|ensure_automatic_groups|Group\\.refresh_automatic|Fabricate\\(:group in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/spec",
+    "grep group_users in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/db/migrate",
+    "grep ^    rails \\(|^    activerecord \\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1",
+    "grep ensure_automatic_groups|refresh_automatic_groups! in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "grep ajaxError|ajax-error|Discourse\\.ajax\\b.*function|export default function ajax in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts",
+    "grep delete_member_confirm|add_members|selector_placeholder|name_placeholder|delete_failed in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/config/locales",
+    "grep \\.ajax\\s*=|ajax = function|function ajax|ajaxError in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts/discourse/lib",
+    "grep ajax\\s*=\\s*function|Discourse\\.ajax\\s*=|\\.ajax =  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8/app/assets/javascripts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 29541,
+  "diff_chars_injected": 29541,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 38,
+  "prompt_tokens": 732648,
+  "cached_tokens": 613508,
+  "cache_write_tokens": 119122,
+  "completion_tokens": 68918,
+  "reasoning_tokens": null,
+  "duration_seconds": 314.92997075011954,
+  "cost_usd": 0.15993388000000003,
+  "cost_basis": "provider"
+}

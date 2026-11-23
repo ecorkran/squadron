@@ -1,0 +1,108 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Imported feed HTML is stored and rendered unescaped, allowing feed markup to execute on the forum origin."
+  ],
+  "F2": [
+   "KEEP",
+   "An accepted URL containing quotes is interpolated into an HTML attribute and parsed into stored content without escaping."
+  ],
+  "F3": [
+   "KEEP",
+   "The trailing conditionless `if` makes the ERB-generated Ruby invalid."
+  ],
+  "F4": [
+   "KEEP",
+   "Neither embed asset is in the explicit precompile list, so production pages cannot reliably load them."
+  ],
+  "F5": [
+   "KEEP",
+   "An exception during one item\u2019s import exits the loop, preventing subsequent items from being processed in that poll."
+  ],
+  "F6": [
+   "KEEP",
+   "A failed post save can leave `create` returning an unsaved post, after which mapping creation uses its nil ID."
+  ],
+  "F7": [
+   "KEEP",
+   "The throttle key includes the full URL, so URL variants receive separate windows, and `setnx` plus `expire` is non-atomic."
+  ],
+  "F8": [
+   "KEEP",
+   "A nil host setting permits hostless input through the guard, and the fetches have no configured timeout or size limit."
+  ],
+  "F9": [
+   "KEEP",
+   "The slash-prefix checks rewrite protocol-relative links as paths on the source host."
+  ],
+  "F10": [
+   "KEEP",
+   "The substring origin check accepts an origin that is only a prefix of the forum URL."
+  ],
+  "F11": [
+   "KEEP",
+   "The mapping lookup retains trashed topics, while anonymous `TopicView` lookup excludes them and raises not found."
+  ],
+  "F12": [
+   "KEEP",
+   "import_remote` performs an unrescued fetch per thread, so one failing fetch aborts the import run."
+  ],
+  "F13": [
+   "KEEP",
+   "The Rails 3 lockfile lacks the two newly declared gems, which can break frozen dependency resolution in that mode."
+  ],
+  "F14": [
+   "KEEP",
+   "force: true` drops an existing table when the migration recreates it, potentially deleting stored data."
+  ],
+  "F15": [
+   "KEEP",
+   "Adding a non-null column with a default can rewrite and lock a large posts table on older PostgreSQL versions."
+  ],
+  "F16": [
+   "DROP",
+   "These are test-coverage and assertion-quality observations, not behavior defects in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14
+ ],
+ "cost_usd": 0.00897858
+}

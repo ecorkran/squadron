@@ -1,0 +1,17 @@
+{
+ "case": "keycloak-ke36882",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Exit code 4 is not reused: it is a dedicated code distinct from 3 (recreate), and the docs table documents it as \"feature `rolling-updates` is disabled\", so code and contract agree; the rest is a design preference."
+  ]
+ },
+ "unjudged": [],
+ "kept": [],
+ "cost_usd": 0.177918
+}

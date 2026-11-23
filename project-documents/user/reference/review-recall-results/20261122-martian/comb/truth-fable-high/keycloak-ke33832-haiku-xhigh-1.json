@@ -1,0 +1,30 @@
+{
+ "case": "keycloak-ke33832",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Default, FIPS and Elytron all return 200 and `detectProvider` takes the first of a stable sort, so a tie is silently resolved by ServiceLoader order; the cited CLI case is wrong, since `ClassLoaderUtil` loads only one crypto jar."
+  ],
+  "F2": [
+   "KEEP",
+   "A zero-length INTEGER (`30 04 02 00 02 00`) reaches `new BigInteger(new byte[0])` through `asn1derToConcatenatedRS` and throws unchecked `NumberFormatException`, and `integerToBytes` silently truncates oversized values; the `NegativeArraySizeException` path is only reachable by calling `readInteger` directly."
+  ],
+  "F3": [
+   "DROP",
+   "It does return the JDK KeyStore provider, but the only consumer is `BouncyIntegration.loadProvider`, which takes its name, and the suggested `null` also yields a JDK provider name, so no behaviour is wrong."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.6943844000000001
+}

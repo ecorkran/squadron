@@ -1,0 +1,92 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 7,
+  "F8": 8,
+  "F9": 9,
+  "F10": 10,
+  "F11": 11,
+  "F12": 12,
+  "F13": 13,
+  "F14": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "parseRefreshTokenResponse` returns the safeParse wrapper and Google persists it as `key` unchanged, so the next `googleCredentialSchema.parse(credential.key)` fails."
+  ],
+  "F2": [
+   "KEEP",
+   "refreshAccessToken` passes `credentialId` (`credential.id`) as the `userId` argument, so the sync endpoint gets a credential ID as `calcomUserId` and the guard is always truthy."
+  ],
+  "F3": [
+   "KEEP",
+   "the computed keys are literal string keys, not pattern keys, and the schema strips `expires_in` and `refresh_token` in sync mode; the claimed rejection is probably wrong because both keys likely collide to one optional key (zod not installed to confirm)."
+  ],
+  "F4": [
+   "KEEP",
+   "in sync mode the helper returns a fetch `Response`, while Google, Zoho Bigin and Zoho CRM read `.data` and HubSpot reads `expiresIn`/`accessToken`, giving TypeErrors or a NaN expiry being persisted."
+  ],
+  "F5": [
+   "KEEP",
+   "the file has no prisma import and its only use is line 96; the ambient `declare global` hides it from TypeScript, but `globalThis.prisma` is unset in production, so it throws a ReferenceError."
+  ],
+  "F6": [
+   "DROP",
+   "over HTTP/1.1 a 200 carries \"OK\" so no failure is shown for this runtime, and the rest is dead code and error-message quality."
+  ],
+  "F7": [
+   "KEEP",
+   "the helper writes the literal `\"refresh_token\"` when the field is missing, and Office 365 spreads that over the stored credential (Zoom assigns it too), overwriting the real token."
+  ],
+  "F8": [
+   "DROP",
+   "the lost zod details, removed log and dead guards are diagnostics and structure; throwing on an invalid token response is not a defect."
+  ],
+  "F9": [
+   "KEEP",
+   "Zoom sends `\"zoomvideo\"` while the app slug is `zoom`; other callers send real slugs (e.g. `\"msteams\"`) and the inbound webhook looks up by real slug."
+  ],
+  "F10": [
+   "KEEP",
+   "the webhook secret is compared with plain `!==`, which is not constant-time."
+  ],
+  "F11": [
+   "KEEP",
+   "the handler has no error wrapper, so `.parse(req.body)`, `symmetricDecrypt` and `JSON.parse` throw uncaught and bad input returns 500 instead of a 4xx."
+  ],
+  "F12": [
+   "DROP",
+   "writing an authenticated, encrypted payload without per-app schema validation is a hardening suggestion, not a defect in what the code does."
+  ],
+  "F13": [
+   "DROP",
+   "the constant does hold the key string, but all three uses are server-side truthiness checks and no exposure path exists; the type is a style point."
+  ],
+  "F14": [
+   "DROP",
+   "the missing auth header is true, but it is a design request for an explicitly customisable outbound call, and any hole would sit in the external endpoint."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  7,
+  9,
+  10,
+  11
+ ],
+ "cost_usd": 1.1200853
+}

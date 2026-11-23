@@ -1,0 +1,325 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Audit-log endpoint returns 500 for org-token and API-key callers on the default path",
+      "description": "Line 71 computes `enable_advanced` on every request, before the `use_optimized` check on line 73. When `request.user.is_superuser` is false, it reads `organization_context.member.has_global_access`. `RpcUserOrganizationContext.member` is typed `RpcOrganizationMember | None` (src/sentry/organizations/services/organization/model.py:346) and is `None` when there is no user id. `OrgAuthTokenAuthentication` (src/sentry/api/authentication.py:492-498) and legacy `ApiKeyAuthentication` (authentication.py:272) both return `AnonymousUser` with no user id, so `member` is `None`. `OrganizationAuditPermission` (src/sentry/api/bases/organization.py:110-124) lets those callers through when their token has `org:write`. For them, line 71 raises `AttributeError` and the request returns 500 even without `optimized_pagination`. The original code never touched `member`, so this is a regression on the default path. Compute the flag only inside the opt-in branch and guard the `None` case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_auditlogs.py:71"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Negative-offset branch of OptimizedCursorPaginator always raises",
+      "description": "When `enable_advanced_features` is set and `cursor.offset < 0`, line 882 slices `queryset[start_offset:stop]` with a negative `start_offset`. Django rejects negative slice bounds with a `ValueError`, so the request fails with a 500. Clients can send a negative offset, because `Cursor.from_string` accepts any integer (src/sentry/utils/cursors.py:53-61). The comments at lines 878-879 say this gives \"access to data beyond normal pagination bounds\" and that \"permissions are checked at the queryset level\". Neither holds: Django cannot index before the start, and the queryset is only filtered by organization. The codebase convention is the reverse. `OffsetPaginator` raises `BadPaginationError` for negative offsets (paginator.py:286-287), and `tests/sentry/api/test_paginator.py:143-153` covers that. Reject negative offsets the same way, or remove the branch.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/paginator.py:877-882"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Span buffer changes the Redis key type without a migration for in-flight data",
+      "description": "`process_spans` now writes `span-buf:s:*` keys with ZADD (buffer.py:197-199) instead of SADD, and add-buffer.lua now uses ZCARD, ZUNIONSTORE and ZPOPMIN on the same keys (add-buffer.lua:46-64). `_load_segment_data` now uses ZSCAN (buffer.py:434). The key names are unchanged, so keys written by the old code are still Redis sets. Those keys carry `redis_ttl` (3600s by default, buffer.py:151), and the Lua script resets their expiry each time a span lands in them. They can therefore outlive the deploy. On such a key, ZADD, ZCARD and ZSCAN raise WRONGTYPE. The pipeline in `process_spans` raises on the first error, which fails the batch. The ZSCAN error in `_load_segment_data` is not caught. The diff does not change the key prefix or drain existing buffers. Bump the prefix, or document and perform a drain before rollout.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/buffer.py:197-199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spans beyond 1000 per segment are dropped silently, replacing an observable skip",
+      "description": "The script calls `ZPOPMIN` to trim sets above 1000 members. That removes the spans with the earliest end timestamps, with no log and no metric. The old Python path logged `logger.error` and incremented `spans.buffer.flush_segments.segment_span_count_exceeded` (removed at src/sentry/spans/buffer.py:443-449). Operators can no longer see that data is being lost. The policy also changed from \"skip the whole segment\" to \"keep the newest 1000 spans\" without any documentation. Have the script return the evicted count and record it with `metrics.incr` in Python.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/scripts/spans/add-buffer.lua:58-64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`max_segment_spans` is now dead configuration",
+      "description": "The diff removes the only reader of `max_segment_spans`, the `len(payloads[key]) > self.max_segment_spans` check in `_load_segment_data`. The parameter (line 150) and the attribute (line 158) remain. A targeted grep finds no other references in `src/sentry/spans` or `tests/sentry/spans`. The default of 1001 now suggests a cap that is not enforced, because the real limit is the hardcoded 1000 in add-buffer.lua. Remove the parameter, or pass the cap to the script.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/spans/buffer.py:150-158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Redirect-chain limit lowered from 10000 to 1000 without rationale",
+      "description": "The loop bound drops from 10000 to 1000, and the comment explaining the old limit is deleted. This is unrelated to the span-count cap. A redirect chain deeper than 1000 hops makes the loop exit on an intermediate `set_span_id`, so the span lands in a set that is not the segment root and the segment is flushed in pieces. Split this into its own change, or document the new bound and test depths above 1000.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/scripts/spans/add-buffer.lua:30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "OptimizedCursorPaginator duplicates BasePaginator and Paginator",
+      "description": "`get_item_key` and `value_from_cursor` (lines 838-843) are identical to `Paginator` (lines 222-227). `get_result` (lines 845-911) is a copy of `BasePaginator.get_result` (lines 136-215) with only the negative-offset branch changed. Any future fix to boundary handling then has to be made in three places. Subclass `BasePaginator` and override only what differs, or drop the class if finding 2 is fixed by removing the branch.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/sentry/api/paginator.py:821-911"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Admin gate uses the database flag instead of the superuser session check",
+      "description": "`request.user.is_superuser` reads the User column. The codebase's check is `is_active_superuser(request)` (src/sentry/auth/superuser.py:143-147), which `OrganizationAuditPermission` already uses (bases/organization.py:124). That check also requires an active superuser session, and `Superuser.is_active` enforces the session and IP rules (superuser.py:204-220). The new branch therefore accepts a DB superuser with no active superuser session. The data exposure is limited, because `OrganizationAuditPermission` already governs access, but the diff adds a second, weaker superuser check. Use `is_active_superuser(request)`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_auditlogs.py:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new paths have no tests, including the default-path regression",
+      "description": "The diff adds no tests. The existing file covers only the default `DateTimePaginator` path with a session user. Nothing exercises `optimized_pagination=true`, `OptimizedCursorPaginator`, a token caller with `member=None` (which would have caught finding 1), or a negative cursor offset (which would have caught finding 2). The `BasePaginator` offset change at src/sentry/api/paginator.py:179-184 affects every paginated endpoint and has no test. The span-buffer changes (SET to ZSET, the 1000-span eviction, the depth limit) are also untested. No test under `tests/sentry/spans` references the removed metric or `max_segment_spans`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/api/endpoints/test_organization_auditlogs.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lint-breaking whitespace and blank lines in the new code",
+      "description": "There are three blank lines before `class OptimizedCursorPaginator` (lines 818-820), trailing whitespace inside its docstring (lines 824, 827, 829), and trailing whitespace at src/sentry/api/endpoints/organization_auditlogs.py:72 and :89. The file also ends with an extra blank line (line 912). The project's formatter will flag these. I could not run the formatter here.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/api/paginator.py:818-829"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Comment in Cursor claims a capability the class does not implement",
+      "description": "The added comment says \"Allow negative offsets for advanced pagination scenarios\", but the only line changed is `self.offset = int(offset)`, which allows and rejects nothing. The behavior lives in the paginators. Remove the comment, since it reinforces the false premise behind finding 2.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "src/sentry/utils/cursors.py:26-27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "ZUNIONSTORE sums scores for duplicate members",
+      "description": "Both `ZUNIONSTORE` calls use the default SUM aggregate. If the same payload appears in both source sets, its score becomes the sum of the two end timestamps. Scores decide eviction order under the 1000 cap, so a duplicated span is treated as newer than it is. Consider `AGGREGATE MAX` on lines 47 and 53.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/scripts/spans/add-buffer.lua:47"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Audit-log endpoint returns 500 for org-token and API-key callers on the default path",
+      "location": "src/sentry/api/endpoints/organization_auditlogs.py:71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Negative-offset branch of OptimizedCursorPaginator always raises",
+      "location": "src/sentry/api/paginator.py:877-882",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Span buffer changes the Redis key type without a migration for in-flight data",
+      "location": "src/sentry/spans/buffer.py:197-199",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Spans beyond 1000 per segment are dropped silently, replacing an observable skip",
+      "location": "src/sentry/scripts/spans/add-buffer.lua:58-64",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`max_segment_spans` is now dead configuration",
+      "location": "src/sentry/spans/buffer.py:150-158",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Redirect-chain limit lowered from 10000 to 1000 without rationale",
+      "location": "src/sentry/scripts/spans/add-buffer.lua:30",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "OptimizedCursorPaginator duplicates BasePaginator and Paginator",
+      "location": "src/sentry/api/paginator.py:821-911",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Admin gate uses the database flag instead of the superuser session check",
+      "location": "src/sentry/api/endpoints/organization_auditlogs.py:71",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new paths have no tests, including the default-path regression",
+      "location": "tests/sentry/api/endpoints/test_organization_auditlogs.py",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Lint-breaking whitespace and blank lines in the new code",
+      "location": "src/sentry/api/paginator.py:818-829",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Comment in Cursor claims a capability the class does not implement",
+      "location": "src/sentry/utils/cursors.py:26-27",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "ZUNIONSTORE sums scores for duplicate members",
+      "location": "src/sentry/scripts/spans/add-buffer.lua:47",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "diff": "3d039fbc693b2bb64ea222c34d0599f33e73bdd9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:11:34.363018",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 43,
+  "injected": [],
+  "files_read": [
+    "src/sentry/api/endpoints/organization_auditlogs.py",
+    "src/sentry/api/paginator.py",
+    "src/sentry/scripts/spans/add-buffer.lua",
+    "src/sentry/spans/buffer.py",
+    "src/sentry/spans/consumers/process/factory.py",
+    "src/sentry/utils/cursors.py",
+    "src/sentry/organizations/services/organization/model.py",
+    "src/sentry/auth/superuser.py",
+    "src/sentry/organizations/services/organization/impl.py",
+    "tests/sentry/api/endpoints/test_organization_auditlogs.py",
+    "tests/sentry/api/test_paginator.py",
+    "src/sentry/api/authentication.py"
+  ],
+  "searches": [
+    "grep def paginate\\(|paginator_cls\\(|paginator_kwargs in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api/base.py",
+    "grep is_active_superuser|request\\.superuser in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api",
+    "grep request\\.user\\.is_superuser in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry",
+    "grep class OrganizationAuditPermission in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api/bases/organization.py",
+    "grep class RpcUserOrganizationContext|member: |has_global_access in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/organizations/services/organization/model.py",
+    "grep def is_active_superuser|def is_system_auth in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry",
+    "grep RpcUserOrganizationContext\\(|member= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/organizations/services/organization/impl.py",
+    "grep OrgAuthToken|AnonymousUser|authentication_classes in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api/base.py",
+    "grep DEFAULT_AUTHENTICATION\\s*=|class ControlSiloOrganizationEndpoint|organization_context|get_organization_by_(id|slug)\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api",
+    "grep def is_active\\b|def is_su\\b|def _set_logged_in|is_superuser in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/auth/superuser.py",
+    "grep class OrgAuthTokenAuthentication in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry",
+    "grep def transform_auth|AnonymousUser\\(\\)|return AnonymousUser|user = None in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api/authentication.py",
+    "grep max_segment_spans|segment_span_count_exceeded|smembers|sunionstore|scard|sadd\\(|end_timestamp_precise in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "grep Span\\(\\s*$|Span\\(payload|from sentry.spans.buffer import|spans\\.buffer import in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "list_files tests/sentry/api/**/test_*paginat*.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "list_files tests/sentry/api/endpoints/test_organization_auditlogs*.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "grep \\bmax_segment_spans\\b|segment_span_count_exceeded|\\bsmembers\\b|\\bsunionstore\\b|\\bscard\\b|\\bsadd\\b|\\bsscan\\b|\\bzscan\\b|\\bzcard\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "grep end_timestamp_precise in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "grep optimized|OptimizedCursorPaginator|enable_advanced|negative in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/tests",
+    "grep Cursor\\(|from_string|offset in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/tests/sentry/utils/test_cursors.py",
+    "list_files **/django/db/models/query.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "grep ^django[=<>~!] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "grep ^class \\w+\\(|return \\(AnonymousUser\\(\\), AuthenticatedToken in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api/authentication.py",
+    "grep class OrganizationPermission\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api/bases/organization.py",
+    "grep end_timestamp_precise in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src",
+    "grep from sentry\\.spans\\.buffer import|import sentry\\.spans\\.buffer|spans\\.buffer\\.Span\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2",
+    "grep def get_paginator in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api",
+    "grep def get_paginator in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry",
+    "grep [ \\t]+$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai2/src/sentry/api"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23722,
+  "diff_chars_injected": 23722,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 44,
+  "prompt_tokens": 1364443,
+  "cached_tokens": 1258844,
+  "cache_write_tokens": 105565,
+  "completion_tokens": 51434,
+  "reasoning_tokens": null,
+  "duration_seconds": 241.64385208301246,
+  "cost_usd": 0.13077974,
+  "cost_basis": "provider"
+}

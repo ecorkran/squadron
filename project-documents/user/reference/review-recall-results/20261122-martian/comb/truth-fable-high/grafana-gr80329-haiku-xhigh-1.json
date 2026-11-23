@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr80329",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The new cleanup closures at `xorm_store.go:534/537`, `554/557` and `576/579` log routine progress via `r.log.Error` with full ID lists on every batch, including the empty terminal one; I did not diff `cleanup.go` to confirm the ticker interval changed."
+  ],
+  "F2": [
+   "KEEP",
+   "The non-SQLite branch of `deleteByIDs` binds one placeholder per ID while `cleanupjob_batchsize` is an unbounded `MustInt64(100)`, so a batch size above the MySQL/Postgres 65,535 parameter cap makes every full-batch DELETE fail."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.1705255
+}

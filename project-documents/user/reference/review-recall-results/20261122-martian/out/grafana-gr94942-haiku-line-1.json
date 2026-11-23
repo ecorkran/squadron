@@ -1,0 +1,135 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`enableSqlExpressions` returns false on every path, so the SQL expression branch always errors",
+      "description": "The new helper computes `enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`, then returns `false` whether `enabled` is true or false. The gate in `ReadQuery` (reader.go:129-132) therefore rejects every `QueryTypeSQL` query with `sqlExpressions is not implemented`, even when the feature flag is on. The negation is also inverted relative to the flag name. The helper should return the flag state, for example `return h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/reader.go:194-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SQL database stub returns \"not implemented\" for every operation",
+      "description": "`TablesList`'s backing `RunCommands`, and `QueryFramesInto`, both return `errors.New(\"not implemented\")`. Even after the gate in reader.go is fixed, `SQLCommand.Execute` (pkg/expr/sql_command.go, around line 97) will return an error on every query. This is a deliberate stub, but the diff makes the SQL expression path unusable end to end.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql/db.go:13-19"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sql_command.go` uses the `sql` package without an added import in this diff",
+      "description": "The hunk replaces the `duck` import with nothing and changes the body to call `sql.NewInMemoryDB()`. No `github.com/grafana/grafana/pkg/expr/sql` import appears in the shown hunk. The file may already import it elsewhere, but I could not confirm that from the diff alone, so the build may fail.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql_command.go#Execute"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "go.sum drops `h1:` content hashes for modules that may still be required",
+      "description": "The diff removes the `h1:` (zip) hash lines for `gotest.tools/v3 v3.5.1`, `github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.3.2`, `github.com/google/go-replayers/grpcreplay` and `httpreplay`, and `github.com/araddon/dateparse`, while keeping their `/go.mod` lines. If any of these modules are still imported by the build, `go build` or `go test` will fail with missing checksum errors. I did not inspect the import graph to confirm, so this needs a `go mod tidy` and build check.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "go.sum"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`enableSqlExpressions` returns false on every path, so the SQL expression branch always errors",
+      "location": "pkg/expr/reader.go:194-200",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "SQL database stub returns \"not implemented\" for every operation",
+      "location": "pkg/expr/sql/db.go:13-19",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sql_command.go` uses the `sql` package without an added import in this diff",
+      "location": "pkg/expr/sql_command.go#Execute",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "go.sum drops `h1:` content hashes for modules that may still be required",
+      "location": "go.sum",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "diff": "00101eef1aa1d1acd93e97289a309b348a657d7d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:55:20.538929",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19087,
+  "diff_chars_injected": 19087,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 16217,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 14244,
+  "completion_tokens": 2670,
+  "reasoning_tokens": null,
+  "duration_seconds": 13.39226070838049,
+  "cost_usd": 0.00569501,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

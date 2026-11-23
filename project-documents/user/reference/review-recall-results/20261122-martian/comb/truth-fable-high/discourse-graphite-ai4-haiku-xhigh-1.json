@@ -1,0 +1,76 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 11,
+  "F11": 13
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Post#cook` returns `raw` for `raw_html`, and `PollFeed` feeds unescaped, unsanitized feed HTML into it, which is rendered via `{{{cooked}}}` and `raw post.cooked`."
+  ],
+  "F2": [
+   "KEEP",
+   "topic_embed.rb:13` interpolates the URL into a single-quoted `href` with no escaping, guarded only by a `^https?` regex, and it also mutates the caller's string."
+  ],
+  "F3": [
+   "DROP",
+   "Erubis trim mode emits `end if` followed by a newline (no `;`), so the next `@output_buffer.safe_append=` expression becomes the modifier condition and the template compiles; no SyntaxError."
+  ],
+  "F4": [
+   "KEEP",
+   "the item loop in `poll_feed.rb:31-37` has no rescue with `retry: false`, so one raising item blocks all later ones every run, and the check-then-insert in `import` can hit the unique index."
+  ],
+  "F5": [
+   "KEEP",
+   "PostCreator#create` returns the unsaved `@post` after a swallowed Rollback (e.g. host-spam), so `post.present?` passes and `TopicEmbed.create!` runs with nil ids against NOT NULL columns."
+  ],
+  "F6": [
+   "DROP",
+   "the nil/nil case is unreachable (setting defaults to `''` and the controller rejects blank), as the finding itself concedes, and the rest is hardening with no concrete failure."
+  ],
+  "F7": [
+   "KEEP",
+   "start_with?('/')` matches `//host/path` and `sub(/^\\/+/, '')` strips the slashes, so protocol-relative URLs are rewritten onto the source article's host (not the forum host, but the wrong host either way)."
+  ],
+  "F8": [
+   "KEEP",
+   "discourseUrl.indexOf(e.origin) === -1` is a substring test, so any origin that is a substring of the forum URL passes the check."
+  ],
+  "F9": [
+   "KEEP",
+   "topic_id_for_embed` ignores trashed state while `TopicView#find_topic` hides deleted topics from non-staff, so the embed raises NotFound and the surviving mapping row prevents re-import."
+  ],
+  "F10": [
+   "KEEP",
+   "the importer now calls `TopicEmbed.import_remote` with only the title, so the parsed thread `created_at` is unused, there is no category option, and each thread does an unrescued HTTP fetch (base version not diffed; inferred from current code)."
+  ],
+  "F11": [
+   "DROP",
+   "force: true` changes nothing in a normal migrate run; this is a migration-practice concern, not a behaviour defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  4,
+  5,
+  8,
+  9,
+  10,
+  11
+ ],
+ "cost_usd": 1.2032949000000002
+}

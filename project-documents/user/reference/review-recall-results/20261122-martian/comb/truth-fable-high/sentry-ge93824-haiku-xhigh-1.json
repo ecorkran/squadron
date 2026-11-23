@@ -1,0 +1,31 @@
+{
+ "case": "sentry-ge93824",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 5,
+  "F3": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "mp_context.Process` is a `SpawnProcess`, which is not a subclass of `multiprocessing.Process`, so the guard at `flusher.py:254` is false and a hung process is never killed before its replacement starts on the same shards."
+  ],
+  "F2": [
+   "KEEP",
+   "the new option is `type=int` with no lower bound; `0` silently becomes one process per shard via `max_processes or len(...)`, and a negative value leaves `process_to_shards_map` empty so `flusher.py:66` raises `KeyError`."
+  ],
+  "F3": [
+   "KEEP",
+   "the added code tags `shard` with a single integer at `flusher.py:244`, with the comma-joined list at lines 185 and 195, and uses the key `shards` at line 199, so the emitted metric data is inconsistent across metrics."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  5,
+  6
+ ],
+ "cost_usd": 0.34713499999999997
+}

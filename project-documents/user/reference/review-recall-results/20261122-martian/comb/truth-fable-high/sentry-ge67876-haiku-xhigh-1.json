@@ -1,0 +1,43 @@
+{
+ "case": "sentry-ge67876",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "state` is `pipeline.signature`, an md5 of the view class names (`pipeline/base.py:132-133`), so it is a fixed public value that never binds the callback to a session."
+  ],
+  "F2": [
+   "KEEP",
+   "the `Integration.DoesNotExist` branch at `integration.py:481-482` returns `pipeline.next_step()` before the new installer check, and only the webhook ever supplies `sender`."
+  ],
+  "F3": [
+   "KEEP",
+   "integration.metadata[\"sender\"][\"login\"]` at `integration.py:503` is unguarded, while `build_integration` only sets `sender` when present, so sender-less rows raise `KeyError`."
+  ],
+  "F4": [
+   "KEEP",
+   "the new check compares the mutable `login` string (`integration.py:438, 501-505`) although the webhook also stores the immutable `sender.id`."
+  ],
+  "F5": [
+   "KEEP",
+   "safe_urlopen` at line 423 and `get_user_info` (which calls `raise_for_status()`) at line 434 sit outside any `try`, so network or GitHub errors surface as a 500, and the `except Exception` at 428-429 swallows parse failures without logging."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.3513396
+}

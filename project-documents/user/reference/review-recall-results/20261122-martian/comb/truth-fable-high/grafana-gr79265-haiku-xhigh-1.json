@@ -1,0 +1,35 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 4,
+  "F4": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "tagDeviceUI` sets the cache key at impl.go:87 before `CreateOrUpdateDevice`, so after `ErrDeviceLimitReached` the next request hits the cache at impl.go:83, returns nil, and `Authenticate` succeeds."
+  ],
+  "F2": [
+   "KEEP",
+   "CreateOrUpdateDevice` runs `CountDevices` and the INSERT as separate sessions with no transaction or lock, so concurrent new devices can both pass the check and exceed `deviceLimit`."
+  ],
+  "F3": [
+   "DROP",
+   "the duplicated 30-day constants under two names are real, but all hold the same value, so this is code structure and naming, not a behavior defect."
+  ],
+  "F4": [
+   "DROP",
+   "the `= undefined` initializer and `number | undefined` type are as described, but this is a typing-looseness point with no runtime effect and nothing reads the field."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2761268
+}

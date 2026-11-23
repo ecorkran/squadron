@@ -1,0 +1,342 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Cron cancel loop aborts on first provider error and skips DB cleanup",
+      "description": "The cancel loop is one `try` around every iteration. `client.request` at line 57 throws on a non-2xx response, and the catch at lines 75-77 logs and exits. That causes two problems:\n\n1. Every reminder after the failing one is skipped in this run.\n2. The `prisma.workflowReminder.delete` calls at lines 66-70 return lazy PrismaPromises. They execute only when `Promise.all` at line 74 awaits them, and that line is never reached after a throw. Rows whose SendGrid cancel succeeded earlier in the same run are never deleted. They keep `cancelled: true` and are cancelled again on the next 15-minute tick (`.github/workflows/cron-scheduleEmailReminders.yml:8`).\n\nIf SendGrid rejects a cancel for a batch it has already dispatched or will no longer cancel, the first such row blocks every later one on every tick. The past-due `deleteMany` at lines 34-41 limits the stall to the time until each row's `scheduledDate` passes. By then the reminder is queued to send, so it goes out to a cancelled booking. The double-cancel path in the `deleteScheduledEmailReminder` finding below feeds this state.\n\nFix: wrap each iteration in its own try/catch, await each delete inside the loop, and treat \"already cancelled / not found\" from SendGrid as success.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Email cancellation is deferred to the cron, not sent to SendGrid at cancel time",
+      "description": "Before this change, `deleteScheduledEmailReminder` called SendGrid immediately to cancel and delete the scheduled send. The default path now only sets `cancelled: true` (lines 225-232). SendGrid is contacted only when the cron finds `cancelled` rows due within the next hour (`scheduleEmailReminders.ts:44-51`), and the cron runs every 15 minutes. This causes two regressions:\n\n- A booking cancelled shortly before its reminder is due can be dispatched before the next cron tick cancels it.\n- Any reminder more than an hour out stays queued at SendGrid until the cron acts. If the cron is not running (missing `APP_URL` or `CRON_API_KEY` secrets, or the loop failure above), the reminder is sent to a cancelled booking.\n\nThe cancellation paths that now take this branch are handleCancelBooking.ts:484-493, bookings.tsx:487-494, and workflows.tsx:375-382 and 573-580. If the deferred cancel is intended, document the accepted window and the failure mode. Otherwise keep the immediate SendGrid cancel on the cancellation paths.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-233"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reminder cancellation is fire-and-forget, and the awaited deletes were removed",
+      "description": "The previous code collected the reminder `deleteMany` promises into `prismaPromises` and awaited them. That is removed here. The new code calls the helpers inside `forEach` without `await` or a returned promise. The handler then continues to `sendCancelledEmails` and returns while the DB writes and provider calls may still be running. The `cancelled: true` update is the only thing that makes the cron cancel an email, so a write that never completes means the reminder still goes out. Errors inside the helpers are only `console.log`ged, so the caller never sees them.\n\nThe same pattern appears in bookings.tsx:487-494, where `await Promise.all(remindersToDelete)` was removed, and in workflows.tsx:375-382 (where `await Promise.all(deleteReminderPromise)` was removed), 516-526, and 573-580.\n\nFix: have the helpers return promises and `await Promise.all(...)` them in each caller.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:484-493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "try/catch in handleNewBooking cannot catch the errors it targets",
+      "description": "The `try` wraps a `forEach` that calls two async helpers without awaiting them. Both helpers catch their own errors (emailReminderManager.ts:233-235, smsReminderManager.ts:187-189), so no rejection reaches this catch. The `log.error` at line 974 is effectively unreachable.\n\nFix: either await the calls so the catch is meaningful, or remove the try/catch and rely on the helpers' own logging.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:963-975"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`deleteScheduledEmailReminder` name and behavior disagree, and the immediate branch leaves rows the cron retries",
+      "description": "The function is named \"delete\", but only the no-`referenceId` branch deletes a row. The default branch sets `cancelled: true`. The `immediateDelete` branch sends the SendGrid cancel and leaves the row untouched, with `cancelled` unset and `scheduled` still true. The boolean `immediateDelete` argument is easy to misread at call sites.\n\nThis causes a concrete double-cancel. bookings.tsx:490 soft-cancels the rows of a booking it reschedules. `getOriginalRescheduledBooking` (handleNewBooking.ts:745-775) accepts `CANCELLED` bookings, so if the reschedule completes through handleNewBooking for that booking, the rows reach the immediate branch at handleNewBooking.ts:968. That branch does not clear `cancelled`, so the cron re-issues the SendGrid cancel on every tick (scheduleEmailReminders.ts:44-64).\n\nFix: split this into a SendGrid cancel and a DB state change, or have the immediate branch also clear or delete the row.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SMS row deletion now depends on Twilio succeeding",
+      "description": "`twilio.cancelSMS` (twilioProvider.ts:48-51) calls `messages(referenceId).update({ status: \"canceled\" })` with no catch, so it throws for a message that has already been sent or is unknown. In `deleteScheduledSMSReminder`, that throw skips the `prisma.workflowReminder.delete` at lines 182-186 and is caught at line 187. Previously the caller removed the row unconditionally with `deleteMany`.\n\nThe row now stays with `scheduled: true` and its `referenceId`. The cron only cleans up EMAIL rows (scheduleEmailReminders.ts:34-41, 80-98), so SMS rows accumulate until their booking or workflow is deleted.\n\nFix: delete the row regardless of the Twilio result.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-190"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cron endpoint auth passes when CRON_API_KEY is unset",
+      "description": "This check predates the diff, but the handler now does more destructive work behind it. The check is `process.env.CRON_API_KEY !== apiKey`, where `apiKey = req.headers.authorization || req.query.apiKey`. If `CRON_API_KEY` is unset and the request has no header or query parameter, both sides are `undefined`. The check passes and the handler runs. It then deletes past-due reminders, cancels SendGrid batches, and sends unscheduled emails (lines 80-224).\n\nFix: fail closed, e.g. `if (!process.env.CRON_API_KEY || process.env.CRON_API_KEY !== apiKey)`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:22-26"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests cover the new cancellation behavior",
+      "description": "A search of test and spec files found no test that references the reminder managers, the cron handler, or the `cancelled` column. The change alters cancellation timing, changes the signature of the delete helpers across 14 call sites in four files, and adds cron cleanup, and none of it is exercised. At minimum, add tests for:\n\n- the cron loop with one SendGrid failure\n- soft-cancel followed by cron cancel\n- a reschedule that reaches a row already marked `cancelled`",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unused `Prisma` import and type-only names moved to a value import",
+      "description": "`Prisma` is imported at line 9, but nothing in the file references it now. Its only use was the `Prisma.BatchPayload` type in the deleted `deleteReminderPromise` declaration. `PrismaPromise` (line 2) is type-only, and the diff moved it out of `import type` into the value import. Line 9 also lacks the trailing comma used by the rest of the list.\n\nFix: remove `Prisma`, and restore `import type` for the type-only names.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commented-out block in workflows.tsx was re-indented",
+      "description": "The commented-out `testAction` block was re-indented, which is a 63-line whitespace-only change inside a comment. Nothing runs, but the diff is noise, and the nested `/*` markers at lines 901 and 968 make the block harder to restore. Revert the whitespace change, or drop the block in a separate commit.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:901-1010"
+    },
+    {
+      "severity": "NOTE",
+      "title": "WorkflowStepContainer restructure is unrelated to reminder cancellation",
+      "description": "This restructure has nothing to do with reminder cancellation. It also removes the outer box that rendered for `isSenderIdNeeded` steps. The sender-ID box at line 463 still renders. The phone-number branch produces the same markup as before. Confirm the UI change is intended, and consider splitting it into its own change, since the re-indent makes the reminder changes harder to review.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:390-462"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cancelled` column has no default and no index, and the cron query scans on it",
+      "description": "`cancelled` is a nullable Boolean with no default and no index. The cron query at scheduleEmailReminders.ts:44-51 runs every 15 minutes, filtering on `cancelled` and `scheduledDate`. Neither column is indexed (schema.prisma:634-645). Consider `Boolean @default(false)` and an index on `(cancelled, scheduledDate)`, or confirm the table is small enough that a scan is acceptable.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/prisma/schema.prisma:644"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Import style drifts within two files",
+      "description": "The diff merges type-only names (`App`, `Credential`, `EventTypeCustomInput`) into a value import and drops the earlier `import type`. In scheduleEmailReminders.ts, lines 2 and 10 import from `@prisma/client` and `@calcom/prisma/client` respectively, within the same file. Use `import type` for type-only names, and one import source per file.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:1-10"
+    },
+    {
+      "severity": "PASS",
+      "title": "Migration matches the schema change",
+      "description": "The migration adds a nullable `BOOLEAN` column `cancelled` to `WorkflowReminder`, which matches `cancelled Boolean?` in schema.prisma:644. It is the latest migration: no 2023 or later migration sorts after it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/prisma/migrations/20230217230604_add_cancelled_to_workflow_reminder/migration.sql"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cron cancel loop aborts on first provider error and skips DB cleanup",
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:53-77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Email cancellation is deferred to the cron, not sent to SendGrid at cancel time",
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:213-233",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Reminder cancellation is fire-and-forget, and the awaited deletes were removed",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:484-493",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "try/catch in handleNewBooking cannot catch the errors it targets",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:963-975",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`deleteScheduledEmailReminder` name and behavior disagree, and the immediate branch leaves rows the cron retries",
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197-236",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "SMS row deletion now depends on Twilio succeeding",
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-190",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Cron endpoint auth passes when CRON_API_KEY is unset",
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:22-26",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests cover the new cancellation behavior",
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused `Prisma` import and type-only names moved to a value import",
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:9",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Commented-out block in workflows.tsx was re-indented",
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:901-1010",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "WorkflowStepContainer restructure is unrelated to reminder cancellation",
+      "location": "packages/features/ee/workflows/components/WorkflowStepContainer.tsx:390-462",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`cancelled` column has no default and no index, and the cron query scans on it",
+      "location": "packages/prisma/schema.prisma:644",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Import style drifts within two files",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:1-10",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migration matches the schema change",
+      "location": "packages/prisma/migrations/20230217230604_add_cancelled_to_workflow_reminder/migration.sql",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "diff": "d0130224f54c3d53c3255d8006c6141da09e3f62...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:48:55.351256",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "injected": [],
+  "files_read": [
+    "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts",
+    "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts",
+    "packages/trpc/server/routers/viewer/workflows.tsx",
+    "packages/features/ee/workflows/api/scheduleEmailReminders.ts",
+    "packages/features/ee/workflows/lib/reminders/smsProviders/twilioProvider.ts",
+    "packages/features/bookings/lib/handleCancelBooking.ts",
+    ".github/workflows/cron-scheduleEmailReminders.yml",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/trpc/server/routers/viewer/bookings.tsx",
+    "packages/features/ee/workflows/components/WorkflowStepContainer.tsx",
+    "packages/prisma/schema.prisma"
+  ],
+  "searches": [
+    "list_files packages/{features/ee/workflows/lib/reminders/{emailReminderManager,smsReminderManager}.ts,trpc/server/routers/viewer/workflows.tsx,features/bookings/lib/handleCancelBooking.ts,features/bookings/lib/handleNewBooking.ts,features/ee/workflows/api/scheduleEmailReminders.ts,trpc/server/routers/viewer/bo\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep \\blog\\b|workflowReminders|deleteScheduled|originalRescheduledBooking in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/bookings/lib/handleNewBooking.ts",
+    "grep Prisma\\b|PrismaPromise|deleteScheduled|isSenderIdNeeded in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/trpc/server/routers/viewer/bookings.tsx",
+    "grep isSenderIdNeeded|isPhoneNumberNeeded in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/features/ee/workflows/components/WorkflowStepContainer.tsx",
+    "grep model WorkflowReminder|model Booking \\{|workflowReminders in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/prisma/schema.prisma",
+    "list_files packages/prisma/migrations/2023*/** in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep scheduleEmailReminders|\"crons\"|schedule\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep deleteScheduledEmailReminder\\(|deleteScheduledSMSReminder\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "grep \\bPrisma\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232/packages/trpc/server/routers/viewer/workflows.tsx",
+    "grep reminderManager|scheduleEmailReminders|deleteScheduled|cancelSMS|workflowReminder in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "list_files packages/prisma/migrations/202[4-9]* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 27759,
+  "diff_chars_injected": 27759,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 26,
+  "prompt_tokens": 667494,
+  "cached_tokens": 553324,
+  "cache_write_tokens": 114150,
+  "completion_tokens": 65436,
+  "reasoning_tokens": null,
+  "duration_seconds": 291.8006124170497,
+  "cost_usd": 0.13327548,
+  "cost_basis": "provider"
+}

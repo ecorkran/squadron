@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai4",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The trailing `if` has no condition, making the ERB-generated Ruby invalid."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw HTML posts return their body without sanitization, including after edits that retain `cook_method`."
+  ],
+  "F3": [
+   "KEEP",
+   "If an item has no `content`, calling `scrub` on it raises and aborts polling."
+  ],
+  "F4": [
+   "KEEP",
+   "The method only rewrites slash-prefixed URLs, leaving document-relative references unresolved and mishandling protocol-relative ones."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00219508
+}

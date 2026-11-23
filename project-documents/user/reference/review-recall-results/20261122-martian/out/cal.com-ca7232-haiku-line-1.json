@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "immediateDelete branch cancels the email but leaves the WorkflowReminder row behind",
+      "description": "In `deleteScheduledEmailReminder`, when `immediateDelete` is true and a `referenceId` exists, the function sends the cancel request to the email provider and then returns. It neither deletes the `workflowReminder` row nor sets `cancelled: true`. The SMS path and the null-referenceId path both remove the row. Callers that pass `true`, including the workflow-deletion and step-deletion paths in `workflows.tsx` and the reschedule path in `handleNewBooking.ts` (around line 966), leave `scheduled=true` rows that the cron in `scheduleEmailReminders.ts` never picks up, because that cron only selects `cancelled: true` rows and unscheduled rows.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197-210"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cron cancel loop sends null referenceIds to the provider",
+      "description": "The `findMany` selects every row with `cancelled: true` and `scheduledDate <= now+1h`, with no filter on `referenceId` or `scheduled`. The loop then calls `client.request` with `batch_id: reminder.referenceId`. `referenceId` is nullable, so reminders that were never scheduled at the provider will send a cancel request with a null batch id.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:43-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deletes are lost if an earlier cancel request throws",
+      "description": "Each `prisma.workflowReminder.delete(...)` returns a lazy `PrismaPromise` that only runs when awaited. The loop pushes these promises into an array and awaits them only after the loop. If `client.request` throws on any iteration, the `catch` logs the error and the pushed deletes never run. Reminders already cancelled at the provider stay in the database, and the remaining reminders in the batch are skipped.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:46-74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "try/catch in handleNewBooking cannot catch the errors it is meant to handle",
+      "description": "The `try` wraps a `forEach` whose callbacks call async functions without awaiting them. Any promise rejection from `deleteScheduledEmailReminder` or `deleteScheduledSMSReminder` escapes the `catch`. The `log.error` branch is effectively dead for async failures, and the reschedule flow continues as if the cleanup succeeded.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:964-975"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "deleteScheduledSMSReminder skips the row delete when the Twilio cancel fails",
+      "description": "`twilio.cancelSMS` and `prisma.workflowReminder.delete` share one `try`. If the Twilio call throws, the database delete never runs, and the error is only logged with `console.log`. The reminder row is left in place with no retry path.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-186"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PrismaPromise import in workflows.tsx is now unused",
+      "description": "`PrismaPromise` was moved into the value import from `@prisma/client`. Its only usage in the diff, `deleteReminderPromise: PrismaPromise<Prisma.BatchPayload>[]`, was removed. The same applies to `Prisma`, which was used only in that removed annotation within the diff. Both are now dead imports, and `PrismaPromise` is a type that does not need a value import.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:1-12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "smsReminderManager.ts now calls prisma without an import visible in the diff",
+      "description": "The new `prisma.workflowReminder.delete` call relies on a `prisma` binding. The diff does not show an import for it in this file. I could not confirm whether the import already exists, so this is unverified.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-186"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "immediateDelete branch cancels the email but leaves the WorkflowReminder row behind",
+      "location": "packages/features/ee/workflows/lib/reminders/emailReminderManager.ts:197-210",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cron cancel loop sends null referenceIds to the provider",
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:43-60",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Deletes are lost if an earlier cancel request throws",
+      "location": "packages/features/ee/workflows/api/scheduleEmailReminders.ts:46-74",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "try/catch in handleNewBooking cannot catch the errors it is meant to handle",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:964-975",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "deleteScheduledSMSReminder skips the row delete when the Twilio cancel fails",
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-186",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "PrismaPromise import in workflows.tsx is now unused",
+      "location": "packages/trpc/server/routers/viewer/workflows.tsx:1-12",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "smsReminderManager.ts now calls prisma without an import visible in the diff",
+      "location": "packages/features/ee/workflows/lib/reminders/smsReminderManager.ts:177-186",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca7232",
+    "diff": "d0130224f54c3d53c3255d8006c6141da09e3f62...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:57:52.830731",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 27759,
+  "diff_chars_injected": 27759,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 14246,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 12273,
+  "completion_tokens": 8674,
+  "reasoning_tokens": null,
+  "duration_seconds": 39.55405087489635,
+  "cost_usd": 0.00810611,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

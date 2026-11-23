@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The public route fetches one 50-member page, and the template has no pagination or loading controls."
+  ],
+  "F2": [
+   "KEEP",
+   "The removal endpoint deletes membership without clearing a matching `primary_group_id`."
+  ],
+  "F3": [
+   "KEEP",
+   "Math.floor(user_count / limit) + 1` counts an extra page for exact multiples of the limit."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0018415900000000002
+}

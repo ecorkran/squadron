@@ -1,0 +1,258 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Google Meet booking with no destination calendar throws a TypeError in `EventManager.create`",
+      "description": "`const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];` yields `undefined` when there is no destination, and line 119 reads `mainHostDestinationCalendar.integration` with no `?.`. That read runs whenever `evt.location === MeetLocationType` (`\"integrations:google:meet\"`, packages/app-store/locations.ts:54). handleNewBooking.ts:1063-1067 sets `destinationCalendar` to `null` when neither the event type nor the organizer has a destination, and handleNewBooking.ts:2114 calls `eventManager.create(evt)` on the normal path. The old line was `evt.destinationCalendar?.integration`, which was null-safe, and the comment on line 116 describes exactly this fallback case. The TypeError is thrown before any calendar or video event is created, so the booking fails.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts:118-119"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Organization slug is written under an inverted billing condition",
+      "description": "The original `...(!IS_TEAM_BILLING_ENABLED && { slug })` wrote `slug` when billing was disabled. The new `...(IS_TEAM_BILLING_ENABLED ? { slug } : {})` writes it only when billing is enabled. The `requestedSlug` on line 153 kept its original polarity (`IS_TEAM_BILLING_ENABLED ? {...} : {}`). So with billing disabled the organization is created with neither `slug` nor `requestedSlug`. With billing enabled, the slug is written directly, bypassing the requested-slug flow.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Video booking references are saved without `credentialId`, so cancellation never deletes the meeting",
+      "description": "The line `credentialId: isCalendarType ? result.credentialId : undefined` replaces the former `isCalendarType ? evt.destinationCalendar?.credentialId : result.credentialId`. Video results from `createMeeting` carry `credentialId: credential.id` (packages/core/videoClient.ts:78), but `isCalendarType` is false for them (`result.type.includes(\"_calendar\")`), so the value is dropped. `referencesToCreate` is persisted as-is (handleNewBooking.ts:2367-2369). handleCancelBooking.ts:491 calls `deleteMeeting` only when `bookingVideoReference.credentialId` is truthy, so cancelled bookings with a dedicated video link keep their meeting.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts:170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Legacy destinations without `credentialId` create Google events in \"primary\" instead of the selected calendar",
+      "description": "`DestinationCalendar.credentialId` is nullable (packages/prisma/schema.prisma:159). For such rows, `createAllCalendarEvents` (packages/core/EventManager.ts:375-381) calls `createEvent(c, event)` without the destination's `externalId`. `GoogleCalendarService.createEvent` picks the calendar with `find((cal) => cal.credentialId === credentialId)?.externalId`, which can never match a null `credentialId`, so `calendarId` becomes `\"primary\"` on line 154. The previous code used `calEventRaw.destinationCalendar?.externalId`. The stored reference also has no `externalCalendarId` (EventManager.ts:169 reads `result.externalId`, which is undefined on this path), which feeds the next finding. The hangout-link `calendar.events.patch` at lines 166-168 still uses `calendarId: selectedCalendar`, which is now possibly undefined, and its promise is not awaited or handled.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:145-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Google delete and update fallback lookup compares `externalId` against the falsy `externalCalendarId`, so it never finds the destination",
+      "description": "`deleteEvent` computes `externalCalendarId ? externalCalendarId : event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId`. In that else branch `externalCalendarId` is null, undefined, or empty, and destination `externalId`s are non-null strings, so the `find` always returns undefined. Line 322 then deletes from `\"primary\"`, and a 404 is resolved silently (line 335). For a cancelled booking whose reference has no `externalCalendarId` (the pre-refactor else branch at handleCancelBooking.ts:473-482, or the references from the previous finding), the event stays on the user's selected calendar while the cancel reports success. The original code was `event.destinationCalendar?.externalId`. The same expression in `updateEvent` (lines 254-256) makes `calendarId` undefined at line 261.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:315-322"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Office365 `createEvent` always targets `destinationCalendar[0]`, ignoring the credential it is invoked for",
+      "description": "`CalendarManager.createEvent` accepts the per-destination `externalId` (packages/core/CalendarManager.ts:221) and echoes it in the result (line 267), but never passes it to `calendar.createEvent` (line 236, which gets only `credential.id`). Office365 then posts to `/me/calendars/${mainHostDestinationCalendar.externalId}/events`, the first destination. For COLLECTIVE events, handleNewBooking.ts:1077-1079 appends team members' destinations, so a member's Office365 credential posts to the organizer's calendar id. That request fails, and CalendarManager logs it and drops the result. Lark (larkcalendar/lib/CalendarService.ts:128-129) uses the same first-destination selection. In CalDAV (packages/lib/CalendarService.ts:156-165), the filter matches no calendar, `responses` is empty, and the method still returns a success object (lines 185-192), so the event is silently not written.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/office365calendar/lib/CalendarService.ts:73-77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Collective team members' calendars are silently dropped when the organizer has no destination calendar",
+      "description": "When neither the event type nor the organizer has a destination, `evt.destinationCalendar` is `null` (lines 1063-1067). Member destinations are collected at lines 992-993, but they are appended with `evt.destinationCalendar?.push(...)` on line 1078, which is a no-op when the value is null. The collective event is therefore not written to members' calendars, and no error is raised.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:1077-1079"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`updateAllCalendarEvents` catch block no longer logs the error",
+      "description": "The diff removes `console.error(message)` from this catch. The `message` string is still built at lines 592-595 but never used. Failures from the Prisma lookups (lines 485, 517, 557), `getCalendar`, and `deleteEvent` are converted into `success: false` results with no log, where they were previously logged.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts:591-609"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An empty dynamic user list is reported as HTTP 500, and the validation message is discarded",
+      "description": "`throw new Error(\"dynamicUserList is not properly defined or empty.\")` runs inside the `try` that starts at line 725. The catch at lines 757-761 rethrows only `HttpError` and `PrismaClientKnownRequestError` (as 400). Any other error becomes `HttpError 500 \"Unable to load users\"`. A dynamic-group request whose user list is empty therefore gets a server error, and the explicit validation message never reaches the caller.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:727-729"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google Meet booking with no destination calendar throws a TypeError in `EventManager.create`",
+      "location": "packages/core/EventManager.ts:118-119",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Organization slug is written under an inverted billing condition",
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts:151",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Video booking references are saved without `credentialId`, so cancellation never deletes the meeting",
+      "location": "packages/core/EventManager.ts:170",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Legacy destinations without `credentialId` create Google events in \"primary\" instead of the selected calendar",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:145-154",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google delete and update fallback lookup compares `externalId` against the falsy `externalCalendarId`, so it never finds the destination",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:315-322",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Office365 `createEvent` always targets `destinationCalendar[0]`, ignoring the credential it is invoked for",
+      "location": "packages/app-store/office365calendar/lib/CalendarService.ts:73-77",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Collective team members' calendars are silently dropped when the organizer has no destination calendar",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:1077-1079",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`updateAllCalendarEvents` catch block no longer logs the error",
+      "location": "packages/core/EventManager.ts:591-609",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "An empty dynamic user list is reported as HTTP 500, and the validation message is discarded",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts:727-729",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967",
+    "diff": "57d246df47d552209a38d3fcba638b19a91fb909...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:53:00.341215",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "injected": [],
+  "files_read": [
+    "packages/core/EventManager.ts",
+    "packages/core/CalendarManager.ts",
+    "packages/app-store/_utils/getCalendar.ts",
+    "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+    "packages/features/bookings/lib/handleCancelBooking.ts",
+    "packages/app-store/office365calendar/lib/CalendarService.ts",
+    "packages/lib/CalendarService.ts",
+    "packages/app-store/larkcalendar/lib/CalendarService.ts",
+    "packages/core/videoClient.ts",
+    "packages/types/Credential.d.ts"
+  ],
+  "searches": [
+    "grep Fallback to Cal Video|mainHostDestinationCalendar\\.integration|import .*prisma in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/core/EventManager.ts",
+    "grep export const (MeetLocationType|DailyLocationType)|MeetLocationType\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/app-store",
+    "grep model DestinationCalendar \\{[\\s\\S]*?\\n\\} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/prisma/schema.prisma",
+    "grep organization|\\.slug|dynamicUserList in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/features/bookings/lib/handleNewBooking.ts",
+    "grep destinationCalendar in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/features/bookings/lib/handleNewBooking.ts",
+    "grep destinationCalendar in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/prisma/selects/user.ts",
+    "grep import prisma|from \"@calcom/prisma\"|credentials: \\{|credentials: true|select: \\{|destinationCalendar in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/features/bookings/lib/handleCancelBooking.ts",
+    "grep \\.createEvent\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967",
+    "grep credentialId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/core/videoClient.ts",
+    "grep _video|references.*credentialId|bookingVideoReference in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/features/bookings/lib/handleCancelBooking.ts",
+    "grep referencesToCreate|references: \\{|create: \\[?\\.\\.\\.?referencesToCreate|credentialId: (ref|reference) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/features/bookings/lib/handleNewBooking.ts",
+    "grep newBookingId|eventManager\\.reschedule\\(|\\.reschedule\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/features/bookings/lib/handleNewBooking.ts",
+    "grep userId: (0|-1|null|undefined)|userId:|export const getDefaultEvent|export function getDefaultEvent in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/lib/defaultEvents.ts",
+    "grep from \"@calcom/prisma/enums\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages",
+    "grep export function getUsernameList|export const getUsernameList in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages",
+    "grep \\.create\\(evt\\)|new EventManager\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967/packages/features/bookings/lib/handleNewBooking.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 50324,
+  "diff_chars_injected": 50324,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 39,
+  "prompt_tokens": 2076754,
+  "cached_tokens": 1955548,
+  "cache_write_tokens": 121156,
+  "completion_tokens": 69015,
+  "reasoning_tokens": null,
+  "duration_seconds": 315.876606374979,
+  "cost_usd": 0.19296688,
+  "cost_basis": "provider"
+}

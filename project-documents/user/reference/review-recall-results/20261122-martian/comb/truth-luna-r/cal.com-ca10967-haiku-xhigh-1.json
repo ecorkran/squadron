@@ -1,0 +1,77 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A Meet event without a destination calendar dereferences `undefined` and can make booking creation fail."
+  ],
+  "F2": [
+   "KEEP",
+   "When `externalCalendarId` is falsy, the lookup compares destination IDs against that falsy value, so updates and deletes cannot recover the destination."
+  ],
+  "F3": [
+   "KEEP",
+   "Credential-less destinations are not selected for insertion, so Google falls back to `primary`, and the Meet-link patch can use an undefined calendar ID."
+  ],
+  "F4": [
+   "KEEP",
+   "These adapters use the first destination rather than the destination for the calling credential, misrouting or silently dropping team events."
+  ],
+  "F5": [
+   "KEEP",
+   "With team billing disabled, the handler omits the organization slug, which the public event code treats as unpublished."
+  ],
+  "F6": [
+   "KEEP",
+   "The catch returns raw Prisma error messages as client-facing 400s and discards other errors without logging them."
+  ],
+  "F7": [
+   "KEEP",
+   "When the organizer has no destination, `evt.destinationCalendar` is null and the team destinations are never appended."
+  ],
+  "F8": [
+   "KEEP",
+   "Spreading `evt` into the webhook payload exposes its destination-calendar array and the added `schedulingType` field, changing the payload shape."
+  ],
+  "F9": [
+   "DROP",
+   "Duplicated helper logic is a code-structure concern, not a behavior defect."
+  ],
+  "F10": [
+   "KEEP",
+   "The recurring-delete block runs inside the calendar-reference loop, so multiple references repeat deletes and can fan out updates."
+  ],
+  "F11": [
+   "DROP",
+   "Missing tests are not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  9
+ ],
+ "cost_usd": 0.00779787
+}

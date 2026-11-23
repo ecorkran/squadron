@@ -1,0 +1,49 @@
+{
+ "case": "grafana-gr90045",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "all four goroutines derive their timeout context from the caller's request `ctx` with no `WithoutCancel`, so the legacy write is cancelled once the handler returns."
+  ],
+  "F2": [
+   "KEEP",
+   "each goroutine reduces the legacy error to a metric boolean and never logs it, so a failed legacy write is silent; there is also no panic recovery."
+  ],
+  "F3": [
+   "KEEP",
+   "lines 45 and 129 call `recordLegacyDuration` on the storage error path, and line 166 calls `recordStorageDuration` for the legacy `DeleteCollection`."
+  ],
+  "F4": [
+   "KEEP",
+   "Delete` now returns on any storage error, NotFound included, before the legacy delete goroutine is started, so a legacy-only row is left behind; the old NotFound tolerance is not visible here, only the absence of any `apierrors` check."
+  ],
+  "F5": [
+   "KEEP",
+   "line 139 passes the raw `objInfo` to `Legacy.Update` rather than an `updateWrapper` holding the stored result, so legacy re-runs `UpdatedObject` on its own old object and can persist a different result."
+  ],
+  "F6": [
+   "KEEP",
+   "the rewritten goroutines call legacy unconditionally with no `DryRun` check anywhere in the package, and playlist legacy `Delete`/`Create` ignore options, so a dry-run still writes to legacy."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.6156367
+}

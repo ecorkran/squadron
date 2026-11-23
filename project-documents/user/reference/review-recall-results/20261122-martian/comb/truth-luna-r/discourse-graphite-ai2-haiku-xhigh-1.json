@@ -1,0 +1,42 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The direct save leaves `notifications_reason_id` null, allowing auto-tracking on a later read to override the unsubscribe level."
+  ],
+  "F2": [
+   "KEEP",
+   "The top-level `topicUnsubscribe` route resolves a differently named template than `topic/unsubscribe.hbs`, so the page template is not found."
+  ],
+  "F3": [
+   "KEEP",
+   "A user without a `TopicUser` row reaches `tu.notification_level` with `tu` nil, causing a `NoMethodError`."
+  ],
+  "F4": [
+   "KEEP",
+   "The GET route changes notification state, so a cross-site request can trigger the mutation for a logged-in user."
+  ],
+  "F5": [
+   "DROP",
+   "Missing test coverage is not itself a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.009546040000000002
+}

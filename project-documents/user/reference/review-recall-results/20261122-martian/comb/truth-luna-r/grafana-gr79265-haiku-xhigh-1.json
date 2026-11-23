@@ -1,0 +1,56 @@
+{
+ "case": "grafana-gr79265",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The cache entry is set before the store call, so a failed write is treated as successful on the next request."
+  ],
+  "F2": [
+   "KEEP",
+   "The count and insert are separate operations, allowing concurrent requests to exceed the configured limit."
+  ],
+  "F3": [
+   "DROP",
+   "The finding describes synchronous request-path database work and latency, but identifies no behavior failure beyond performance."
+  ],
+  "F4": [
+   "DROP",
+   "The service gets its dependencies from Wire, and no current code requests the now-unused store binding."
+  ],
+  "F5": [
+   "DROP",
+   "Duplicate expiration constants are a naming and maintenance issue, not a behavior defect."
+  ],
+  "F6": [
+   "DROP",
+   "Missing configuration documentation is not a behavior defect."
+  ],
+  "F7": [
+   "KEEP",
+   "The class field is inferred as `undefined`, preventing consumers from reading the runtime numeric setting as a number."
+  ],
+  "F8": [
+   "DROP",
+   "Missing test coverage alone is not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  6
+ ],
+ "cost_usd": 0.009111359999999999
+}

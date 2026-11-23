@@ -1,0 +1,99 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Migration default sets every existing post to raw_html cooking",
+      "description": "The migration adds `cook_method` with `default: 1, null: false`. `Post.cook_methods` is `Enum.new(:regular, :raw_html)`, and Discourse's `Enum` is zero-indexed, so `:regular` is 0 and `:raw_html` is 1. The default therefore marks every post that existed before this migration, and any post created without an explicit cook method, as raw HTML. `Post#cook` then returns `raw` for them and skips the rendering pipeline. The default should be `0` (`:regular`).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20131219203905_add_cook_method_to_posts.rb:2"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Stray `if` after `end` in the best-posts template",
+      "description": "The line `<%- end if %>` closes the `if @topic_view.posts.present?` block with a dangling modifier `if` that has no condition. Ruby will reject this as a syntax error, or misparse the following output lines as the condition. The `if` should be removed so the line reads `<%- end %>`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/views/embed/best.html.erb:6"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Migration default sets every existing post to raw_html cooking",
+      "location": "db/migrate/20131219203905_add_cook_method_to_posts.rb:2",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Stray `if` after `end` in the best-posts template",
+      "location": "app/views/embed/best.html.erb:6",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "diff": "40c0c041eef5dc44025770d153a3608edf852aed...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:57:03.558752",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 25589,
+  "diff_chars_injected": 25589,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 14872,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 12899,
+  "completion_tokens": 5578,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.508298374712467,
+  "cost_usd": 0.00674421,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

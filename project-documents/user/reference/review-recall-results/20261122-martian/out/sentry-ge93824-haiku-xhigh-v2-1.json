@@ -1,0 +1,159 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Hung spawn-mode flusher is never killed before restart, because the `isinstance` guard never matches `SpawnProcess`",
+      "description": "The removed `_ensure_process_alive` body called `self.process.kill()` unconditionally inside `try/except ValueError`. The new code only kills when `isinstance(process, multiprocessing.Process)` (lines 254-255). Production processes come from `multiprocessing.get_context(\"spawn\")` (lines 53 and 105), so they are `multiprocessing.context.SpawnProcess`. In CPython 3.13 `multiprocessing/context.py`, `SpawnProcess` subclasses `process.BaseProcess` directly (line 284). `multiprocessing.Process` is the separate `context.Process` class (line 220, aliased at line 231). The guard is therefore always False on the spawn path, and `kill()` is skipped.\n\nThe failure path: a flusher with a stale heartbeat gets `cause = \"hang\"` (lines 231-236). The kill is skipped, and line 259 starts a replacement for the same shards and overwrites `self.processes[process_index]`. The old process is still running but no longer referenced. If it unblocks, both processes call `buffer.flush_segments` on the same queues (`buffer.py:386-393`), which only reads them. Entries are removed later in `done_flush_segments` (`buffer.py:523-530`), so the same segment can be fetched and produced twice. If the old process never unblocks, it leaks a process and a Kafka producer. The tests use `produce_to_pipe`, which creates threads, so this path is not exercised.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:253-257"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`join()` never terminates spawn-mode flusher processes that outlive the timeout, because the same `isinstance` guard never matches",
+      "description": "The `terminate()` call is gated on `isinstance(process, multiprocessing.Process)`, which is always False for `SpawnProcess` (see the finding above). The original code had the same no-op check on `self.process`. This diff rewrote the block into the per-process loop and kept the check. If the `while` loop at line 343 exits on the deadline while a flusher is still alive, nothing terminates it. It stays alive until interpreter exit, when multiprocessing terminates daemon children. The impact is delayed cleanup at shutdown rather than data loss.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:346-347"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A negative `--flusher-processes` value passes click validation and makes `SpanFlusher.__init__` crash with `KeyError: 0`",
+      "description": "The new click option is `type=int` with no lower bound (`src/sentry/consumers/__init__.py:432-438`). Click passes the value through as kwargs (`consumers/__init__.py:511-513`) to the factory, which forwards it as `max_processes`. With `-1`, `self.max_processes = -1 or ...` keeps `-1` (line 51), and `self.num_processes = min(-1, len(shards)) = -1` (line 60). `range(-1)` is empty, so `process_to_shards_map` starts empty (lines 61-63). For each shard, `i % self.num_processes` is `0` (line 65), and `self.process_to_shards_map[0]` raises `KeyError: 0` (line 66). This runs inside `create_with_partitions`, so the consumer fails at partition assignment with an error that does not name the flag.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:60-66"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Each per-process `SpansBuffer` applies the full `max-flush-segments` budget, so P flusher processes fetch about P times the documented cap",
+      "description": "`_create_process_for_shards` now builds `SpansBuffer(shards)` with only that process's shards. `SpansBuffer.flush_segments` computes `max_segments_per_shard = ceil(max_flush_segments / len(self.assigned_shards))` (`src/sentry/spans/buffer.py:382-384`) and fetches that many segments from each of its shards. Each process therefore fetches roughly `spans.buffer.max-flush-segments` per round. The option is described as \"Maximum number of segments to fetch and flush per cycle\" (`src/sentry/options/defaults.py:2716-2720`). Before this diff, one flusher capped the total at about 500. With `--flusher-processes=P`, the flusher now fetches and holds about P\u00d7500 segments per round, with P times the Redis load and peak memory. The CLI default is 1, so only deployments that opt in are affected. If the cap is meant to bound the whole flusher, the per-process budget needs to be divided by the process count. If per-process budgets are intended, the option's documentation should say so.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py:93"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Hung spawn-mode flusher is never killed before restart, because the `isinstance` guard never matches `SpawnProcess`",
+      "location": "src/sentry/spans/consumers/process/flusher.py:253-257",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`join()` never terminates spawn-mode flusher processes that outlive the timeout, because the same `isinstance` guard never matches",
+      "location": "src/sentry/spans/consumers/process/flusher.py:346-347",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A negative `--flusher-processes` value passes click validation and makes `SpanFlusher.__init__` crash with `KeyError: 0`",
+      "location": "src/sentry/spans/consumers/process/flusher.py:60-66",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Each per-process `SpansBuffer` applies the full `max-flush-segments` budget, so P flusher processes fetch about P times the documented cap",
+      "location": "src/sentry/spans/consumers/process/flusher.py:93",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "diff": "c1449270812b3fd722c26d64b8530922be72789e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:59:21.722818",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "injected": [],
+  "files_read": [
+    "src/sentry/spans/consumers/process/flusher.py",
+    "src/sentry/spans/consumers/process/factory.py",
+    "src/sentry/spans/buffer.py",
+    "src/sentry/consumers/__init__.py",
+    "src/sentry/utils/arroyo.py",
+    "tests/sentry/spans/consumers/process/test_flusher.py",
+    "src/sentry/processing/backpressure/memory.py",
+    "src/sentry/options/defaults.py"
+  ],
+  "searches": [
+    "grep ProcessSpansStrategyFactory\\(|SpanFlusher\\(|_create_process_for_shard\\b|flusher_processes|def multiprocessing_options|def run_with_initialized_sentry in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "list_files **/multiprocessing/context.py in /Library/Frameworks/Python.framework/Versions",
+    "list_files **/multiprocessing/context.py in /opt/homebrew/opt",
+    "list_files **/multiprocessing/context.py in /usr/local/Cellar",
+    "grep ^class (Process|SpawnProcess|ForkProcess|ForkServerProcess)\\b|^class \\w+\\(process\\.BaseProcess\\)|_default_context = |Process = _default_context|multiprocessing\\.Process\\b in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/context.py",
+    "grep globals\\(\\)\\.update|_default_context|__all__ in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/__init__.py",
+    "grep class SpawnProcess|class ForkProcess|_start_method = 'spawn' in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/context.py",
+    "grep ^class DefaultContext|^    Process = Process|^class BaseContext|    Process = |    def Process in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/context.py",
+    "grep def kill\\(self\\)|def terminate\\(self\\) in /Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/process.py",
+    "grep spans\\.buffer\\.max-flush-segments|spans\\.buffer\\.flusher\\.max-unhealthy-seconds in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src",
+    "grep click_options|strategy_factory|import_string\\(.*strategy_factory|\\*\\*kwargs\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824/src/sentry/consumers/__init__.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 19169,
+  "diff_chars_injected": 19169,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 21,
+  "prompt_tokens": 504881,
+  "cached_tokens": 438852,
+  "cache_write_tokens": 66009,
+  "completion_tokens": 48954,
+  "reasoning_tokens": null,
+  "duration_seconds": 212.42905412521213,
+  "cost_usd": 0.04296702,
+  "cost_basis": "provider"
+}

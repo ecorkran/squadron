@@ -1,0 +1,36 @@
+{
+ "case": "grafana-gr97529",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "no RPC in `server.go` calls `s.Init` any more (only the constructor at line 258 does), so the \"service is stopped\" error set by `Stop()` is never checked and post-Stop requests reach the backend; the removal itself is taken from the finding, as the diff was not readable here."
+  ],
+  "F2": [
+   "KEEP",
+   "BuildIndex` takes `cacheMu` only around the final cache write (bleve.go:137-139) and `getOrCreateIndex` has no per-key guard, so same-key builds can run concurrently and overwrite each other's cache entry; that the lock used to wrap the whole build is taken from the finding."
+  ],
+  "F3": [
+   "KEEP",
+   "TotalDocs` ranges over `b.cache` with no lock (bleve.go:146) and `init` calls it at search.go:216 after the event goroutine has started and can reach `BuildIndex`'s map write."
+  ],
+  "F4": [
+   "DROP",
+   "the shared `err` and counter race at search.go:189-190 is real, but the finding itself says this code predates the diff and is outside the changed hunk."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.4366867
+}

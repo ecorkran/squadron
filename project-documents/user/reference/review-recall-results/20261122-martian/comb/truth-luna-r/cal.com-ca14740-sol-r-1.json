@@ -1,0 +1,43 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler permits all booking statuses, then updates attendees and sends emails with `CONFIRMED` ICS status."
+  ],
+  "F2": [
+   "KEEP",
+   "The `&&` condition denies non-owner team admins because `isTeamOwner` is false for them."
+  ],
+  "F3": [
+   "KEEP",
+   "The schema accepts duplicate addresses, and the handler does not deduplicate submitted guests before creating attendees."
+  ],
+  "F4": [
+   "KEEP",
+   "Submitted addresses are compared against lowercased blacklist entries without normalization, allowing case variants through."
+  ],
+  "F5": [
+   "KEEP",
+   "sendAddGuestsEmails` sends organizer and attendee emails without checking the event type\u2019s disabled-email metadata."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.0037022300000000004
+}

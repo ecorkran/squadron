@@ -1,0 +1,103 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "MetricAlertDetectorHandler is an empty subclass of an ABC with unimplemented abstract methods, so constructing it raises TypeError",
+      "description": "The diff replaces the concrete `evaluate()` in `MetricAlertDetectorHandler` with `pass`, while changing its base from `DetectorHandler` to `StatefulDetectorHandler`. `StatefulDetectorHandler` declares four abstract members that this class does not implement: `counter_names` (src/sentry/workflow_engine/processors/detector.py:144), `get_dedupe_value` (:151), `get_group_key_values` (:159), and `build_occurrence_and_event_data` (:167, added by this diff). Python's ABC machinery therefore refuses to instantiate the class.\n\nThe failure path: `Detector.detector_handler` (src/sentry/workflow_engine/models/detector.py:86) calls `group_type.detector_handler(self)` for any detector whose type is `metric_alert_fire`. `process_detectors` (src/sentry/workflow_engine/processors/detector.py:53) calls that property on every detector it is given, so such a detector would raise inside the detector loop. Before this diff, the class defined `evaluate()` on `DetectorHandler`, which was its only abstract member, so it instantiated and returned `[]`.\n\nWhy this is a CONCERN and not a FAIL: `metric_alert_fire` / `MetricAlertFire` appears only in src/sentry/incidents/grouptype.py, and nothing in the repo creates a `Detector` with that type, so the crash is latent in this tree. No test references `MetricAlertDetectorHandler`, so the suite will not catch it. Once any code creates a detector of this type, this becomes a FAIL. The fix is either to implement the four abstract members or to keep the placeholder on `DetectorHandler` and return `{}` until the stateful handler exists.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/incidents/grouptype.py:11-12"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "MetricAlertDetectorHandler is an empty subclass of an ABC with unimplemented abstract methods, so constructing it raises TypeError",
+      "location": "src/sentry/incidents/grouptype.py:11-12",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+    "diff": "feafc4b297275021a56ba865840b8849899b3f3e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:03:13.448996",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "injected": [],
+  "files_read": [
+    "src/sentry/workflow_engine/processors/detector.py",
+    "src/sentry/incidents/grouptype.py",
+    "src/sentry/workflow_engine/models/detector.py",
+    "src/sentry/workflow_engine/types.py",
+    "tests/sentry/workflow_engine/processors/test_detector.py",
+    "src/sentry/issues/issue_occurrence.py"
+  ],
+  "searches": [
+    "grep class (DetectorPriorityLevel|PriorityLevel)\\b|DetectorGroupKey\\s*=|^\\s+(OK|LOW|MEDIUM|HIGH)\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry",
+    "grep MetricAlertDetectorHandler|metric_alert_fire|MetricAlertFire in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+    "grep StatefulDetectorHandler|DetectorHandler\\b|process_detectors|\\.evaluate\\(|build_occurrence_and_event_data|detector_handler in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168",
+    "grep def get_by_slug|class GroupTypeRegistry|def add\\(|def register|__init_subclass__|class GroupType\\b|_registry|def get_by_type_id|def all\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry/issues/grouptype.py",
+    "grep class BaseGroupTypeTest|_registry|registry\\.|def setUp|def tearDown|class TestCase in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/tests/sentry/issues/test_grouptype.py",
+    "grep class IssueOccurrence\\b|@dataclass|def __eq__|initial_issue_priority|evidence_display|detection_time:|resource_id:|culprit:|level: in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry/issues/issue_occurrence.py",
+    "grep def freeze_time|^freeze_time|freeze_time\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry/testutils/helpers/datetime.py",
+    "grep def evaluate\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry",
+    "grep get_by_slug|Detector\\.objects\\.(create|get_or_create)|Detector\\(\\s*$|type=.*slug in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry",
+    "grep class .*Detector.*(Serializer|Validator)|def validate_type|\"type\":\\s*serializers|detector.*type.*=\\s*serializers\\.(Char|Choice) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168/src/sentry",
+    "grep StatefulDetectorHandlerTestMixin|from tests\\.sentry\\.workflow_engine\\.processors\\.test_detector|processors\\.test_detector import|group_type\\b.*=\\s*property|def group_type in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80168"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 29492,
+  "diff_chars_injected": 29492,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 434455,
+  "cached_tokens": 360801,
+  "cache_write_tokens": 73638,
+  "completion_tokens": 33932,
+  "reasoning_tokens": null,
+  "duration_seconds": 144.34942787513137,
+  "cost_usd": 0.03665371,
+  "cost_basis": "provider"
+}

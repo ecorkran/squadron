@@ -1,0 +1,81 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`get_monitor_environment_context` builds a modified `config` copy but returns the unmodified original",
+      "description": "Line 160 copies the monitor config, and lines 161-162 replace `schedule_type` with its display value in that copy. The returned dict on line 168 uses `monitor_environment.monitor.config` instead of the local `config`, so the display conversion is discarded and the raw stored value is sent in the event context. The same logic exists in the removed block of `mark_failed.py`, so this is carried over from the original code, not introduced by the move. The fix is to return `config` on line 168, or to delete the dead copy-and-convert lines if the raw value is intended.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:160-168"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`get_monitor_environment_context` builds a modified `config` copy but returns the unmodified original",
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:160-168",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "diff": "b695d416e601becddb96a381968cc3b5c8f1bd40...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:54:32.432192",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21046,
+  "diff_chars_injected": 21046,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 11485,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 9512,
+  "completion_tokens": 2993,
+  "reasoning_tokens": null,
+  "duration_seconds": 12.220239541959018,
+  "cost_usd": 0.00443541,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

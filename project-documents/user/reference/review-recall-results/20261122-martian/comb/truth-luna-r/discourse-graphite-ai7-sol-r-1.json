@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "In dark themes, the default badge uses the darkened secondary for its background and the same dark secondary for its text."
+  ],
+  "F2": [
+   "KEEP",
+   "Mobile topic-map h3 headings use a 50% adjustment in both themes, making light-theme headings lighter than before."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0013287400000000001
+}

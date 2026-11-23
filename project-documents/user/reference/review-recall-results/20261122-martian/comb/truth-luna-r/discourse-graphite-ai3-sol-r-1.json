@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The validator can initialize an empty email error array, which the client treats as a rejection and caches."
+  ],
+  "F2": [
+   "KEEP",
+   "Blocked-email lookup uses exact equality and neither lookup nor stored addresses are normalized."
+  ],
+  "F3": [
+   "KEEP",
+   "Concurrent checks can read the same count and save the same incremented value, losing an update."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00252591
+}

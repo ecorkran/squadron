@@ -1,0 +1,226 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Delete is never rendered in the Grafana rule list because the menu item still requires a ruler rule that the list no longer supplies",
+      "description": "`canDelete` is now computed from the promRule ability (`AlertRuleMenu.tsx:85-87`), but the Delete item still renders only under `canDelete && rulerRule` (line 165). The list item no longer passes a ruler rule: `GrafanaRuleListItem.tsx:47` renders `<RuleActionsButtons promRule={rule} groupIdentifier={groupIdentifier} compact />`, and `RuleActionsButtons.V2.tsx:95` forwards `rulerRule={rule}`, which is `undefined`. A user with `AlertingRuleDelete` on the folder, which the code now correctly computes as allowed, gets no Delete option in the list view. Before this change the list fetched ruler rules and Delete appeared. The updated `GrafanaGroupLoader.test.tsx` grants `AlertingRuleDelete` and still expects exactly four menu items, which is consistent with the missing item.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:165"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Pause is never rendered in the Grafana rule list because the pause item also requires a ruler rule",
+      "description": "The Pause item renders only when `canPause && rulerRuleType.grafana.rule(rulerRule) && groupIdentifier.groupOrigin === 'grafana'`. In the list view `rulerRule` is `undefined`, so `rulerRuleType.grafana.rule(undefined)` is false (`utils/rules.ts:58-60`). `canPause` can be true from the promRule ability (line 83), but no item is shown. `MenuItemPauseRule` also takes only the ruler rule. Users can no longer pause or unpause Grafana rules from the list.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:123"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Silence notifications does nothing in the Grafana rule list because the drawer renders only when a ruler rule is present",
+      "description": "The Silence item appears when `canSilence` is true from the promRule ability (`AlertRuleMenu.tsx:96`, `126-132`). Clicking it calls `handleSilence`, which sets `showSilenceDrawer` (`RuleActionsButtons.V2.tsx:100`). The drawer renders only when `rulerRuleType.grafana.alertingRule(rule)` holds (line 104). `rule` is `undefined` in the list, and `isGrafanaAlertingRule(undefined)` returns false (`utils/rules.ts:58-64`). The click changes state and nothing appears, with no error.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:104-106"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Federated rule groups become editable and deletable because `useAllAlertRuleAbilities` no longer checks `isFederatedRuleGroup`",
+      "description": "The removed base code computed `const isFederated = isFederatedRuleGroup(rule.group);` in `useAllAlertRuleAbilities`. The new version delegates to `useAllRulerRuleAbilities`, which hardcodes `const isFederated = false;` (`useAbilities.ts:245`). Combined groups do carry `source_tenants` (`hooks/useCombinedRuleNamespaces.ts:256`), so the old check was live. Federated groups were previously immutable and now get Update, Delete, Pause, and Restore whenever the ruler is available and the user has permission. Callers include `components/rules/RuleActionsButtons.tsx:57` (`useAlertRuleAbility(rule, Update)`), so Edit now appears for federated rules in RulesTable and RuleViewer. No test covers this path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:222-228"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicate is offered for datasource-managed rules because the Grafana create permission is OR-ed in when the rule is not a Grafana rule",
+      "description": "For non-Grafana rules, `AlertRuleMenu` passes `skipToken` (`AlertRuleMenu.tsx:73`), so `useAllGrafanaPromRuleAbilities(undefined)` runs. `useIsGrafanaPromRuleEditable(undefined)` returns `loading: false` (`useAbilities.ts:354-356`), so `MaybeSupported` is `AlwaysSupported` (line 309). Duplicate then becomes `[true, ctx.hasPermission(AlertingRuleCreate)]` (line 318). `canDuplicate` ORs this in (`AlertRuleMenu.tsx:91-92`). Any datasource rule now shows Duplicate for a user with the global Grafana alert-rule create permission, including rules whose ruler is unavailable. The ruler path correctly reports those as unsupported through `isRulerAvailable`. The non-V2 caller passes datasource promRules (`components/rules/RuleActionsButtons.tsx:110-112`).",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:309"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Export is hidden for Grafana recording rules in the list because the promRule ModifyExport ability requires an alerting rule",
+      "description": "The base ruler-based ability used `isGrafanaManagedAlertRule = rulerRuleType.grafana.rule(rule)`, which is true for recording rules too (base `useAbilities.ts:268`). The new promRule ability uses `isAlertingRule = prometheusRuleType.grafana.alertingRule(rule)` (lines 302, 324). For a Grafana recording rule, `canExport` becomes false in the list view (`AlertRuleMenu.tsx:100`). The list previously showed Export for these rules, and the non-list path still does, so the two views now disagree.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Grafana list rule links drop `returnTo`, so the rule view's back button falls back to `/alerting/list`",
+      "description": "The old Grafana list item built its view href with `{ returnTo: createReturnTo() }`. The new href is bare. `RuleViewer.tsx:96` calls `useReturnTo('/alerting/list')`, which returns that fallback when no `returnTo` param is present (`hooks/useReturnTo.ts:20-22`). The back button at `RuleViewer.tsx:304` then goes to `/alerting/list`, losing the filtered list the user came from. `DataSourceRuleListItem.tsx:36-42` still passes `returnTo`, so the two list item types now behave differently.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:40"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delete is never rendered in the Grafana rule list because the menu item still requires a ruler rule that the list no longer supplies",
+      "location": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:165",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Pause is never rendered in the Grafana rule list because the pause item also requires a ruler rule",
+      "location": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx:123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Silence notifications does nothing in the Grafana rule list because the drawer renders only when a ruler rule is present",
+      "location": "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx:104-106",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Federated rule groups become editable and deletable because `useAllAlertRuleAbilities` no longer checks `isFederatedRuleGroup`",
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:222-228",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Duplicate is offered for datasource-managed rules because the Grafana create permission is OR-ed in when the rule is not a Grafana rule",
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:309",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Export is hidden for Grafana recording rules in the list because the promRule ModifyExport ability requires an alerting rule",
+      "location": "public/app/features/alerting/unified/hooks/useAbilities.ts:324",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Grafana list rule links drop `returnTo`, so the rule view's back button falls back to `/alerting/list`",
+      "location": "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx:40",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778",
+    "diff": "5e9d2108d0b700e58f104fd97a35a805e38e0397...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:19:37.781233",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 35,
+  "injected": [],
+  "files_read": [
+    "public/app/features/alerting/unified/hooks/useAbilities.ts",
+    "public/app/features/alerting/unified/rule-list/components/RuleActionsButtons.V2.tsx",
+    "public/app/features/alerting/unified/rule-list/GrafanaRuleListItem.tsx",
+    "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+    "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.tsx",
+    "public/app/features/alerting/unified/utils/rules.ts",
+    "public/app/features/alerting/unified/hooks/useIsRuleEditable.ts",
+    "public/app/features/alerting/unified/utils/groupIdentifier.ts",
+    "public/app/features/alerting/unified/components/rules/RuleActionsButtons.tsx",
+    "public/app/features/alerting/unified/rule-list/FilterView.tsx",
+    "public/app/types/unified-alerting.ts",
+    "pkg/services/ngalert/api/tooling/definitions/prom.go",
+    "public/app/features/alerting/unified/hooks/useReturnTo.ts",
+    "public/app/features/alerting/unified/hooks/useCombinedRuleNamespaces.ts"
+  ],
+  "searches": [
+    "grep export (function|const) (isPluginProvidedRule|isFederatedRuleGroup|isProvisionedRule|isGrafanaRulerRule|prometheusRuleType|rulerRuleType|isProvisionedRuleGroup)\\b|export const prometheusRuleType|export const rulerRuleType in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified/utils/rules.ts",
+    "grep export function getRulesPermissions|GRAFANA_RULES_SOURCE_NAME =|hasPermissionInMetadata in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public",
+    "grep AlertRuleMenu|from '.*RuleActionsButtons(\\.V2)?'|GrafanaRuleLoader|matchRules|GrafanaRuleListItem in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app",
+    "grep export function getRulesPermissions|export const getRulesPermissions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified/utils/access-control.ts",
+    "grep useAllAlertRuleAbilities|useAlertRuleAbility\\b|useAlertRuleAbilities|useAllRulerRuleAbilities|useRulerRuleAbility\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app",
+    "grep const rulesPermissions|create: \\{|delete: \\{|update: \\{|read: \\{|grafana: AccessControlAction in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified/utils/access-control.ts",
+    "grep export type Rule =|export type RuleIdentifier|export interface GrafanaRuleIdentifier|export type EditableRuleIdentifier|export type GrafanaRuleGroupIdentifier|export type RuleGroupIdentifierV2|export type CombinedRule |export interface CombinedRule  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/types/unified-alerting.ts",
+    "grep export type PromRuleDTO|export interface PromRuleDTOBase|interface PromRuleDTOBase|export type GrafanaPromRuleDTO|export interface GrafanaPromRuleDTO|export type GrafanaPromRuleDTO|interface GrafanaPromRuleDTOBase|export interface PromAlertingRuleDTO|export interface PromRecordingRuleDTO|export inte\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/types/unified-alerting-dto.ts",
+    "grep returnTo in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified/components/rule-viewer",
+    "grep export interface RuleListItemCommonProps|export interface AlertRuleListItemProps|export function UnknownRuleListItem|export function AlertRuleListItem|export function RecordingRuleListItem|showLocation|labels\\??:|ruleDefinition in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified/rule-list/components/AlertRuleListItem.tsx",
+    "grep createReturnTo|returnTo in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified/rule-list",
+    "grep [Pp]rovenance in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/pkg/services/ngalert/api/tooling/definitions",
+    "grep [Pp]rovenance in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/pkg/services/ngalert/api/prometheus",
+    "grep useCreateSearchParams|labels\\b.*&&|RuleLabels labels=|labels &&|\\{labels &&  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified/rule-list/components/AlertRuleListItem.tsx",
+    "grep [Pp]rovenance in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/pkg/services/ngalert/api/prometheus/api_prometheus.go",
+    "grep source_tenants in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified",
+    "grep [Ff]ederated in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified",
+    "grep RuleWithOrigin\\b.*=|type RuleWithOrigin|interface RuleWithOrigin in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr106778/public/app/features/alerting/unified"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 61662,
+  "diff_chars_injected": 61662,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 36,
+  "prompt_tokens": 1384848,
+  "cached_tokens": 1243678,
+  "cache_write_tokens": 141142,
+  "completion_tokens": 68896,
+  "reasoning_tokens": null,
+  "duration_seconds": 290.3402521670796,
+  "cost_usd": 0.24772993999999998,
+  "cost_basis": "provider"
+}

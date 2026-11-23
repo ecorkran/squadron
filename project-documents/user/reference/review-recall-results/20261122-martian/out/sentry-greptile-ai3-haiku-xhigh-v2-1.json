@@ -1,0 +1,208 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Upsampled `count()` series come back as zeros when `transformAliasToInputFormat=1`",
+      "description": "When upsampling applies and the request sets `transformAliasToInputFormat=1`, every count is 0 and no error is raised. The chain:\n\n1. `_get_event_stats` swaps `count()` for `\"upsampled_count() as count\"` (line 296; `error_upsampling.py:95`).\n2. The builder aliases the column `count`. With the flag set, `process_results` renames each alias to `function_details.field`, which is the raw input string (`builder/base.py:1566-1572`, `FunctionDetails` at 746). The row key therefore becomes `\"upsampled_count() as count\"` (`builder/base.py:1613-1616`).\n3. The serializer still looks up the input name. `resolve_axis_column(\"count()\", \u2026, transform_alias_to_input_format=True)` returns `\"count()\"` unchanged (`api/bases/organization_events.py:75-76`, used at 605-607). `SnubaTSResultSerializer.serialize` then does `r.get(column, 0)` (`api/serializers/snuba.py:92`), so every bucket is 0.\n\nWithout the flag, `resolve_axis_column` returns `get_function_alias(\"count()\")`, which is `\"count\"` and matches the alias, so the path works. The multi-axis serializer (`organization_events.py:674`) and top-events path (`organization_events_stats.py:270`) pass the same flag through. The existing suite uses `transformAliasToInputFormat` (`tests/snuba/api/endpoints/test_organization_events_stats.py:511, 536`), but none of the new upsampling tests set it.\n\nA fix has to keep the input-format name through the transform, not just change the alias.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_is_error_focused_query` also matches negated and OR filters, so transactions get `sum(sample_weight)`",
+      "description": "The check is `\"event.type:error\" in query` on the raw lowercased string. `!event.type:error` contains that substring, and so does `event.type:error OR event.type:transaction`. For `dataset=discover` with such a query on fully allowlisted projects, `_should_apply_sample_weight_transform` returns True (lines 122-124), and the endpoint rewrites `count()` to `toInt64(sum(sample_weight))` (`discover.py:1041-1052`). The helper's own docstring says `sample_weight` does not exist for transactions (lines 105-107), so transaction rows add no weight. The result is either a count of 0 or a Snuba error about the column, and both are wrong. Matching only a positive `event.type:error` term would avoid this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:137"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Eligibility is decided on the outer `dataset`, not the `scoped_dataset` the query runs on",
+      "description": "`_get_event_stats` receives `scoped_dataset` (line 210), but the eligibility call passes `dataset`, the outer variable from `get()`. The dashboard split path runs queries on `discover` through `_get_event_stats(discover, \u2026)` (lines 386-394, 399-407, 427-435, 444-452, 487-495). For `dataset=metrics_performance` or `metrics_enhanced_performance` with a `dashboardWidgetId`, the only case that reaches the split path (lines 191, 344), `_should_apply_sample_weight_transform` returns False for every call (`error_upsampling.py:127`). The error-only split query therefore never gets upsampled. If the decision is `ERROR_EVENTS`, those raw counts are what gets returned (lines 467-480). Passing `scoped_dataset` would fix the lookup.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Equation columns containing `count()` are not upsampled while a plain `count()` in the same request is",
+      "description": "The transform rewrites only columns that equal `count()` exactly (line 92). Equations such as `equation|count() * 2` reach `query_columns` unchanged (equations travel in `query_columns`, as `organization_events.py:71-72` shows), so the inner `count()` is evaluated as an ordinary count. A request with `yAxis=count()&yAxis=equation|count() * 2` returns one upsampled series and one raw series for the same quantity.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Upsampled sums assume every allowlisted event has `sample_weight`, which ingestion does not guarantee",
+      "description": "The docstring says the schema guarantees `sample_weight` for all events in allowlisted projects, so no null handling is needed. The ingestion code in this repo does not do that. `_derive_client_error_sampling_rate` sets `sample_rate` only when the client rate is present and in (0, 1] (`event_manager.py:785-796`). Other events in allowlisted projects arrive without `sample_rate`. If Snuba stores NULL `sample_weight` for them, `sum(sample_weight)` drops those events entirely. If it defaults to 1, they count once. Wrapping the column in `ifNull(sample_weight, 1)` would remove the dependency, or the assumption needs to be checked against the Snuba schema.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/api/helpers/error_upsampling.py:85-86"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`topEvents` error message changed in an unrelated edit",
+      "description": "The 400 detail changes from \"If topEvents needs to be at least 1\" to \"topEvents needs to be at least 1\". This has nothing to do with upsampling, and the text is client-visible. No test in the repo asserts either string, so nothing breaks here, but clients that match the old text will. Confirm the change is intended or move it to its own commit.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:124"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Upsampled `count()` series come back as zeros when `transformAliasToInputFormat=1`",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:296",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`_is_error_focused_query` also matches negated and OR filters, so transactions get `sum(sample_weight)`",
+      "location": "src/sentry/api/helpers/error_upsampling.py:137",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Eligibility is decided on the outer `dataset`, not the `scoped_dataset` the query runs on",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:220",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Equation columns containing `count()` are not upsampled while a plain `count()` in the same request is",
+      "location": "src/sentry/api/helpers/error_upsampling.py:92",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Upsampled sums assume every allowlisted event has `sample_weight`, which ingestion does not guarantee",
+      "location": "src/sentry/api/helpers/error_upsampling.py:85-86",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`topEvents` error message changed in an unrelated edit",
+      "location": "src/sentry/api/endpoints/organization_events_stats.py:124",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "diff": "6ed572a59d2f51323f982a2cd7330cbaf12f890a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:10:36.968091",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 38,
+  "injected": [],
+  "files_read": [
+    "src/sentry/api/endpoints/organization_events_stats.py",
+    "src/sentry/api/helpers/error_upsampling.py",
+    "src/sentry/search/events/datasets/discover.py",
+    "src/sentry/event_manager.py",
+    "src/sentry/options/defaults.py",
+    "src/sentry/search/events/constants.py",
+    "src/sentry/search/events/fields.py",
+    "src/sentry/search/events/builder/base.py",
+    "src/sentry/api/bases/organization_events.py",
+    "src/sentry/api/serializers/snuba.py",
+    "tests/snuba/api/endpoints/test_organization_events_stats.py"
+  ],
+  "searches": [
+    "grep client_error_sampling|sample_weight in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "grep register\\(\\s*\"issues\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/options",
+    "grep FUNCTION_PATTERN|def parse_function|\\\\s\\+as\\\\s|def is_function|def get_function_alias|\" as \" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep ^FUNCTIONS\\b|FUNCTIONS\\s*=|FUNCTIONS\\[|in FUNCTIONS|import.*FUNCTIONS|def function_converter|function_converter\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep upsampled_count in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "grep def timeseries_query|def top_events_timeseries|QueryBuilder\\(|DatasetConfig|config_class|def get_dataset in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/snuba/errors.py",
+    "grep def get_dataset\\b|def get_dataset\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api",
+    "grep class ErrorsTimeseriesQueryBuilder|class ErrorsTopEventsQueryBuilder|class ErrorsQueryBuilder|class DiscoverQueryBuilder|config_class = |DiscoverDatasetConfig in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/builder",
+    "grep def get_event_stats_data|def get_yaxis|query_columns|get_equation_list|def get_field_list in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/bases/organization_events.py",
+    "grep def resolve_axis_column|def get_query_columns in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry",
+    "grep transform_alias_to_input_format in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep FunctionDetails\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/builder/base.py",
+    "grep class SnubaTSResultSerializer|def serialize\\(|row\\[column\\]|row\\.get\\(|\\[column\\]|get\\(column in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/api/serializers/snuba.py",
+    "grep transformAliasToInputFormat|transform_alias_to_input_format in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3",
+    "grep transform_alias_to_input_format|transformAliasToInputFormat in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/snuba",
+    "grep def process_results|class TimeseriesQueryBuilder|class TopEventsQueryBuilder in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/builder",
+    "grep resolve_function\\(|class FunctionDetails|field: str in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep def parse_arguments in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events/fields.py",
+    "grep topEvents needs to be at least 1|transformAliasToInputFormat in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/tests",
+    "grep def is_equation\\b|def is_equation\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/search/events",
+    "grep _set_sample_rate_from_error_sampling|MutableMapping in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai3/src/sentry/testutils/factories.py"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 24916,
+  "diff_chars_injected": 24916,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 39,
+  "prompt_tokens": 1764958,
+  "cached_tokens": 1659612,
+  "cache_write_tokens": 105290,
+  "completion_tokens": 61689,
+  "reasoning_tokens": null,
+  "duration_seconds": 296.37780300015584,
+  "cost_usd": 0.09898394,
+  "cost_basis": "provider"
+}

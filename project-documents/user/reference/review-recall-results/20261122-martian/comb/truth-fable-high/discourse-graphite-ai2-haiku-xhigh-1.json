@@ -1,0 +1,36 @@
+{
+ "case": "discourse-graphite-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "unsubscribe` saves the level without setting `notifications_reason_id`, so `update_last_read` (topic_user.rb:160-167) flips a NULL-reason row back to tracking on the next timings post, and the `TopicUser.change` MessageBus publish is skipped."
+  ],
+  "F2": [
+   "DROP",
+   "the custom resolver's `findTemplate` (resolver.js.es6:158) maps `topicUnsubscribe` \u2192 `topic_unsubscribe` \u2192 `topic/unsubscribe`, so the template does resolve for the top-level route."
+  ],
+  "F3": [
+   "KEEP",
+   "TopicUser.find_by` at topics_controller.rb:105 returns nil when no row exists (`TopicView.new` does not create one), so `tu.notification_level` raises NoMethodError and returns a 500."
+  ],
+  "F4": [
+   "KEEP",
+   "routes.rb:440-441 map GET to `topics#unsubscribe`, which changes the notification level and saves, and `protect_from_forgery` does not check GET requests, so a cross-site request can trigger it."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  3
+ ],
+ "cost_usd": 0.5370258
+}

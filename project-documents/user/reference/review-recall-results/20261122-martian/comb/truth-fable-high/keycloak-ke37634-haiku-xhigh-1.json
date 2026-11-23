@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke37634",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 1,
+  "F2": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "ClientCredentialsGrantType` and `AuthorizationTokenService` never set `Constants.GRANT_TYPE` before `generateAccessToken()`, so the new encoder in `TokenManager.initToken` falls back to `na` and the registered `cc`/`pg` shortcuts are never emitted."
+  ],
+  "F2": [
+   "KEEP",
+   "AccessTokenContext.java:73` calls `requireNonNull(grantType, \"Null rawTokenId not allowed\")`, so `rawTokenId` is never null-checked and a null would be encoded as `:null`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  5
+ ],
+ "cost_usd": 0.5087017
+}

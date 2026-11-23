@@ -1,0 +1,196 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Script resolves `ENV_FILE=\"../.env\"` against the current directory, so run from the repo root it writes `GOOGLE_WEBHOOK_URL` outside the repo",
+      "description": "`ENV_FILE` is relative and the script never `cd`s to its own directory. Run as `./scripts/test-gcal-webhooks.sh` from the checkout root, `../.env` is the parent of the repo. Lines 62\u201373 then create or update that outside file and print \"\u2705 Updated GOOGLE_WEBHOOK_URL in ../.env\". The repo's env file is the root `.env` (its template `.env.example` sits at the root and contains `GOOGLE_WEBHOOK_URL=` at line 150), so the app keeps the old or empty value. Resolving the path from the script location would fix it, for example `ENV_FILE=\"$(cd \"$(dirname \"$0\")/..\" && pwd)/.env\"`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:5"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cleanup()` always exits 0, so the rate-limit and missing-URL failure paths report success to the caller",
+      "description": "`cleanup` ends with an unconditional `exit 0`. Both failure paths call it: the rate-limit branch (line 49) and the \"Failed to extract Tunnelmole URL\" branch (line 58). Each prints an error, but the process still exits 0, so a wrapper or CI step treats a failed tunnel setup as a pass. Passing the status through (`cleanup 1` on failure) would fix it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sed -i ''` is BSD-only; on GNU sed the update silently fails and the script still prints \"\u2705 Updated\"",
+      "description": "On GNU sed (Linux), `-i` does not take a following `''` as its suffix. The empty string becomes the sed script, and the `s|\u2026|\u2026|` expression is treated as a filename. sed errors out and leaves `.env` unchanged, but line 73 prints the success message anyway. There is no `set -e` and no status check. `sed -i.bak \u2026 && rm -f \"$ENV_FILE.bak\"` is portable across BSD and GNU. I have not run this on Linux.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The migration sets every pre-existing `CalendarCache` row's `updatedAt` to the migration time, so legacy entries show the deploy date as \"Last updated\"",
+      "description": "`ADD COLUMN \u2026 DEFAULT NOW()` gives every existing row the timestamp of the migration. `updatedAt` feeds `getCacheStatusByCredentialIds` (calendar-cache.repository.ts:173\u2013188), which the dropdown renders as \"Last updated\". Legacy rows were actually written up to 30 days earlier, since `upsertCachedAvailability` sets `expiresAt = now + CACHING_TIME` (30 days, calendar-cache.repository.ts:16, 161, 168), so the displayed time is wrong. Because `expiresAt` is always write time plus 30 days, backfilling with `UPDATE \"CalendarCache\" SET \"updatedAt\" = \"expiresAt\" - INTERVAL '30 days'` would recover the true write time.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deleting the cache doesn't refresh the list for consumers that pass no `onSuccess`, so \"Cache Status\" keeps showing the deleted cache",
+      "description": "`deleteCacheMutation`'s `onSuccess` only calls `onSuccess?.()` (line 45), and it has no `onSettled` that invalidates `connectedCalendars`. The disconnect mutation does that (lines 61\u201364). `EventAdvancedTab.tsx:372` renders `SelectedCalendarsSettingsWebWrapper` without `onChanged`, so after a successful delete nothing refetches. The query uses `suspense: true` and `refetchOnWindowFocus: false`, so the stale `cacheUpdatedAt` and the \"Delete cached data\" item stay on screen while the component is mounted, and a second delete succeeds silently. `CalendarListContainer.tsx:79\u201388` avoids this by passing an `onChanged` that invalidates. Invalidating `utils.viewer.calendars.connectedCalendars` in `deleteCacheMutation` would fix it for every consumer.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:42"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Script resolves `ENV_FILE=\"../.env\"` against the current directory, so run from the repo root it writes `GOOGLE_WEBHOOK_URL` outside the repo",
+      "location": "scripts/test-gcal-webhooks.sh:5",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "`cleanup()` always exits 0, so the rate-limit and missing-URL failure paths report success to the caller",
+      "location": "scripts/test-gcal-webhooks.sh:17",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sed -i ''` is BSD-only; on GNU sed the update silently fails and the script still prints \"\u2705 Updated\"",
+      "location": "scripts/test-gcal-webhooks.sh:68",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The migration sets every pre-existing `CalendarCache` row's `updatedAt` to the migration time, so legacy entries show the deploy date as \"Last updated\"",
+      "location": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql:9",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Deleting the cache doesn't refresh the list for consumers that pass no `onSuccess`, so \"Cache Status\" keeps showing the deleted cache",
+      "location": "packages/features/apps/components/CredentialActionsDropdown.tsx:42",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "diff": "74608dcfae2592562c1b07b0b24a783d6f80659a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:39:26.080898",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 40,
+  "injected": [],
+  "files_read": [
+    "packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "packages/app-store/googlecalendar/api/webhook.ts",
+    "packages/app-store/googlecalendar/lib/__tests__/CalendarService.test.ts",
+    "packages/features/apps/components/DisconnectIntegration.tsx",
+    "packages/ui/components/disconnect-calendar-integration/DisconnectIntegration.tsx",
+    "packages/trpc/server/routers/viewer/calendars/connectedCalendars.handler.ts",
+    "packages/lib/CalendarManager.ts",
+    "packages/features/calendar-cache/calendar-cache.repository.ts",
+    "packages/platform/atoms/selected-calendars/wrappers/SelectedCalendarsSettingsWebWrapper.tsx",
+    "packages/ui/components/dropdown/Dropdown.tsx",
+    "packages/features/eventtypes/components/tabs/advanced/EventAdvancedTab.tsx",
+    "packages/trpc/server/routers/viewer/calendars/_router.tsx",
+    "scripts/test-gcal-webhooks.sh",
+    "packages/features/apps/components/CredentialActionsDropdown.tsx"
+  ],
+  "searches": [
+    "grep SelectedCalendarRepository|^import|fetchAvailabilityAndSetCache|setAvailabilityInCache in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/app-store/googlecalendar/lib/CalendarService.ts",
+    "grep model SelectedCalendar \\{|model CalendarCache \\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/prisma/schema.prisma",
+    "grep updatedAt|googleChannelId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages",
+    "grep fetchAvailabilityAndSetCache in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages",
+    "grep export (const GOOGLE_CALENDAR_TYPE|function ConfirmationDialogContent|const ConfirmationDialogContent|const Dialog\\b|function Dialog\\b|const Dropdown\\b|function Dropdown\\b|const DropdownItem|function DropdownItem|const DropdownMenuItem|const DropdownMenuContent|const DropdownMenuTrigger|function sho\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages",
+    "grep \"(cache_deleted_successfully|error_deleting_cache|cache_status|cache_last_updated|delete_cached_data|yes_delete_cache|confirm_delete_cache|app_removed_successfully|error_removing_app|remove_app|yes_remove_app|are_you_sure_you_want_to_remove_this_app)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/apps/web/public/static/locales/en",
+    "grep export (function|const) isDelegationCredential|export const isDelegationCredential in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/delegationCredential",
+    "grep delegationCredentialId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/getConnectedCalendars.ts",
+    "grep isInMemoryDelegationCredential in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/delegationCredential",
+    "list_files packages/ui/components/disconnect-calendar-integration/**/*.tsx in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep getConnectedCalendars|delegationCredentialId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib",
+    "grep delegationCredentialId|credentialId: -|id: -1|credentialId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/delegationCredential/server.ts",
+    "grep delegationCredentialId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/lib/getConnectedDestinationCalendars.ts",
+    "grep export (async )?function getConnectedCalendars|export const getConnectedCalendars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages",
+    "grep transformer|superjson in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/trpc/server/trpc.ts",
+    "grep test-gcal-webhooks|GOOGLE_WEBHOOK_URL in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "list_files packages/prisma/migrations/2025071*/** in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "list_files packages/prisma/migrations/2025{07,08,09,1}*/migration.sql in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep ellipsis|\"trash\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages/ui/components/icon",
+    "grep implements ICalendarCacheRepository|ICalendarCacheRepository\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep <SelectedCalendarsSettingsWebWrapper[\\s\\S]{0,400}?/>|<SelectedCalendarsSettingsWebWrapper\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep (selectedCalendar|SelectedCalendar|selectedCalendars).*updatedAt|updatedAt.*(selectedCalendar|SelectedCalendar) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "grep onChanged|invalidate|refetch in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/apps/web/components/apps/CalendarListContainer.tsx",
+    "grep allSelectedCalendars|userLevelSelectedCalendars|UserWithCalendars in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532/packages"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23017,
+  "diff_chars_injected": 23017,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 41,
+  "prompt_tokens": 1007061,
+  "cached_tokens": 913952,
+  "cache_write_tokens": 93075,
+  "completion_tokens": 53793,
+  "reasoning_tokens": null,
+  "duration_seconds": 246.86683074990287,
+  "cost_usd": 0.07917756000000001,
+  "cost_basis": "provider"
+}

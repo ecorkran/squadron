@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Organization slug condition is inverted after the `!` was dropped",
+      "description": "The hunk at `@@ -148` changes `...(!IS_TEAM_BILLING_ENABLED && { slug })` to `...(IS_TEAM_BILLING_ENABLED ? { slug } : {})`. The original included the plain `slug` when billing was disabled. The new code includes it only when billing is enabled, so the behavior is reversed. The adjacent `requestedSlug` line keeps the original polarity, which makes the flip look accidental.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Unguarded `.integration` access will throw when there is no destination calendar",
+      "description": "The Google Meet fallback now reads `const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];` and then checks `mainHostDestinationCalendar.integration !== \"google_calendar\"`. When `destinationCalendar` is null or empty, `mainHostDestinationCalendar` is `undefined` and the property read throws a TypeError. The previous code used `evt.destinationCalendar?.integration`, which did not throw. The access needs `?.`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/EventManager.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Google `updateEvent` searches for the calendar using the falsy `externalCalendarId`",
+      "description": "The new fallback is `externalCalendarId ? externalCalendarId : event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId`. In the `else` branch `externalCalendarId` is falsy, so the predicate compares against a falsy value and almost always returns `undefined`. The lookup should match on something other than the value that already failed the truthiness check.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#updateEvent"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Google `deleteEvent` has the same falsy-lookup problem",
+      "description": "`calendarId` is now `externalCalendarId ? externalCalendarId : event.destinationCalendar?.find((cal) => cal.externalId === externalCalendarId)?.externalId`. This has the same issue as the update path: when `externalCalendarId` is falsy, the `find` almost never matches, so delete falls through to `\"primary\"` or fails.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#deleteEvent"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `|| []` fallback for `eventType.users` was dropped",
+      "description": "The old expression ended with `: eventType.users || [];`. The new code returns `users.length ? users : eventType.users;`. If `eventType.users` is optional, `loadUsers` can now return `undefined`, and the later `users.length` and `users.slice` calls will throw.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts#loadUsers"
+    },
+    {
+      "severity": "NOTE",
+      "title": "An empty `dynamicUserList` is now rejected, and the message is replaced by a generic 500",
+      "description": "The new guard throws a plain `Error` for an empty `dynamicUserList`. The `catch` only maps `HttpError` and Prisma errors to a 400 with the message. A plain `Error` becomes a 500 with \"Unable to load users\", so the descriptive message is lost. Empty dynamic lists were not rejected before this change, so this is also a behavior change to confirm.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleNewBooking.ts#loadUsers"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Organization slug condition is inverted after the `!` was dropped",
+      "location": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unguarded `.integration` access will throw when there is no destination calendar",
+      "location": "packages/core/EventManager.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google `updateEvent` searches for the calendar using the falsy `externalCalendarId`",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#updateEvent",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google `deleteEvent` has the same falsy-lookup problem",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#deleteEvent",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `|| []` fallback for `eventType.users` was dropped",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts#loadUsers",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "An empty `dynamicUserList` is now rejected, and the message is replaced by a generic 500",
+      "location": "packages/features/bookings/lib/handleNewBooking.ts#loadUsers",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10967",
+    "diff": "57d246df47d552209a38d3fcba638b19a91fb909...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:58:10.088668",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 50324,
+  "diff_chars_injected": 50324,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 23042,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 21069,
+  "completion_tokens": 7515,
+  "reasoning_tokens": null,
+  "duration_seconds": 30.75335787469521,
+  "cost_usd": 0.01016291,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

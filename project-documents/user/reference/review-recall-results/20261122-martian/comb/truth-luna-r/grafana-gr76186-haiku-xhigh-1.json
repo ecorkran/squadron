@@ -1,0 +1,24 @@
+{
+ "case": "grafana-gr76186",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Missing test coverage is not a behavior defect."
+  ],
+  "F2": [
+   "KEEP",
+   "Logger attribution silently loses traceID when tracing is initialized through ParseSettings without registering the contextual log provider."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1
+ ],
+ "cost_usd": 0.00295399
+}

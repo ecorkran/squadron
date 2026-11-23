@@ -1,0 +1,203 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Authorization fragments are returned without outer parentheses, so callers can mis-compose them",
+      "description": "`getBaseConditions()` wraps both sides in parentheses only when both are present (line 73). When one side is present it returns that fragment bare (lines 75, 77). Several builders also return a top-level `OR` with no outer parentheses: the eventTypeId filter (lines 104-107, returned directly at 114-122 when it is the only condition), the org scope (lines 171-174), and the team scope (lines 204-207). Postgres binds `AND` tighter than `OR`, so for org scope `WHERE ${base} AND \"status\" = ...` reads as `(teamPred) OR (userPred AND status ...)`. Team-booking rows would then skip any predicate ANDed on by the caller.\n\nThe tests lock in the bare form: `insightsBooking.integration-test.ts:296-299` (team), `:332-343` (org), and `:384-386` (eventTypeId only). The only test that executes SQL (`:480-491`) uses the fragment as the sole `WHERE` predicate, so it cannot catch this. Fix by parenthesizing each fragment where it is built, or by always wrapping the return value of `getBaseConditions()`, and add a test that ANDs an extra predicate onto the base conditions.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts:72-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Constructor type was loosened, so an invalid team config compiles and silently returns no rows",
+      "description": "`InsightsBookingServicePublicOptions` lists `scope` and an optional `teamId` as independent fields. The previous constructor parameter was the discriminated union from `insightsBookingServiceOptionsSchema`, which requires `teamId` for `scope: \"team\"` (lines 21-26). With the new type, `{ scope: \"team\", userId, orgId }` compiles. At runtime `safeParse` fails (lines 62-63), `this.options` becomes `null`, and `buildAuthorizationConditions` returns the NOTHING condition (lines 126-128). That fails closed, which is the safe direction, but it gives the caller no error or log. The public type also duplicates the zod schema by hand, so the two can drift. Derive the constructor type from the schema (`z.input<typeof insightsBookingServiceOptionsSchema>`) and consider logging when validation fails.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts:29-34"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Authorization tests compare SQL text, and the org/team array branches never run against the database",
+      "description": "Most assertions compare the generated `Prisma.sql` to a re-typed SQL literal (`:273`, `:295-299`, `:332-343`, `:384-386`). The NOTHING tests compare to `1=0` (`:210`, `:245`). These pin parenthesization and whitespace but do not check which rows come back. Only one test executes SQL (`:480-491`), and it uses user scope with an eventTypeId filter. No test runs the org or team branches, which bind `\"teamId\" = ANY(...)` and `\"userId\" = ANY(...)` (`insightsBooking.ts:164`, `:168`, `:197`, `:201`), and no test confirms that a NOTHING case returns zero rows. These are the authorization-critical branches. Seed bookings across user, team, and org scopes and assert the returned IDs for each, plus zero rows for the non-owner case.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:273"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Caching tests were removed and not replaced",
+      "description": "The `describe(\"Caching\")` block was deleted. The cache is still in the code (`insightsBooking.ts:49-50` and `:83-94`), so nothing now checks it. The deleted tests were weak (two equal results pass even without caching), so the loss is small, but a spy-based test would close the gap.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:435-437"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Raw SQL identifiers no longer get compile-time checks",
+      "description": "The Prisma typed where-input would fail to compile if a field were renamed. Now the column names (`eventTypeId`, `eventParentId`, `userId`, `teamId`, `isTeamBooking`) and the view name are string literals. I checked them against `BookingTimeStatusDenormalized` in `packages/prisma/schema.prisma:1682-1708`, and they match today. A future schema rename will only surface at runtime, and only in branches that a test actually executes (see the test-debt finding above).",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts:104-111"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Join logic is duplicated, and part of `getBaseConditions` is unreachable",
+      "description": "The same `reduce` with an `index === 0` check appears three times (`:118-122`, `:171-174`, `:204-207`), differing only in the operator. A `joinSql(parts, \"AND\" | \"OR\")` helper would remove the duplication and centralize parenthesization, which also addresses the first finding. In `getBaseConditions`, `authConditions` is typed as a non-nullable `Prisma.Sql`, so the `else if (authConditions)` check always passes, and lines 76-79 can never run.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts:72-80"
+    },
+    {
+      "severity": "PASS",
+      "title": "User-supplied values are bound as parameters, so no injection path was found",
+      "description": "Every user-supplied value (`userId`, `orgId`, `teamId`, `eventTypeId`, `memberUserId`, and the ID arrays) is interpolated through `Prisma.sql`, so it binds as a parameter. Identifiers are string literals in the source, and there is no `Prisma.raw` or string concatenation. The scope check runs before any condition is built (`:129-132`). Empty `ANY()` arrays are avoided: `teamIds` always contains `orgId` (`:154`), and the user-ID arrays are guarded at `:166` and `:200`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts:104-111"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Authorization fragments are returned without outer parentheses, so callers can mis-compose them",
+      "location": "packages/lib/server/service/insightsBooking.ts:72-80",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Constructor type was loosened, so an invalid team config compiles and silently returns no rows",
+      "location": "packages/lib/server/service/insightsBooking.ts:29-34",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Authorization tests compare SQL text, and the org/team array branches never run against the database",
+      "location": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:273",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Caching tests were removed and not replaced",
+      "location": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts:435-437",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Raw SQL identifiers no longer get compile-time checks",
+      "location": "packages/lib/server/service/insightsBooking.ts:104-111",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Join logic is duplicated, and part of `getBaseConditions` is unreachable",
+      "location": "packages/lib/server/service/insightsBooking.ts:72-80",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "User-supplied values are bound as parameters, so no injection path was found",
+      "location": "packages/lib/server/service/insightsBooking.ts:104-111",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "diff": "ef0d5fb0fd4d6be99f3fc203a367d6f9957c1489...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:45:55.308336",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "injected": [],
+  "files_read": [
+    "packages/lib/server/service/insightsBooking.ts",
+    "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts"
+  ],
+  "searches": [
+    "grep getAuthorizationConditions|getFilterConditions|buildFilterConditions|findMany\\(|InsightsBookingService\\b|getBaseConditions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "grep InsightsBookingService|insightsBooking\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages",
+    "grep model BookingTimeStatusDenormalized|BookingTimeStatusDenormalized\"|BookingTimeStatusDenormalized \\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages/prisma",
+    "grep InsightsBookingService|insightsBookingService|getAuthorizationConditions|getFilterConditions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/apps",
+    "list_files node_modules/@prisma/client/runtime/*.js in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "grep ANY\\(\\$|= ANY\\(\\$\\d|ANY\\(\\$\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages",
+    "grep ANY\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages/features/pbac/infrastructure/repositories/PermissionRepository.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17894,
+  "diff_chars_injected": 17894,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 190727,
+  "cached_tokens": 149242,
+  "cache_write_tokens": 41473,
+  "completion_tokens": 30991,
+  "reasoning_tokens": null,
+  "duration_seconds": 142.1975972908549,
+  "cost_usd": 0.026211119999999997,
+  "cost_basis": "provider"
+}

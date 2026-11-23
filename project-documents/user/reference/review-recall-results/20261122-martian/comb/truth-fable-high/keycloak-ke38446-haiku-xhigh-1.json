@@ -1,0 +1,40 @@
+{
+ "case": "keycloak-ke38446",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "The helper only hands the raw codes to the provider's `updateCredential`, as the SPI does for passwords and OTP secrets; the only plaintext storage is the test fixture's in-memory map, and no shipped provider accepts this type."
+  ],
+  "F2": [
+   "DROP",
+   "The fixture's validator does accept any listed code without consuming it, but this is a simplification in a test-only provider, not a defect in shipped behaviour, and the finding itself asks for enforcement or documentation of a contract."
+  ],
+  "F3": [
+   "KEEP",
+   "When `updateCredential` returns true the old locally stored recovery credential is never deleted, and `UserCredentialManager.isValid` falls through to the local validator, which still accepts the old codes."
+  ],
+  "F4": [
+   "KEEP",
+   "The authenticator now takes the credential from `getCredential` (federated first) but removes it via `removeStoredCredentialById`, which only targets the local store, and the user-storage model built by `createFromValues` has a null id."
+  ],
+  "F5": [
+   "DROP",
+   "A user model for this provider is only ever created when the username is in the map, so the null dereference has no reachable path; the rest is log wording."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2,
+  3
+ ],
+ "cost_usd": 1.2537098
+}

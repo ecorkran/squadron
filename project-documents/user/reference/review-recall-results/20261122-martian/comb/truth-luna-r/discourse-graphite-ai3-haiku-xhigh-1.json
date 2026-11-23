@@ -1,0 +1,42 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The raw case-sensitive lookup allows mixed-case addresses to bypass a blocked entry."
+  ],
+  "F2": [
+   "KEEP",
+   "Validation updates the match statistics, and the controller\u2019s `valid?` followed by `save` validates again."
+  ],
+  "F3": [
+   "KEEP",
+   "The unanchored regex accepts addresses with a whitelisted domain as only a prefix of the actual domain."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests are not a behavior defect under the stated criteria."
+  ],
+  "F5": [
+   "KEEP",
+   "The array is initialized in the class definition, so controller instances share its mutable rejection state."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4
+ ],
+ "cost_usd": 0.00156503
+}

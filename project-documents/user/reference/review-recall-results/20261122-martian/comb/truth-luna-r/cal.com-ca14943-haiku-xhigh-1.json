@@ -1,0 +1,52 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A failed retry-count update inside the catch escapes the loop and aborts processing the remaining reminders."
+  ],
+  "F2": [
+   "KEEP",
+   "Locked-account returns increment the counter, and the delete query removes the reminder after it exceeds 1."
+  ],
+  "F3": [
+   "KEEP",
+   "The new retry logic leaves falsy-message and missing-workflow/booking paths uncounted, so those reminders keep being reprocessed."
+  ],
+  "F4": [
+   "DROP",
+   "The broad predicate is real, but the only current code that increments retryCount is the SMS path, so the claimed cross-channel deletion requires hypothetical future behavior."
+  ],
+  "F5": [
+   "DROP",
+   "This is an unverified performance concern and identifies no behavior failure."
+  ],
+  "F6": [
+   "KEEP",
+   "Overlapping runs can read the same retryCount and overwrite one another\u2019s increments."
+  ],
+  "F7": [
+   "DROP",
+   "Missing test coverage is not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  5
+ ],
+ "cost_usd": 0.00284249
+}

@@ -1,0 +1,106 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The AND condition rejects ADMIN members because `isTeamOwner` only matches owners."
+  ],
+  "F2": [
+   "KEEP",
+   "Guest addresses are compared without lowercasing or extracting base addresses, allowing blacklist bypasses."
+  ],
+  "F3": [
+   "KEEP",
+   "Calendar update failures are discarded, so the handler can report success despite a failed update."
+  ],
+  "F4": [
+   "DROP",
+   "The catch logs a generic failure message; omitting the error details is a diagnostics issue, not a behavior defect."
+  ],
+  "F5": [
+   "KEEP",
+   "The server neither deduplicates the request nor compares addresses case-insensitively before creating attendees."
+  ],
+  "F6": [
+   "KEEP",
+   "Passing raw guests lets existing attendees in the request be classified for new-booking confirmations."
+  ],
+  "F7": [
+   "KEEP",
+   "Add-guests emails do not receive event-type metadata and therefore ignore its email-disable settings."
+  ],
+  "F8": [
+   "KEEP",
+   "The handler has no status or time guard and can add guests to cancelled or past bookings."
+  ],
+  "F9": [
+   "KEEP",
+   "The authenticated attendee can submit arbitrary addresses without a guest-count cap or mutation rate limit."
+  ],
+  "F10": [
+   "KEEP",
+   "The permission message key is absent from the English locale, so the dialog can display the raw key."
+  ],
+  "F11": [
+   "KEEP",
+   "The templates provide the untranslated key as `subject`, which takes precedence for the rendered email title."
+  ],
+  "F12": [
+   "KEEP",
+   "The organizer add-guests email uses `APP_NAME` instead of the configured `EMAIL_FROM_NAME`."
+  ],
+  "F13": [
+   "KEEP",
+   "The invalid-email flag is not reset on success or close, and the interpolated error message makes the fallback unreachable."
+  ],
+  "F14": [
+   "DROP",
+   "This finding requests a structural deduplication and describes no behavior defect in the changed component."
+  ],
+  "F15": [
+   "KEEP",
+   "The removal tooltip is hardcoded in English, so it remains untranslated in localized UIs."
+  ],
+  "F16": [
+   "DROP",
+   "Missing tests are a test-coverage gap, not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 0.01689436
+}

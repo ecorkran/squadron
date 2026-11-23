@@ -1,0 +1,268 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Busy times and bookings are ignored for slots inside a date override",
+      "description": "When a slot falls inside a date-override window, `dateOverrideExist` is set to true (line 113). The function then returns `true` at lines 133\u2013135, before `busy.every(...)` at line 153 runs. Calendar events and existing bookings in `busy` are never checked for that slot. Both the fixed-host pass (`getSchedule`, lines 485\u2013498) and the loose-host pass (lines 513\u2013518) rely on this function for busy checks, so double-booking is possible on any day that has a date override. The override should only narrow the window, and the slot should then fall through to the busy check. The \"Check for Date overrides\" test (`apps/web/test/lib/getSchedule.test.ts:742-805`) has no busy times, so it does not catch this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:133"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Every slot on a weekday with split working hours is rejected",
+      "description": "`workingHours.find(...)` returns truthy when any block on that weekday does not contain the slot start (lines 139\u2013147). `getWorkingHours` (`packages/lib/availability.ts:76-124`) emits one entry per availability row, so a split shift such as Mon 09:00\u201312:00 plus 13:00\u201317:00 gives two Monday entries. Any slot is outside at least one of them, so every slot that day is rejected. `getSlots` already handles multiple blocks (`packages/lib/slots.ts:170-204`), so the new check is redundant for single-block days and destructive for split-shift days.\n\nLine 142 also sets `end` from `slotStartTime` instead of `slotEndTime`. The end check therefore repeats the start check, and slot length is ignored.\n\nThe only multi-row fixture, `IstWorkHoursWithDateOverride` (`getSchedule.test.ts:107-129`), has its second block on the override date. The override branch returns before this check runs, so no test reaches the multi-block path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:137"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Multiple override ranges on one date reject every slot on that date",
+      "description": "The same inverted `find` logic applies to date overrides. The predicate returns true, meaning \"not available\", whenever the slot is outside any same-day override (lines 117\u2013125). `getUserAvailability` creates one date override per dated availability row with no grouping (`packages/core/getUserAvailability.ts:215-224`). Two disjoint ranges on one date, such as 09:00\u201312:00 and 14:00\u201317:00, therefore reject every slot that day.\n\nThe predicate also uses `find` for side effects: `dateOverrideExist` is set inside it (line 113). `some` with explicit accept logic would be clearer.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Identity comparison makes the zero-length override branch unreachable",
+      "description": "`dayjs(date.start).add(...) === dayjs(date.end).add(...)` compares two object references, so it is always false and the branch at lines 114\u2013116 never runs. If the intent is that a zero-length override excludes the slot, use `.isSame(...)`. Without it, a slot that overlaps a zero-length override is treated as available.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Date-day match depends on the server's local timezone",
+      "description": "`dayjs(date.start).add(utcOffset, \"minutes\")` is in process-local mode. `@calcom/dayjs` sets no default zone (`packages/dayjs/index.ts:14-23`), so `.format(\"YYYY MM DD\")` reads the server's local calendar date. `slotStartTime` (line 100) is UTC. The day match is only correct when the server runs in UTC. `dayjs.utc(date.start).add(...)` keeps both sides in UTC.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-slot `dayjs.tz` calls on the hot path",
+      "description": "The predicate calls `dayjs.tz(date.start, organizerTimeZone).utcOffset()` for every override before it checks the day. `checkIfIsAvailable` runs for every slot and every fixed host (`getSchedule`, lines 485\u2013498), and `dayjs.tz` goes through `Intl` formatting. Compute each override's shifted start and end once, or filter by day before computing the offset.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:106"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Override times lose their day when shifted across midnight",
+      "description": "The override is selected for an invitee day using its unshifted start (line 207). The times are then shifted by the invitee\u2013organizer offset and reduced to minutes-of-day (`hour()*60 + minute()`), which drops the date. Example: organizer `Asia/Kolkata` has an override 03:00\u201304:00 on Nov 23, and the invitee is UTC. The override is selected for Nov 23. The shifted start is 21:30 on Nov 22, but it is placed at 21:30 on Nov 23. An override that becomes end-before-start is silently dropped by the `start >= end` skip at line 68.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/lib/slots.ts:218"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Optional `timeZone` on the shared type is silently defaulted",
+      "description": "`TimeRange.timeZone` is optional (`packages/types/schedule.d.ts:5`). `override.timeZone` can therefore be undefined, and `.tz(undefined)` falls back to dayjs's default zone without an error. I did not verify that fallback in node_modules, which is absent. `getSchedule` always sets the value, but `getSlots` accepts overrides without it. Line 212 also round-trips a `Date` through `Date.toString()`, which drops milliseconds, while line 219 uses `dayjs(override.start)` directly. A dedicated override type with required `timeZone` would make the contract explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/lib/slots.ts:212"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new availability logic has no targeted tests",
+      "description": "The only added test (`apps/web/test/lib/getSchedule.test.ts:788-804`) changes the invitee timezone for one override day. Nothing covers a busy event on an override day, split working hours, multiple override ranges, a zero-length override, or an override that crosses midnight after the timezone shift. Each of the first three findings and the midnight case would be caught by a small test. The comment at line 798 (\"it should return the same as this is the utc time\") also does not say what property is being checked.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts#checkIfIsAvailable"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Whitespace churn and an ineffective timezone argument in the selected-slots pass",
+      "description": "Two blank lines were removed, around lines 178 and 591, with no functional change. The selected-slots pass (lines 579\u2013586) passes `organizerTimeZone` but not `dateOverrides` or `workingHours`, so the timezone has no effect there. Either pass the overrides for consistency or drop the lookup. The inline `dateOverrides` type at lines 87\u201390 also duplicates `TimeRange`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/slots.ts:579"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Busy times and bookings are ignored for slots inside a date override",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:133",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Every slot on a weekday with split working hours is rejected",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:137",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Multiple override ranges on one date reject every slot on that date",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:105",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Identity comparison makes the zero-length override branch unreachable",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:114",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Date-day match depends on the server's local timezone",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:109",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Per-slot `dayjs.tz` calls on the hot path",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:106",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Override times lose their day when shifted across midnight",
+      "location": "packages/lib/slots.ts:218",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Optional `timeZone` on the shared type is silently defaulted",
+      "location": "packages/lib/slots.ts:212",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The new availability logic has no targeted tests",
+      "location": "packages/trpc/server/routers/viewer/slots.ts#checkIfIsAvailable",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Whitespace churn and an ineffective timezone argument in the selected-slots pass",
+      "location": "packages/trpc/server/routers/viewer/slots.ts:579",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "diff": "4b23bcf8914b88da2d69aa44331baa835529f278...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:44:02.128828",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "injected": [],
+  "files_read": [
+    "packages/trpc/server/routers/viewer/slots.ts",
+    "packages/lib/slots.ts",
+    "packages/types/schedule.d.ts",
+    "packages/core/getAggregateWorkingHours.ts",
+    "packages/core/getUserAvailability.ts",
+    "packages/lib/availability.ts",
+    "apps/web/test/lib/getSchedule.test.ts",
+    "apps/web/test/lib/slots.test.ts",
+    "packages/dayjs/index.ts"
+  ],
+  "searches": [
+    "grep export (const|function|async function) (getAggregateWorkingHours|getWorkingHours|getUserAvailability)|export type (WorkingHours|TimeRange)|dateOverrides|timeZone in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330/packages/core/getAggregateWorkingHours.ts",
+    "list_files packages/{core,lib}/{getUserAvailability,getAggregateWorkingHours,availability,slots}*.ts in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "grep getSchedule\\(|checkIfIsAvailable|getSlots\\(|getTimeSlots\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "grep IstWorkHoursWithDateOverride|IstWorkHours\\b|export const Timezones|\"\\+6:00\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "grep dateOverride|getSlots|override in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330/apps/web/test/lib/slots.test.ts",
+    "grep proto\\.tz = function in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/node_modules/dayjs/plugin",
+    "list_files node_modules/dayjs/plugin/timezone.js in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "grep startTime: \"1970-01-01T|startTime: `1970-01-01T in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/apps/web/test/lib/getSchedule.test.ts",
+    "grep startTime: [`\"]1970-01-01T in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330/apps/web/test/lib/getSchedule.test.ts",
+    "list_files packages/dayjs/*.ts in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330",
+    "grep timeZone\\s+String in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8330/packages/prisma/schema.prisma"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 9104,
+  "diff_chars_injected": 9104,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 621412,
+  "cached_tokens": 546861,
+  "cache_write_tokens": 74529,
+  "completion_tokens": 58699,
+  "reasoning_tokens": null,
+  "duration_seconds": 269.18840612471104,
+  "cost_usd": 0.05030021,
+  "cost_basis": "provider"
+}

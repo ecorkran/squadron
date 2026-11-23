@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "header-extra-info` has no `tagName`, so the `div.ember-view` wrapper is the flex item with no `min-width: 0` or overflow, and the nowrap `.topic-link` title cannot shrink or ellipsize."
+  ],
+  "F2": [
+   "KEEP",
+   "mobile `.custom-message` still has `margin-left: -40px` while `.small-action-desc` is now a flex item with only `padding: 0 1.5%`, so the message is pulled into the 45px avatar column; that the old `4em` padding was removed by this change is taken from the finding, since the diff could not be read here."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.4885248
+}

@@ -1,0 +1,42 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The migration indexes the first category query result before its uncategorized fallback, so an empty result raises."
+  ],
+  "F2": [
+   "KEEP",
+   "The migration inserts legacy host strings verbatim, while runtime lookup compares against the parsed hostname."
+  ],
+  "F3": [
+   "KEEP",
+   "The migration interpolates legacy host values into SQL without quoting or binding, so apostrophes can break the migration or alter the SQL."
+  ],
+  "F4": [
+   "KEEP",
+   "The host validation regex rejects top-level domains longer than five letters."
+  ],
+  "F5": [
+   "DROP",
+   "Missing behavioral tests are a test-coverage concern, not a behavior defect in the changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.0004887800000000001
+}

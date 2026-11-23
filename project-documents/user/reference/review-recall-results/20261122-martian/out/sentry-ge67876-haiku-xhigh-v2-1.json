@@ -1,0 +1,178 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "OAuth `state` is the public pipeline signature, so the callback is not bound to the session that started the flow",
+      "description": "`OAuthLoginView.dispatch` sends `state = pipeline.signature` (line 402) and accepts the callback when `request.GET.get(\"state\") == pipeline.signature` (line 412). `Pipeline.signature` is `md5_text(*pipe_ids).hexdigest()` over the view class names (`src/sentry/pipeline/base.py:129-133`), so it is identical for every user and session. The tests hard-code the same value (`9cae5e88\u2026`). The state therefore says nothing about who started the flow, and nothing binds the OAuth `code` to the pipeline in the browser. The existing OAuth2 flow avoids this with a per-session `secrets.token_hex()` stored via `bind_state(\"state\", \u2026)` and checked against `fetch_state(\"state\")` (`src/sentry/identity/oauth2.py:245-252, 325`).\n\nExploit path: while a victim has a GitHub install pipeline open in their session, the attacker gets the victim's browser to load `/extensions/github/setup/?code=<code for the attacker's GitHub login>&state=<constant>&installation_id=<attacker's installation>`. Lines 397-399 bind the URL's `installation_id` before the state comparison. Lines 448-450 in `GitHubInstallation.dispatch` prefer the GET `installation_id` over the bound value. The sender check at lines 501-505 then compares the attacker's login with the sender of the attacker's own installation, which matches. The attacker's installation ends up bound to the victim's organization.\n\nFix: use a random per-session state, bound with `bind_state` and compared with `fetch_state`, and take `installation_id` only from pipeline state.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:412"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Ownership check raises KeyError when the Integration's `sender` metadata is missing, returning a 500 on reinstall",
+      "description": "Line 503 reads `integration.metadata[\"sender\"][\"login\"]` with no guard. The codebase guards this same field at `src/sentry/integrations/github/installation.py:44` (`if \"sender\" not in integration.metadata`), so the new code is inconsistent with it. `sender` disappears in a realistic sequence:\n\n1. The `installation` webhook creates the row with `sender` (`src/sentry/integrations/github/webhook.py:201-210`).\n2. The first completed setup calls `finish_pipeline`, which calls `build_integration(self.state.data)`. Pipeline state never contains `sender`, so `build_integration` omits it (`integration.py:376-377`). `ensure_integration` then runs `integration.update(**defaults)` with the new metadata dict (`src/sentry/integrations/pipeline.py:41-42`). That replaces the JSON field, so `sender` is dropped.\n3. The user removes the integration in Sentry. `src/sentry/api/endpoints/integrations/organization_integrations/details.py:88-95` only schedules the OrganizationIntegration for deletion. The Integration row stays ACTIVE.\n4. On reinstall, lines 492-496 find the ACTIVE row, `installations_exist` is False, and line 503 raises KeyError. The request returns a 500 instead of the error template.\n\nFix: treat a missing `sender` as a mismatch (use `.get`), and keep `sender` in metadata when the pipeline updates the row.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:503"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Ownership check is skipped entirely when no Integration row exists",
+      "description": "The check at lines 492-505 runs only after the lookup at lines 477-479 succeeds. When that lookup raises `DoesNotExist`, lines 481-482 return `pipeline.next_step()` with no check that the authenticated GitHub user installed the app. Setup then completes, and `build_integration` creates the row with no record of the installer. This happens when the `installation` webhook has not been processed yet (a race with the browser redirect) or when the webhook is not configured. For that installation id, the installer is never verified. The check should fail closed, not skip. I rate this CONCERN rather than FAIL because it needs an installation the webhook has not yet mirrored.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:481"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Network and HTTP failures during the OAuth exchange escape as unhandled exceptions",
+      "description": "`safe_urlopen` at line 423 sits outside the `try` block, and `get_user_info` at line 434 is not wrapped. `get_user_info` calls `resp.raise_for_status()` (`src/sentry/identity/github/provider.py:16`), and `safe_urlopen` calls `session.request` without handling exceptions (`src/sentry/http.py:106-114`). A GitHub timeout, connection failure, or 5xx therefore propagates out of `dispatch` as a 500, instead of rendering `github-integration-failed.html` as the other error paths in this view do. The code the new view says it is modelled on handles these cases: `OAuth2CallbackView.exchange_token` catches `ConnectionError` and JSON errors and returns an error payload (`src/sentry/identity/oauth2.py:302-314`).\n\nFix: wrap both calls and route failures to `error(...)`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/integrations/github/integration.py:434"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removing `FORWARD_INSTALL_FOR` in pipeline_advancer is behavior-preserving",
+      "description": "The constant was a one-element list, so `provider_id == \"github\"` is equivalent to `provider_id in [\"github\"]`. A search of the repository finds no remaining references to `FORWARD_INSTALL_FOR`. The moved comment still describes the branch. No defect here.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/web/frontend/pipeline_advancer.py:40-44"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "OAuth `state` is the public pipeline signature, so the callback is not bound to the session that started the flow",
+      "location": "src/sentry/integrations/github/integration.py:412",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Ownership check raises KeyError when the Integration's `sender` metadata is missing, returning a 500 on reinstall",
+      "location": "src/sentry/integrations/github/integration.py:503",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Ownership check is skipped entirely when no Integration row exists",
+      "location": "src/sentry/integrations/github/integration.py:481",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Network and HTTP failures during the OAuth exchange escape as unhandled exceptions",
+      "location": "src/sentry/integrations/github/integration.py:434",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Removing `FORWARD_INSTALL_FOR` in pipeline_advancer is behavior-preserving",
+      "location": "src/sentry/web/frontend/pipeline_advancer.py:40-44",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "diff": "11980b40faffa3631be5733d29650675f30d54b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:13:30.804212",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [],
+  "files_read": [
+    "src/sentry/integrations/github/integration.py",
+    "src/sentry/web/frontend/pipeline_advancer.py",
+    "src/sentry/pipeline/base.py",
+    "src/sentry/integrations/github/installation.py",
+    "src/sentry/integrations/github/webhook.py",
+    "src/sentry/identity/github/provider.py",
+    "src/sentry/http.py",
+    "src/sentry/integrations/pipeline.py",
+    "src/sentry/identity/oauth2.py",
+    "src/sentry/models/integrations/integration.py",
+    "src/sentry/api/endpoints/integrations/organization_integrations/details.py"
+  ],
+  "searches": [
+    "grep FORWARD_INSTALL_FOR|def signature|def get_user_info|def safe_urlopen|def safe_urlread|class GitHubIdentityProvider|def get_oauth_|def determine_active_organization|def fetch_state|def bind_state|def next_step|def get_for_request in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src",
+    "grep \"sender\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/integrations",
+    "grep signature|state in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/identity/oauth2.py",
+    "grep def ensure_integration|def finish_pipeline|build_integration\\(|metadata\\[.sender|PENDING_DELETION in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/integrations",
+    "grep FORWARD_INSTALL_FOR in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876",
+    "grep def update\\(|def delete\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/db/models/base.py",
+    "grep integration\\.delete\\(|Integration\\.objects\\.filter\\([^)]*\\)\\.delete|status=ObjectStatus\\.PENDING_DELETION in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry",
+    "grep def update\\(self in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/db",
+    "grep post_delete|pre_delete|post_save in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge67876/src/sentry/models/integrations"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19901,
+  "diff_chars_injected": 19901,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 744189,
+  "cached_tokens": 647806,
+  "cache_write_tokens": 96359,
+  "completion_tokens": 57540,
+  "reasoning_tokens": null,
+  "duration_seconds": 259.88552908273414,
+  "cost_usd": 0.08030408,
+  "cost_basis": "provider"
+}

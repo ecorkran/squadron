@@ -1,0 +1,31 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The 15-minute cron can first attempt cancellation less than 10 minutes before the scheduled send."
+  ],
+  "F2": [
+   "KEEP",
+   "A provider error exits the loop, and the queued Prisma deletes never execute because `Promise.all` is skipped."
+  ],
+  "F3": [
+   "KEEP",
+   "Cancellation callers discard the async helper promises, so the database update marking reminders cancelled may not finish before the operation returns."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00440959
+}

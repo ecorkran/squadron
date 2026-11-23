@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`unsubscribe` dereferences a `TopicUser` that may be nil",
+      "description": "`tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])` can return nil when the user has no `TopicUser` row for the topic. The next line, `tu.notification_level`, then raises `NoMethodError` and returns a 500. Use `find_or_initialize_by` or handle the nil case explicitly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb#unsubscribe"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Triple-stash renders the translated string as unescaped HTML",
+      "description": "`{{{stopNotificiationsText}}}` outputs raw HTML. The text interpolates `model.fancyTitle` through `I18n.t`, so a topic title containing markup would be rendered unescaped. Use the double-stash form, or confirm that `fancyTitle` is already sanitized and document that assumption.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Template path does not match the route name",
+      "description": "The route is registered as top-level `this.route('topicUnsubscribe', ...)`. In Ember this resolves to a template named `topic-unsubscribe`, but the template was added as `templates/topic/unsubscribe.hbs`, which is the nested `topic.unsubscribe` form. The page may render with no template. Rename the template or the route to match.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/routes/app-route-map.js.es6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Misspelled computed property name",
+      "description": "`stopNotificiationsText` misspells \"Notifications\". The template uses the same misspelling, so the code works, but the name will spread if it is copied elsewhere. Rename it to `stopNotificationsText` in both files.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unverified references in the new route and mailer",
+      "description": "The route calls `PostStream.loadTopicView` and `topic.updateFromJson`, and `afterModel` calls `topic.set(\"details.notificationReasonText\", null)`, which throws if `details` is undefined on a freshly created record. The controller also calls `perform_show_response` and `slugs_do_not_match`. I could not confirm that these exist. Separately, `unsubscribe_url` is now passed to the mailer, but the `unsubscribe_link` i18n string must reference `%{unsubscribe_url}` for the link to render. Confirm all of these.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6#model"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`unsubscribe` dereferences a `TopicUser` that may be nil",
+      "location": "app/controllers/topics_controller.rb#unsubscribe",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Triple-stash renders the translated string as unescaped HTML",
+      "location": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Template path does not match the route name",
+      "location": "app/assets/javascripts/discourse/routes/app-route-map.js.es6",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Misspelled computed property name",
+      "location": "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unverified references in the new route and mailer",
+      "location": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6#model",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "diff": "8ed1eef2746ad2b5bc996a74233852e5d83a765d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:57:11.784808",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19364,
+  "diff_chars_injected": 19364,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 11392,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 9419,
+  "completion_tokens": 5626,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.725323874969035,
+  "cost_usd": 0.005724710000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

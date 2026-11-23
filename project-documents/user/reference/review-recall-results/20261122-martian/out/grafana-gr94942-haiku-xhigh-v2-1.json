@@ -1,0 +1,120 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`enableSqlExpressions` always returns false, so SQL expression queries are rejected even when the `sqlExpressions` flag is enabled",
+      "description": "`enableSqlExpressions` computes `enabled := !h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions)`, then returns `false` in both branches of `if enabled { return false }`. Its result never depends on the flag. In `ReadQuery`, every `QueryTypeSQL` node hits the gate at `pkg/expr/reader.go:128-132` and returns `fmt.Errorf(\"sqlExpressions is not implemented\")` before the query is read. The production callers pass real toggles (`pkg/expr/nodes.go:132`, under `FlagExpressionParser`, and `pkg/registry/apis/query/register.go:56`). Enabling `sqlExpressions`, which `pkg/services/featuremgmt/toggles_gen.go:582-584` documents as \"Enables using SQL and DuckDB functions as Expressions\", therefore has no effect.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/reader.go:194-200"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`sql.DB` stub methods return \"not implemented\", so every SQL expression fails at construction and at execution",
+      "description": "The base commit ran SQL expressions on `github.com/scottlepp/go-duck`'s in-memory DuckDB, through `duck.NewInMemoryDB()` in `pkg/expr/sql/parser.go` and `pkg/expr/sql_command.go`. This diff swaps that for `NewInMemoryDB()`, whose `RunCommands` (`db.go:16-18`) and `QueryFramesInto` (`db.go:20-22`) both return `errors.New(\"not implemented\")`. That breaks two paths for every SQL query:\n\n- **Construction:** `NewSQLCommand` (`pkg/expr/sql_command.go:30`) calls `sql.TablesList`. That calls `NewInMemoryDB().RunCommands` (`pkg/expr/sql/parser.go:23-26`), which errors. `TablesList` returns \"error serializing sql\", and `NewSQLCommand` maps it to `errutil.BadRequest(\"sql-invalid-sql\")` (`sql_command.go:31-36`).\n- **Execution:** `SQLCommand.Execute` (`pkg/expr/sql_command.go:96-105`) calls `db.QueryFramesInto`, which returns \"not implemented\". That error lands in `rsp.Error`.\n\nEven with the gate at `reader.go:194-200` fixed, no SQL expression can be created or executed. The existing SQL tests (`pkg/expr/sql/parser_test.go`, `pkg/expr/sql_command_test.go`) are all `t.Skip()`'d, so the suite does not exercise this path. If the stub is scaffolding for a future backend, it should not sit on a default path as a working expression type. Either restore a working backend or keep the feature explicitly disabled.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/expr/sql/db.go:12-22"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`enableSqlExpressions` always returns false, so SQL expression queries are rejected even when the `sqlExpressions` flag is enabled",
+      "location": "pkg/expr/reader.go:194-200",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sql.DB` stub methods return \"not implemented\", so every SQL expression fails at construction and at execution",
+      "location": "pkg/expr/sql/db.go:12-22",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "diff": "00101eef1aa1d1acd93e97289a309b348a657d7d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:13:45.437787",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 17,
+  "injected": [],
+  "files_read": [
+    "pkg/expr/reader.go",
+    "pkg/expr/sql/parser.go",
+    "pkg/expr/sql/db.go",
+    "pkg/expr/sql_command.go",
+    "pkg/expr/sql/parser_test.go",
+    "pkg/expr/sql_command_test.go",
+    "pkg/expr/nodes.go",
+    "pkg/registry/apis/query/register.go",
+    "pkg/services/featuremgmt/toggles_gen.go"
+  ],
+  "searches": [
+    "grep go-duck|scottlepp|duck\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep FlagSqlExpressions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep NewExpressionQueryReader\\(|ExpressionQueryReader\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep NewSQLCommand|TablesList|QueryTypeSQL|SQLCommand\\{|sql\\.NewInMemoryDB|QueryFramesInto in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg",
+    "grep araddon|storage/azblob|go-replayers|gotest.tools/v3|apache/thrift|JohnCGriffin|klauspost/asmfmt|minio/asm2plan9s|minio/c2goasm|hairyhenderson/go-which|iancoleman/orderedmap in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/go.mod",
+    "grep \"(github\\.com/apache/thrift|github\\.com/JohnCGriffin/overflow|github\\.com/klauspost/asmfmt|github\\.com/minio/asm2plan9s|github\\.com/minio/c2goasm|github\\.com/hairyhenderson/go-which|github\\.com/iancoleman/orderedmap|github\\.com/araddon/dateparse|github\\.com/Azure/azure-sdk-for-go/sdk/storage/azblob|\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942",
+    "grep (?i)sql in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr94942/pkg/expr/reader_test.go"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 19087,
+  "diff_chars_injected": 19087,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 18,
+  "prompt_tokens": 182035,
+  "cached_tokens": 141817,
+  "cache_write_tokens": 40208,
+  "completion_tokens": 21046,
+  "reasoning_tokens": null,
+  "duration_seconds": 95.62804804183543,
+  "cost_usd": 0.02147557,
+  "cost_basis": "provider"
+}

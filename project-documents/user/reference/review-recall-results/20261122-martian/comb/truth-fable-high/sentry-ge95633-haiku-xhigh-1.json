@@ -1,0 +1,25 @@
+{
+ "case": "sentry-ge95633",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The factory builds one `FixedQueuePool` and hands it to every strategy, while strategy `close()`/`terminate()` shut it down; a later strategy's `put` raises `queue.ShutDown`, which `submit` catches and marks the offset complete, so unprocessed messages get committed."
+  ],
+  "F2": [
+   "KEEP",
+   "shutdown()` sets each worker's flag before the non-immediate queue shutdown, so workers exit after their current item and leave queued items unprocessed with offsets outstanding, defeating the graceful drain; the sequential 5s joins are also as described."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  6
+ ],
+ "cost_usd": 0.4014995
+}

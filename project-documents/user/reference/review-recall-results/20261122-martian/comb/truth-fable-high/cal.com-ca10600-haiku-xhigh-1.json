@@ -1,0 +1,60 @@
+{
+ "case": "cal.com-ca10600",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7,
+  "F8": 11
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "line 121 skips password verification when `totpCode` is non-empty, and the new backup-code branch at 131\u2013156 then logs the user in without ever checking the password."
+  ],
+  "F2": [
+   "KEEP",
+   "backup codes are read at line 73, modified in memory and written back unconditionally at 149\u2013156, so concurrent logins can reuse a code or restore a consumed one."
+  ],
+  "F3": [
+   "KEEP",
+   "req.body.backupCode.replaceAll` at `disable.ts:61` throws a TypeError (500) on a truthy non-string, and codes are compared with no trim or lowercase against lowercase hex."
+  ],
+  "F4": [
+   "KEEP",
+   "onEnable` is only called from the Close button, so Escape or overlay dismissal on the backup-codes step just toggles the modal shut without invalidating `viewer.me`, leaving the switch stale."
+  ],
+  "F5": [
+   "KEEP",
+   "PasswordField` spreads `{...props}` after its computed `type`, so the caller's `type=\"password\"` at `EnableTwoFactorModal.tsx:176` overrides it and the field never reveals."
+  ],
+  "F6": [
+   "KEEP",
+   "with `noValidate` and no schema check, an empty backup code falls into the TOTP branch, throws `SecondFactorRequired`, and the client only re-sets `twoFactorRequired(true)` with no error shown."
+  ],
+  "F7": [
+   "KEEP",
+   "navigator.clipboard.writeText` at line 278 is neither awaited nor caught and the success toast fires unconditionally, so a rejected write is reported as success."
+  ],
+  "F8": [
+   "DROP",
+   "the component is indeed named `TwoFactor` in `BackupCode.tsx`, but a duplicate function name and a missing `htmlFor` are naming/accessibility points, not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.6185901
+}

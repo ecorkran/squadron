@@ -1,0 +1,42 @@
+{
+ "case": "sentry-greptile-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "event.type:error\" in query` is a substring test, so `!event.type:error` on the discover dataset is treated as error-focused and `count()` is rewritten to `upsampled_count()`."
+  ],
+  "F2": [
+   "KEEP",
+   "with `transformAliasToInputFormat=1` the row key is remapped to `upsampled_count() as count` while the serializer looks up the original `count()`, so `r.get(column, 0)` returns 0 for every bucket."
+  ],
+  "F3": [
+   "KEEP",
+   "_get_event_stats` checks eligibility against the outer `dataset` and `request.GET[\"query\"]` rather than `scoped_dataset`/`query`, so split-path discover queries (outer dataset is metrics) are never upsampled."
+  ],
+  "F4": [
+   "KEEP",
+   "only an exact `count()` is rewritten, so `equation|count() * 2` and the top-N ranking query stay unweighted while the plain `count()` series is weighted, giving inconsistent data on the same chart."
+  ],
+  "F5": [
+   "DROP",
+   "the bare `except Exception: pass` blocks are in a test factory and the finding names no wrong behavior, only a style/structure preference."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 1.1023791
+}

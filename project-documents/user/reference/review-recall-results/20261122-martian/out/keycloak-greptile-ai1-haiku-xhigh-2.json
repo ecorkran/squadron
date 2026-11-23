@@ -1,0 +1,234 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "UsernameForm calls a method that does not exist",
+      "description": "`authenticate` now reads `if (context.getUser() != null && !isConditionalPasskeysEnabled())`. The only definition in the repo is `isConditionalPasskeysEnabled(UserModel user)` at `UsernamePasswordForm.java:160`. A repo-wide search finds no zero-argument overload in the superclass chain, so this call will not compile. Fix it together with the finding below: make the helper parameterless, keep `context.getUser() != null` here, and this line compiles and reads correctly.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Inverted user guard removes conditional passkey UI from the first-factor page",
+      "description": "`isConditionalPasskeysEnabled(UserModel)` returns true only when `user != null`. The old fill sites ran when the user was not set: the `else` branch of `authenticate` and `challenge(error, field)` both checked `context.getUser() == null`. The new call sites at lines 115 and 137 use the helper with the user argument, so `fillContextForm` never runs on the no-user page. `enableWebAuthnConditionalUI` is set only in `WebAuthnConditionalUIAuthenticator.java:43` and `:51`, and the templates depend on it. `login.ftl:16` and `login-username.ftl:22` emit `autocomplete=\"username webauthn\"`, and `passkeys.ftl:2` renders the `#webauth` form. The regression also hits failed first-page logins. A failed username or password submission builds its challenge before the user is set, so the fill is skipped there too.\n\nExisting tests that are unchanged by this diff encode the first-page expectation and would fail: `PasskeysUsernamePasswordFormTest.java:145-146`, `:195-196`, `:237-238`, `:359-360`, and `PasskeysUsernameFormTest.java:183-185`.\n\nThe re-authentication tests do need the fill with a user set. The fix is to fill whenever passkeys are enabled, with no user check: `isConditionalPasskeysEnabled()` with no parameter, used at lines 115 and 137. The user exclusion already exists where it belongs, in `UsernameForm.authenticate`. `WebAuthnConditionalUIAuthenticator.shouldShowWebAuthnAuthenticators` already suppresses the per-user authenticator list, so filling with a user set is safe. The same guard also applies to `PasswordForm`'s error path, which inherits `challenge`. The tests do not cover that path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Negative webauthn checks swallow every exception",
+      "description": "In `reauthenticationOfUserWithoutPasskey` (and again at `:312-317`), the absence check is `try { assertThat(driver.findElement(...), nullValue()); fail(...); } catch (Exception nsee) {}`. `catch (Exception)` swallows any WebDriverException, such as a stale session or a page that never loaded, so the check can pass for the wrong reason. The `fail()` is unreachable: if the element is found, `assertThat` throws an `AssertionError`, which `catch (Exception)` does not catch. The package already uses `Assert.assertThrows(NoSuchElementException.class, () -> driver.findElement(By.xpath(\"//form[@id='webauth']\")))` at `PasskeysUsernameFormTest.java:202`. Use that form in both places.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:291-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unused imports left after the test edits",
+      "description": "`org.openqa.selenium.NoSuchElementException` is no longer referenced, because the diff replaced both `assertThrows` calls with `notNullValue` assertions. `PasskeysUsernamePasswordFormTest.java:35` has the same problem with `PasswordCredentialModel`, which the file never references. Remove both imports.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysOrganizationAuthenticationTest.java:51"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The re-authentication flag is read two different ways in the same class",
+      "description": "`setupReauthenticationInUsernamePasswordFormError` reads `USER_SET_BEFORE_USERNAME_PASSWORD_AUTH` with `getAuthNote` and `Boolean.parseBoolean`. That duplicates `AbstractUsernameFormAuthenticator.isUserAlreadySetBeforeUsernamePasswordAuth` at `AbstractUsernameFormAuthenticator.java:257-260`. The diff also changes `badPasswordHandler` (`AbstractUsernameFormAuthenticator.java:222`) to call the util instead of the existing sibling method in the same class. Keep one reader: have `isUserAlreadySetBeforeUsernamePasswordAuth` delegate to the util, and have `badPasswordHandler` call the instance method.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java:125-133"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The util package now imports a constant from the browser package",
+      "description": "`AuthenticatorUtils` now static-imports `USER_SET_BEFORE_USERNAME_PASSWORD_AUTH` from `authenticators.browser.AbstractUsernameFormAuthenticator`, while the browser classes already import `AuthenticatorUtils`. That creates a package cycle. It also forced the constant from `protected` to `public` (`AbstractUsernameFormAuthenticator.java:58`), which widens the public surface of an extension-point class. Moving the constant into `AuthenticatorUtils` would remove both problems.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java:35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Re-authentication test bodies are copied across three classes",
+      "description": "`webauthnLoginWithExternalKey_reauthentication` here, `webauthnLoginWithDiscoverableKey_reauthentication` in `PasskeysUsernameFormTest`, and the same-named test in `PasskeysOrganizationAuthenticationTest` repeat nearly the same login, `prompt=login`, and passkey sequence. The last two are based on the diff text. Consider moving the shared sequence into `AbstractWebAuthnVirtualTest`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:213"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mixed assertion style and a typo in the new test code",
+      "description": "The file mixes static `assertEquals` (lines 259, 311, 373) with qualified `Assert.assertEquals` (lines 378, 405). `nullValue()` is now a static import, but `Matchers.notNullValue()` is still qualified. The comment at line 413 has the typo \"Succesful\". `AuthenticatorUtils.java:122-123` also has a double blank line before the new method.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:259"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "UsernameForm calls a method that does not exist",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Inverted user guard removes conditional passkey UI from the first-factor page",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-162",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Negative webauthn checks swallow every exception",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:291-296",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused imports left after the test edits",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysOrganizationAuthenticationTest.java:51",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The re-authentication flag is read two different ways in the same class",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java:125-133",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The util package now imports a constant from the browser package",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java:35",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Re-authentication test bodies are copied across three classes",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:213",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Mixed assertion style and a typo in the new test code",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java:259",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "diff": "c851f7883d229dd2a940a77cd49220ecb126ec84...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:01:47.520262",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [],
+  "files_read": [
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnPasswordlessAuthenticator.java",
+    "themes/src/main/resources/theme/base/login/passkeys.ftl",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernameFormTest.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java"
+  ],
+  "searches": [
+    "grep isConditionalPasskeysEnabled in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "grep ENABLE_WEBAUTHN_CONDITIONAL_UI|SHOULD_DISPLAY_AUTHENTICATORS|IS_USER_IDENTIFIED|username webauthn|enableWebAuthnConditionalUI in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/themes",
+    "grep ENABLE_WEBAUTHN_CONDITIONAL_UI|SHOULD_DISPLAY_AUTHENTICATORS|IS_USER_IDENTIFIED|ALLOWED_AUTHENTICATORS in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "grep shouldDisplayAuthenticators|isUserIdentified|allowedAuthenticators|enableWebAuthnConditionalUI in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/themes/src/main/resources/theme/base/login",
+    "grep NoSuchElementException|PasswordCredentialModel|configureTestRealm|getInfoMessage|getInputError|Closeable update\\(\\)|public .* update\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn",
+    "grep getInfoMessage|getInputError\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/pages",
+    "grep String getInfoMessage\\(\\)|String getInputError\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work",
+    "grep class (PasswordForm|UsernamePasswordForm|UsernameForm|WebAuthnPasswordlessAuthenticator|WebAuthnConditionalUIAuthenticator)\\b.*extends|extends (UsernamePasswordForm|UsernameForm|PasswordForm)\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/services/src/main/java",
+    "grep new (PasswordForm|UsernameForm|UsernamePasswordForm)\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/services/src/main/java",
+    "grep username webauthn|#webauth|form\\[@id='webauth'\\] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn",
+    "grep username webauthn|form\\[@id='webauth'\\] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysConditionalUITest.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 35663,
+  "diff_chars_injected": 35663,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 753643,
+  "cached_tokens": 662510,
+  "cache_write_tokens": 91111,
+  "completion_tokens": 50116,
+  "reasoning_tokens": null,
+  "duration_seconds": 212.2967385002412,
+  "cost_usd": 0.05157080000000001,
+  "cost_basis": "provider"
+}

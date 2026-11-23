@@ -1,0 +1,178 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "V2 `canManage()` returns true for a VIEW-only all-groups grant, so `POST /groups` can create or move top-level groups",
+      "description": "`GroupPermissionsV2.canManage()` (lines 65-71) ends with `hasPermission(null, AdminPermissionsSchema.VIEW, AdminPermissionsSchema.MANAGE)`. A null group id falls back to the \"Groups\" type resource, so any caller with an all-groups VIEW grant passes. The no-argument `canManage()` is what `GroupsResource.addTopLevelGroup` checks through `auth.groups().requireManage()` (`GroupsResource.java:181`). That path then calls `realm.createGroup` (line 202). When the body carries an existing group id, it calls `realm.moveGroup(child, null)` (line 198), which has no per-group manage check. The `GroupPermissionEvaluator.canManage()` Javadoc says V2 includes VIEW, so this is documented behavior. It still lets a read-only grant change the group hierarchy. V1 is not affected, because `GroupPermissions.canManage()` (lines 274-276) checks only `MANAGE_USERS`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:70"
+    },
+    {
+      "severity": "FAIL",
+      "title": "V2 `getGroupIdsWithViewPermission` adds resource UUIDs instead of group IDs, so all-groups view-members holders see zero users",
+      "description": "Line 123 adds `groupResource.getId()`, which is the store-generated resource UUID (`JPAResourceStore.java:66`). The group id is the resource name (`AdminPermissionsSchema.java:109,118-121`). V1 correctly strips the prefix from the name (`GroupPermissions.java:315`). The set is stored as `UserModel.GROUPS` (`UsersResource.java:448-451`) and matched against `UserGroupMembershipEntity.groupId` (`JpaUserProvider.java:1070`).\n\nFor a caller with an all-groups VIEW_MEMBERS or MANAGE_MEMBERS grant, the lookup at line 122 falls back to the \"Groups\" type resource and passes. The set then contains that resource's UUID, which matches no membership row. The list (`UsersResource.java:453`) and the count (`UsersResource.java:398,425,430`) return nothing, even though `canViewMembers` (`GroupPermissionsV2.java:83-87`) would allow those members. `BruteForceUsersResource.java:147` has the same pattern.\n\nCorrected IDs alone would not be enough. The list query's subquery (`JpaUserProvider.java:1081`) also requires a resource named `group.resource.<groupId>`, which is the V1 naming scheme. V2 never creates that name. This is outside the diff, but this change is what routes V2 into that query.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:123"
+    },
+    {
+      "severity": "FAIL",
+      "title": "A group's own V2 resource hides the all-groups grant, so all-groups VIEW/MANAGE is ignored for any group with a per-group grant",
+      "description": "`hasPermission` looks up the group's own resource at line 141 and falls back to the \"Groups\" type resource only when that resource is absent (line 143). When another admin holds a per-group grant on group G, evaluation runs only against G's resource. That resource is untyped (`AdminPermissionsSchema.java:118-128` never calls `setType`), so `DefaultPolicyEvaluator.java:73-74` skips the type-level policy lookup.\n\nThe all-groups policy is attached to the type resource (`AuthorizationProvider.java:323-326`). It therefore does not come back from `findByResource(G)`, and it does not come back from the null-resource scope lookup, because `findPolicyIdByNullResourceScope` requires `pe.resources is empty` (`PolicyEntity.java:62`).\n\nAs a result, `canView(G)`, `canManage(G)`, `canViewMembers(G)` and `canManageMembership(G)` return false for an admin whose all-groups grant should apply. `GroupsResource.java:113` then hides G from listings, and `GroupResource.java:176-179` rejects sub-group listing. `UserPermissionsV2.hasPermission` (lines 105-114) uses the same lookup shape but is not part of this diff.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:141-143"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "V2 group-specific view grants are missing from the group set because group resources are never typed `Groups`, so the user count returns 0",
+      "description": "`getGroupIdsWithViewPermission` enumerates with `findByType(server, \"Groups\")` (line 121). Group-specific resources are created in `AdminPermissionsSchema.getOrCreateResource` (lines 118-128) without a type, and `JPAResourceStore.create` does not set one either. Only the realm-wide \"Groups\" resource is typed (`AdminPermissionsSchema.java:273-274`), so per-group grants never enter the set.\n\nFor a caller whose only grant is VIEW_MEMBERS on one group, the set is empty. `UsersResource.getUsersCount` (line 430) then calls the empty-set overload, which returns 0 immediately (`JpaUserProvider.java:599-601`). The count is 0, while the list falls back to per-user checks and returns the member. That fallback also paginates in SQL (`JpaUserProvider.java:773`) before the per-user filter (`UsersResource.java:460`), so permitted members outside the first page are never returned. Typing group resources at creation would fix this enumeration, and it shares a root cause with the shadowing defect above.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "V2 `canManage()` returns true for a VIEW-only all-groups grant, so `POST /groups` can create or move top-level groups",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:70",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "V2 `getGroupIdsWithViewPermission` adds resource UUIDs instead of group IDs, so all-groups view-members holders see zero users",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A group's own V2 resource hides the all-groups grant, so all-groups VIEW/MANAGE is ignored for any group with a per-group grant",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:141-143",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "V2 group-specific view grants are missing from the group set because group resources are never typed `Groups`, so the user count returns 0",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java:121",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "diff": "adbf7e325f79be3b8e5cfa54483c962fd3f5683d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:55:47.966804",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 48,
+  "injected": [],
+  "files_read": [
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissions.java",
+    "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+    "rest/admin-ui-ext/src/main/java/org/keycloak/admin/ui/rest/BruteForceUsersResource.java",
+    "model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAResourceStore.java",
+    "model/jpa/src/main/java/org/keycloak/models/jpa/JpaUserProvider.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissions.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissions.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/GroupResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+    "server-spi-private/src/main/java/org/keycloak/authorization/AuthorizationProvider.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java",
+    "server-spi-private/src/main/java/org/keycloak/authorization/policy/evaluation/DefaultPolicyEvaluator.java"
+  ],
+  "searches": [
+    "list_files **/GroupPermissionsV2.java in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep getGroupsWithViewPermission|canManageDefault|canViewDefault|searchGroupModelsByAttributes|canViewGlobal|isImpersonatable in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep UserModel\\.GROUPS\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep public ResourceEntity|resourceStore\\.create|ResourceAdapter\\(|setId\\(KeycloakModelUtils|generateId\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/model",
+    "grep groupsWithPermissionsSubquery|void findByType\\(ResourceServer resourceServer, String type, Consumer in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep getOrCreateResource\\(|\\.setType\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep groups\\(\\)\\.(canManage|requireManage|canView|requireView|canList|requireList)\\(\\)|groupsEvaluator\\.(canManage|requireManage|canView|requireView|canList|requireList)\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep GROUPS_RESOURCE_TYPE|\"Groups\"|implements .*GroupPermission|implements .*UserPermissionEvaluator|QUERY_GROUPS = in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep findByResourceType|resourceType\\)\\s*\\.|getResourceType\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/authz/common/src/main/java",
+    "grep AdminRoles\\.ADMIN\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep new Permission\\(|getResourceId\\(\\)\\.equals|resourceServer\\.getId\\(\\)\\)\\s*;?\\s*$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep findByResourceType|findByResource\\(|resourceType in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/server-spi-private/src/main/java/org/keycloak/authorization",
+    "grep public int getUsersCount\\(|groupIds == null \\|\\| groupIds.isEmpty|group\\.resource\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/model/jpa/src/main/java/org/keycloak/models/jpa/JpaUserProvider.java",
+    "grep protected boolean hasPermission\\(|private boolean hasPermission\\(|boolean hasPermission\\(String in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissions.java",
+    "grep \\bPredicate\\b|\\bArrays\\.|ModelToRepresentation\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+    "grep \\bArrays\\. in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/tests/base/src/test/java/org/keycloak/tests/admin/authz/fgap/UserResourceTypeEvaluationTest.java",
+    "grep ModelToRepresentation|canViewGlobal in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java",
+    "grep public void findByScopes\\(|findByScopes\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/model/jpa/src/main/java/org/keycloak/authorization/jpa/store",
+    "grep findPolicyIdByNullResourceScope|findPolicyIdByResourceScope|findPolicyIdByScope\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/model/jpa/src/main/java/org/keycloak/authorization/jpa/entities/PolicyEntity.java",
+    "grep setResourceType\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep public String getType\\(\\)|public void evaluate\\(|void evaluate\\(Permission|class DefaultPolicyEvaluator|new DefaultPolicyEvaluator in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038",
+    "grep public String getType\\(\\)|public String getOwner\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37038/model/jpa/src/main/java/org/keycloak/authorization/jpa/store/ResourceAdapter.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 66033,
+  "diff_chars_injected": 66033,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 49,
+  "prompt_tokens": 3502742,
+  "cached_tokens": 3297208,
+  "cache_write_tokens": 205482,
+  "completion_tokens": 109274,
+  "reasoning_tokens": null,
+  "duration_seconds": 495.6572358747944,
+  "cost_usd": 0.5051308800000001,
+  "cost_basis": "provider"
+}

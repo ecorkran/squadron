@@ -1,0 +1,228 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Denial-cache test passes without the denial cache",
+      "description": "The subtest \"Should deny on explicit cache deny entry\" seeds `permCache` with `{\"dashboards:uid:dash1\": false}`. The comment directly above it says \"Allow access to the dashboard to prove this is not checked\", but a `false` entry is not an allow. The test cannot tell the denial-cache path from the normal path.\n\nI traced the test with the denial lookup removed (`service.go:116-121`). The cached map yields no allow. `checkInheritedPermissions` finds nothing, because `folderTree.Ancestors` returns an empty iterator for an unknown UID (`tree.go:73-77`). The DB fallback returns no permissions, because `setupService` uses an empty `fakeStore`. `assert.False(resp.Allowed)` still holds, so the test passes either way.\n\nThe test also never checks that a DB denial populates `permDenialCache` (`service.go:153-155`) and that a repeat request is then served without a DB call. To fix it, seed `permCache` with `true` for dash1 so the cache path would allow, then assert the denial. Add a second request that asserts `store.calls` is unchanged.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service_test.go:973-986"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Denial-cache key can collide across distinct resources",
+      "description": "`userPermDenialCacheKey` joins `name` and `parent` with `_`, which can also appear inside UIDs. The test fixtures already use UIDs with underscores (`some_dashboard`, `service_test.go:345`). For example, `(name=\"a_\", parent=\"b\")` and `(name=\"a\", parent=\"_b\")` both produce the suffix `a__b`. A recorded denial for one would then deny the other without a check.\n\nThe failure is fail-closed, so it is not an allow bypass, but it returns a wrong answer.\n\nThe key also uses the raw subject UID (`checkReq.UserUID`, `service.go:116`) rather than the resolved UID that `permCache` uses (`service.go:360`). A numeric-ID subject and a UID subject for the same user therefore get separate denial entries. That lowers the hit rate but does not cause wrong answers.\n\nFix: use a separator that cannot appear in UIDs, such as `\\x00`, or length-prefix each component. Build the key on `userPermCacheKey` to avoid duplicating its prefix.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/cache.go:30-32"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "In-process authz client cache removed without rationale",
+      "description": "Before this change, `newRBACClient` was shared by the in-process and remote paths, and it wired a 30s `cache.NewLocalCache` into the client (visible in the removed helper body in the diff). The in-process path now uses `&NoopCache{}`. Every Check and List from in-process callers therefore goes through the inproc channel to the server.\n\nOne plausible reason is that the server now has its own permission and denial caches, and stacking two 30s caches would double staleness. Neither the diff nor a comment says so. Please add a comment recording the rationale, and confirm the added server load is acceptable. The remote path keeps its 30s cache (`rbac.go:160-167`).",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac.go:101-105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Negative cache adds a stale-deny window with no invalidation",
+      "description": "A DB denial is now cached for `shortCacheTTL` (30s) and checked before the permission map (`service.go:153-155`). If a user is granted access during that window, requests are still denied until the entry expires. The window is fail-closed, and the allow side already had a comparable window from `permCache`, so this is a tolerable trade-off. It is new, though, and nothing documents it.\n\nThe window also depends on authlib honoring the per-entry `exp` that `cacheWrap.Set` passes (`cache.go:88`). If the local cache instead uses its configured `Expiry` (5 minutes in `rbac.go:88`), the denial window is 5 minutes. I could not check authlib's source to confirm which applies. Document the trade-off, and verify the authlib `Set` behavior.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go:116-121"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dead `cacheHit` branches and a misnamed case in `TestService_getUserPermissions`",
+      "description": "Removing the only `cacheHit: true` case leaves the `cacheHit` field and both `if tc.cacheHit` branches (lines 367-369 and 388-392) unreachable. Remove them.\n\nSeparately, the case \"should return error if store fails\" (line 351) never sets `fakeStore.err` and asserts `require.NoError`. It tests the success path under an error-sounding name. That predates this diff, but the table was edited here.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service_test.go:333-395"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`getCachedIdentityPermissions` does DB I/O despite its name and duplicates the dispatch switch",
+      "description": "Despite the \"Cached\" name, `GetUserIdentifiers` (`service.go:356`) queries the store on an `idCache` miss. Its errors are discarded at both call sites (`service.go:123-124` and `180-181`) with no log. The fallback path then re-raises the error, so a failing user lookup costs two store lookups per request (`service.go:356`, and again via `getUserPermissions` at `service.go:374`). The switch also duplicates the dispatch in `getIdentityPermissions` (`service.go:330-339`).\n\nConsider resolving identifiers once in `Check` and `List` and passing them down. That gives one lookup and one dispatch.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac/service.go:342-368"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exported `NoopCache` lacks a doc comment and uses a copy-pasted receiver name",
+      "description": "`NoopCache` is exported with no doc comment. Its receiver is `lc`, which reads as left over from a local-cache implementation. Add a comment stating that it disables client-side caching, and rename the receiver. Revive's `exported` rule may flag this, though existing exported symbols in the same file (e.g. `RegisterRBACAuthZService`) also lack comments.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac.go:239-251"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pre-existing: cloud-mode error is dropped when Zanzana is enabled",
+      "description": "This is not part of the diff, but it sits in the same function. `rbacClient, err := newRemoteRBACClient(...)` is followed by an early return when Zanzana is enabled, before `err` is checked. A failed client creation therefore passes a nil client to `WithShadowClient` and the error is lost. Checking `err` first would fix it.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/authz/rbac.go:65-69"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Denial-cache test passes without the denial cache",
+      "location": "pkg/services/authz/rbac/service_test.go:973-986",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Denial-cache key can collide across distinct resources",
+      "location": "pkg/services/authz/rbac/cache.go:30-32",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "In-process authz client cache removed without rationale",
+      "location": "pkg/services/authz/rbac.go:101-105",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Negative cache adds a stale-deny window with no invalidation",
+      "location": "pkg/services/authz/rbac/service.go:116-121",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Dead `cacheHit` branches and a misnamed case in `TestService_getUserPermissions`",
+      "location": "pkg/services/authz/rbac/service_test.go:333-395",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`getCachedIdentityPermissions` does DB I/O despite its name and duplicates the dispatch switch",
+      "location": "pkg/services/authz/rbac/service.go:342-368",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Exported `NoopCache` lacks a doc comment and uses a copy-pasted receiver name",
+      "location": "pkg/services/authz/rbac.go:239-251",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Pre-existing: cloud-mode error is dropped when Zanzana is enabled",
+      "location": "pkg/services/authz/rbac.go:65-69",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633",
+    "diff": "e1285b747878f75e0e1248bec2e80263ab046fbe...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:15:24.316274",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "injected": [],
+  "files_read": [
+    "pkg/services/authz/rbac.go",
+    "pkg/services/authz/rbac/service.go",
+    "pkg/services/authz/rbac/cache.go",
+    "pkg/services/authz/rbac/service_test.go",
+    ".golangci.yml",
+    "pkg/services/authz/rbac/mapper.go"
+  ],
+  "searches": [
+    "grep newRBACClient|NoopCache|cacheHit|permDenialCache|userPermDenialCacheKey in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg",
+    "grep type fakeStore|type fakeIdentityStore|func \\(f \\*fakeStore\\)|func \\(f \\*fakeIdentityStore\\)|func setupService|func TestService_getUserPermissions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/services/authz/rbac",
+    "list_files **/.golangci* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633",
+    "list_files **/cache/*.go in /Users/manta/go/pkg/mod/github.com/grafana",
+    "grep Delete\\(ctx context\\.Context, key string\\) error in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg",
+    "grep folderSupport|func \\(t translation\\) scope|func \\(m mapper\\) translation in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/services/authz/rbac",
+    "grep \\.calls|calls\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/services/authz/rbac/service_test.go",
+    "list_files **/authlib/cache/*.go in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633",
+    "grep func \\(.*folderTree\\) (Ancestors|Children|newFolderTree)|func newFolderTree in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg/services/authz/rbac",
+    "grep Set\\(ctx context\\.Context, key string, data \\[\\]byte, exp time\\.Duration\\) error in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr103633/pkg"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 16281,
+  "diff_chars_injected": 16281,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 20,
+  "prompt_tokens": 496862,
+  "cached_tokens": 421917,
+  "cache_write_tokens": 74927,
+  "completion_tokens": 49984,
+  "reasoning_tokens": null,
+  "duration_seconds": 228.0899693327956,
+  "cost_usd": 0.04518697000000001,
+  "cost_basis": "provider"
+}

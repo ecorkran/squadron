@@ -1,0 +1,195 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "website_name leaks the website for TL0 users seen by anonymous viewers",
+      "description": "`website` is listed in `untrusted_attributes` (lines 105-111). The generated `include_website?` returns false when `scope.restrict_user_fields?(object)` is true, which means a TL0 user seen by an anonymous viewer (`lib/guardian/user_guardian.rb:58-60`). The new `website_name` attribute is not in that list, and its condition only checks `website.present?`. For that same viewer, the host and path are still serialized, which is the information the gate exists to hide.\n\nThis reaches the page. For a TL0 user, `isBasic` is true, so `linkWebsite` is false and `user.hbs:71` prints `{{model.website_name}}` in a span. The JSON endpoint (`app/controllers/users_controller.rb:55`) and the HTML preload (`:51`) both use this serializer, so one fix covers both.\n\nThe spec does not catch this. The untrusted-attributes list (`spec/serializers/user_serializer_spec.rb:11`) omits `website_name`. The fabricator never sets `website` (`spec/fabricators/user_profile_fabricator.rb:1-3`), so the existing test passes without exercising the gate even for `website`.\n\nFix: add `:website_name` to the `untrusted_attributes` call at line 105, delete the explicit `include_website_name` at line 153 (see the next finding), and add a TL0 case that sets `user.user_profile.website` and asserts `website_name` is absent.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/serializers/user_serializer.rb:153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "include_website_name is misnamed, so its presence check never runs",
+      "description": "Every other condition method in this file ends in `?` (for example lines 117, 161, 201, 223), and the macros at lines 9, 18, and 27 generate `include_<attr>?`. The serializer library calls `include_<name>?`. The method at line 153 is `def include_website_name` with no `?`, so it is never called. The `include_website_name?` hook keeps its default of true, so `website_name` is always emitted, as `null` when the website is blank. The spec does not test a blank website, so this goes unnoticed. This finding rests on the library's naming convention and the file's own pattern, not on a run.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/serializers/user_serializer.rb:153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "website_name logic repeats URI parsing and is hard to follow",
+      "description": "The method parses `URI(website.to_s)` four times (lines 138, 143, 146, 149) and repeats `website_host + URI(website.to_s).path` three times. The domain-matching rule is two inline ternaries with split/join chains, and it lives in the serializer. Two smaller issues in the same method:\n- `\".\" << website_host` (line 149) mutates a string literal. `\".#{website_host}\"` expresses the same thing without mutation.\n- The host comparison is case-sensitive, so `Example.com` and `example.com` do not match.\n\nSuggested fix: parse the URI once into a local, and move the domain-matching rule into a small method (for example on `UserProfile`) so it can be unit-tested without the serializer.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/serializers/user_serializer.rb:137-151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Specs miss the sibling-subdomain branch, the blank case, and the access gate",
+      "description": "The three cases cover the exact-host, parent-domain, and host-only paths. The `elsif` at `user_serializer.rb:144-146` (same label count, both deeper than two labels) is never exercised, in either outcome. Missing cases:\n- `blog.example.com` on `forum.example.com` should return `blog.example.com/user`.\n- `blog.example.com` on `forum.other.org` should return `blog.example.com`.\n- A blank website should produce no value. Currently it produces `null`.\n- The TL0 anonymous context (lines 6-16) never sets a website, so it cannot catch a leak (see the first finding).\n\nThe context title \"has a website name\" (line 76) does not describe a behavior.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/serializers/user_serializer_spec.rb:76-91"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rescue modifier catches every StandardError",
+      "description": "`URI(website.to_s).host rescue nil` swallows any `StandardError` from the expression. The only expected failure is `URI::InvalidURIError`, so `rescue URI::InvalidURIError` would state the intent and avoid masking unrelated bugs.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "app/serializers/user_serializer.rb:138"
+    },
+    {
+      "severity": "PASS",
+      "title": "Frontend migration from websiteName is complete",
+      "description": "A repo-wide search finds no remaining `websiteName` references. The controller property is gone, the template uses `model.website_name` in all three places, and the model doc comment that wrongly said `@property websiteName` now says `profileBackground`. I did not run the Ember build or the qunit suite.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/templates/user/user.hbs:66-73"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "website_name leaks the website for TL0 users seen by anonymous viewers",
+      "location": "app/serializers/user_serializer.rb:153",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "include_website_name is misnamed, so its presence check never runs",
+      "location": "app/serializers/user_serializer.rb:153",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "website_name logic repeats URI parsing and is hard to follow",
+      "location": "app/serializers/user_serializer.rb:137-151",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Specs miss the sibling-subdomain branch, the blank case, and the access gate",
+      "location": "spec/serializers/user_serializer_spec.rb:76-91",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Rescue modifier catches every StandardError",
+      "location": "app/serializers/user_serializer.rb:138",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Frontend migration from websiteName is complete",
+      "location": "app/assets/javascripts/discourse/templates/user/user.hbs:66-73",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+    "diff": "c49ca5ea63ffedcf975193b44ad65232e521badc...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:34:44.571897",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 20,
+  "injected": [],
+  "files_read": [
+    "app/serializers/user_serializer.rb",
+    "spec/serializers/user_serializer_spec.rb",
+    "app/assets/javascripts/discourse/templates/user/user.hbs",
+    "app/assets/javascripts/discourse/controllers/user.js.es6",
+    "app/assets/javascripts/discourse/models/user.js.es6",
+    "app/controllers/users_controller.rb",
+    "lib/discourse.rb"
+  ],
+  "searches": [
+    "grep restrict_user_fields\\? in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+    "grep websiteName|website_name in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+    "grep untrusted_attributes|def self.current_hostname|def current_hostname in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+    "grep website in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6/app/models/user_profile.rb",
+    "grep website in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6/app",
+    "grep Fabricator\\(:user_profile|website in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6/spec/fabricators",
+    "grep active_model_serializers|^    active_model_serializers in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+    "grep def include_\\w+[^?\\w]|include_#\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6/app/serializers",
+    "list_files **/active_model_serializers-0.8.3/lib/active_model/serializer.rb in /Users/manta",
+    "list_files **/active_model_serializers-0.8.3/lib/active_model/serializer.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai6",
+    "list_files */gems/active_model_serializers-0.8.3/lib/active_model/serializer.rb in /Users/manta/.rbenv/versions",
+    "list_files */gems/active_model_serializers-0.8.3/lib/active_model/serializer.rb in /Users/manta/.rvm/gems"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 4,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 5126,
+  "diff_chars_injected": 5126,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 21,
+  "prompt_tokens": 335472,
+  "cached_tokens": 286024,
+  "cache_write_tokens": 49432,
+  "completion_tokens": 31025,
+  "reasoning_tokens": null,
+  "duration_seconds": 159.74104824988171,
+  "cost_usd": 0.02863884,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,31 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The empty `updateMany` data does not update the `@updatedAt` field, so the cache refresh timestamp is not advanced."
+  ],
+  "F2": [
+   "KEEP",
+   "Delegated calendars use credential ID `-1` in the status lookup, so their persisted cache status is missed."
+  ],
+  "F3": [
+   "KEEP",
+   "Cache deletion does not invalidate the connected-calendars query, leaving stale controls when no `onSuccess` callback refetches it."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.0046107100000000005
+}

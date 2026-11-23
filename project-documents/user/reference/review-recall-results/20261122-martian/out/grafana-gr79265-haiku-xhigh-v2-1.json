@@ -1,0 +1,182 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Device is added to the local cache before the store write, so a device rejected at the limit is admitted on its next request",
+      "description": "`tagDeviceUI` checks the local cache (impl.go:83-85), then calls `a.localCache.SetDefault(key, struct{}{})` at line 87 before `CreateOrUpdateDevice` at line 93. When the store returns `ErrDeviceLimitReached`, `tagDeviceUI` returns it, `TagDevice` now propagates it (impl.go:144-148), and `Authenticate` returns it (client.go:44-47). The key stays cached for the 29-minute default expiration set at impl.go:42. The device's next request hits the cache at impl.go:83-85, returns nil, and `Authenticate` returns an identity. A rejected device is therefore denied only once per 29-minute window; a page refresh gets it in. The cache entry should be set only after a successful write, or removed when the write fails.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/impl.go:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`updateDevice` re-prepends the query to a captured `args` slice on every callback run, so a SQLite lock retry executes with a corrupted argument list",
+      "description": "`args` is declared at line 80 and captured by the closure passed to `WithDbSession`. Line 84 reassigns it: `args = append([]interface{}{query}, args...)`. Each invocation prepends the query again. `withDbSession` runs the callback through `retryer.Retry` and `retryOnLocks` (pkg/services/sqlstore/session.go:126-127, 86-110), which re-invokes the same closure when SQLite returns `ErrLocked` or `ErrBusy`. On the second run the statement receives seven bound values for six placeholders, so `database/sql` returns an argument-count error. `updateDevice` then returns that error instead of `ErrDeviceLimitReached`. `Authenticate` only logs it (client.go:49) and admits the request, and the device update is lost. The same pattern exists in `CreateOrUpdateDevice` at database.go:150, which this diff does not touch. The fix is to build the exec slice in a new local variable inside the closure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The device-limit check is skipped for any request that omits `X-Grafana-Device-Id`",
+      "description": "`TagDevice` returns nil at lines 120-122 when the header is empty, before the limit check in `CreateOrUpdateDevice` (database.go:109-118) runs. `Authenticate` then returns an identity (client.go:52-58), so a request without the header gets anonymous access regardless of `device_limit`. The frontend can omit it: `backend_srv.ts:159-162` sets the header only when `this.deviceID` is truthy, and that value comes from FingerprintJS (`backend_srv.ts:97-99`). It stays null if the load throws (`backend_srv.ts:100-101`). Any non-browser client can also leave the header out. Requests without a device ID should be rejected or counted when the limit is set.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/impl.go:120"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The count and the insert in `CreateOrUpdateDevice` are not atomic, so concurrent new devices can exceed `device_limit`",
+      "description": "The limit check counts devices (line 110), compares against the limit (line 115), and only then runs the upsert (lines 120-156), with no transaction or lock in between. Several requests from distinct new devices that arrive together can each read a count below the limit and each insert, pushing the count past `device_limit`. The overshoot is bounded by request concurrency, and it is not bounded at all across multiple Grafana instances sharing one database. The count and insert need to happen atomically.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Device tagging now runs synchronously on the request context, so a stalled database write blocks anonymous authentication",
+      "description": "Before this change, `Authenticate` ran `TagDevice` in a goroutine using `context.Background()` with a 2-minute timeout (the removed `timeoutTag` and goroutine). Now it calls `TagDevice` inline with the request context (line 44). Every anonymous request that misses the local cache waits for the upsert, plus the COUNT when `device_limit > 0`, before authentication returns. Nothing in this path sets a deadline on that context, so if the database stalls, anonymous requests stall with it until the client disconnects. Previously the write was bounded at 2 minutes and never delayed the response. The tagging call should keep a bounded context.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/client.go:44"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Device is added to the local cache before the store write, so a device rejected at the limit is admitted on its next request",
+      "location": "pkg/services/anonymous/anonimpl/impl.go:87",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`updateDevice` re-prepends the query to a captured `args` slice on every callback run, so a SQLite lock retry executes with a corrupted argument list",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:84",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The device-limit check is skipped for any request that omits `X-Grafana-Device-Id`",
+      "location": "pkg/services/anonymous/anonimpl/impl.go:120",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The count and the insert in `CreateOrUpdateDevice` are not atomic, so concurrent new devices can exceed `device_limit`",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-118",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Device tagging now runs synchronously on the request context, so a stalled database write blocks anonymous authentication",
+      "location": "pkg/services/anonymous/anonimpl/client.go:44",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "diff": "6eaae19a37e6ac5d60f9e1a278019416fd5c60b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:20:35.399139",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "injected": [],
+  "files_read": [
+    "pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "pkg/services/anonymous/anonimpl/impl.go",
+    "pkg/services/anonymous/anonimpl/client.go",
+    "packages/grafana-runtime/src/config.ts",
+    "pkg/server/wire.go",
+    "pkg/services/anonymous/anonimpl/impl_test.go",
+    "pkg/services/authn/authnimpl/service.go",
+    "pkg/server/wireexts_oss.go",
+    "pkg/services/anonymous/service.go",
+    "public/app/core/services/backend_srv.ts",
+    "pkg/services/sqlstore/session.go"
+  ],
+  "searches": [
+    "grep ProvideAnonDBStore|ProvideAnonymousDeviceService|anonstore\\.AnonStore|TagDevice\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep anonymousDeviceLimit|AnonymousDeviceLimit|device_limit in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep anonymousEnabled in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/packages",
+    "list_files pkg/server/wire_gen*.go in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "list_files pkg/server/*.go in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep func \\(s \\*Service\\) authenticate\\(|func \\(s \\*Service\\) Authenticate\\(|clients\\[|\\.Authenticate\\(ctx, r\\)|s\\.clients|return nil, err in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/authn/authnimpl",
+    "grep X-Grafana-Device-Id|deviceIDHeader|thirtyDays in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep deviceID in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/public/app/core/services/backend_srv.ts",
+    "grep func \\(ss \\*SQLStore\\) WithDbSession|func \\(ss \\*SQLStore\\) WithTransactionalDbSession|func \\(sess \\*DBSession\\) Exec|type DBSession struct|func \\(ss \\*SQLStore\\) withDbSession in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/sqlstore",
+    "grep func Retry\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg",
+    "grep anonymousEnabled|: GrafanaConfig\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/public",
+    "grep func New\\(|func \\(c \\*CacheService\\) (Get|SetDefault) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/infra/localcache",
+    "grep anonymousEnabled|GrafanaConfig in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/public/app"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 14673,
+  "diff_chars_injected": 14673,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 27,
+  "prompt_tokens": 697178,
+  "cached_tokens": 624108,
+  "cache_write_tokens": 73044,
+  "completion_tokens": 42810,
+  "reasoning_tokens": null,
+  "duration_seconds": 197.3347918340005,
+  "cost_usd": 0.043186880000000004,
+  "cost_basis": "provider"
+}

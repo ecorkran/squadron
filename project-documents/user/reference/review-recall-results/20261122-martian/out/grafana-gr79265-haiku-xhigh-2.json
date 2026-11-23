@@ -1,0 +1,344 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Rejected device is admitted on its next request",
+      "description": "`tagDeviceUI` marks the device in the local cache (impl.go:87) before calling `CreateOrUpdateDevice` (impl.go:93). When the limit is hit, the store returns `ErrDeviceLimitReached`, `TagDevice` returns it (impl.go:147), and `Authenticate` rejects the request (client.go:45-47). The cache entry is not removed, and it lasts 29 minutes (impl.go:42).\n\nThe next request from the same device hits the cache check at impl.go:83-85, `tagDeviceUI` returns nil, and the request is admitted. After expiry the cycle repeats, so a rejected device gets in on alternating attempts for as long as the limit holds.\n\nFix: call `SetDefault` only after the store write succeeds, or delete the key on error. The same ordering also means a failed write (a transient DB error, or a cancelled request context, which client.go now passes through) suppresses tagging for 29 minutes. The existing `localCacheSafety` test only covers a pre-populated cache hit, so it does not catch this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/impl.go:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Count-then-write is not atomic, so the limit can be overshot",
+      "description": "`CreateOrUpdateDevice` runs `CountDevices` (line 110) and then the insert or `updateDevice` as separate statements, with no transaction or conditional insert. Concurrent logins from new device IDs that all see `count = limit-1` will all insert. The overshoot is bounded by concurrency, but the setting reads as a hard cap.\n\nEither document it as a soft limit, or do the check and insert in one transaction (`WithTransactionalDbSession`) or a single conditional `INSERT ... SELECT ... WHERE (SELECT COUNT(*) ...) < ?`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tagging moved from a background goroutine into the login request path",
+      "description": "Before this change, tagging ran in a goroutine with its own context, a 2-minute timeout (`timeoutTag`), and a `recover()`. Now `Authenticate` waits on `TagDevice` using the request context. Every cache-miss anonymous request performs a write on the request path, and with `device_limit > 0` a `COUNT(*)` first. That adds DB latency and DB-failure exposure to every anonymous page load, including the default `device_limit = 0`, where the result is only logged.\n\nThe count is index-backed (`anonservice/migrations.go:24`), so the cost is bounded, but the synchronous write is only needed when a limit is configured. Consider keeping tagging best-effort and async when `deviceLimit == 0`, and synchronous only when a limit is set. The diff also drops the explicit timeout and the panic recovery without mentioning either.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/client.go:44"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Retried closure mutates captured `args`, so lock retries send a malformed statement",
+      "description": "`withDbSession` re-invokes the callback when SQLite returns `SQLITE_BUSY` or `SQLITE_LOCKED` (`pkg/services/sqlstore/session.go:86-103`, retried via `retryer.Retry` at line 127). The closure runs `args = append([]interface{}{query}, args...)`, which rewrites the captured `args`. On the first retry the slice already starts with the query text, so `Exec` receives the SQL twice and the retry fails.\n\nBuild a local slice inside the closure (`execArgs := append([]any{query}, args...)`). The same pattern exists in `CreateOrUpdateDevice` (database.go:150). That predates this change but has the same bug. The new function also uses `[]interface{}` where the rest of the file uses `[]any`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:83-84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Device limit can be bypassed by omitting the device header",
+      "description": "`TagDevice` returns nil when `X-Grafana-Device-Id` is absent (impl.go:119-122), and `Authenticate` admits the request. Requests without the header are never counted or limited. New random IDs are rejected once the limit is reached, but a client can skip the header and avoid the check entirely.\n\nIf the limit is meant to cap anonymous access, this is a gap. If it only caps tracked devices, document that, because operators will otherwise assume the setting caps access.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/impl.go:118-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Three definitions of the same 30-day window",
+      "description": "`impl.go` still defines `thirtyDays` (line 25), used by `usageStatFn`. The diff adds `anonymousDeviceExpiration` in `api/api.go:18` and again in `anonstore/database.go:16`. The same value now has two names, and one constant is defined in two packages. Export one constant from `anonstore` and use it in all three places.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/impl.go:25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ProvideAnonDBStore` wire registration is now stale",
+      "description": "The service now builds its own store from `db.DB` (impl.go:43), so nothing consumes the `anonstore.AnonStore` binding at wire.go:375. The new `ProvideAnonDBStore(db, int64)` signature also can't be injected, since wire has no provider for a bare int64.\n\nRemove the provider and bind, or keep the store injected and pass the limit another way. The service can no longer receive an `AnonStore` from DI, which is why `impl_test.go` changed to build a real DB. I could not verify wire generation because `pkg/server/wire_gen.go` is not in this checkout.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "pkg/server/wire.go:374"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`anonymousDeviceLimit` is typed `undefined` in the runtime class",
+      "description": "The interface declares `anonymousDeviceLimit: number | undefined` (packages/grafana-data/src/types/config.ts:200), but the class initializer `anonymousDeviceLimit = undefined;` has no annotation. With `strict: true` in tsconfig, the inferred type is `undefined`, so `config.anonymousDeviceLimit` on `GrafanaBootConfig` cannot be compared to a number. The file's convention is annotated, for example `loginError: string | undefined = undefined;` at line 85.\n\nThe backend always sends an int64 (default 0), so `number` is the accurate contract. Suggested fix: `anonymousDeviceLimit: number = 0;` in the class, and `anonymousDeviceLimit: number;` in the interface. I have not compiled this.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/grafana-runtime/src/config.ts:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`device_limit` is undocumented",
+      "description": "`device_limit` is read in `pkg/setting/setting.go:1654`, but it is not added to `conf/defaults.ini` or `conf/sample.ini` next to `hide_version`, and the authentication docs do not mention it. Operators cannot discover the key, that 0 means unlimited, or that exceeding the limit rejects anonymous logins.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "conf/defaults.ini:592"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests miss the paths that matter for the limit",
+      "description": "`TestIntegrationBeyondDeviceLimit` covers only the rejection branch. Not covered:\n- (a) an existing active device is still admitted at the limit. This is the `updateDevice` success path, which the `BETWEEN` window exists for.\n- (b) a device whose `updated_at` is older than 30 days is rejected at the limit.\n- (c) `Authenticate` returning `ErrDeviceLimitReached` (client.go:45-47), and the non-limit error path continuing to admit the request.\n- (d) a rejected device retried, which would have caught the cache bug above.\n- (e) `device_limit` parsing in `setting.go:1654`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:51-71"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Doc comment describes parameters that don't exist",
+      "description": "The comment on `updateDevice` says \"has been updated between the given times\", but the function takes no times. The window is fixed relative to `device.UpdatedAt`. The function also mixes policy into the store layer, returning `ErrDeviceLimitReached` for both unknown and inactive devices. Fix the comment to describe the actual window.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:72-73"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rejected logins are logged at Warn on every request",
+      "description": "Once the limit is reached, each rejected anonymous request returns `ErrDeviceLimitReached`. `authenticate` logs it through `errorLogFunc` (service.go:230, which defaults to Warn at line 364) and `Authenticate` increments `failedAuth` (service.go:220). A persistent limit condition will flood logs at Warn. Consider a Debug log or a dedicated metric.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/authn/authnimpl/service.go:230"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`ErrDeviceLimitReached` should use `errors.New`",
+      "description": "`fmt.Errorf` with no format verbs is equivalent to `errors.New`, which is the usual idiom for sentinel errors. Trivial.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:18"
+    },
+    {
+      "severity": "PASS",
+      "title": "MySQL `RowsAffected` check is correct",
+      "description": "The zero-rows check in `updateDevice` relies on `RowsAffected` counting matched rows. The MySQL DSN sets `clientFoundRows=true`, so an UPDATE that rewrites identical values still reports matched rows and is not mistaken for a limit rejection.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/sqlstore/sqlstore.go:287"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Rejected device is admitted on its next request",
+      "location": "pkg/services/anonymous/anonimpl/impl.go:87",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Count-then-write is not atomic, so the limit can be overshot",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:109-118",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Tagging moved from a background goroutine into the login request path",
+      "location": "pkg/services/anonymous/anonimpl/client.go:44",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Retried closure mutates captured `args`, so lock retries send a malformed statement",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:83-84",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Device limit can be bypassed by omitting the device header",
+      "location": "pkg/services/anonymous/anonimpl/impl.go:118-122",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Three definitions of the same 30-day window",
+      "location": "pkg/services/anonymous/anonimpl/impl.go:25",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`ProvideAnonDBStore` wire registration is now stale",
+      "location": "pkg/server/wire.go:374",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`anonymousDeviceLimit` is typed `undefined` in the runtime class",
+      "location": "packages/grafana-runtime/src/config.ts:97",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "`device_limit` is undocumented",
+      "location": "conf/defaults.ini:592",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests miss the paths that matter for the limit",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database_test.go:51-71",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Doc comment describes parameters that don't exist",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:72-73",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Rejected logins are logged at Warn on every request",
+      "location": "pkg/services/authn/authnimpl/service.go:230",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "`ErrDeviceLimitReached` should use `errors.New`",
+      "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:18",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "MySQL `RowsAffected` check is correct",
+      "location": "pkg/services/sqlstore/sqlstore.go:287",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "diff": "6eaae19a37e6ac5d60f9e1a278019416fd5c60b1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:24:59.691611",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 25,
+  "injected": [],
+  "files_read": [
+    "pkg/services/anonymous/anonimpl/impl_test.go",
+    "pkg/services/anonymous/service.go",
+    "pkg/server/wire.go",
+    "pkg/services/anonymous/anontest/fake.go",
+    "pkg/services/authn/authnimpl/service.go",
+    "conf/defaults.ini",
+    "pkg/services/sqlstore/session.go"
+  ],
+  "searches": [
+    "grep . in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/anonymous/anonimpl/anonstore/database.go",
+    "grep . in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/anonymous/anonimpl/impl.go",
+    "grep . in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/anonymous/anonimpl/client.go",
+    "grep TagDevice\\(|ProvideAnonDBStore|ProvideAnonymousDeviceService|anonstore\\.AnonStore|AnonDeviceService in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep anonymousEnabled|anonymousDeviceLimit in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep device_limit|hide_version in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep clientFoundRows in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg",
+    "grep anonimpl|anonstore|anonymous\\.Service|AnonDeviceService in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/server",
+    "list_files pkg/server/wire_gen*.go in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep func \\(s \\*Service\\) authenticate|func \\(s \\*Service\\) Authenticate|ContextAwareClient|errors\\.Is\\(err|client\\.Authenticate|\\.Authenticate\\(ctx in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/authn/authnimpl",
+    "grep func \\(ss \\*SQLStore\\) WithDbSession|func \\(ss \\*SQLStore\\) WithTransactionalDbSession|retry|Retry in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/sqlstore/sqlstore.go",
+    "grep \"strict\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265",
+    "grep func \\(ss \\*SQLStore\\) WithDbSession|func \\(ss \\*SQLStore\\) WithTransactionalDbSession|func \\(ss \\*SQLStore\\) inTransactionWithRetry in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/sqlstore",
+    "grep errorLogFunc in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/authn/authnimpl/service.go",
+    "grep func \\(ss \\*SQLStore\\) withDbSession|retryer\\.Retry|retryOnLocks\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/sqlstore/session.go",
+    "grep anon_device in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/pkg/services/sqlstore/migrations",
+    "grep export const config|= undefined;|export class GrafanaBootConfig in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr79265/packages/grafana-runtime/src/config.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 14673,
+  "diff_chars_injected": 14673,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 26,
+  "prompt_tokens": 551224,
+  "cached_tokens": 493123,
+  "cache_write_tokens": 58077,
+  "completion_tokens": 45784,
+  "reasoning_tokens": null,
+  "duration_seconds": 203.83937599975616,
+  "cost_usd": 0.04037043,
+  "cost_basis": "provider"
+}

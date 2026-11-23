@@ -1,0 +1,220 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "getClientsWithPermission never returns per-client grants and returns the literal \"Clients\" for an all-clients grant, which makes the role-mapping listing throw NullPointerException",
+      "description": "`resourceStore.findByType(server, \"Clients\", ...)` only matches resources whose `type` column is `Clients` (`ResourceEntity` named query `findResourceIdByType`, `ResourceEntity.java:64`). Per-client resources are created in `AdminPermissionsSchema.getOrCreateResource` through `resourceStore.create(...)` at `AdminPermissionsSchema.java:104`, and `JPAResourceStore.create` (`JPAResourceStore.java:62-79`) never sets a type. So a client granted a scope through its own permission is never returned.\n\nThe only resource that matches is the all-clients resource created in `AdminPermissionsSchema.init` with type `Clients` (`RepresentationToModel.java:1546` copies the type). When the scope is granted on that resource, line 140 adds its name, `\"Clients\"`, to the result.\n\nThe only caller, `rest/admin-ui-ext/src/main/java/org/keycloak/admin/ui/rest/AvailableRoleMappingResource.java:229-230`, passes each id to `realm.getClientById(cid).getRolesStream()`. `JpaRealmProvider.getClientById` returns null for `\"Clients\"`, so this throws NullPointerException. That caller only runs when `ADMIN_FINE_GRAINED_AUTHZ` is also on (`AvailableRoleMappingResource.java:217`). The wrong result is in this method regardless of the caller.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Deleting any client throws UnsupportedOperationException when both admin-fine-grained-authz flags are enabled",
+      "description": "The `ClientRemovedEvent` branch runs when the V1 flag is on (`AdminPermissions.java:77`). It calls `management(...)`, which returns `MgmtPermissionsV2` when the V2 flag is also on (`AdminPermissions.java:67-68`). `MgmtPermissionsV2.clients()` now returns `ClientPermissionsV2` (`MgmtPermissionsV2.java:63-68`), and its `setPermissionsEnabled` throws (`ClientPermissionsV2.java:193-195`).\n\n`JpaRealmProvider.removeClient` publishes this event at `JpaRealmProvider.java:1006`, before the row is deleted. `DefaultKeycloakSessionFactory.publish` (`DefaultKeycloakSessionFactory.java:86-90`) does not catch exceptions, so client deletion fails whenever both flags are on. Before this change, `clients()` resolved to the V1 `ClientPermissions`, which handled this call.\n\nThe V2-only configuration avoids the throw only because the listener is gated on the V1 flag. That gate does nothing once both flags are on, and I found no rule in `Profile` that prevents enabling both.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GET and PUT /clients/{id}/management/permissions return 500 when both admin-fine-grained-authz flags are enabled",
+      "description": "`getManagementPermissions` (`ClientResource.java:706-714`) and `setManagementPermissionsEnabled` (`ClientResource.java:739-748`) are gated on the V1 flag through `requireFeature(ADMIN_FINE_GRAINED_AUTHZ)`. They then call `AdminPermissions.management(...)`, which is V2 when the V2 flag is also on.\n\nUnder that combination, `clients().isPermissionsEnabled` (`ClientPermissionsV2.java:188-190`), `clients().getPermissions` (`:203-205`, reached through `toMgmtRef` at `ClientResource.java:720`), `clients().resource` (`:198-200`), and `clients().setPermissionsEnabled` (`:193-195`) all throw `UnsupportedOperationException`. The GET and PUT therefore return 500. Both endpoints worked before this change because `clients()` resolved to the V1 implementation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java:710"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cross-client token exchange throws from canExchangeTo instead of denying, so the request fails with a server error rather than ACCESS_DENIED",
+      "description": "`V1TokenExchangeProvider` (enabled by `TOKEN_EXCHANGE`, `V1TokenExchangeProviderFactory.java:60`) calls `AdminPermissions.management(session, realm).clients().canExchangeTo(client, targetClient, token)` for every cross-client exchange (`AbstractTokenExchangeProvider.java:276`). When the V2 flag is on, `management()` returns `MgmtPermissionsV2`, and `ClientPermissionsV2.canExchangeTo` throws `UnsupportedOperationException` (`ClientPermissionsV2.java:147-150`).\n\nBefore this change, the call reached the V1 implementation, which returned false, and the caller returned `ACCESS_DENIED` (`AbstractTokenExchangeProvider.java:277-280`). The exception is not caught at line 276, which sits outside the `try` that starts at line 287, so the client now gets a server error instead of a 403.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "hasPermission dereferences a null type resource when realm admin permissions are switched off, so client permission checks throw NullPointerException instead of returning false",
+      "description": "When a client has no resource of its own, `hasPermission(ClientModel, String)` loads the all-clients type resource at line 217 and passes it to `findByResource(server, resource)` at line 219. `getResourceTypeResource` returns null when `supportsAuthorizationSchema` is false (`AdminPermissionsSchema.java:116-119`, `144-152`). That happens when `realm.isAdminPermissionsEnabled()` is false (`AdminPermissionsSchema.java:257-259`).\n\nThe admin-permissions client still exists in that state. `RealmAdapter.setAdminPermissionsEnabled(false)` only flips the attribute (`model/jpa/src/main/java/org/keycloak/models/jpa/RealmAdapter.java:1208-1210`), and `getAdminPermissionsClient()` reads only the client-id attribute (`RealmAdapter.java:1287-1292`). `JPAPolicyStore.findByResource` then dereferences `resource.getId()` (`JPAPolicyStore.java:211-215`), which throws NullPointerException.\n\nThe trigger is any per-client check by a caller with no manage or view-clients role, for example `canView(client)` \u2192 `canConfigure` \u2192 `canManage(client)`. The same shape exists in `UserPermissionsV2.hasPermission` (`UserPermissionsV2.java:117-123`), which is outside this diff.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:219"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Clients permission resources have no display name, so the policy resources endpoint returns a null displayName for them",
+      "description": "`getResourceName` special-cases only Users (`AdminPermissionsSchema.java:310-322`) and otherwise returns `resource.getDisplayName()` (line 325). Per-client resources are created without a display name (`AdminPermissionsSchema.java:101-104`), and `ResourceAdapter.getDisplayName` returns the stored value (`model/jpa/src/main/java/org/keycloak/authorization/jpa/store/ResourceAdapter.java:76-78`). As a result, `PolicyResourceService.getResources` (`services/src/main/java/org/keycloak/authorization/admin/PolicyResourceService.java:218`) returns `displayName: null` for every Clients permission resource. The new CLIENTS type was added in this change without matching name resolution.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:304"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "getClientsWithPermission never returns per-client grants and returns the literal \"Clients\" for an all-clients grant, which makes the role-mapping listing throw NullPointerException",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:138",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Deleting any client throws UnsupportedOperationException when both admin-fine-grained-authz flags are enabled",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java:89",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "GET and PUT /clients/{id}/management/permissions return 500 when both admin-fine-grained-authz flags are enabled",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java:710",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cross-client token exchange throws from canExchangeTo instead of denying, so the request fails with a server error rather than ACCESS_DENIED",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:147",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "hasPermission dereferences a null type resource when realm admin permissions are switched off, so client permission checks throw NullPointerException instead of returning false",
+      "location": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java:219",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Clients permission resources have no display name, so the policy resources endpoint returns a null displayName for them",
+      "location": "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java:304",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "diff": "d59c0fbb0ca50c9e9c54e7deec77bb7cbbb212d5...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:55:06.784846",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 46,
+  "injected": [],
+  "files_read": [
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+    "server-spi-private/src/main/java/org/keycloak/authorization/AdminPermissionsSchema.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissions.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissions.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/MgmtPermissionsV2.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/UserPermissionsV2.java",
+    "common/src/main/java/org/keycloak/common/Profile.java",
+    "rest/admin-ui-ext/src/main/java/org/keycloak/admin/ui/rest/AvailableRoleMappingResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/ClientResource.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/RolePermissions.java",
+    "model/jpa/src/main/java/org/keycloak/models/jpa/JpaRealmProvider.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissionManagement.java",
+    "model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAResourceStore.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java",
+    "model/jpa/src/main/java/org/keycloak/models/jpa/JpaClientProviderFactory.java",
+    "services/src/main/java/org/keycloak/services/managers/RealmManager.java",
+    "model/jpa/src/main/java/org/keycloak/models/jpa/RealmAdapter.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "server-spi-private/src/main/java/org/keycloak/authorization/policy/evaluation/DefaultPolicyEvaluator.java",
+    "services/src/main/java/org/keycloak/authorization/admin/PolicyResourceService.java"
+  ],
+  "searches": [
+    "grep ADMIN_FINE_GRAINED_AUTHZ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "grep registerListener\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "grep class ProviderEventManager|void fire\\(|public void publish|catch|onEvent in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/server-spi/src/main/java/org/keycloak/provider",
+    "grep ADMIN_FINE_GRAINED_AUTHZ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/tests/base/src/test/java/org/keycloak/tests/admin",
+    "grep ClientRemovedEvent|ClientPermissionEvaluator|clients\\(\\)\\.setPermissionsEnabled|clients\\(\\)\\.getPermissions|clients\\(\\)\\.isPermissionsEnabled|clients\\(\\)\\.canMapRoles|clients\\(\\)\\.canMapClientScopeRoles|clients\\(\\)\\.canMapCompositeRoles|clients\\(\\)\\.getClientsWithPermission in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "grep public void publish\\(|public <T extends ProviderEvent> void publish|void publish\\(ProviderEvent in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/services/src/main/java/org/keycloak/services/DefaultKeycloakSessionFactory.java",
+    "grep findByType|findByName|setType|create\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/server-spi-private/src/main/java/org/keycloak/authorization/store/ResourceStore.java",
+    "grep public (void|Resource|Collection|List|Stream) ?(findByType|findByName|create)\\(|findResourceByType|findResourceByName|setType\\(|resourceServer.*owner|ownerId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAResourceStore.java",
+    "grep findResourceIdByType|findResourceIdByTypeNoOwner|findResourceIdByName\"|findResourceIdByName\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/authorization/jpa/entities/ResourceEntity.java",
+    "grep getClientId\\(\\)|getId\\(\\)|public ResourceServer create\\(ClientModel|entity.setId\\(|setId\\(client in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAResourceServerStore.java",
+    "grep public String getClientId\\(\\)|public String getId\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAResourceServerStore.java",
+    "grep public String getClientId\\(\\)|public String getId\\(\\)|public void setType\\(|private String type|String type; in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/authorization/jpa",
+    "grep public ClientModel getClientById\\(RealmModel realm, String id\\)|public ClientModel getClientById\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/models/jpa",
+    "grep getClientById\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+    "grep \\.canExchangeTo\\(|\\.exchangeToPermission\\(|\\.mapRolesPermission\\(|\\.mapRolesClientScopePermission\\(|\\.mapRolesCompositePermission\\(|\\.managePermission\\(|\\.configurePermission\\(|\\.viewPermission\\(|clients\\(\\)\\.resource\\(|clients\\(\\)\\.getAccess\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "grep AdminPermissionsSchema\\.SCHEMA\\.init\\(|SCHEMA\\.init\\(|\\.getOrCreateResource\\(|setAdminPermissionsEnabled\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "grep public Policy\\(?\\)? ?|public List<Policy> findByResource\\(ResourceServer resourceServer, Resource resource\\)|findByResource\\(ResourceServer in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/authorization/jpa/store/JPAPolicyStore.java",
+    "grep isFeatureEnabled|Feature\\.|requireFeature|protected .*exchangeClientToClient|private .*exchangeClientToClient|public .*exchangeClientToClient|ClientToClient in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/services/src/main/java/org/keycloak/protocol/oidc/tokenexchange",
+    "grep default List<Policy> findByResource\\(ResourceServer resourceServer, Resource resource\\)|default .* findByResource\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/server-spi-private/src/main/java/org/keycloak/authorization/store/PolicyStore.java",
+    "grep setType\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/server-spi-private/src/main/java/org/keycloak/models/utils/RepresentationToModel.java",
+    "grep findByResourceType|findByTypeInstance\\(|getResourceType\\(\\)\\)|resource\\.getType\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "grep public ClientModel getAdminPermissionsClient\\(\\)|public boolean isAdminPermissionsEnabled\\(\\)|public void setAdminPermissionsClient\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/models/jpa/RealmAdapter.java",
+    "grep getResourceName\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880",
+    "grep public String getDisplayName\\(\\)|public String getType\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36880/model/jpa/src/main/java/org/keycloak/authorization/jpa/store/ResourceAdapter.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 78806,
+  "diff_chars_injected": 78806,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 47,
+  "prompt_tokens": 3105067,
+  "cached_tokens": 2906269,
+  "cache_write_tokens": 198754,
+  "completion_tokens": 103452,
+  "reasoning_tokens": null,
+  "duration_seconds": 460.91712458385155,
+  "cost_usd": 0.47808311000000003,
+  "cost_basis": "provider"
+}

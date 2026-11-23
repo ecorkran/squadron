@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "Misspelled config alias \"delayed-suthenticator-config\" in test flow setup",
+      "description": "The alias passed to `config.setAlias(...)` for the `delayed-authenticator` execution is spelled \"delayed-suthenticator-config\". It is self-consistent within the hunk, so it does not break anything, but it is a typo and should read \"delayed-authenticator-config\".",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java#configureBrowserFlowWithRecoveryAuthnCodes"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hardcoded provider id string replaces the previously referenced constant",
+      "description": "`createRecoveryCodesCredential` calls `session.getProvider(CredentialProvider.class, \"keycloak-recovery-authn-codes\")` with a string literal. The removed code used `RecoveryAuthnCodesCredentialProviderFactory.PROVIDER_ID`. The literal may match the constant's value, but I could not confirm that without reading the factory. Using the constant would keep the two in sync if the id ever changes.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java#createRecoveryCodesCredential"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Misspelled config alias \"delayed-suthenticator-config\" in test flow setup",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/federation/storage/BackwardsCompatibilityUserStorageTest.java#configureBrowserFlowWithRecoveryAuthnCodes",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Hardcoded provider id string replaces the previously referenced constant",
+      "location": "server-spi-private/src/main/java/org/keycloak/utils/CredentialHelper.java#createRecoveryCodesCredential",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke38446",
+    "diff": "77c379efc3a0bcadb2c7dc035c8a0bc1ce524fe6...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:53:21.500688",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 33382,
+  "diff_chars_injected": 33382,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 17295,
+  "cached_tokens": 0,
+  "cache_write_tokens": 17293,
+  "completion_tokens": 4426,
+  "reasoning_tokens": null,
+  "duration_seconds": 19.27432533307001,
+  "cost_usd": 0.007269800000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

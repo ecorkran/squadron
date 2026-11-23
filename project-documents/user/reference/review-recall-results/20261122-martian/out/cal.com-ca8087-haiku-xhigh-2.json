@@ -1,0 +1,237 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Async callbacks in reschedule `forEach` escape the try/catch and are never awaited",
+      "description": "The diff changes `bookingRefsFiltered.forEach((bookingRef) => {` to `forEach(async (bookingRef) => {` and adds `await` to `getCalendar`. `forEach` does not wait for the callback, so the calendar and video deletions run fire-and-forget. `sendRequestRescheduleEmail` (line 570) runs before any `deleteEvent` finishes. A rejection from `getCalendar` or `deleteEvent` becomes an unhandled promise rejection. Before this change, a synchronous throw from `getCalendar` would have propagated out of the mutation. No `try` encloses this block (the file's only `try` blocks are at lines 632 and 711), so now the mutation continues and reports success.\n\nThe same edit is in `packages/app-store/vital/lib/reschedule.ts:125-134` and `packages/app-store/wipemycalother/lib/reschedule.ts:125-134`. There the existing `try/catch` (lines 124-139) can no longer catch these errors, so the `catch` is effectively dead. In Node's default mode an unhandled rejection terminates the process unless a handler is registered; I did not check whether the web server registers one.\n\nFix: `await Promise.all(bookingRefsFiltered.map(async ...))` or a `for...of` loop. In the two reschedule files this also makes the existing `try/catch` meaningful.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings.tsx:553"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Recurring-booking cancel: calendar deletes can be unawaited when the response is sent",
+      "description": "The `forEach(async (credential) => \u2026)` is pre-existing, but the diff edits its first line (461). The callback pushes into `apiDeletes` only after `await getCalendar` and `await calendar?.deleteEvent(...)`. The main flow snapshots `apiDeletes` at line 652 (`Promise.all(prismaPromises.concat(apiDeletes))`). On the non-paid path there is no I/O await between the `forEach` and line 652, so the snapshot happens before any recurring deletion has pushed. The function then returns \"Booking successfully cancelled\" while those deletions are still running, and their rejections are unhandled.\n\nThe `else` branch in the same function (lines 476-483) already uses a `for...of` with `await`, which is the fix to apply here.\n\nSeparately, `await apiDeletes;` at line 617 does nothing, because awaiting an array does not wait for its elements. It should be `await Promise.all(apiDeletes)`. That line is outside the diff, but it is the same defect on the rejected-booking path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:458-470"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`lastAttendee` is always false, so the newly awaited calendar branch at line 243 never runs",
+      "description": "`bookingToDelete.attendees.filter(...).length < 0` can never be true, so `lastAttendee` is always `false`. The `if (lastAttendee)` branch at lines 238-249 is therefore unreachable, including the `await getCalendar(credential)` at line 243 that this diff changes. When the last attendee leaves a seated booking, the code takes the update path and never sets the booking to CANCELLED (lines 277-288). The intent is most likely `=== 0`. This predates the diff and sits outside the changed hunks, but it decides whether the changed code is exercised at all.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:223-225"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test covers the changed async paths",
+      "description": "The diff converts `getCalendar`, `getVideoAdapters`, `deleteEvent`, `deleteMeeting`, `createEvent`, `updateEvent`, and the cancel and reschedule flows to async. That touches more than 20 call sites. Searches of `*test*` files and of `test`, `tests`, and `__tests__` directories found no test that exercises `handleCancelBooking`, `handleNewBooking`, `videoClient`, `CalendarManager`, `getCalendar`, or the reschedule modules. The only related reference is a mock of `getBusyCalendarTimes` in `apps/web/test/lib/getSchedule.test.ts:1374`, which this diff does not change. Nothing verifies that the deletes are awaited, and the two issues above got through for that reason.\n\nAdd tests for a cancel with a calendar reference (asserting `deleteEvent` is awaited), a recurring cancel, and `getVideoAdapters` with an unknown `*_video` type.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/getCalendar.ts:9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Eager `import()` calls in `appStore` defer nothing",
+      "description": "Each `import(\"./x\")` in the object literal runs when the module first loads, so all 28 app modules still load on first import of `@calcom/app-store`. The change makes loading asynchronous but not lazy. If deferred loading is the goal, store thunks (`applecalendar: () => import(\"./applecalendar\")`) and call `await appStore[key]()`. A failed import is an unhandled rejection unless something awaits that key.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/app-store/index.ts:3-30"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`getCalendarCredentials` now returns an un-awaited Promise in its shape",
+      "description": "The `calendar` field is now `Promise<Calendar | null>`, and the return type is inferred, so nothing enforces awaiting it. The three current callers (`packages/trpc/server/routers/viewer.tsx:340` and `:415`, `apps/web/pages/api/availability/calendar.ts:83`) pass the result to `getConnectedCalendars`, which does `await item.calendar`, so they are correct today. A future caller that tests `if (item.calendar)` would be true for every credential. Consider making the field's type explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/core/CalendarManager.ts:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reschedule logic is copied three times",
+      "description": "The changed region of `vital/lib/reschedule.ts` and `wipemycalother/lib/reschedule.ts` is identical, and `bookings.tsx` (lines 546-567) holds a third copy. This diff applies the same edit to all three, and that is how the same error-handling defect was introduced three times. Extracting one helper, such as `deleteBookingReferences(bookingRefs, credentialsMap, builder)`, would let the fix land once.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/app-store/vital/lib/reschedule.ts:117-139"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every changed consumer of `appStore`, `getCalendar`, and `getVideoAdapters` awaits the new Promise",
+      "description": "- `appStore` lookups outside the app-store package are at `videoClient.ts:26`, `handleCancelBooking.ts:589`, `deletePayment.ts:16`, `handlePayment.ts:26`, and `bookings.tsx:967`. Each is awaited inside an async function. `getCalendar.ts:15` is awaited too.\n- All seven `getVideoAdapters` calls (`videoClient.ts:39, 52, 111, 144, 162, 185, 206`) are awaited.\n- All `getCalendar` call sites are awaited, or stored and awaited in `getConnectedCalendars`. `EventManager.ts:488` sits in `private async updateAllCalendarEvents` (line 429).\n- The 28 keys in the new `index.ts` match the old static list one-for-one. The `example` entry was already commented out before this change.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/videoClient.ts:21"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Async callbacks in reschedule `forEach` escape the try/catch and are never awaited",
+      "location": "packages/trpc/server/routers/viewer/bookings.tsx:553",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Recurring-booking cancel: calendar deletes can be unawaited when the response is sent",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:458-470",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`lastAttendee` is always false, so the newly awaited calendar branch at line 243 never runs",
+      "location": "packages/features/bookings/lib/handleCancelBooking.ts:223-225",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No test covers the changed async paths",
+      "location": "packages/app-store/_utils/getCalendar.ts:9",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Eager `import()` calls in `appStore` defer nothing",
+      "location": "packages/app-store/index.ts:3-30",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`getCalendarCredentials` now returns an un-awaited Promise in its shape",
+      "location": "packages/core/CalendarManager.ts:28",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Reschedule logic is copied three times",
+      "location": "packages/app-store/vital/lib/reschedule.ts:117-139",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Every changed consumer of `appStore`, `getCalendar`, and `getVideoAdapters` awaits the new Promise",
+      "location": "packages/core/videoClient.ts:21",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "diff": "9246bad445bbd2085138c9b707f0c54eededc4d9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:55:05.025803",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 32,
+  "injected": [],
+  "files_read": [
+    "packages/core/CalendarManager.ts",
+    "packages/core/videoClient.ts",
+    "packages/app-store/_utils/getCalendar.ts",
+    "packages/app-store/index.ts",
+    "packages/trpc/server/routers/viewer.tsx",
+    "apps/web/pages/api/availability/calendar.ts",
+    "packages/app-store/vital/lib/reschedule.ts",
+    "packages/app-store/wipemycalother/lib/reschedule.ts",
+    "packages/features/bookings/lib/handleCancelBooking.ts",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/core/EventManager.ts",
+    "packages/trpc/server/routers/viewer/bookings.tsx"
+  ],
+  "searches": [
+    "grep appStore\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep getCalendar\\(|getVideoAdapters\\(|getCalendarCredentials\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep apiDeletes|integrationsToDelete in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/features/bookings/lib/handleCancelBooking.ts",
+    "grep ^\\s*(export )?(async )?(function|const) \\w+|^\\s+(private |public |protected )?(async )?\\w+\\(.*\\)(: .*)? \\{$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/core/EventManager.ts",
+    "grep try \\{|catch \\(|private async \\w+|private \\w+\\(|public async \\w+\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/trpc/server/routers/viewer/bookings.tsx",
+    "grep getCalendar|getVideoAdapters|app-store\"|appStore|getCalendarCredentials|videoClient in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep async updateAllCalendarEvents|updateAllCalendarEvents\\(|async \\w+\\(\\s*$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/core/EventManager.ts",
+    "grep getCalendar|getVideoAdapters|@calcom/app-store|appStore|getCalendarCredentials|videoClient|deleteMeeting|handleCancelBooking in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep import \\w+ from \"@calcom/app-store\"|import \\w+ from \"@calcom/app-store/index\"|import \\w+ from \"(\\.\\./)+index\"|import \\w+ from \"(\\.\\./)+\"\\s*;?$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages",
+    "list_files packages/{core,features/bookings,trpc,lib/payment,app-store/_utils}/**/*.{test,spec}.ts in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep handleNewBooking|handleCancelBooking|getCalendar|videoClient|CalendarManager|getVideoAdapters|rescheduleBooking in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep handleNewBooking|handleCancelBooking|getCalendar|videoClient|CalendarManager|getVideoAdapters|rescheduleBooking in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/apps/web/test/lib/getSchedule.test.ts",
+    "grep ^(export )?(async )?function handler|^async function|^export default async function in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/features/bookings/lib/handleCancelBooking.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 20721,
+  "diff_chars_injected": 20721,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 33,
+  "prompt_tokens": 730266,
+  "cached_tokens": 653182,
+  "cache_write_tokens": 77058,
+  "completion_tokens": 48911,
+  "reasoning_tokens": null,
+  "duration_seconds": 224.51660045795143,
+  "cost_usd": 0.04745492,
+  "cost_basis": "provider"
+}

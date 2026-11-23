@@ -1,0 +1,144 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cleanup ticker cut from 10 minutes to 1 minute, so every background cleanup job now runs ten times as often",
+      "description": "`Run` changes `time.NewTicker(time.Minute * 10)` to `time.Minute * 1`. Each tick calls `clean` (cleanup.go:88-121), which runs all eight jobs: temp files, snapshots, dashboard versions, images, annotations, user invites, short URLs, and query history. The query-history job runs two row-limit enforcement queries. Every one of these now runs every minute instead of every ten. The 9-minute timeout in `clean` is unchanged, and nothing in the diff explains the cadence change. On a busy instance this is about ten times the background DELETE and scan load, and it also makes the annotation cleanup from the next finding run every minute. If this was a debugging aid, it should be reverted before merge.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "pkg/services/cleanup/cleanup.go:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Every annotation and tag cleanup batch is logged at ERROR level, including runs that delete nothing",
+      "description": "Lines 534, 537, 554, 557, 576, and 579 log each batch at `Error` level. The first line in each pair also logs the full `ids` slice. These calls run even when nothing matches: `fetchIDs` returns an empty slice, and the \"cleaned\" line still logs `count=0` at Error. `CleanAnnotations` runs once per configured retention rule, so an instance with any max-age or max-count retention set emits about two ERROR lines per rule on every run, even when idle. With the 1-minute ticker from the previous finding, that is about two ERROR lines per minute per rule. The `err` field on the first line is always nil at that point. Operators who alert on error-level logs will be paged for routine, successful cleanup. Progress should be logged at Debug or Info, and Error should be reserved for actual failures.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:534"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Batch DELETE binds one parameter per ID on MySQL and Postgres, so a batch size above their bind-parameter limit makes cleanup fail",
+      "description": "`deleteByIDs` builds `DELETE FROM <table> WHERE id IN (?,?,...)` with one placeholder per ID. The count is bounded only by `cfg.AnnotationCleanupJobBatchSize`, which `setting.go:710` reads as an unbounded `int64` with default 100. The only escape hatch is the SQLite branch at line 608, which inlines the IDs. Grafana's MySQL DSN (`sqlstore.go:287`) does not set `interpolateParams`, so the driver uses server-side prepared statements, which allow at most 65535 placeholders. Postgres has the same 65535 bind-parameter limit at the protocol level.\n\nIf an operator sets the batch size above 65535 and one batch matches at least 65536 rows, the DELETE returns an error. `untilDoneOrCancelled` propagates it, and `cleanUpOldAnnotations` (cleanup.go:126-127) logs it. The fetch returns the same top-of-list batch on every run, so cleanup gets stuck there on every run. The previous single-statement DELETE used no bind parameters, so this configuration worked before the change. The default batch size does not trigger it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:615-617"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Cleanup ticker cut from 10 minutes to 1 minute, so every background cleanup job now runs ten times as often",
+      "location": "pkg/services/cleanup/cleanup.go:77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Every annotation and tag cleanup batch is logged at ERROR level, including runs that delete nothing",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:534",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Batch DELETE binds one parameter per ID on MySQL and Postgres, so a batch size above their bind-parameter limit makes cleanup fail",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:615-617",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329",
+    "diff": "2eb6310b796e3ca92bf2ad7de13cdecacb7c3469...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:17:14.025946",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "injected": [],
+  "files_read": [
+    "pkg/services/annotations/annotationsimpl/xorm_store.go",
+    "pkg/services/annotations/annotationsimpl/cleanup_test.go",
+    "pkg/services/cleanup/cleanup.go",
+    "pkg/services/annotations/annotationsimpl/cleanup.go",
+    "pkg/services/sqlstore/migrator/dialect.go",
+    "pkg/infra/db/db.go",
+    "pkg/setting/setting.go",
+    "docs/sources/setup-grafana/configure-grafana/_index.md",
+    "pkg/services/sqlstore/session.go"
+  ],
+  "searches": [
+    "grep alertAnnotationType|dashboardAnnotationType|apiAnnotationType in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/annotations",
+    "grep AnnotationCleanupJobBatchSize in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep GetDBType\\(\\)|func \\(.*\\) (Limit|LimitOffset)\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep func \\(.*\\*Session\\) (Exec|SQL|Find)\\(|type Session struct|type DBSession in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep cleanupjob_batchsize|AnnotationCleanupJobBatchSize|annotation_cleanup_job_batch_size in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329",
+    "grep SQLite\\s*=|MySQL\\s*=|Postgres\\s*=|MSSQL\\s*= in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/sqlstore/migrator",
+    "grep executeUntilDoneOrCancelled|func asAny|untilDoneOrCancelled\\(|fetchIDs\\(|deleteByIDs\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep ^go \\d|^go [0-9.]+ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/go.mod",
+    "grep func \\(.*\\) (Limit|LimitOffset)\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/sqlstore/migrator",
+    "grep MSSQLDialect|mssql_dialect in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/sqlstore/migrator",
+    "grep SQL\\([^)]*\\)\\.Find\\(&[a-zA-Z]*[iI][dD]s\\)|\\.Find\\(&ids\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg",
+    "grep MSSQL|mssql in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/sqlstore/migrator",
+    "grep func (NewDialect|newDialect|GetDialect)|case (migrator\\.)?(SQLite|MySQL|Postgres) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329/pkg/services/sqlstore"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 15675,
+  "diff_chars_injected": 15675,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 475587,
+  "cached_tokens": 403780,
+  "cache_write_tokens": 71789,
+  "completion_tokens": 46652,
+  "reasoning_tokens": null,
+  "duration_seconds": 206.90781987505034,
+  "cost_usd": 0.0426648,
+  "cost_basis": "provider"
+}

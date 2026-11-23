@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Added `time.sleep(0.1)` is a no-op because the test patches `time.sleep`",
+      "description": "The test starts with `monkeypatch.setattr(\"time.sleep\", lambda _: None)`, which replaces `time.sleep` for the whole process. The new `time.sleep(0.1)` at line 61 therefore returns immediately. The comment \"Give flusher threads time to process after drift change\" is wrong, and the test still depends on the timing it was meant to guarantee.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:59-61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Metric tag key `shards` is inconsistent with `shard` used elsewhere in the same change",
+      "description": "The `spans.buffer.flusher.wait_produce` timer uses `tags={\"shards\": shard_tag}`. The other timers and the `segment_size_bytes` metric in the same function use `tags={\"shard\": shard_tag}`. Dashboards and alerts filtering on `shard` will miss this series.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py#SpanFlusher.main"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`isinstance(process, multiprocessing.Process)` is false for spawn-context processes, so the kill is skipped",
+      "description": "`self.mp_context` is `multiprocessing.get_context(\"spawn\")`, so processes are `SpawnProcess` instances. `SpawnProcess` derives from `BaseProcess`, not from `multiprocessing.Process`. The check therefore never passes for real processes, and a hung flusher is never killed before it is replaced. The same check in `join()` means `terminate()` is never called for spawned processes. The `join()` pattern predates this diff, but the new kill path copies it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py#SpanFlusher._ensure_processes_alive"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`break` in `join()` skips terminating the remaining flusher processes",
+      "description": "Once the deadline has passed, the loop breaks before reaching the `terminate()` call for the current or any later process. The original code always terminated the single process after the wait. With several processes, the later ones can be left running after `join()` returns.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/spans/consumers/process/flusher.py#SpanFlusher.join"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI default of `1` overrides the factory's one-process-per-shard default",
+      "description": "The factory treats `flusher_processes=None` as \"one process per shard\" (`max_processes or len(buffer.assigned_shards)`). The new click option sets `default=1`, so the production consumer always runs a single flusher process unless the flag is passed. This may be intentional, but the factory and CLI defaults disagree, and the help text does not explain the difference.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/sentry/consumers/__init__.py:430-437"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Added `time.sleep(0.1)` is a no-op because the test patches `time.sleep`",
+      "location": "tests/sentry/spans/consumers/process/test_consumer.py:59-61",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Metric tag key `shards` is inconsistent with `shard` used elsewhere in the same change",
+      "location": "src/sentry/spans/consumers/process/flusher.py#SpanFlusher.main",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`isinstance(process, multiprocessing.Process)` is false for spawn-context processes, so the kill is skipped",
+      "location": "src/sentry/spans/consumers/process/flusher.py#SpanFlusher._ensure_processes_alive",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`break` in `join()` skips terminating the remaining flusher processes",
+      "location": "src/sentry/spans/consumers/process/flusher.py#SpanFlusher.join",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "CLI default of `1` overrides the factory's one-process-per-shard default",
+      "location": "src/sentry/consumers/__init__.py:430-437",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge93824",
+    "diff": "c1449270812b3fd722c26d64b8530922be72789e...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:54:12.686088",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19169,
+  "diff_chars_injected": 19169,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10286,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8313,
+  "completion_tokens": 6116,
+  "reasoning_tokens": null,
+  "duration_seconds": 26.238473082892597,
+  "cost_usd": 0.00563821,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

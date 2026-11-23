@@ -1,0 +1,46 @@
+{
+ "case": "cal.com-ca7232",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 1,
+  "F2": 2,
+  "F3": 3,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "import type` vs value import is a lint/style matter, not a behavior defect."
+  ],
+  "F2": [
+   "KEEP",
+   "scheduleEmailReminders.ts:53-77` awaits each SendGrid cancel inside one try while the lazy Prisma deletes only run at the final `Promise.all`, so one throw aborts the batch and deletes nothing."
+  ],
+  "F3": [
+   "KEEP",
+   "the reminder cleanup in `handleCancelBooking.ts:485-493`, `bookings.tsx:488-494` and `workflows.tsx:376-382, 574-580` is called without `await` and the helper only logs errors, so a failed flag write is silent (the removed awaited `deleteMany` is from memory of the upstream code, not a diff I could run)."
+  ],
+  "F4": [
+   "DROP",
+   "this is a naming and code-structure complaint about the helper's three modes, not a behavior defect."
+  ],
+  "F5": [
+   "KEEP",
+   "the `immediateDelete` branch at `emailReminderManager.ts:213-222` cancels at SendGrid and returns without touching the row, leaving stale `scheduled`/`referenceId` data, and a row already flagged by `requestReschedule` is cancelled again by the cron."
+  ],
+  "F6": [
+   "DROP",
+   "the outer catch is dead code, but both helpers catch and log their own errors, so removing it changes no behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  2,
+  3,
+  5
+ ],
+ "cost_usd": 0.7090087
+}

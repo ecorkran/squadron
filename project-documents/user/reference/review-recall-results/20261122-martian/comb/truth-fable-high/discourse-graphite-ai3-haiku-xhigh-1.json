@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai3",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "should_block?` does an exact `where(email: email)` match on the raw `params[:email]`, with no normalization in `User`, the validator or the migration, so a mixed-case variant bypasses the blocklist."
+  ],
+  "F2": [
+   "KEEP",
+   "should_block?` increments and saves `match_count` inside validation, and `create` runs `user.valid?` then `user.save`, so each blocked attempt counts twice via a non-atomic, unchecked save."
+  ],
+  "F3": [
+   "KEEP",
+   "the regex `@(domains)` in the newly added validator file has no end anchor, so `x@whitelisted.com.evil.example` passes the whitelist; the logic was moved by this change, though its behavior predates it."
+  ],
+  "F4": [
+   "KEEP",
+   "rejectedEmails: Em.A([])` in the `extend()` literal is a single prototype-level array mutated by `pushObject`, so rejected emails leak across any controller instances."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4
+ ],
+ "cost_usd": 0.385673
+}

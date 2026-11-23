@@ -1,0 +1,132 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Async forEach callback in the vital reschedule moves getCalendar failures outside the try/catch, so they become unhandled rejections",
+      "description": "Before this diff, `getCalendar` was synchronous. A throw from a calendar constructor, such as `new CalendarService(credential)` with a bad key (the exchange2013 constructor calls `JSON.parse(symmetricDecrypt(...))` unguarded at `packages/app-store/exchange2013calendar/lib/CalendarService.ts:48-50`), propagated synchronously out of `forEach` into the `catch` at line 135, which logs it. Now the callback is `async` and does `await getCalendar(...)` at line 128. The throw becomes a rejected promise that `forEach` discards, so the `catch` never runs and the rejection is unhandled. `deleteMeeting` (line 131) has the same problem, since it is now `async` and its adapter failures are rejections too. The repo has no `unhandledRejection` handler (grep found none), and Node terminates on unhandled rejections by default. I did not check the production host's runtime configuration. The identical block in `packages/app-store/wipemycalother/lib/reschedule.ts:124-139` has the same defect. Fix by replacing `forEach` with a `for\u2026of` loop and awaiting the deletes (or `Promise.all`) inside the `try`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/app-store/vital/lib/reschedule.ts:124-139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Async forEach callback in requestReschedule drops getCalendar errors, so the reschedule reports success while the old calendar event stays",
+      "description": "The booking is already marked CANCELLED and rescheduled at line 475. Before this diff, a synchronous throw from `getCalendar` at line 556 escaped the `forEach` and failed the mutation, so no reschedule email went out and the client saw an error. Now the callback is `async`, so the error becomes an unhandled rejection. Execution continues to the reschedule email at line 570 and the webhooks, then returns success. The previous calendar event is never deleted, and the caller gets no signal. The earlier behavior was also not clean, since the booking had already been cancelled, but it did surface the failure. Fix by awaiting the loop so errors propagate to the mutation, as in the other call sites in this diff.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings.tsx:553-567"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Async forEach callback in the vital reschedule moves getCalendar failures outside the try/catch, so they become unhandled rejections",
+      "location": "packages/app-store/vital/lib/reschedule.ts:124-139",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Async forEach callback in requestReschedule drops getCalendar errors, so the reschedule reports success while the old calendar event stays",
+      "location": "packages/trpc/server/routers/viewer/bookings.tsx:553-567",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "diff": "9246bad445bbd2085138c9b707f0c54eededc4d9...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:52:05.751730",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 34,
+  "injected": [],
+  "files_read": [
+    "packages/core/CalendarManager.ts",
+    "packages/app-store/_utils/getCalendar.ts",
+    "apps/web/pages/api/availability/calendar.ts",
+    "packages/trpc/server/routers/viewer.tsx",
+    "tests/config/singleton.ts",
+    "packages/core/EventManager.ts",
+    "packages/features/bookings/lib/handleCancelBooking.ts",
+    "packages/app-store/vital/lib/reschedule.ts",
+    "packages/app-store/wipemycalother/lib/reschedule.ts",
+    "packages/trpc/server/routers/viewer/bookings.tsx",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/core/videoClient.ts",
+    "packages/app-store/utils.ts",
+    "packages/app-store/exchangecalendar/lib/CalendarService.ts",
+    "packages/app-store/hubspot/lib/CalendarService.ts",
+    "packages/app-store/exchange2013calendar/lib/CalendarService.ts"
+  ],
+  "searches": [
+    "grep appStore\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep from \"(@calcom/app-store|\\.\\.?/(\\.\\./)*app-store|\\.\\./\\.\\.|\\.\\.|\\.)\"?\\s*;?$|app-store/index|from \"\\.\\.\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages",
+    "grep import (appStore|\\w+) from \"(@calcom/app-store|\\.\\./(\\.\\./)*app-store|\\.\\.)\"?;?$ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep getCalendar\\(|getCalendarCredentials|\\.calendar\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep from \"@calcom/core/(CalendarManager|videoClient)\"|from \"\\./(CalendarManager|videoClient)\"|from \"\\.\\./(CalendarManager|videoClient)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep constructor\\(|JSON\\.parse|throw new Error in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/app-store",
+    "grep variant: in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/app-store",
+    "grep type: \"\\w+_(calendar|other_calendar)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/app-store",
+    "grep variant:|type: in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/app-store",
+    "list_files packages/app-store/exchangecalendar/**/*.{ts,tsx,json} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep unhandledRejection|app-store/index|app-store/index\\.ts in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087",
+    "grep ^\\s*(\\.mutation|\\.query)\\(async|^\\s*\\w+: (bookingsProcedure|authedProcedure)|\\.mutation\\(async|\\.query\\(async in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca8087/packages/trpc/server/routers/viewer/bookings.tsx"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 20721,
+  "diff_chars_injected": 20721,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 35,
+  "prompt_tokens": 1148025,
+  "cached_tokens": 1056515,
+  "cache_write_tokens": 91470,
+  "completion_tokens": 49880,
+  "reasoning_tokens": null,
+  "duration_seconds": 236.063619249966,
+  "cost_usd": 0.05485555,
+  "cost_basis": "provider"
+}

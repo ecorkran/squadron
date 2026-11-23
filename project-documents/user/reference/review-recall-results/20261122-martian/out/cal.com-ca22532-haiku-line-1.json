@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Script exits with status 0 on its failure paths",
+      "description": "`cleanup()` ends with `exit 0`, and the script calls `cleanup` on both failure paths: the rate-limit branch (around line 47) and the \"Failed to extract Tunnelmole URL\" branch (around line 61). A caller or CI job cannot tell that the tunnel setup failed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:21-24"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sed -i ''` syntax works only on BSD/macOS sed",
+      "description": "The `sed -i '' -E ...` form is BSD syntax. GNU sed reads `''` as the script and fails on the following argument, so the script cannot update `GOOGLE_WEBHOOK_URL` on Linux. The script depends on `tmole`, `pgrep`, and `/tmp` as well, so the platform assumption should be documented or made portable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "scripts/test-gcal-webhooks.sh:69"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Migration header contradicts the SQL that follows it",
+      "description": "The generated header says the required column cannot be added \"without a default value\". The SQL then adds the column with `DEFAULT NOW()`. The comment is accurate for the generated statement but misleading next to the hand-edited statement.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql:1-9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Imports and constructor used by new code are not visible in the diff",
+      "description": "`CalendarService.ts` now calls `SelectedCalendarRepository.updateManyByCredentialId`, and `connectedCalendars.handler.ts` calls `new CalendarCacheRepository()`. The diff does not show the `SelectedCalendarRepository` import in `CalendarService.ts`, and it does not show whether `CalendarCacheRepository` takes constructor arguments. Both need checking in the full files.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Script exits with status 0 on its failure paths",
+      "location": "scripts/test-gcal-webhooks.sh:21-24",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sed -i ''` syntax works only on BSD/macOS sed",
+      "location": "scripts/test-gcal-webhooks.sh:69",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Migration header contradicts the SQL that follows it",
+      "location": "packages/prisma/migrations/20250715160635_add_calendar_cache_updated_at/migration.sql:1-9",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Imports and constructor used by new code are not visible in the diff",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22532",
+    "diff": "74608dcfae2592562c1b07b0b24a783d6f80659a...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:57:08.567380",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23017,
+  "diff_chars_injected": 23017,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 13211,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 11238,
+  "completion_tokens": 4593,
+  "reasoning_tokens": null,
+  "duration_seconds": 20.125853333156556,
+  "cost_usd": 0.00575411,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

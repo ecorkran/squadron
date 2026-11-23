@@ -1,0 +1,310 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Grant matcher in AssertEvents is inverted and reads the wrong characters",
+      "description": "`isAccessTokenId` has two defects. Line 483 uses `substring(3, 5)`, which is the second character of the token-type shortcut plus the first character of the grant shortcut. The grant sits at indexes 4\u20135, since the encoder writes session(2) + token type(2) + grant(2) (`DefaultTokenContextEncoderProvider.java:114-117`). The condition is also inverted: it returns `false` when the grant *matches*.\n\nBecause of the wrong offset, the reject branch never fires for any token the encoder produces. The grant is never checked, so `onrtcc:<uuid>` passes an `ac` expectation. Fixing only the offset would make every correct token fail, because the inverted branch rejects equal values. The four expectations that use this matcher (AssertEvents.java:145, 173, 182, 244) do not verify grant type. Fix the condition to `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;` and add a negative test case.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several grant paths never record their grant type, so their tokens are encoded as \"na\"",
+      "description": "Only five paths set `Constants.GRANT_TYPE`: refresh, `createTokenResponse` (authorization code, CIBA, device), pre-authorized, ROPC, and Standard token exchange. Others fall back to `na`, even though their factories define a shortcut:\n- **Client credentials** (`ClientCredentialsGrantType.java:140-141`) calls `responseBuilder(...).generateAccessToken()` directly and never sets the attribute. `ClientCredentialsGrantTypeFactory.getShortcut()` returns `\"cc\"`, which is never emitted.\n- **UMA permission grant**: `PermissionGrantType.java:187` delegates to `AuthorizationTokenService.authorize`. That creates the token at `AuthorizationTokenService.java:357-358` without setting the attribute, so `\"pg\"` is never emitted.\n- **Token exchange**: `StandardTokenExchangeProvider.java:237` sets the attribute only in its own `exchangeClientToOIDCClient` override. The V1, Federated, and SubjectImpersonation providers inherit the base method at `AbstractTokenExchangeProvider.java:409-410`, which does not set it, so tokens from the same grant differ by provider.\n\nThe new AssertEvents expectations cover only code, device, refresh, and CIBA, so none of these gaps would fail a test. If the encoded grant is meant to be authoritative, this is blocking. Otherwise, set the attribute on these paths or document `na` as the expected value.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "AccessTokenContext null-checks the wrong argument",
+      "description": "The constructor calls `Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\")` a second time. As a result, `rawTokenId` is never validated. The only caller passes a generated UUID (`TokenManager.java:1053`), so nothing fails today, but the check is wrong. Change line 73 to `requireNonNull(rawTokenId, ...)`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test \"testIncorrectGrantType\" passes for the wrong reason",
+      "description": "The test expects `ofrtac` to be rejected, but `ac` is not in the grant map this test builds, and `before()` never calls `postInit`. The lookup therefore reaches `sessionFactory.getProviderFactoriesStream(...)` in `DefaultTokenContextEncoderProviderFactory.java:125` with a null `sessionFactory`, which throws `NullPointerException`. The `catch (RuntimeException)` accepts that, so the test never exercises the intended \"unknown grant\" `IllegalArgumentException`. Register the grant map, and catch `IllegalArgumentException` specifically.\n\nAlso, `Assert.assertEquals` is called with actual before expected throughout (for example lines 56\u201359 and 68\u201371), so failure messages read backwards.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:77-85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Core encoding and decoding paths lack unit tests",
+      "description": "`getTokenContextFromClientSessionContext` is on the path for every issued token, and it has no unit test. The session-type branches (transient, offline, online) and the lightweight-vs-regular branch are not tested. The duplicate-shortcut check in `postInit` (`DefaultTokenContextEncoderProviderFactory.java:81-85`) and the lazy-refresh paths are not tested either. `getTokenContextFromTokenId` has no production caller in this diff, so only its unit test exercises it. The one integration check that touches real token IDs is the broken matcher above.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Javadoc says 3-letter shortcuts, but the encoder requires exactly 2",
+      "description": "The javadoc says a shortcut is \"usually like 3-letters\". The decoder requires exactly two characters: it checks the prefix length is 6 (`DefaultTokenContextEncoderProvider.java:74`) and splits it into 2-character pieces (lines 79\u201381). A 3-character shortcut still encodes, since the prefix becomes 7 characters. But `getTokenContextFromTokenId` then throws \"Expected length of 6\" for tokens that were issued. Nothing validates shortcut length or nullness in `postInit` (`DefaultTokenContextEncoderProviderFactory.java:70-77`), and a null shortcut throws `NullPointerException` from `ConcurrentHashMap.put`. Fix the javadoc to say two characters, and validate in `postInit`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New abstract method breaks third-party grant factories",
+      "description": "`getShortcut()` is added to a public SPI interface with no default. All nine in-repo implementers were updated (verified by grep), but any external `OAuth2GrantTypeFactory` will fail to compile, and will fail at startup if its jar is precompiled. If compatibility matters, make it a default method. A default that returns null will not work as-is, because `postInit` inserts the value into a `ConcurrentHashMap`, which rejects null keys.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Public copy constructor removed without explanation",
+      "description": "The diff deletes `OAuth2GrantType.Context(Context)`. Nothing in the repo calls it (the only constructor call is `TokenEndpoint.java:149`), and the removal is unrelated to token IDs. It is still a source-breaking change to a public SPI class. The new constructor also dereferences `formParams` at line 102, which the old constructor tolerated being null. Restore the copy constructor, copying `grantType` too, or split this change out with a note.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java:87"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unused import",
+      "description": "`TokenExchangeGrantTypeFactory` is imported but never referenced in the file. Line 237 uses the `OAuth2Constants` string instead. Remove the import.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java:50"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Encoder depends on the mapper package and on hidden session state",
+      "description": "The encoder calls `AbstractOIDCProtocolMapper.getShouldUseLightweightToken`, which reads the client from `session.getContext()`. That makes the `encode` package depend on the mapper package, and the helper's visibility was widened to `public` just for this. `initToken` already receives the issued-for `client` as a parameter (`TokenManager.java:1048`), so passing it through would remove the hidden dependency. Current callers do set the session client (`ClientsResource.java:251`, `AuthorizeClientUtil.java:83`), so this is not a runtime bug today.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:54"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Access-token `jti` format changed for every token",
+      "description": "Every access token's `jti` is now `<6 chars>:<uuid>`. Keycloak's own consumers use the stored ID (`TokenRevocationEndpoint.java:119`, `TokenManager.java:1364`), and grep found no `UUID.fromString` in services, so nothing in the repo breaks. Downstream consumers that validate `jti` as a UUID will break, so the release note should call this out.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:1052"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Grant matcher in AssertEvents is inverted and reads the wrong characters",
+      "location": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java:483",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Several grant paths never record their grant type, so their tokens are encoded as \"na\"",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java:140",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "AccessTokenContext null-checks the wrong argument",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java:73",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test \"testIncorrectGrantType\" passes for the wrong reason",
+      "location": "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java:77-85",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Core encoding and decoding paths lack unit tests",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:45",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "Javadoc says 3-letter shortcuts, but the encoder requires exactly 2",
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:29",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "New abstract method breaks third-party grant factories",
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java:33",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Public copy constructor removed without explanation",
+      "location": "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java:87",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Unused import",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java:50",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Encoder depends on the mapper package and on hidden session state",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java:54",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Access-token `jti` format changed for every token",
+      "location": "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java:1052",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "diff": "fbd9543bab513d8f2124cf583d1b9388ec492635...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:51:20.812737",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 48,
+  "injected": [],
+  "files_read": [
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProvider.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderFactory.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+    "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeBase.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/endpoints/TokenEndpoint.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/PreAuthorizedCodeGrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/mappers/AbstractOIDCProtocolMapper.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/ClientScopeEvaluateResource.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/ResourceOwnerPasswordCredentialsGrantType.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/AbstractTokenExchangeProvider.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/tokenexchange/StandardTokenExchangeProvider.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+    "server-spi-private/src/main/java/org/keycloak/protocol/oidc/grants/OAuth2GrantTypeFactory.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/endpoints/TokenRevocationEndpoint.java",
+    "server-spi-private/src/main/java/org/keycloak/models/Constants.java",
+    "services/src/main/java/org/keycloak/protocol/oidc/grants/ClientCredentialsGrantType.java",
+    "services/src/main/java/org/keycloak/authorization/authorization/AuthorizationTokenService.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/ClientsResource.java",
+    "services/src/test/java/org/keycloak/protocol/oidc/encode/DefaultTokenContextEncoderProviderTest.java"
+  ],
+  "searches": [
+    "grep implements .*OAuth2GrantTypeFactory|OAuth2GrantTypeFactory\\(\\)\\s*\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep new (OAuth2GrantType\\.)?Context\\(|extends (OAuth2GrantType\\.)?Context\\b|super\\(context\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep getTokenContextFromTokenId|TokenContextEncoderProvider|encodeTokenId|isAccessTokenId in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep Details\\.TOKEN_ID in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep ^import .*(OAuth2Constants|models\\.Constants);|GRANT_TYPE in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/server-spi-private/src/main/java/org/keycloak/models/Constants.java",
+    "grep public static final String GRANT_TYPE\\b|class OAuth2Constants in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "list_files **/OAuth2Constants.java in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep OAuth2GrantType\\.class|new OAuth2GrantType\\.Context|setFormParams|getGrantType\\(\\)|grantType\\s*=|GRANT_TYPE\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/endpoints/TokenEndpoint.java",
+    "grep GRANT_TYPE\\b|class OAuth2Constants in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/core/src/main/java/org/keycloak/OAuth2Constants.java",
+    "grep createClientAccessToken\\(|\\.generateAccessToken\\(\\)|createTokenResponse\\(|TokenExchangeGrantTypeFactory|getShouldUseLightweightToken in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java",
+    "grep extends AbstractTokenExchangeProvider|implements TokenExchangeProvider|class .*TokenExchangeProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java",
+    "grep TokenExchangeGrantTypeFactory|Constants\\.GRANT_TYPE|OAuth2Constants\\.TOKEN_EXCHANGE_GRANT_TYPE|^import org\\.keycloak\\.OAuth2Constants|^import org\\.keycloak\\.models\\.Constants; in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/tokenexchange",
+    "grep exchangeClientToOIDCClient\\(|getContext\\(\\)\\.setClient\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak",
+    "grep UUID\\.fromString|isUUID\\(\\)\\s*\\{|Pattern\\.compile\\(.*[Uu][Uu][Ii][Dd] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak",
+    "grep \\.setFormParams\\(|^import org\\.keycloak\\.OAuth2Constants;|^import org\\.keycloak\\.models\\.Constants;|^import .*\\.AccessTokenContext; in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java",
+    "grep ^import org\\.keycloak\\.(OAuth2Constants|models\\.Constants);|OAuth2Constants\\.|AccessTokenContext in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+    "grep \\.setFormParams\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc",
+    "grep AccessTokenContext in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/TokenManager.java",
+    "grep setAttribute|getAttribute|attributes\\s*=|Map<String, Object>|private .*attributes in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/services/util/DefaultClientSessionContext.java",
+    "grep setAttribute\\(|setContext\\(context\\)|createTokenResponse\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/grants",
+    "grep Constants\\.GRANT_TYPE\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep setAttribute\\(\\s*(Constants|org\\.keycloak\\.models\\.Constants)\\.GRANT_TYPE in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634",
+    "grep AuthorizationTokenService|authorize\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke37634/services/src/main/java/org/keycloak/protocol/oidc/grants/PermissionGrantType.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 54272,
+  "diff_chars_injected": 54272,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 49,
+  "prompt_tokens": 1975281,
+  "cached_tokens": 1829954,
+  "cache_write_tokens": 145287,
+  "completion_tokens": 75361,
+  "reasoning_tokens": null,
+  "duration_seconds": 332.4920280841179,
+  "cost_usd": 0.26362492,
+  "cost_basis": "provider"
+}

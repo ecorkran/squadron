@@ -1,0 +1,246 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Team admin/owner check uses `&&`, so only team owners pass and team admins get FORBIDDEN",
+      "description": "`isTeamAdmin` (packages/lib/server/queries/teams/index.ts:264-284) returns the membership for role ADMIN or OWNER. `isTeamOwner` (lines 286-295) returns true only for OWNER. Lines 46-48 combine them with `&&`, so the result is true only for owners, and the `isTeamAdmin` check is redundant. A team ADMIN who is neither the organizer nor an attendee hits the FORBIDDEN branch at lines 54-56, even though the variable name and both helpers say admins and owners should pass. Changing `&&` to `||` gives the intended behavior.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Blacklist filter compares the raw guest email against lowercased entries, so mixed-case blacklisted addresses get through",
+      "description": "Lines 70-72 lowercase the blacklist entries, but line 77 compares the unnormalized `guest` with `blacklistedGuestEmails.includes(guest)`. The input schema (`addGuests.schema.ts:5`, `z.string().email()`) accepts mixed case. With `BLACKLISTED_GUEST_EMAILS=spam@example.com`, the input `Spam@Example.com` passes the filter, is inserted at lines 100-104, and is emailed. The existing booking path lowercases both sides before comparing (`packages/features/bookings/lib/handleNewBooking.ts:742-743`).",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Email step receives all submitted guests instead of the filtered `uniqueGuests`, so existing attendees get the full booking confirmation",
+      "description": "`uniqueGuests` (line 74) excludes addresses already on the booking, and only `uniqueGuests` is written (lines 83, 102). Line 168 passes the original `guests` array to `sendAddGuestsEmails`. In `packages/emails/email-manager.ts:541`, any attendee whose address is in `newGuests` gets `AttendeeScheduledEmail` (the full \"your event has been scheduled\" email) instead of `AttendeeAddGuestsEmail`. So if the organizer submits an address already on the booking alongside a new one, that existing attendee gets the full confirmation. The function should receive `uniqueGuests`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Add-guests emails ignore the event type's \"disable standard emails\" setting",
+      "description": "`sendLocationChangeEmails` checks `eventTypeDisableHostEmail` and `eventTypeDisableAttendeeEmail` (lines 503, 515), and `sendScheduledEmails` does the same (lines 99, 111). `sendAddGuestsEmails` takes no metadata and sends to the organizer, team members, and attendees unconditionally. The handler could pass `booking.eventType?.metadata`, which is already loaded (`addGuests.handler.ts:31-32`, `eventType: true`), but it does not. An event type that disabled standard emails still sends add-guest emails.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/emails/email-manager.ts:525-548"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Duplicate emails in one request create duplicate attendee rows and duplicate invitations",
+      "description": "The filter at lines 74-78 checks each guest only against existing attendees and the blacklist. Duplicates within `guests` survive, so `createMany` (lines 100-104) inserts two attendee rows for the same address, and two invitations go out. The dialog's refine (`apps/web/components/dialog/AddGuestsDialog.tsx:26-29`) blocks duplicates in the UI, but the server schema (`addGuests.schema.ts:5`) does not. A direct tRPC call reproduces the problem.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Successful add leaves `isInvalidEmail` set, so the validation warning shows on the next open",
+      "description": "On success, `onSuccess` closes the dialog and resets `multiEmailValue`, but never resets `isInvalidEmail`. If an earlier Add click failed validation (line 56 set it to true), the red \"Emails must be unique and valid\" block stays visible the next time the dialog opens. Closing via the overlay or Escape (`onOpenChange={setIsOpenDialog}`) has the same problem. Only the Cancel button clears it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx:36-41"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Error toast is built as `\"${err.data?.code}: ...\"`, so errors without a tRPC code show \"undefined: ...\" and the fallback never runs",
+      "description": "Line 43 builds `${err.data?.code}: ${t(err.message)}`. A failure without tRPC `data`, such as a network error, produces text starting with \"undefined:\". The template literal is always a non-empty string, so `message || t(\"unable_to_add_guests\")` on line 44 never uses the fallback.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx:42-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Any booking attendee can invite arbitrary third-party addresses to the booking",
+      "description": "The `isAttendee` branch (line 52) lets any attendee call the mutation. The handler then adds any valid addresses the attendee supplies, updates the calendar event, and emails each new address an invitation built from the full booking event (assembled at lines 124-156, including video call data). An attendee can therefore send booking invitations through the platform to people the organizer never approved. If attendee-initiated invites are not intended, restrict the check to organizer and team admin/owner. Please confirm intent before changing it.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52-56"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Team admin/owner check uses `&&`, so only team owners pass and team admins get FORBIDDEN",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Blacklist filter compares the raw guest email against lowercased entries, so mixed-case blacklisted addresses get through",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-77",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Email step receives all submitted guests instead of the filtered `uniqueGuests`, so existing attendees get the full booking confirmation",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Add-guests emails ignore the event type's \"disable standard emails\" setting",
+      "location": "packages/emails/email-manager.ts:525-548",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Duplicate emails in one request create duplicate attendee rows and duplicate invitations",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:74-78",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Successful add leaves `isInvalidEmail` set, so the validation warning shows on the next open",
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx:36-41",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Error toast is built as `\"${err.data?.code}: ...\"`, so errors without a tRPC code show \"undefined: ...\" and the fallback never runs",
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx:42-45",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Any booking attendee can invite arbitrary third-party addresses to the booking",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52-56",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "diff": "727ce43337184249d174cc06314c8cd7209320be...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:48:08.397102",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 39,
+  "injected": [],
+  "files_read": [
+    "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "apps/web/components/booking/BookingListItem.tsx",
+    "packages/trpc/server/routers/viewer/bookings/editLocation.handler.ts",
+    "packages/trpc/server/routers/viewer/bookings/util.ts",
+    "packages/core/EventManager.ts",
+    "packages/features/bookings/lib/handleNewBooking.ts",
+    "packages/emails/templates/attendee-scheduled-email.ts",
+    "packages/emails/templates/organizer-scheduled-email.ts",
+    "packages/emails/email-manager.ts",
+    "packages/emails/src/templates/AttendeeScheduledEmail.tsx",
+    "packages/emails/src/templates/OrganizerScheduledEmail.tsx",
+    "packages/emails/src/templates/index.ts",
+    "packages/emails/src/renderEmail.ts",
+    "packages/emails/src/templates/BaseScheduledEmail.tsx",
+    "packages/lib/server/queries/teams/index.ts",
+    "apps/web/components/dialog/AddGuestsDialog.tsx"
+  ],
+  "searches": [
+    "grep export (async )?function (isTeamAdmin|isTeamOwner)|export const (isTeamAdmin|isTeamOwner) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/lib/server/queries/teams",
+    "grep export (async )?(function|const) (getUsersCredentials|updateCalendarAttendees)|updateCalendarAttendees\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages",
+    "grep private async updateAllCalendarEvents|constructor\\(user|this\\.calendarCredentials|private async updateAllCalendarEvents|updateAllCalendarEvents\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/core/EventManager.ts",
+    "grep addGuests|add_guests|AddGuests|additional_guests|guests_added|new_guests_added|emails_must_be_unique_valid|unable_to_add_guests|add_emails|add_another|emailed_you_and_any_other_attendees|guests_added_event_type_subject in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/i18n/locales/en/common.json",
+    "grep addGuests|AddGuests|add_members|additional_guests in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "grep \"(additional_guests|guests_added|new_guests_added|emails_must_be_unique_valid|unable_to_add_guests|add_emails|add_another|emailed_you_and_any_other_attendees|guests_added_event_type_subject|booking_not_found|you_do_not_have_permission)\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/apps/web/public/static/locales/en/common.json",
+    "grep bookedActions|isUpcoming|isCancelled|isBookingInPast|isPending\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/apps/web/components/booking/BookingListItem.tsx",
+    "grep BLACKLISTED_GUEST_EMAILS in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages",
+    "grep AttendeeScheduledEmail|OrganizerScheduledEmail|export const sendEmail|const sendEmail|export const formatCalEvent|export const sendScheduledEmails in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/emails/email-manager.ts",
+    "grep export const renderEmail|export async function renderEmail|const renderEmail in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/emails",
+    "grep export (default )?(function|const) \\w+|export const \\w+Email|title\\?|headerType|callToAction|subject\\?|interface .*Props|type .*Props in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/emails/src/templates/AttendeeScheduledEmail.tsx",
+    "grep export (default )?(function|const) \\w+|title\\?|headerType|callToAction|subject\\?|interface .*Props|type .*Props|: React.ComponentProps|Props =  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/emails/src/templates/OrganizerScheduledEmail.tsx",
+    "grep renderEmail in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/emails/index.ts",
+    "grep title|headerType|subject|callToAction|export (const|function) BaseScheduledEmail|props:  in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/emails/src/templates/BaseScheduledEmail.tsx",
+    "grep onClickAddon|addOnSuffix|export (const|function|default) EmailField|export \\{.*EmailField|EmailField in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/ui",
+    "grep enableOverflow|export function DialogHeader|export function DialogFooter|export const DialogFooter|export const DialogHeader in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/ui/components/dialog",
+    "grep \"user-plus\"|\"triangle-alert\"|user-plus|triangle-alert in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/ui/components/icon",
+    "grep export const (APP_NAME|EMAIL_FROM_NAME)\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/lib"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 26333,
+  "diff_chars_injected": 26333,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 40,
+  "prompt_tokens": 1032818,
+  "cached_tokens": 931811,
+  "cache_write_tokens": 100977,
+  "completion_tokens": 55349,
+  "reasoning_tokens": null,
+  "duration_seconds": 249.1950003746897,
+  "cost_usd": 0.10165231,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr94942",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "enableSqlExpressions` at `pkg/expr/reader.go:194-200` returns false on both branches, so the SQL case at `reader.go:128-131` always returns \"sqlExpressions is not implemented\" whatever the flag says."
+  ],
+  "F2": [
+   "KEEP",
+   "the stubbed `DB` in `pkg/expr/sql/db.go` makes `sql.TablesList` fail, so `NewSQLCommand` always returns BadRequest on the ungated legacy path (`nodes.go:159-160`), and the new-parser path fails at `reader.go:131`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.3232989
+}

@@ -1,0 +1,49 @@
+{
+ "case": "cal.com-ca10967",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "An absent or empty destination leaves `mainHostDestinationCalendar` undefined, and the Meet check dereferences it."
+  ],
+  "F2": [
+   "KEEP",
+   "The mapping drops the video result\u2019s credential ID, while cancellation requires that ID to delete the meeting."
+  ],
+  "F3": [
+   "KEEP",
+   "These adapters use the first destination from the full array, which can target another host\u2019s calendar or create no event."
+  ],
+  "F4": [
+   "KEEP",
+   "When `externalCalendarId` is absent, the fallback cannot match a destination; deletion then defaults to `\"primary\"`."
+  ],
+  "F5": [
+   "KEEP",
+   "Recurring cancellation searches only the owner\u2019s credentials and deletes only the first calendar reference per updated booking."
+  ],
+  "F6": [
+   "KEEP",
+   "With billing disabled, creation stores neither slug field, but later onboarding requires one."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 0.007217000000000001
+}

@@ -1,0 +1,82 @@
+{
+ "case": "sentry-greptile-ai5",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 3,
+  "F4": 4,
+  "F5": 6,
+  "F6": 7,
+  "F7": 8,
+  "F8": 9,
+  "F9": 10,
+  "F10": 12,
+  "F11": 13,
+  "F12": 16
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "get_multi` dedupes ids, the Django backend omits missing ids, and cache hits are merged after uncached ones, so `zip(error_ids, events.values())` can pair an id with another event's data."
+  ],
+  "F2": [
+   "KEEP",
+   "client `field` values go straight into `process_raw_response`, which yields only those keys, so `?field=trace_ids` leaves `error_ids` as `[]` and error context is silently skipped."
+  ],
+  "F3": [
+   "KEEP",
+   "both validators test truthiness, so `{\"age\": 0, \"timestamp\": 0}` is accepted with both fields present; the finding's own example is wrong, since `validate_age` still rejects it."
+  ],
+  "F4": [
+   "KEEP",
+   "the loop returns 422 on the first invalid report before any metric is emitted, and the `ChoiceField` allowlist makes any unlisted type invalid, so valid reports in the same batch go uncounted."
+  ],
+  "F5": [
+   "KEEP",
+   "the `HIDDEN_ATTRIBUTES` check sits only in the filter after the empty-search early return, so those attributes show by default and vanish only while searching."
+  ],
+  "F6": [
+   "KEEP",
+   "with `use-table-widget-visualization` on, each table result renders `TableWidgetVisualization` with `columns={[]}` and empty data, ignoring `result.data` and `result.meta`."
+  ],
+  "F7": [
+   "KEEP",
+   "the query key is `['use-trace-item-attribute-keys', queryOptions]` with no org component while the request URL uses `organization.slug`, so identical options in two orgs share a cache entry."
+  ],
+  "F8": [
+   "DROP",
+   "the code has no `retry: false` and omits `environment`, but default retries still surface the error, the omission is commented as intentional, and the finding only asks to confirm; no concrete failure is shown."
+  ],
+  "F9": [
+   "KEEP",
+   "useProjectFromId` returns undefined while the projects store is still loading and the check never consults `initiallyLoaded`, so the \"Project not found\" error can show before projects arrive."
+  ],
+  "F10": [
+   "DROP",
+   "the broad `except` is a deliberate, logged fallback to no environment text; log level, exception narrowing and per-issue lookup cost are not behavior defects."
+  ],
+  "F11": [
+   "KEEP",
+   "the template puts the truncated but unescaped `issue.title` inside `[**{title}**]({url})`, so a title containing `](` or an unbalanced bracket can break or redirect the link in the PR comment."
+  ],
+  "F12": [
+   "DROP",
+   "the single-element `dedupedYAxes` wrappers are a naming and cleanup point with no behavior impact."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  3,
+  4,
+  6,
+  7,
+  8,
+  10,
+  13
+ ],
+ "cost_usd": 1.9361583000000002
+}

@@ -1,0 +1,208 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Legacy writes run on a request-scoped context that is cancelled when the handler returns, so they can be aborted and lost",
+      "description": "In `Create`, the legacy write runs in `go func()` and derives its context from the request `ctx` (`context.WithTimeoutCause(ctx, ...)` at line 51). The same pattern appears in `Delete` (lines 108-114), `Update` (lines 134-141) and `DeleteCollection` (lines 161-167). `Create` returns at line 59, right after the goroutine starts. Under `net/http`, a server request's context is cancelled when `ServeHTTP` returns, so the goroutine's context is typically cancelled before or during the legacy call. The 10-second timeout is derived from that same parent, so it does not help. Any legacy call that honours its context will fail or roll back, and nothing waits for the result. The unified store keeps the object while the legacy copy is missing, so a rollback to Mode 1 or 2, or a read through the legacy API, shows divergent data. Mode 1 uses the same goroutine pattern, but only for best-effort comparison metrics. In Mode 3 the async write is the only path that writes the legacy store, so the consequence is data loss. Fix: wrap the context with `context.WithoutCancel(ctx)` before starting each goroutine.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:50-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Errors from the async legacy writes are recorded as metrics only and never logged",
+      "description": "The `Create` goroutine stores the legacy error in `errObjectSt` and passes only `errObjectSt != nil` to `recordLegacyDuration`. The same holds for `Delete` (lines 112-113), `Update` (lines 139-140) and `DeleteCollection` (lines 165-166). The removed base code logged these failures: for example, `log.WithValues(\"object\", created).Error(err, \"unable to create object in legacy storage\")` and `log.Error(errLeg, \"could not update object in legacy store\")`. Now the only signal is an `is_error=\"true\"` sample on a histogram. Combined with the context cancellation above, legacy write failures are silent.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:55-56"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mode 3 returns before the legacy write completes, so legacy reads right after a successful write can be stale",
+      "description": "The base Mode 3 finished the legacy write before returning. Now `Create` returns `created, err` at line 59 while the legacy write is still pending. The new `(file, mode 3)` and `(unified storage, mode 3)` integration subtests run `doPlaylistTests`. That helper creates three playlists through the k8s API and then immediately lists `/api/playlists` and expects all three UIDs (`pkg/tests/apis/playlist/playlist_test.go:505-531`). `getFromBothAPIs` (lines 535, 547, 565) has the same dependency on ordering. Those assertions race the goroutine, and a legacy API client can see stale data after a write that reported success.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delete returns early on any unified-store error, so a storage NotFound no longer reaches the legacy delete",
+      "description": "The base code, visible in the removed lines of the diff, returned early only for non-NotFound storage errors. On NotFound it still deleted from the legacy store and then returned the NotFound. The new code returns on every error at lines 101-105, so the legacy delete is skipped. An object that exists only in the legacy store is reported as NotFound and never removed. It can then reappear after a rollback or through the legacy API.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:100-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The success-path delete metric passes the object name into the `kind` label",
+      "description": "`d.recordStorageDuration(false, mode3Str, name, method, startStorage)` passes `name` where the other calls pass `options.Kind`. In `metrics.go:23` the third label is `kind`, so every successful delete records the object name as the kind. That creates one series per object name and leaves the real kind unrecorded. Mode 1 has the same mistake at `dualwriter_mode1.go:155`, but that line is not in this diff.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:106"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Storage-side failures in Create and Update are recorded in the legacy duration histogram",
+      "description": "When `d.Storage.Create` fails, line 45 calls `d.recordLegacyDuration(true, ...)`. Update does the same at line 129. Storage failures therefore appear under `dual_writer_legacy_duration_seconds{is_error=\"true\"}` and not in the storage histogram, so the per-store error rates are wrong.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "DeleteCollection's legacy timing is recorded in the storage histogram",
+      "description": "The `DeleteCollection` goroutine calls `d.recordStorageDuration(err != nil, mode3Str, options.Kind, method, startLegacy)`. Legacy timings and errors therefore go into the storage histogram, and the legacy histogram gets no samples for this operation.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:166"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Legacy writes run on a request-scoped context that is cancelled when the handler returns, so they can be aborted and lost",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:50-57",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Errors from the async legacy writes are recorded as metrics only and never logged",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:55-56",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mode 3 returns before the legacy write completes, so legacy reads right after a successful write can be stale",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:59",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Delete returns early on any unified-store error, so a storage NotFound no longer reaches the legacy delete",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:100-105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The success-path delete metric passes the object name into the `kind` label",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:106",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Storage-side failures in Create and Update are recorded in the legacy duration histogram",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:45",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "DeleteCollection's legacy timing is recorded in the storage histogram",
+      "location": "pkg/apiserver/rest/dualwriter_mode3.go:166",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045",
+    "diff": "77572e87ff64663c748ff103d92d3d53650d37dd...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:17:16.562401",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "injected": [],
+  "files_read": [
+    "pkg/apiserver/rest/dualwriter_mode3.go",
+    "pkg/apiserver/rest/dualwriter.go",
+    "pkg/apiserver/rest/metrics.go",
+    "pkg/apiserver/rest/dualwriter_test.go",
+    "pkg/apiserver/rest/dualwriter_mode1_test.go",
+    "pkg/apiserver/rest/dualwriter_mode1.go",
+    "pkg/apiserver/rest/storage_mocks_test.go",
+    "pkg/tests/apis/playlist/playlist_test.go"
+  ],
+  "searches": [
+    "grep \\bp\\b\\s*:?=|var p\\b|recordLegacyDuration|recordStorageDuration|func newDualWriterMetrics|dualWriterMetrics\\s+\\*? in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver/rest",
+    "grep type (legacyStoreMock|storageMock|updatedObjInfoObj|UpdatedObjInfoObj)|func \\(m (legacyStoreMock|storageMock)\\) (Create|Delete|DeleteCollection|Update|Get|List)\\b|func \\(.*updatedObjInfoObj\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/apiserver/rest",
+    "grep go func|WithoutCancel|context\\.WithTimeout in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg",
+    "grep WithoutCancel|DetachedContext|context\\.Background\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/registry/apis/dashboard/legacy/storage.go",
+    "grep func doPlaylistTests|Eventually|Legacy|legacy|time\\.Sleep|Equal\\(t, .*(Items|len) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg/tests/apis/playlist/playlist_test.go",
+    "grep (mode3Str|mode1Str|mode2Str)\\s*=|context\\.WithoutCancel in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr90045/pkg"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32103,
+  "diff_chars_injected": 32103,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 475416,
+  "cached_tokens": 394179,
+  "cache_write_tokens": 81221,
+  "completion_tokens": 36240,
+  "reasoning_tokens": null,
+  "duration_seconds": 165.55554966581985,
+  "cost_usd": 0.040182890000000006,
+  "cost_basis": "provider"
+}

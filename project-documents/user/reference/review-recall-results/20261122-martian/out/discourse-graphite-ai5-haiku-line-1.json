@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The `align-items` mixin declares `-ms-align-items`, which is not a real CSS property",
+      "description": "Line 121 of the new `align-items` mixin emits `-ms-align-items: $alignment;`. No browser recognizes this property. Internet Explorer and Edge use `-ms-flex-align`, which line 120 already sets. The line is dead output, and it suggests the vendor-prefix list was not checked against real properties.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `align-items` mixin declares `-webkit-align-items`, which is not a standard prefixed property",
+      "description": "Line 119 emits `-webkit-align-items`. WebKit's legacy flexbox (the `-webkit-box` path) is covered by `-webkit-box-align` on line 118, and modern Safari supports unprefixed `align-items`. The `-webkit-align-items` declaration is unlikely to take effect and should be verified or removed.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `order` mixin declares `-webkit-order`, which is not a real CSS property",
+      "description": "Line 129 emits `-webkit-order: $val;`. The WebKit prefixed equivalent for the old box model is `-webkit-box-ordinal-group`, which line 126 already sets, and modern WebKit supports unprefixed `order`. The `-webkit-order` declaration is not a valid property and should be removed or verified.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:129"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `align-items` mixin declares `-ms-align-items`, which is not a real CSS property",
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:121",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `align-items` mixin declares `-webkit-align-items`, which is not a standard prefixed property",
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:119",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `order` mixin declares `-webkit-order`, which is not a real CSS property",
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:129",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "diff": "53963048419d79170560938c003ae9ed1172f8ee...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:56:45.692315",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 3645,
+  "diff_chars_injected": 3645,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 3,
+    "in_fences": 0,
+    "in_section": 3,
+    "surviving": 3
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 4809,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 2836,
+  "completion_tokens": 4052,
+  "reasoning_tokens": null,
+  "duration_seconds": 18.25756891677156,
+  "cost_usd": 0.00296181,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

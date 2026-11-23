@@ -1,0 +1,99 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`getBaseConditions` checks `authConditions` for truthiness, so the filter-only branch can never run",
+      "description": "`getAuthorizationConditions()` is typed to return `Prisma.Sql` and never `null`, so `if (authConditions && filterConditions)` reduces to `if (filterConditions)`. Because of that, the `else if (filterConditions)` branch is unreachable: when a filter exists, the first branch always runs. The output is still correct, since the auth clause is always present, but the branch is dead code and suggests a null case that the types rule out. Either drop the `authConditions` check or make the nullability explicit in the return type.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts#getBaseConditions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Constructor option type is widened to `InsightsBookingServicePublicOptions` without a visible narrowing for `this.options`",
+      "description": "The constructor parameter changed from `InsightsBookingServiceOptions` (a discriminated union) to the flat `InsightsBookingServicePublicOptions`, whose `scope` is a plain union. The field assignment `this.options = options` is outside the shown hunk, so I could not confirm from the diff that it still type-checks against `InsightsBookingServiceOptions | null`. Please confirm that the project's type check passes.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts#constructor"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`getBaseConditions` checks `authConditions` for truthiness, so the filter-only branch can never run",
+      "location": "packages/lib/server/service/insightsBooking.ts#getBaseConditions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Constructor option type is widened to `InsightsBookingServicePublicOptions` without a visible narrowing for `this.options`",
+      "location": "packages/lib/server/service/insightsBooking.ts#constructor",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "diff": "ef0d5fb0fd4d6be99f3fc203a367d6f9957c1489...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:57:28.668336",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17894,
+  "diff_chars_injected": 17894,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10569,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8596,
+  "completion_tokens": 4124,
+  "reasoning_tokens": null,
+  "duration_seconds": 18.621460291091353,
+  "cost_usd": 0.00472851,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

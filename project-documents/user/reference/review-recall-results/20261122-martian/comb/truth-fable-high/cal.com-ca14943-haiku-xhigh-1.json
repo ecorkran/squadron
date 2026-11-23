@@ -1,0 +1,41 @@
+{
+ "case": "cal.com-ca14943",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the `update` inside `catch` (lines 190-197) is unguarded, so a throw (e.g. row already deleted) leaves the loop and `defaultHandler` returns 500, skipping the rest of the batch."
+  ],
+  "F2": [
+   "KEEP",
+   "scheduleSMS` returns `undefined` for locked accounts, the new `else` increments `retryCount`, and the new `retryCount > 1` delete branch then removes those reminders permanently."
+  ],
+  "F3": [
+   "DROP",
+   "reprocessing of reminders with no message or destination is unchanged by this diff and is a wasted-work point with no failure named."
+  ],
+  "F4": [
+   "DROP",
+   "only this SMS path writes `retryCount`, so the unscoped branch deletes no wrong rows today; the rest is comment and magic-number style."
+  ],
+  "F5": [
+   "KEEP",
+   "lines 184 and 195 write `reminder.retryCount + 1` from the value read at the start of the run, so overlapping runs lose an increment and give an extra attempt."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  5
+ ],
+ "cost_usd": 0.2707523
+}

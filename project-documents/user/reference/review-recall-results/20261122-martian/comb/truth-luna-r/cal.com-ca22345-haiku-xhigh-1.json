@@ -1,0 +1,30 @@
+{
+ "case": "cal.com-ca22345",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Unparenthesized OR fragments can escape predicates added by callers composing the returned condition."
+  ],
+  "F2": [
+   "DROP",
+   "Removing tests is not a behavior defect in the changed code."
+  ],
+  "F3": [
+   "KEEP",
+   "Invalid scope options compile and silently produce a condition that returns no rows."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2
+ ],
+ "cost_usd": 0.0008200400000000001
+}

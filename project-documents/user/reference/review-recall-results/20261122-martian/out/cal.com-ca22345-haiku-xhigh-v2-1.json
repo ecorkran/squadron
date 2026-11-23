@@ -1,0 +1,95 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Public auth and filter SQL fragments are returned without outer parentheses, so AND-composition changes which rows match",
+      "description": "`getAuthorizationConditions()` (lines 83-88) returns whatever `buildAuthorizationConditions()` produced. For org scope, `buildOrgAuthorizationCondition` ends with a reduce that yields `(A) OR (B)` with no enclosing parentheses (lines 171-174). Team scope does the same (lines 204-207). `buildFilterConditions` does this too: with only `eventTypeId` set it returns the bare `(\"eventTypeId\" = X) OR (\"eventParentId\" = X)` (lines 104-107, 119-122). `getBaseConditions()` only wraps when both auth and filter exist (line 73). With no filters it returns the bare fragment (line 75).\n\nThe old code returned nested `{ AND: [{ OR: [...] }] }` objects, so Prisma grouped the OR correctly for any caller. A raw string does not. Take a caller that writes `WHERE ${await service.getAuthorizationConditions()} AND \"status\" = 'accepted'` for org scope. The text becomes `WHERE (A) OR (B) AND \"status\" = 'accepted'`. AND binds tighter than OR in PostgreSQL, so the team-booking branch `(A)` skips the `status` filter. The filter case is worse: `WHERE ${await service.getFilterConditions()} AND \"userId\" = Y` becomes `eventTypeId = X OR (eventParentId = X AND userId = Y)`, which returns every booking of event type X regardless of user.\n\nNo code in this repo composes these fragments that way today. `getBaseConditions` wraps the combined case, and the test uses `WHERE ${baseConditions}` alone. The hazard is still part of the public contract, and the test file locks it in: the org and team expectations at `__tests__/insightsBooking.integration-test.ts:296-300` and `:333-345` assert the unparenthesized `... OR ...` form.\n\nSuggested fix: wrap each returned fragment in parentheses at the public getters (or at each return point in the builders), for example `Prisma.sql\\`(${x})\\``, and update the expected values in those tests to match.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/lib/server/service/insightsBooking.ts:83"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Public auth and filter SQL fragments are returned without outer parentheses, so AND-composition changes which rows match",
+      "location": "packages/lib/server/service/insightsBooking.ts:83",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "diff": "ef0d5fb0fd4d6be99f3fc203a367d6f9957c1489...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:41:25.405135",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "injected": [],
+  "files_read": [
+    "packages/lib/server/service/insightsBooking.ts",
+    "packages/prisma/migrations/20250505135207_create_booking_time_status_denormalized/migration.sql",
+    "packages/prisma/schema.prisma"
+  ],
+  "searches": [
+    "grep InsightsBookingService|insightsBookingService|getAuthorizationConditions|getFilterConditions|buildFilterConditions|buildAuthorizationConditions|getBaseConditions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345",
+    "grep model BookingTimeStatusDenormalized|BookingTimeStatusDenormalized in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages/prisma",
+    "grep model BookingTimeStatusDenormalized in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages/prisma/schema.prisma",
+    "grep BookingTimeStatusDenormalized|BookingDenormalized in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages/prisma/schema.prisma",
+    "grep NOTHING\\b|findMany|\\{ id: -1 \\} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages/lib/server/service",
+    "grep = ANY\\(\\$\\{|ANY\\(\\$\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca22345/packages"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17894,
+  "diff_chars_injected": 17894,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 212614,
+  "cached_tokens": 176057,
+  "cache_write_tokens": 36543,
+  "completion_tokens": 26169,
+  "reasoning_tokens": null,
+  "duration_seconds": 116.86866954201832,
+  "cost_usd": 0.02308247,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,63 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The five-argument emoji call raises `ArgumentError` because only the later three-or-four-argument `downsize` definition remains."
+  ],
+  "F2": [
+   "DROP",
+   "This identifies an obsolete test expectation, not a production behavior defect."
+  ],
+  "F3": [
+   "DROP",
+   "The shadowed definition has no runtime effect, so this is a code-structure concern only."
+  ],
+  "F4": [
+   "KEEP",
+   "The client accepts attachments above the configured attachment limit and reports a fixed 10 MB limit instead."
+  ],
+  "F5": [
+   "KEEP",
+   "Failed downsizing is ignored, so the oversized file is retried and then passed to upload creation without a conversion-failure log."
+  ],
+  "F6": [
+   "KEEP",
+   "The download can be truncated at the fixed cap, and a successful conversion of partial image data can let the corrupted file pass validation."
+  ],
+  "F7": [
+   "KEEP",
+   "With animated thumbnails disabled, an oversized uploaded GIF follows the first-frame conversion path and loses its animation."
+  ],
+  "F8": [
+   "DROP",
+   "This is a documentation wording concern, not a behavior defect."
+  ],
+  "F9": [
+   "DROP",
+   "Missing test coverage alone is not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.006248890000000001
+}

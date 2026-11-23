@@ -1,0 +1,107 @@
+{
+ "case": "cal.com-ca11059",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Google persists the SafeParse wrapper, so subsequent credential validation fails."
+  ],
+  "F2": [
+   "KEEP",
+   "The sync helper receives the credential ID instead of the user ID."
+  ],
+  "F3": [
+   "KEEP",
+   "The computed schema key is a literal required property, so real token responses fail validation."
+  ],
+  "F4": [
+   "KEEP",
+   "Sync mode returns a Response, but several callers expect provider-specific response objects."
+  ],
+  "F5": [
+   "KEEP",
+   "Salesforce references `prisma` without importing or defining it."
+  ],
+  "F6": [
+   "KEEP",
+   "The code checks `statusText` instead of `ok`, and parsing throws before the success check."
+  ],
+  "F7": [
+   "KEEP",
+   "Salesforce refreshes and writes tokens during client construction without using the sync helper."
+  ],
+  "F8": [
+   "KEEP",
+   "Missing refresh tokens are replaced with the literal sentinel and can overwrite stored tokens."
+  ],
+  "F9": [
+   "DROP",
+   "The finding primarily concerns logging and documentation, not a demonstrated behavior defect."
+  ],
+  "F10": [
+   "KEEP",
+   "Zoom passes `zoomvideo` rather than the app\u2019s `zoom` slug to the sync helper."
+  ],
+  "F11": [
+   "KEEP",
+   "The webhook compares the shared secret with ordinary string equality."
+  ],
+  "F12": [
+   "KEEP",
+   "Invalid request bodies and decryption failures are uncaught and can become 500 responses."
+  ],
+  "F13": [
+   "KEEP",
+   "Decrypted, unvalidated JSON is written directly to credential storage."
+  ],
+  "F14": [
+   "KEEP",
+   "The exported constant evaluates to the encryption key value when both environment variables are set."
+  ],
+  "F15": [
+   "KEEP",
+   "The outbound sync request sends no authentication or signature."
+  ],
+  "F16": [
+   "DROP",
+   "Missing tests alone are not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14
+ ],
+ "cost_usd": 0.01035227
+}

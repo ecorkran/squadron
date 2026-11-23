@@ -1,0 +1,31 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Matching date overrides return true before checking busy periods, so overlapping bookings and calendar events are advertised."
+  ],
+  "F2": [
+   "KEEP",
+   "The working-hours check rejects a slot if any same-day interval does not contain its start, invalidating slots in split schedules."
+  ],
+  "F3": [
+   "KEEP",
+   "The override search rejects a slot when any same-day interval lies outside it, even if another interval contains it."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.00218116
+}

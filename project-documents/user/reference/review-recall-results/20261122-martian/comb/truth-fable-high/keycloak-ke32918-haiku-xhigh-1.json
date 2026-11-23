@@ -1,0 +1,25 @@
+{
+ "case": "keycloak-ke32918",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the `ORG_ONLY`/null-org query matches `BROKER_PUBLIC=true` with no organization restriction, but toggling that flag on a realm-level IDP hits the early return at lines 409-412, leaving the cached list stale."
+  ],
+  "F2": [
+   "KEEP",
+   "update()` passes the org-aware `getById()` wrapper as `original`, so a disabled org makes the predicate false and a `hideOnLogin`/`linkOnly` change skips invalidation; org re-enable never invalidates login keys and callers re-check only `isEnabled()`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.9781808
+}

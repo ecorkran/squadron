@@ -1,0 +1,104 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Strategy close() shuts down the factory's shared queue pool, so after a rebalance new strategies drop messages and commit their offsets",
+      "description": "`ResultsStrategyFactory.create_thread_queue_parallel_worker` (`result_consumer.py:254-259`) passes the single factory-owned `self.queue_pool` to every strategy it builds, and `create_with_partitions` runs on every partition assignment. `SimpleQueueProcessingStrategy.close()`, `terminate()`, and `join()` (`queue_consumer.py:335-345`) each call `self.queue_pool.shutdown()`. That sets every worker's `shutdown` flag and shuts every queue down (`queue_consumer.py:231-243`). Nothing resets `factory.queue_pool` to `None`; only `ResultsStrategyFactory.shutdown()` does that (`result_consumer.py:183-185`).\n\nThe repo keeps shared resources factory-owned. `parallel_executor` is shut down only in the factory's `shutdown()` (`result_consumer.py:180-182`, same pattern in `monitor_consumer.py:1150-1152`). `SetJoinTimeout`'s docstring (`utils/arroyo.py:229-231`) says strategies are joined during rebalancing.\n\nThe failure path for the next assignment:\n1. Arroyo closes the strategy on revoke and calls `create_with_partitions` again. The new strategy receives the dead pool.\n2. `submit` calls `queue_pool.submit`, which adds the offset to the tracker (`queue_consumer.py:211`) and then calls `work_queue.put` on a shut-down queue. On Python 3.13, that raises `queue.ShutDown` (`setup.cfg:24` requires `>=3.13`).\n3. The blanket `except Exception` in `submit` (`queue_consumer.py:317-325`) logs \"Error submitting message to queue\" and then marks the offset complete.\n4. The commit thread commits that offset (`queue_consumer.py:278-289`, with `+1` at `result_consumer.py:251`).\n\nNo worker ever runs the result processor for these messages. After the first rebalance in a process, every message on the reassigned partitions is logged as an error, never processed, and its offset committed. This contradicts the class's stated guarantee \"No item is lost\" (`queue_consumer.py:250-251`).\n\nFix: keep pool teardown only in `ResultsStrategyFactory.shutdown()`, as the parallel executor does. Separately, an enqueue failure should not fall through to \"completed\" in `submit`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-342"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Strategy close() shuts down the factory's shared queue pool, so after a rebalance new strategies drop messages and commit their offsets",
+      "location": "src/sentry/remote_subscriptions/consumers/queue_consumer.py:335-342",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "diff": "f438c4be9d36953d2bc72e0cce4c7eeb5e0b4016...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:09:07.778181",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "injected": [],
+  "files_read": [
+    "src/sentry/remote_subscriptions/consumers/result_consumer.py",
+    "src/sentry/remote_subscriptions/consumers/queue_consumer.py",
+    "src/sentry/consumers/__init__.py",
+    "src/sentry/utils/arroyo.py",
+    "src/sentry/uptime/consumers/results_consumer.py",
+    "src/sentry/monitors/consumers/monitor_consumer.py"
+  ],
+  "searches": [
+    "list_files **/arroyo/processing/processor.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "grep ^(requires-python|python_requires)|python_version|PYTHON_VERSION in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633",
+    "grep arroyo in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/requirements-base.txt",
+    "list_files **/arroyo/processing/processor.py in /Users/manta",
+    "grep def create_with_partitions|\\.close\\(\\)|def _StreamProcessor__|self\\.__processing_strategy\\.(close|join|terminate) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/src/sentry/utils/arroyo.py",
+    "grep \\.shutdown\\(|create_with_partitions\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/src/sentry/uptime/consumers/results_consumer.py",
+    "grep multiprocessing_pool|parallel_executor|queue_pool|factory\\.shutdown|\\.shutdown\\(\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/src/sentry",
+    "list_files **/sentry_arroyo*/arroyo/processing/processor.py in /Users/manta/.cache",
+    "list_files **/sentry_arroyo*/arroyo/processing/processor.py in /Users/manta/.local",
+    "list_files **/arroyo/processing/processor.py in /private/tmp/claude-501",
+    "grep rebalanc|on_partitions_revoked|revoke in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/src/sentry/utils/arroyo.py",
+    "grep uptime_options|UptimeResultsStrategyFactory\\(|uptime-results|ResultsStrategyFactory\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge95633/src"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 55882,
+  "diff_chars_injected": 55882,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 20,
+  "prompt_tokens": 593642,
+  "cached_tokens": 505462,
+  "cache_write_tokens": 88162,
+  "completion_tokens": 56398,
+  "reasoning_tokens": null,
+  "duration_seconds": 278.5191626250744,
+  "cost_usd": 0.05311382,
+  "cost_basis": "provider"
+}

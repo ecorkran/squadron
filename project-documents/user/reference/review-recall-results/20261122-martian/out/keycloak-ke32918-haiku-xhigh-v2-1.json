@@ -1,0 +1,104 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "IdP update decides login-cache invalidation from an org-aware model, so an IdP hidden or made non-public while its org is disabled stays in the login cache after the org is re-enabled",
+      "description": "`update()` gets `idpById` from `getById()` (line 91) and passes it as `original` to `registerIDPLoginInvalidationOnUpdate` (line 93). `getById()` always returns the org-aware wrapper (lines 135\u2013141). That wrapper's `isEnabled()` (lines 436\u2013444) returns false while the linked organization is disabled. The login caches, however, are filled from the raw JPA query (lines 228\u2013229), which does not check org state. So an IdP linked to a disabled org is still cached in ORG_ONLY/ALL.\n\nTrace:\n1. IdP X is linked to org O with `BROKER_PUBLIC=true`, enabled and not hidden. The ORG_ONLY/ALL caches contain X.\n2. O is disabled. `OrganizationAdapter.setEnabled` only reaches the org invalidation in `InfinispanOrganizationProvider.java:300-308`. Nothing invalidates `cacheKeyForLogin` on org changes.\n3. An admin updates X with `hideOnLogin=true`, `BROKER_PUBLIC=false`, or `linkOnly=true`. In `registerIDPLoginInvalidationOnUpdate`, `test(original)` is false because the wrapper's `isEnabled()` is false (line 405). `test(updated)` is also false because of the changed flag. Both are false, so the method returns early at line 407 and no login key is invalidated.\n4. O is re-enabled. Still no login-key invalidation.\n5. On the next login page, `getForLogin(ALL, \u2026)` returns X's cached ID. `getById` loads the current X, and its wrapper `isEnabled()` is now true. `OrganizationAwareIdentityProviderBean.java:80` filters only on `isEnabled()` and alias, so X is rendered. With `BROKER_PUBLIC=false`, a non-public org IdP is shown on the realm login page to all users.\n\n`create()` (line 84) and `remove()` (lines 100, 111) evaluate the same predicate on raw JPA models, so they match what is cached. `update()` is the only path that uses the org-aware model. The `isEnabled` re-check added in `OrganizationAwareIdentityProviderBean.java:75,80` covers only the enabled flag at render time. It does not cover `hideOnLogin`, `linkOnly`, or `BROKER_PUBLIC`.\n\nSuggested fix: evaluate `original` against the raw delegate, for example `IdentityProviderModel stored = idpDelegate.getById(model.getInternalId());`, and pass `stored` to `registerIDPLoginInvalidationOnUpdate`. Keep `idpById` for the existing `registerIDPInvalidation` call.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:403-407"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "IdP update decides login-cache invalidation from an org-aware model, so an IdP hidden or made non-public while its org is disabled stays in the login cache after the org is re-enabled",
+      "location": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java:403-407",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "diff": "d7fe6b4e11d37a69fbabd9be670162f59430de44...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:14:45.773933",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "injected": [],
+  "files_read": [
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/InfinispanIdentityProviderStorageProvider.java",
+    "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+    "services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java",
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/idp/IdentityProviderListQuery.java",
+    "services/src/main/java/org/keycloak/forms/login/freemarker/model/IdentityProviderBean.java",
+    "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/organization/InfinispanOrganizationProvider.java",
+    "model/jpa/src/main/java/org/keycloak/organization/jpa/OrganizationAdapter.java",
+    "services/src/main/java/org/keycloak/services/resources/admin/IdentityProviderResource.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java"
+  ],
+  "searches": [
+    "grep getLoginPredicate|LoginFilter\\.|getForLogin\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "grep cacheKeyForLogin|IDP_LOGIN|idp\\.login in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "grep public IdentityProviderModel\\(|private .*config|getConfig\\(\\)|getOrganizationId\\(\\)|setOrganizationId|public boolean isEnabled|equals\\(|hashCode\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/server-spi/src/main/java/org/keycloak/models/IdentityProviderModel.java",
+    "grep setOrganizationId|identityProviders\\(\\)\\.update|\\.update\\(idp|updateIdentityProvider|addIdentityProvider|removeIdentityProvider in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "grep registerInvalidation|invalidateObject|setEnabled|public void update|cacheKey in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/organization/InfinispanOrganizationProvider.java",
+    "grep setOrganizationId\\(|identityProviders\\(\\)\\.update\\(|\\.update\\(identityProvider|updateIdentityProvider\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918",
+    "grep public void setEnabled|registerOrganizationInvalidation|public boolean isEnabled in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/organization",
+    "grep public void setHideOnLogin|public void setTrustEmail|public void setEnabled|public void setDisplayName|public void setProviderId|public void setAlias in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/core/src/main/java/org/keycloak/representations/idm/IdentityProviderRepresentation.java",
+    "grep get\\(\"alias\"\\)::remove in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke32918/testsuite/integration-arquillian/tests/base/src/test/java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 23352,
+  "diff_chars_injected": 23352,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 1,
+    "in_fences": 0,
+    "in_section": 1,
+    "surviving": 1
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 20,
+  "prompt_tokens": 529329,
+  "cached_tokens": 439002,
+  "cache_write_tokens": 90309,
+  "completion_tokens": 58121,
+  "reasoning_tokens": null,
+  "duration_seconds": 246.97107904218137,
+  "cost_usd": 0.05263322000000001,
+  "cost_basis": "provider"
+}

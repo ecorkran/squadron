@@ -1,0 +1,124 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "UsernameForm.authenticate calls isConditionalPasskeysEnabled() with no argument, which matches no declaration, so the services module fails to compile",
+      "description": "Line 47 reads `if (context.getUser() != null && !isConditionalPasskeysEnabled())`. The only declaration of `isConditionalPasskeysEnabled` in the repo is `protected boolean isConditionalPasskeysEnabled(UserModel user)` at `UsernamePasswordForm.java:160`. A repo-wide search finds no zero-argument overload in `UsernameForm`, `UsernamePasswordForm`, or the other callers (`UsernamePasswordForm.java:115` and `:137`). javac will reject line 47, so `UsernameForm` and everything depending on the services module cannot build. The fix is to pass `context.getUser()`, which is already non-null at that point.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47"
+    },
+    {
+      "severity": "FAIL",
+      "title": "isConditionalPasskeysEnabled(user) returns false when user is null, so the username-first passkey conditional UI is never set up",
+      "description": "The helper returns `webauthnAuth != null && webauthnAuth.isPasskeysEnabled() && user != null`. Its two call sites were converted from checks that fired when the user was null. Per the removed lines in the diff, the original `authenticate()` fill sat in the `else` branch of `if (context.getUser() != null)`, and the original `challenge(context, error, field)` checked `context.getUser() == null`. The call sites are now at `UsernamePasswordForm.java:115` and `:137`, and with no user both evaluate to false.\n\nThe path is: open the login page with no user, then `authenticate()` (line 115) is false, so `webauthnAuth.fillContextForm` never runs. `ENABLE_WEBAUTHN_CONDITIONAL_UI` is never set, so `themes/.../passkeys.ftl:2` does not render `<form id=\"webauth\">` or the conditional-UI script. `login.ftl` and `login-username.ftl` then emit `autocomplete=\"username\"` instead of `\"username webauthn\"`. The username-not-found and error re-renders through line 137 lose the same setup. `OrganizationAuthenticator.java:357-361` has its own no-user fill, so the regression is limited to the `UsernamePasswordForm`/`UsernameForm` path.\n\nThe new fill for the re-authentication case is correct and should stay. The no-user fill must also keep running. Dropping the `user != null` term from the helper would fix both cases. The existing assertions at `PasskeysUsernamePasswordFormTest.java:142-146` and `:191-196` check the conditional-UI autocomplete and the `webauth` form on the initial no-user page, so they would fail as written.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-162"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "UsernameForm.authenticate calls isConditionalPasskeysEnabled() with no argument, which matches no declaration, so the services module fails to compile",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java:47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "isConditionalPasskeysEnabled(user) returns false when user is null, so the username-first passkey conditional UI is never set up",
+      "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:160-162",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "diff": "c851f7883d229dd2a940a77cd49220ecb126ec84...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:58:19.881423",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 24,
+  "injected": [],
+  "files_read": [
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernameForm.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java",
+    "services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java",
+    "themes/src/main/resources/theme/base/login/passkeys.ftl",
+    "services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnPasswordlessAuthenticator.java",
+    "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+    "services/src/main/java/org/keycloak/organization/authentication/authenticators/browser/OrganizationAuthenticator.java"
+  ],
+  "searches": [
+    "grep isConditionalPasskeysEnabled in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "grep ENABLE_WEBAUTHN_CONDITIONAL_UI|enableWebAuthnConditionalUI in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "grep SHOULD_DISPLAY_AUTHENTICATORS|shouldDisplayAuthenticators in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/services",
+    "grep fillContextForm|WebAuthnConditionalUIAuthenticator\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/services",
+    "list_files **/PasskeysUsernamePasswordFormTest.java in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1",
+    "grep void configureTestRealm\\(|void configureTestRealm\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn",
+    "grep void configureTestRealm\\(RealmRepresentation|static UserResource findUserByUsernameId|UserResource findUserByUsernameId|public static UserRepresentation findUserByUsernameId|String getInfoMessage\\(|String getInputError\\(|String getUsernameAutocomplete\\(|void login\\(String password\\)|public void logi\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite",
+    "grep PROMPT_VALUE_LOGIN\\s*=|PROMPT_VALUE_LOGIN; in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/services/src/main/java/org/keycloak/protocol/oidc/OIDCLoginProtocol.java",
+    "grep configureTestRealm|class AbstractWebAuthnVirtualTest|class AbstractWebAuthnTest|class AbstractWebAuthnVirtualTest in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src",
+    "grep username webauthn|//form\\[@id='webauth'\\] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-greptile-ai1/testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 35663,
+  "diff_chars_injected": 35663,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 25,
+  "prompt_tokens": 697414,
+  "cached_tokens": 612081,
+  "cache_write_tokens": 85311,
+  "completion_tokens": 36504,
+  "reasoning_tokens": null,
+  "duration_seconds": 154.27115729171783,
+  "cost_usd": 0.04310051,
+  "cost_basis": "provider"
+}

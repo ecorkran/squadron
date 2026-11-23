@@ -1,0 +1,48 @@
+{
+ "case": "keycloak-ke36880",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5,
+  "F6": 6
+ },
+ "decisions": {
+  "F1": [
+   "DROP",
+   "Profile.configure` allows only one version of `admin-fine-grained-authz` to be enabled, so the V1-gated listener never receives `MgmtPermissionsV2` in a real server."
+  ],
+  "F2": [
+   "KEEP",
+   "ClientPermissionsV2.canExchangeTo` throws `UnsupportedOperationException`, and `exchangeClientToClient` (line 276) reaches it with `TOKEN_EXCHANGE` plus V2 only, where the base class returned false for a 403."
+  ],
+  "F3": [
+   "KEEP",
+   "findByType(server, \"Clients\")` matches only the typed all-clients resource (`r.type = :type`), so it returns the name \"Clients\" and omits untyped per-client resources."
+  ],
+  "F4": [
+   "KEEP",
+   "init()` returns early for an existing admin-permissions client, so the \"Clients\" resource is missing there and `findByResource(server, null)` dereferences `resource.getId()`."
+  ],
+  "F5": [
+   "KEEP",
+   "no `ClientRemovedEvent` handler deletes the V2 resource named by client UUID or its permissions, and the V1-gated listener never covered them, so they are orphaned."
+  ],
+  "F6": [
+   "KEEP",
+   "getResourceName` handles only USERS, so client resources fall through to `resource.getDisplayName()`, which is never set, and `PolicyResourceService:218` returns a null display name."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  1,
+  2,
+  3,
+  5,
+  6
+ ],
+ "cost_usd": 2.4422663
+}

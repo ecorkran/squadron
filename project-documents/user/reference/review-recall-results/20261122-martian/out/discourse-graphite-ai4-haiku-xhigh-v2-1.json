@@ -1,0 +1,276 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Unescaped `embed_url` is written into the stored post as HTML after sanitization, so a crafted URL stores a live event-handler attribute",
+      "description": "`TopicEmbed.import` builds the footer as `\"<a href='#{url}'>#{url}</a>\"` and appends it to `contents` at line 13. This happens after `import_remote` has run Readability's tag and attribute whitelist, so the footer is never sanitized and `url` is never escaped. The post is then created with `cook_method: raw_html` (line 22), so `Post#cook` returns the string unchanged (`app/models/post.rb:133`), and the embed page prints it with `raw` (`app/views/embed/best.html.erb:19`).\n\nAn anonymous client can reach this sink:\n- `EmbedController#best` enqueues `retrieve_topic` with any `embed_url` that has no topic yet (`app/controllers/embed_controller.rb:15`).\n- The only gate is the Referer host check in `ensure_embeddable` (line 26). Referer is a request header, so any HTTP client can set it to the embeddable host.\n- `TopicRetriever#invalid_host?` (`lib/topic_retriever.rb:14-19`) checks only the host. Path and query may contain `'`, `=`, `(`, `)`, which the URI parser accepts.\n\nFor example, `http://<embeddable_host>/?x='onmouseover='alert(1)` passes the host check. `fetch_http` then calls `open(url)`, which succeeds when the host answers 200 for that URL, as many blogs do for a homepage with a query string. The footer becomes `<a href='http://\u2026/?x='onmouseover='alert(1)'>\u2026</a>`. `absolutize_urls` parses it with Nokogiri and keeps the `onmouseover` attribute. The result is a topic published under the embed user's account. Any reader who hovers the link runs script in the Discourse origin.\n\nThe same sink takes the feed `link` value from `PollFeed`. Fix by HTML-escaping `url` in the footer, or by building the anchor with Nokogiri. Also reject URLs containing quotes, `<`, `>`, or whitespace before fetching.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "RSS item HTML is stored and rendered without any sanitizer",
+      "description": "`content = CGI.unescapeHTML(i.content.scrub)` decodes entities, so escaped markup in a feed becomes live markup. `TopicEmbed.import` passes it to `PostCreator` as `raw_html`, and it is stored as `cooked` unchanged (`app/models/post.rb:133`). It is rendered with `raw` (`app/views/embed/best.html.erb:19`). Nothing on this path removes `<script>`, `on*` attributes, or `javascript:` URLs. `absolutize_urls` only rewrites relative `href` and `src`. Contrast this with `import_remote`, which whitelists tags through Readability.\n\nSeverity depends on how much the feed is trusted. Any feed author, or anyone who can change an `http://` feed in transit, gets script execution for every reader. Run the feed HTML through a whitelist sanitizer before storing it.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/jobs/scheduled/poll_feed.rb:35"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A post rejected by the spam check is treated as saved, so the import crashes and the whole feed poll aborts",
+      "description": "`PostCreator#create` returns `@post` even when `rollback_if_host_spam_detected` (`lib/post_creator.rb:222-229`) has raised Rollback before the save. The returned post has `id == nil` and has errors. `TopicEmbed.import` only checks `post.present?` (line 24), so `TopicEmbed.create!` runs with `post_id: nil`. The column is `null: false` (`db/migrate/20131217174004_create_topic_embeds.rb:5`), so this raises. The exception rolls back the transaction and escapes the `rss.items.each` loop in `poll_feed.rb:31-37`, which has no rescue. Every item after it is skipped on every hourly run.\n\nThe trigger is in `Post#has_host_spam?` (`app/models/post.rb:164-172`). Each post counts as one for its host, plus one for each earlier post by the same user that linked that host. Admins and moderators are exempt (`app/models/user.rb:393-396`). For a non-staff embed user below basic trust, the threshold is 3 (`config/site_settings.yml:325`), so the third post linking the same blog host is rejected. Check `post.persisted?` before creating the embed, and skip rejected items.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/topic_embed.rb:24-29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "postMessage origin check is a substring match, so a look-alike origin can resize the iframe",
+      "description": "`discourseUrl.indexOf(e.origin) === -1` accepts any origin string that appears inside `discourseUrl`. With `discourseUrl = \"https://discuss.example.com/\"`, a message from `https://discuss.example.co` passes, because that string is a prefix of the URL. Its `discourse-resize` message can then set `iframe.height` to any value. The impact is limited to resizing the frame, but the check was meant to be an origin allowlist. Compare parsed origins for equality instead, for example by reading `protocol` and `host` from an anchor element built from `discourseUrl`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/assets/javascripts/embed.js:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Disqus importer aborts the whole run on the first thread it can't fetch",
+      "description": "The importer used to create one topic per thread without any network access. Now `TopicEmbed.import_remote(user, t[:link], title: t[:title])` runs `open(url)` for every thread, with no rescue. A 404, a timeout, or a nil `t[:link]` raises out of `parser.threads.each`. Threads imported earlier remain, and the rest are never imported. Rescue per thread, log the failing URL, and continue.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "lib/tasks/disqus.thor:148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `--category` option was removed from the Disqus importer with no replacement",
+      "description": "The `method_option :category` declaration and the lookup that used it were removed. Nothing takes its place. `TopicEmbed.import_remote` has no category parameter, and the `category:` argument to `PostCreator` is gone. A script that passes `-c` or `--category` silently loses that behavior. Restore the option and pass the category through `TopicEmbed.import` and `import_remote`, or document the removal as intentional.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "lib/tasks/disqus.thor:116-118"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`Gemfile.lock` has no entries for the two gems added to the Gemfile",
+      "description": "`Gemfile:210-211` adds `ruby-readability` and `simple-rss`. `Gemfile_rails4.lock` lists both (lines 313 and 344). `Gemfile.lock`, the lock for the Rails 3.2.12 app (line 308), lists neither, and `.gitignore` doesn't exclude it. A frozen or deployment install will fail because the Gemfile has dependencies the lock doesn't record. The `*.lock` files were excluded from the diff I was given, so I can't tell whether this commit touched `Gemfile.lock`. The file on disk does not contain the gems. Run `bundle install` and commit the updated lock.",
+      "file_ref": null,
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "location": "Gemfile:210"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`create_table ... force: true` drops an existing table and its rows",
+      "description": "`force: true` makes Rails drop `topic_embeds` if it already exists before it creates the table. If the migration runs against a database that has the table but no `schema_migrations` row, every embed mapping is lost. Each embedded article then gets imported again as a new, duplicate topic. The same flag was added to the base-commit migration `db/migrate/20131223171005_create_top_topics.rb:3`, which is an edit to an existing migration. Remove `force: true` in both places, and restore the top-topics migration to its base-commit form.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "db/migrate/20131217174004_create_topic_embeds.rb:3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`<%- end if %>` in the embed template is malformed",
+      "description": "Line 6 closes the `if` from line 2 with `end if`, which is a modifier, not a block terminator. Depending on how Rails 3.2's Erubis handler trims the newline after the tag, this either fails to compile, which would make every embed page with a topic return a 500, or it compiles only by accident. I could not render the template, so I can't say which. Change it to `<%- end %>`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/views/embed/best.html.erb:6"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Unescaped `embed_url` is written into the stored post as HTML after sanitization, so a crafted URL stores a live event-handler attribute",
+      "location": "app/models/topic_embed.rb:13",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "RSS item HTML is stored and rendered without any sanitizer",
+      "location": "app/jobs/scheduled/poll_feed.rb:35",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A post rejected by the spam check is treated as saved, so the import crashes and the whole feed poll aborts",
+      "location": "app/models/topic_embed.rb:24-29",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "postMessage origin check is a substring match, so a look-alike origin can resize the iframe",
+      "location": "app/assets/javascripts/embed.js:17",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The Disqus importer aborts the whole run on the first thread it can't fetch",
+      "location": "lib/tasks/disqus.thor:148",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `--category` option was removed from the Disqus importer with no replacement",
+      "location": "lib/tasks/disqus.thor:116-118",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependency-config-debt",
+      "raw_category": null,
+      "summary": "`Gemfile.lock` has no entries for the two gems added to the Gemfile",
+      "location": "Gemfile:210",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`create_table ... force: true` drops an existing table and its rows",
+      "location": "db/migrate/20131217174004_create_topic_embeds.rb:3",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`<%- end if %>` in the embed template is malformed",
+      "location": "app/views/embed/best.html.erb:6",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "diff": "40c0c041eef5dc44025770d153a3608edf852aed...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:38:35.643288",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 48,
+  "injected": [],
+  "files_read": [
+    "app/models/topic_embed.rb",
+    "app/controllers/embed_controller.rb",
+    "lib/topic_retriever.rb",
+    "app/jobs/scheduled/poll_feed.rb",
+    "app/models/post.rb",
+    "lib/post_revisor.rb",
+    "lib/post_creator.rb",
+    "lib/enum.rb",
+    "lib/topic_creator.rb",
+    "app/controllers/posts_controller.rb",
+    "lib/topic_view.rb",
+    "config/application.rb",
+    "lib/tasks/disqus.thor",
+    "app/models/post_analyzer.rb",
+    "app/assets/javascripts/embed.js",
+    "app/views/embed/best.html.erb",
+    "db/migrate/20131223171005_create_top_topics.rb",
+    "db/migrate/20131217174004_create_topic_embeds.rb",
+    "app/models/topic_link.rb"
+  ],
+  "searches": [
+    "grep cook_method in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep imported_from|start_discussion|embed: in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/config/locales",
+    "grep embeddable_host|feed_polling|embed_by_username in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/config",
+    "grep discourse_expires_in|def check_xhr|def preload_json|skip_before_filter :check_xhr in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/app/controllers",
+    "grep best in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/app/models/topic_view.rb",
+    "grep PostCreator\\.new|PostCreator\\.create|TopicCreator\\.new in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "list_files **/topic_view.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep before_filter|def ensure_logged_in|rescue_from in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/app/controllers/application_controller.rb",
+    "grep def create_params|params\\.permit|params\\.slice|\\.permit\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/app/controllers",
+    "grep ruby-readability|simple-rss in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "list_files app/assets/stylesheets/{vendor/normalize*,common/foundation/base*} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep autoload_paths|eager_load_paths|app/jobs in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/config",
+    "grep jobs/|Dir\\[|Dir\\.glob in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/lib",
+    "list_files Gemfile* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep app/jobs|jobs/scheduled|Jobs::Scheduled|scheduled/ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep Gemfile|lock in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/.gitignore",
+    "grep ^    (ruby-readability|simple-rss|rails) \\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/Gemfile.lock",
+    "list_files .ruby-version in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep rvm|ruby-2|2\\.0\\.0|2\\.1\\.0 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/.travis.yml",
+    "list_files **/{simple-rss,ruby-readability}*/**/*.rb in /Users/manta",
+    "grep \\.scrub\\b|^ruby |RUBY_VERSION in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "list_files **/simple-rss-1.3.1/lib/*.rb in /usr/local/lib/ruby",
+    "list_files **/ruby-readability-0.5.7/lib/*.rb in /usr/local/lib/ruby",
+    "grep newuser_spam_host_threshold|def linked_hosts|def self\\.linked_hosts in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4",
+    "grep category in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/lib/tasks/disqus.thor",
+    "grep def self\\.extract_from|def has_trust_level\\?|def self\\.topic_map|cooked_document|def self\\.counts_for in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4/app",
+    "grep def small_avatar_url|def url\\b|class InvalidAccess|class InvalidParameters|logo_url:|def self\\.logo_url|def base_url in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai4"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 5,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": true,
+  "verdictSource": "derived",
+  "diff_chars": 25589,
+  "diff_chars_injected": 25589,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 49,
+  "prompt_tokens": 1761118,
+  "cached_tokens": 1626588,
+  "cache_write_tokens": 134494,
+  "completion_tokens": 93271,
+  "reasoning_tokens": null,
+  "duration_seconds": 443.57469220878556,
+  "cost_usd": 0.26517548,
+  "cost_basis": "provider"
+}

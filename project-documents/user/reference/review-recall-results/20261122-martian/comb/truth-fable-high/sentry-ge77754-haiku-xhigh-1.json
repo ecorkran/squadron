@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge77754",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "queued: datetime = timezone.now()` at assignment_source.py:18 is a class-body default evaluated once at import, so every instance (including those from `from_integration`) carries the process start time and serializes that wrong timestamp via `to_dict()`."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.0587687
+}

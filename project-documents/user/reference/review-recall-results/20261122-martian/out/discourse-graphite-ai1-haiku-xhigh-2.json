@@ -1,0 +1,213 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Second `downsize` overrides the first, so the emoji resize call now raises",
+      "description": "`OptimizedImage` now defines `self.downsize` twice: the width/height form at lines 145-147 and the `dimensions` form at lines 149-151. In Ruby the later definition replaces the earlier one, so the width/height method is dead code. Any five-argument call raises `ArgumentError`.\n\n`app/jobs/regular/resize_emoji.rb:14` still calls `OptimizedImage.downsize(path, path, 100, 100, opts)`. Every custom emoji upload therefore fails in that job. `Jobs::Base#perform` rescues the exception and passes it to `Discourse.handle_job_exception` (`app/jobs/base.rb:110-111`), so the failure is only reported. Emoji are never capped at 100x100, and `enforce_square_emoji` is not applied. No spec covers the emoji job, so this went unnoticed.\n\nFix: remove the duplicate and change the emoji call to pass `\"100x100\"`, or keep one method that accepts both forms.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/optimized_image.rb:145-151"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Existing JS test asserts the removed setting-based limit and will fail",
+      "description": "\"prevents files that are too big from being uploaded\" sets `max_image_size_kb = 5` and expects a 10 KB file to be rejected with `max_size_kb: 5`. After this change, `validateUploadedFile` compares against a hardcoded 10240 KB (`utilities.js:182-183`). The 10 KB file passes, `validUpload` returns true, and `not(validUpload([image]))` fails. The diff does not touch this test. Update it to the new boundary, or restore the setting-based check.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/javascripts/lib/utilities-test.js.es6:52-61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hardcoded 10 MB limit replaces the admin settings on the client and in the API path",
+      "description": "`max_image_size_kb` and `max_attachment_size_kb` are `client: true` settings (`config/site_settings.yml:513-518`, default 3072 KB each). The client check used to read them. Now it uses `10 * 1024` at `utilities.js:182` and again at `utilities.js:246` (the 413 handler). The server uses `10.megabytes` at `uploads_controller.rb:55`.\n\n- Admin attachment limits are no longer checked before upload. The server still enforces them (`lib/validators/upload_validator.rb:80-88`), so users only learn of the rejection after uploading.\n- The upload selector still reads `max_attachment_size_kb` (`upload-selector.js.es6:17-18`), so client code now draws on two sources for the same limit.\n- The default API URL download cap rises from 3 MB to 10 MB.\n- The three literals duplicate one value. The 413 message also assumes a 10 MB nginx limit, which the admin controls.\n\nSuggest one constant or setting shared between client and server, with the client keeping the setting it already uses for attachments.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/lib/utilities.js:182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The reduction loop ignores failures and repeats the full pipeline",
+      "description": "`OptimizedImage.downsize` returns `false` when convert fails (`convert_with`, `optimized_image.rb:160-169`), but the loop discards the return value and logs nothing. For a corrupt file or a non-image with an image extension, all five attempts run convert. Then `Upload.create_for` reports a generic \"too large\" error, and the real cause is lost. Break on failure and log it, for example `break unless OptimizedImage.downsize(...)` plus a `Rails.logger.warn`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "app/controllers/uploads_controller.rb:64-70"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Raster downsizing is applied to SVG and animated GIFs without the special cases used elsewhere",
+      "description": "The guard uses `FileHelper.is_image?`, which includes `svg` (`lib/file_helper.rb:31`). Elsewhere, SVG is special-cased: `OptimizedImage.create_for` skips resizing it (`optimized_image.rb:45-47`), and `Upload.create_for` reads its dimensions with Nokogiri (`upload.rb:63-66`). The new loop instead runs ImageMagick `-resize` on the SVG and writes the output back to the `.svg` path. I did not verify what ImageMagick produces for SVG. It may rasterize or corrupt the vector file.\n\nFor animated GIFs, `\"80%\"` is passed to `resize_instructions_animated`, which uses it as gifsicle `--resize-fit` (`optimized_image.rb:115-124, 137-139`). I could not confirm that gifsicle accepts a percentage there. Exclude SVG from the loop, and confirm or replace the gifsicle geometry.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/uploads_controller.rb:64-67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New behavior has no test coverage",
+      "description": "The diff adds the reduction loop, a new `downsize` overload, and a 10 MB API download cap, but no spec changes. The controller spec has no oversized-image case. `spec/models/optimized_image_spec.rb` covers only `create_for` and stubs `resize`. Nothing references `Jobs::ResizeEmoji`, which is why finding 1 is not caught. Add specs for: an oversized image reduced under the limit; an image still too large after five attempts; a failing convert; and the emoji job call.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/controllers/uploads_controller_spec.rb:29-96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Removed `OptimizedImage.dimensions` has no remaining callers",
+      "description": "A repository search found no remaining uses of `dimensions(` on `OptimizedImage`, so removing it is safe. The numeric `resize` callers in `upload.rb:98`, `lib/letter_avatar.rb:48`, and `lib/tasks/uploads.rake:347` still work with the new `resize` body.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "app/models/optimized_image.rb:141-143"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Second `downsize` overrides the first, so the emoji resize call now raises",
+      "location": "app/models/optimized_image.rb:145-151",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Existing JS test asserts the removed setting-based limit and will fail",
+      "location": "test/javascripts/lib/utilities-test.js.es6:52-61",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Hardcoded 10 MB limit replaces the admin settings on the client and in the API path",
+      "location": "app/assets/javascripts/discourse/lib/utilities.js:182",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "The reduction loop ignores failures and repeats the full pipeline",
+      "location": "app/controllers/uploads_controller.rb:64-70",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Raster downsizing is applied to SVG and animated GIFs without the special cases used elsewhere",
+      "location": "app/controllers/uploads_controller.rb:64-67",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "New behavior has no test coverage",
+      "location": "spec/controllers/uploads_controller_spec.rb:29-96",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Removed `OptimizedImage.dimensions` has no remaining callers",
+      "location": "app/models/optimized_image.rb:141-143",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1",
+    "diff": "c3290c1d85eabd86f9f839931bdf2a043474f844...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:37:06.003716",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "injected": [],
+  "files_read": [
+    "app/models/optimized_image.rb",
+    "app/controllers/uploads_controller.rb",
+    "app/assets/javascripts/discourse/lib/utilities.js",
+    "app/jobs/regular/resize_emoji.rb",
+    "lib/file_helper.rb",
+    "app/models/upload.rb",
+    "test/javascripts/lib/utilities-test.js.es6",
+    "spec/controllers/uploads_controller_spec.rb",
+    "app/assets/javascripts/discourse/controllers/upload-selector.js.es6",
+    "spec/models/upload_spec.rb",
+    "lib/validators/upload_validator.rb",
+    "app/models/emoji.rb",
+    "config/site_settings.yml"
+  ],
+  "searches": [
+    "grep OptimizedImage\\.(downsize|resize|optimize|dimensions)|\\bdimensions\\(|\\.downsize\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1",
+    "grep max_image_size_kb|max_attachment_size_kb|allow_animated_thumbnails|def self\\.is_image\\? in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1",
+    "grep downsize|OptimizedImage|dimensions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1/spec",
+    "grep class UploadValidator|max_image_size_kb|max_attachment_size_kb|def validate in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1/lib/validators",
+    "grep ResizeEmoji|resize_emoji|allow_animated_thumbnails in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1",
+    "grep def perform|rescue|def execute in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai1/app/jobs/base.rb"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 3917,
+  "diff_chars_injected": 3917,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 20,
+  "prompt_tokens": 271233,
+  "cached_tokens": 209924,
+  "cache_write_tokens": 61297,
+  "completion_tokens": 29233,
+  "reasoning_tokens": null,
+  "duration_seconds": 140.04350416688249,
+  "cost_usd": 0.029322139999999997,
+  "cost_basis": "provider"
+}

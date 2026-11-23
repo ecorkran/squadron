@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Retry cleanup clause is not scoped to SMS reminders",
+      "description": "The first `deleteMany` now uses `OR: [{ method: SMS, scheduledDate <= now }, { retryCount: { gt: 1 } }]`. The second branch has no `method` filter, so any `WorkflowReminder` row with `retryCount > 1` is deleted, including non-SMS methods and reminders that are not yet due. The current code path only increments `retryCount` for SMS, so this is latent today, but the delete scope is broader than the original SMS-past-date intent. Add `method: WorkflowMethods.SMS` to the retry branch, and consider logging the number of rows deleted by each branch.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:30-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unguarded database update in the catch block can abort the loop",
+      "description": "The new `prisma.workflowReminder.update` in the `catch` block sits outside any try. If that update throws, the error propagates out of the `for` loop, so the remaining reminders in the batch are never processed. Wrap the update in its own try/catch and log the failure, so one bad row cannot stop the batch.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts#handler"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests cover the new retry behaviour",
+      "description": "The diff adds `retryCount` persistence in both the `else` branch and the `catch` block, plus a new deletion rule. No test in the diff exercises these paths: a reminder that fails should have its count incremented, a reminder with `retryCount > 1` should be deleted, and a failing update should not stop the batch. Add tests for these cases.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Read-modify-write on retryCount is not atomic",
+      "description": "Both increments use `retryCount: reminder.retryCount + 1`, which reads a value fetched earlier in the run. Concurrent runs could lose an increment. Prisma's `retryCount: { increment: 1 }` avoids this and would be simpler.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts#handler"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Retry cleanup clause is not scoped to SMS reminders",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:30-45",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Unguarded database update in the catch block can abort the loop",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts#handler",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests cover the new retry behaviour",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Read-modify-write on retryCount is not atomic",
+      "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts#handler",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14943",
+    "diff": "b521f3a8ec35ec1e90b28075046b369b6eff5554...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:57:18.660586",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 2947,
+  "diff_chars_injected": 2947,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 4335,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 2362,
+  "completion_tokens": 2582,
+  "reasoning_tokens": null,
+  "duration_seconds": 13.616658084094524,
+  "cost_usd": 0.00208581,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

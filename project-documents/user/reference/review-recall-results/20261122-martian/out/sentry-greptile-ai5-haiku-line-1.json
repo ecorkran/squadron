@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Error events are zipped against dict values, so errors get paired with the wrong event IDs",
+      "description": "`nodestore.backend.get_multi(node_ids)` returns a dict keyed by node ID. Its `.values()` order is not guaranteed to match `error_ids`, yet the code does `zip(error_ids, events.values())`. The `if data is not None` filter runs after the zip, so one missing node shifts every later pairing. Each `ErrorEvent` can end up with another error's title, message, and timestamp, and those values are sent to Seer. The fix is to look up each event by its own node ID, e.g. `events.get(node_id)` per ID.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py#fetch_error_details"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Feature-flagged dashboard table ignores the real data and always renders an empty table",
+      "description": "When `use-table-widget-visualization` is on, the new `TableWidgetVisualization` is rendered with hard-coded `columns={[]}` and `tableData={{data: [], meta: {fields: {}, units: {}}}}`. It ignores `result.data`, `result.meta`, `fields`, and `eventView`, so every enabled widget shows an empty table. The props should come from `result` and `fields`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/dashboards/widgetCard/chart.tsx#tableResultComponent"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hidden-attribute filter only runs when a search query is present",
+      "description": "`HIDDEN_ATTRIBUTES` (`is_segment`, `project_id`, `received`) is applied only in the `return sorted.filter(...)` branch, which runs after the early `return sorted;` for an empty query. With no search text, the hidden attributes still appear. The filter needs to run in both paths.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx#Attributes"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "AI summary shows \"Project not found\" while the project is still loading",
+      "description": "`useProjectFromId` returns no project until it resolves. The check `if (replayRecord?.project_id && !project)` therefore shows the error alert during the initial load, before the project has arrived. The check should also consider the project's loading state.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "static/app/views/replays/detail/ai/index.tsx#AiContent"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Truthiness checks treat `age: 0` and `timestamp: 0` as absent",
+      "description": "`validate_timestamp` and `validate_age` use `self.initial_data.get(...)` as a truthy test. A report with `age: 0` plus `timestamp` passes, and the reverse also passes, which violates the stated \"both present\" rule. Presence should be checked with `is not None` or `in self.initial_data`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py#BrowserReportSerializer"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Broad `except Exception` in `get_environment_info` hides failures at info level",
+      "description": "The blanket catch logs at `info` and returns an empty string. A broken event or environment lookup silently drops environment context from PR comments with no alert, and the exception is not reported to Sentry. Narrow the exception type or log at a level that surfaces failures.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/sentry/integrations/source_code_management/commit_context.py#PRCommentWorkflow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test name says \"defaults to bar charts\" but the second case asserts LINE charts",
+      "description": "The `it.each` block for `avg`, `p50`, and similar aggregates is titled `defaults to bar charts for %s`, but it asserts `ChartType.LINE`. The title should say line charts so failures are readable.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "static/app/views/explore/contexts/pageParamsContext/visualizes.spec.tsx"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Error events are zipped against dict values, so errors get paired with the wrong event IDs",
+      "location": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py#fetch_error_details",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Feature-flagged dashboard table ignores the real data and always renders an empty table",
+      "location": "static/app/views/dashboards/widgetCard/chart.tsx#tableResultComponent",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Hidden-attribute filter only runs when a search query is present",
+      "location": "static/app/views/performance/newTraceDetails/traceDrawer/details/span/eapSections/attributes.tsx#Attributes",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "AI summary shows \"Project not found\" while the project is still loading",
+      "location": "static/app/views/replays/detail/ai/index.tsx#AiContent",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Truthiness checks treat `age: 0` and `timestamp: 0` as absent",
+      "location": "src/sentry/issues/endpoints/browser_reporting_collector.py#BrowserReportSerializer",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Broad `except Exception` in `get_environment_info` hides failures at info level",
+      "location": "src/sentry/integrations/source_code_management/commit_context.py#PRCommentWorkflow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test name says \"defaults to bar charts\" but the second case asserts LINE charts",
+      "location": "static/app/views/explore/contexts/pageParamsContext/visualizes.spec.tsx",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-greptile-ai5",
+    "diff": "0b1504e563dc2ce5648b38af85faf3ed1cb30472...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:54:40.932243",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 248902,
+  "diff_chars_injected": 248902,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 109489,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 107516,
+  "completion_tokens": 11465,
+  "reasoning_tokens": null,
+  "duration_seconds": 48.22707491694018,
+  "cost_usd": 0.19038905,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

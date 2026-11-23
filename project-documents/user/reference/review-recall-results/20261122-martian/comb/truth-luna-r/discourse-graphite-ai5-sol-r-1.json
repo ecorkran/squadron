@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai5",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The component\u2019s anonymous flex-item root keeps its automatic minimum width, so a long non-wrapping title can prevent the header from shrinking."
+  ],
+  "F2": [
+   "KEEP",
+   "The description flex item does not grow to fill the row, leaving its floated buttons aligned to the description instead of the row\u2019s right edge."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.0026460700000000004
+}

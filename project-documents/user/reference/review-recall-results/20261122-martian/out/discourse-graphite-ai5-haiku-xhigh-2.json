@@ -1,0 +1,268 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Desktop small-action buttons no longer pinned to the row's right edge",
+      "description": "`.small-action` is now `display:flex`, and `.small-action-desc` is one of its direct flex items (`small-action.hbs:1-18` renders `.topic-avatar` and `.small-action-desc` as siblings). Nothing gives `.small-action-desc` `flex-grow` or a width, so it sizes to its max-content width instead of filling the 755px row (`desktop/topic-post.scss:730-733`). The edit and delete buttons are `float: right` inside it (common/base/topic-post.scss:306-310). Before this change they sat at the far right of a full-width block. Now they float to the right of the shrink-wrapped description, so for short messages they land next to the text. Adding `flex: 1` (or `flex-grow: 1`) to `.small-action-desc` should fix it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/topic-post.scss:279-280"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mobile custom message now overlaps the avatar column",
+      "description": "The mobile rule `.small-action .small-action-desc .custom-message { margin-left: -40px }` was tuned against the `padding-left: 4em` that this diff removes from `.small-action-desc` (common/base/topic-post.scss:280). The description now starts right after the avatar flex item, which is 45px wide (`.small-action .topic-avatar i { width: 45px }`, common/base/topic-post.scss:271-276). The custom message is therefore pulled about 40px into the avatar column, and its text can run under the icon. Either remove the mobile offset or recompute it for the new layout.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:516-523"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No-JS header layout regressed",
+      "description": "The static header partial sits inside `<noscript>` (`layouts/application.html.erb:39-40`), so it renders for visitors without JavaScript. Its markup is `.contents > .row > (.title.span13, .panel)`. With `.contents` now `display:flex`, `.row` is the only flex item. It has `flex-grow: 0` and sizes to its max-content width, so it no longer spans the wrap. `.panel` lost `float: right`, and its `margin-left: auto` and `order(3)` do nothing because it is not a flex item. The login and icons block now floats up beside the logo. The header.scss rules match the Ember header (`header.hbs:2-96`, where `.panel` and `.extra-info-wrapper` are direct children of `.contents`) but not this markup. The noscript partial needs its own rules, or the floats should stay for it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/views/application/_header.html.erb:3-15"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`align-items` mixin emits an invalid property and accepts values it cannot express",
+      "description": "`-ms-align-items` (line 121) is not a real property in any browser, so that declaration never applies. `-webkit-box-align` (line 118) only accepts start, end, center, baseline, or stretch, but the mixin accepts any value. A future `align-items(flex-start)` would silently drop the legacy declaration. The current call sites (`center` and `baseline`) are valid. Consider restricting the accepted values and removing the dead line. The `-moz-box` and `-moz-box-ordinal-group` prefixes (lines 102 and 127) are also no longer needed by any supported browser.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:117-123"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated extra-info styling bundled with the flex change",
+      "description": "Apart from `order(2)`, which is correct for the Ember header, the diff adds `line-height: 1.5` to `.extra-info-wrapper` and removes the `.badge-wrapper.bullet { margin-top: 5px }` rule. Neither follows from the flex conversion, and neither is explained. This shifts bullet badges in the docked header, so please confirm both changes are intended.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/topic.scss:29-37"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Floats on flex children are dead declarations",
+      "description": "`.small-action .topic-avatar { float: left }` (line 270) and `.small-action { clear: both }` (line 312) no longer have any effect because `.small-action` is a flex container. Remove them. Keep `button { float: right }` (line 309), since those buttons sit inside the non-flex `.small-action-desc`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/topic-post.scss:267-270"
+    },
+    {
+      "severity": "PASS",
+      "title": "Ember header flex layout matches the rendered DOM",
+      "description": "In `header.hbs`, `.contents` directly contains `home-logo` (root element has class `title`, per `home-logo.js.es6:2`), `.panel` (line 6), and `.extra-info-wrapper` (lines 93-95). The `order(2)` and `order(3)` declarations plus `margin-left: auto` on `.panel` produce logo, then docked info, then right-aligned icons. `.extra-info-wrapper` has `overflow: hidden` (`desktop/topic-post.scss:519`), so its ellipsized title can shrink as a flex item.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/base/header.scss:14-40"
+    },
+    {
+      "severity": "PASS",
+      "title": "Badge refactor keeps the same computed styles",
+      "description": "`inline-flex()` and `align-items(baseline)` expand to the same `display: inline-flex; align-items: baseline` the rule already had, plus legacy fallbacks. Modern browsers see no change.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common/components/badges.css.scss:54-57"
+    },
+    {
+      "severity": "PASS",
+      "title": "Mixin import order is valid",
+      "description": "`common.scss` imports `common/foundation/mixins` (line 6) before `common/components/*` (line 8) and `common/base/*` (line 12). `common/foundation/base.scss:2` imports it earlier still, so the new `@include`s resolve at compile time. This is from reading the import chain; I did not run the Sass compiler.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/common.scss:6"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Desktop small-action buttons no longer pinned to the row's right edge",
+      "location": "app/assets/stylesheets/common/base/topic-post.scss:279-280",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mobile custom message now overlaps the avatar column",
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:516-523",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "No-JS header layout regressed",
+      "location": "app/views/application/_header.html.erb:3-15",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`align-items` mixin emits an invalid property and accepts values it cannot express",
+      "location": "app/assets/stylesheets/common/foundation/mixins.scss:117-123",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unrelated extra-info styling bundled with the flex change",
+      "location": "app/assets/stylesheets/common/base/topic.scss:29-37",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Floats on flex children are dead declarations",
+      "location": "app/assets/stylesheets/common/base/topic-post.scss:267-270",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Ember header flex layout matches the rendered DOM",
+      "location": "app/assets/stylesheets/common/base/header.scss:14-40",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Badge refactor keeps the same computed styles",
+      "location": "app/assets/stylesheets/common/components/badges.css.scss:54-57",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mixin import order is valid",
+      "location": "app/assets/stylesheets/common.scss:6",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "diff": "53963048419d79170560938c003ae9ed1172f8ee...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:35:54.532069",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 42,
+  "injected": [],
+  "files_read": [
+    "app/assets/stylesheets/common/base/header.scss",
+    "app/assets/stylesheets/common/base/topic-post.scss",
+    "app/assets/stylesheets/common/base/topic.scss",
+    "app/assets/stylesheets/common/components/badges.css.scss",
+    "app/assets/stylesheets/common/foundation/mixins.scss",
+    "app/views/application/_header.html.erb",
+    "app/assets/javascripts/discourse/templates/components/small-action.hbs",
+    "app/assets/javascripts/discourse/templates/components/header-extra-info.hbs",
+    "app/assets/javascripts/discourse/templates/post-small-action.hbs",
+    "app/assets/stylesheets/desktop/header.scss",
+    "app/assets/stylesheets/mobile/header.scss",
+    "app/assets/stylesheets/desktop/topic-post.scss",
+    "app/assets/stylesheets/mobile/topic-post.scss",
+    "app/assets/stylesheets/vendor/bootstrap.scss",
+    "app/assets/stylesheets/desktop/discourse.scss",
+    "app/assets/javascripts/discourse/templates/header.hbs",
+    "app/assets/javascripts/discourse/templates/components/home-logo.hbs",
+    "app/views/layouts/application.html.erb",
+    "app/assets/javascripts/discourse/components/home-logo.js.es6",
+    "app/assets/stylesheets/mobile/discourse.scss",
+    "app/assets/stylesheets/common.scss"
+  ],
+  "searches": [
+    "grep @mixin\\s+(flexbox|inline-flex|align-items|order)\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "grep (@include\\s+(flexbox|inline-flex|align-items|order)\\b|display:\\s*(inline-)?flex|display:\\s*-webkit-box) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/stylesheets",
+    "grep extra-info-wrapper|small-action|d-header|class=\"contents\"|class=\"panel|valign-helper in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app",
+    "grep extra-info-wrapper|title-wrapper|header-extra-info|small-action|\\.title\\b|\\.contents|\\.panel|valign-helper|\\.icons in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/stylesheets/desktop",
+    "grep extra-info-wrapper|title-wrapper|small-action|\\.title\\b|\\.contents|\\.panel|valign-helper|d-header in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/stylesheets/mobile",
+    "grep ^\\s*\\.(row|span13|span\\d+|wrap|title)\\s*[{,]|\\.row\\s*\\{|\\.span13|\\.span\\d+\\s*\\{ in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/stylesheets",
+    "grep topic-title|extra-info-wrapper|header-extra-info in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/javascripts/discourse/templates",
+    "grep small-action|extra-info|\\.panel|d-header \\.contents|\\.contents in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/stylesheets/mobile",
+    "grep application/header|render\\s+['\"]?(application/)?header|_header in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app",
+    "grep \\.title\\b in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/javascripts/discourse",
+    "grep render[^\\n]*header|partial[^\\n]*header|['\"]application/header['\"] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/views",
+    "grep autoprefixer|postcss|sass-rails|bourbon|compass in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "list_files app/assets/javascripts/discourse/components/home-logo* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "list_files app/views/**/_header.html.erb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5",
+    "grep classNames|tagName|classNameBindings in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/javascripts/discourse/components/small-action.js.es6",
+    "grep @import\\s+[\"'](common/foundation/mixins|vendor/bootstrap|common/base/header|common/base/topic|common/base/topic-post|common/components/badges|common/foundation/variables|common/base/[a-z_-]+|common/components/[a-z_-]+|foundation/mixins|bootstrap)[\"'] in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/stylesheets",
+    "grep @import\\s+[\"'](common|vendor) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai5/app/assets/stylesheets"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 3645,
+  "diff_chars_injected": 3645,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 43,
+  "prompt_tokens": 777150,
+  "cached_tokens": 695126,
+  "cache_write_tokens": 81994,
+  "completion_tokens": 58672,
+  "reasoning_tokens": null,
+  "duration_seconds": 266.90378916589543,
+  "cost_usd": 0.05303776000000001,
+  "cost_basis": "provider"
+}

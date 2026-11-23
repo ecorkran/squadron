@@ -1,0 +1,54 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "AlertRuleMenu.tsx:123` and `:165` gate Pause and Delete on `rulerRule`, which `GrafanaRuleListItem.tsx:47` no longer passes, so both vanish from the list menu."
+  ],
+  "F2": [
+   "KEEP",
+   "the Silence item renders from prom-rule abilities, but the drawer at `RuleActionsButtons.V2.tsx:104` requires a Grafana ruler `rule`, which is undefined in the list, so the click does nothing."
+  ],
+  "F3": [
+   "KEEP",
+   "useAllAlertRuleAbilities` now delegates to `useAllRulerRuleAbilities`, which hardcodes `isFederated = false`; sibling checkouts of the prior code show the `isFederatedRuleGroup(rule.group)` guard that was dropped."
+  ],
+  "F4": [
+   "KEEP",
+   "the Grafana branch at `FilterView.tsx:157` renders `GrafanaRuleListItem` inside `rules.map` with no `key`, while the other two branches still pass `key={key}`."
+  ],
+  "F5": [
+   "KEEP",
+   "the `href` at `GrafanaRuleListItem.tsx:40` has no `returnTo`, so `RuleViewer.tsx:96` falls back to `/alerting/list` and loses the search and filters; the datasource item still passes it."
+  ],
+  "F6": [
+   "KEEP",
+   "useAllGrafanaPromRuleAbilities` gates ModifyExport and Pause on `prometheusRuleType.grafana.alertingRule`, while the ruler path uses `rulerRuleType.grafana.rule`, so Grafana recording rules lose Export in the list."
+  ],
+  "F7": [
+   "DROP",
+   "every caller passes either a ruler rule or a Grafana prom rule, so the null-and-warn fallback is an unreached defensive path and the complaint is about log detail, not behaviour."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5
+ ],
+ "cost_usd": 2.0161985000000002
+}

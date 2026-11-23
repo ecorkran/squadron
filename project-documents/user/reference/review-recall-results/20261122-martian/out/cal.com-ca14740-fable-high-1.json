@@ -1,0 +1,313 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Team admin/owner check uses `&&`, so team admins are denied",
+      "description": "`isTeamAdminOrOwner` is computed as `isTeamAdmin(...) && isTeamOwner(...)`. `isTeamAdmin` (`packages/lib/server/queries/teams/index.ts:264-284`) already matches role `ADMIN` or `OWNER`, so the conjunction is only true for owners. A team admin who is neither organizer nor attendee gets `FORBIDDEN`, contradicting the variable name. It should be `||`, or just `isTeamAdmin` alone. Both queries also run with `teamId ?? 0` for non-team bookings, which is two wasted DB round-trips.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guest blacklist can be bypassed by letter case",
+      "description": "The `BLACKLISTED_GUEST_EMAILS` entries are lowercased, but each guest is compared as submitted (`blacklistedGuestEmails.includes(guest)`). `Blocked@Example.com` passes the filter even when `blocked@example.com` is blacklisted. The existing-attendee check (`guest === attendee.email`) is case-sensitive in the same way, so a case variant of a current attendee is inserted as a second attendee. Normalise guests to lowercase before both comparisons.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No server-side dedupe or size limit on `guests`",
+      "description": "The server schema is `z.array(z.string().email())` with no uniqueness refine and no `.max()`. Uniqueness is only enforced by a separate schema in the client (`apps/web/components/dialog/AddGuestsDialog.tsx:26-29`). A direct API call with `[\"a@x.com\",\"a@x.com\"]` creates duplicate attendee rows via `createMany` (handler lines 92-106). An unbounded array also lets any authorised caller trigger an arbitrary number of outbound emails in one request. Move the refine into the shared schema, import it in the dialog, and add an upper bound.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Any attendee may add guests, and calendar sync uses the caller's credentials",
+      "description": "The route uses `authedProcedure` with a hand-rolled check. The sibling `editLocation` uses `bookingsProcedure` (`packages/trpc/server/routers/viewer/bookings/util.ts:19-65`), which admits only the organizer or a collective host. Here `isAttendee` lets any logged-in user whose email is on the booking add arbitrary guests and send email under the organizer's name.\n\n`EventManager` is then built from `getUsersCredentials(ctx.user)` (lines 158-165), not from the organizer's credentials. When the caller is an attendee or team admin, `updateAllCalendarEvents` (`packages/core/EventManager.ts:845-879`) only finds the right credential if the booking reference has a `credentialId`. For references without one it filters the caller's own calendars by type, which either skips the update or uses the wrong account.\n\nThere is no booking status or time check either, so guests can be added to cancelled or past bookings. Collective co-hosts, who are allowed by `bookingsProcedure`, are not allowed here.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52-56"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Email recipients are split on raw input, and standard-email opt-outs are ignored",
+      "description": "`sendAddGuestsEmails(evt, guests)` passes the unfiltered input rather than `uniqueGuests`. If the submission includes an existing attendee alongside a new guest, `newGuests.includes(attendee.email)` (`packages/emails/email-manager.ts:541`) is true for the existing attendee, who gets a fresh \"scheduled\" email instead of the \"guests added\" one.\n\nUnlike `sendLocationChangeEmails` directly above it (`email-manager.ts:495-524`), `sendAddGuestsEmails` takes no `eventTypeMetadata`. It skips the `eventTypeDisableHostEmail` and `eventTypeDisableAttendeeEmail` checks, so event types that disabled standard emails still send them.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Attendees are persisted before the calendar update, and failures are swallowed",
+      "description": "`prisma.booking.update` commits the new attendees, then `updateCalendarAttendees` runs outside any try/catch and its result is discarded. `updateAllCalendarEvents` returns `success: false` entries rather than throwing, and `updateCalendarAttendees` only `console.error`s when there are no references (`EventManager.ts:596-602`). The handler therefore returns \"Guests added\" even when no calendar was updated. The email catch block is `console.log(\"Error sending AddGuestsEmails\")` with the error dropped; `editLocation.handler.ts` shows the project `logger` being used for the comparable failure path.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:165-171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dialog error handling shows untranslated keys and stale validation state",
+      "description": "- **Dead fallback:** `message` is a template string (`${err.data?.code}: ${t(err.message)}`), so it is always truthy and `t(\"unable_to_add_guests\")` is unreachable.\n- **Missing locale key:** the handler throws `you_do_not_have_permission`, which a repo-wide search finds only in the handler, not in `apps/web/public/static/locales/en/common.json`. The toast will read `FORBIDDEN: you_do_not_have_permission`.\n- **Sticky error banner:** `isInvalidEmail` is only reset by the Cancel button (line 91). It stays set after the user fixes the input, after a successful submit, and after dismissing via overlay or Esc, so the next open shows the error over an empty form.\n- **Per-render schema:** the zod schema is rebuilt on every render (lines 26-29) and duplicates the server schema.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx:42-45"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`MultiEmail` duplicates the form-builder implementation",
+      "description": "The component is a near-verbatim copy of the `multiemail` factory in `packages/features/form-builder/Components.tsx:231-314`, which carries a `//TODO: Make it a ui component`. The form-builder was not switched to the new component, so there are now two copies to maintain. Smaller issues in the copy:\n- The `\"Remove email\"` tooltip is hardcoded and not passed through `t()` (line 46).\n- `<label htmlFor=\"emails\">` points at no element with that id (line 21).\n- `key={index}` is used on a list that supports removal from the middle (line 26).\n- The component imports from the `@calcom/ui` barrel that also exports it (line 2).\n- `MultiEmailLazy.tsx:3` copies the \"These are like 40kb\" comment from `PhoneInputLazy.tsx`, which is not true for this component.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "packages/ui/form/MultiEmail.tsx:12-94"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests for the new mutation or email path",
+      "description": "A search of `*.test`, `*.spec` and `*.e2e` files finds no reference to `addGuests`, `AddGuests`, or the `add_members` test id. The authorization matrix, the blacklist and dedupe filtering, and the new-versus-existing email split are all untested. The first two contain the defects above, which simple unit tests would have caught.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Organizer email deviates slightly from its sibling template",
+      "description": "`from` uses `APP_NAME`, whereas `organizer-scheduled-email.ts:47` and `organizer-location-change-email.ts:23` use `EMAIL_FROM_NAME`, so the `EMAIL_FROM_NAME` env override is ignored for this email. `renderEmail(\"OrganizerAddGuestsEmail\", \u2026)` also omits `teamMember`, so team members get the body in the organizer's locale and timezone; the location-change template has the same omission.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/emails/templates/organizer-add-guests-email.ts:23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Handler loads credentials it never uses",
+      "description": "The booking query includes `user.credentials: true`, copied from `bookingsProcedure`, but the handler never reads `booking.user.credentials`. It pulls credential keys into memory for no purpose. The handler also re-queries the organizer (lines 58-68) although `booking.user` is already loaded.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:35-40"
+    },
+    {
+      "severity": "PASS",
+      "title": "Router wiring and booking-list integration follow existing conventions",
+      "description": "The lazy-loaded handler cache entry matches the other procedures in the file. In `BookingListItem.tsx`, the `add_members` action references `setIsOpenAddGuestsDialog` before its `useState` at line 268, but only inside an `onClick` closure, the same as the existing `setIsOpenLocationDialog` usage, so it is safe at runtime. The other new locale keys (`additional_guests`, `guests_added`, `new_guests_added`, `guests_added_event_type_subject`, `emails_must_be_unique_valid`, `add_emails`, `unable_to_add_guests`) are present in `common.json`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "packages/trpc/server/routers/viewer/bookings/_router.tsx:79-95"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Team admin/owner check uses `&&`, so team admins are denied",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:46-48",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Guest blacklist can be bypassed by letter case",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:70-78",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "No server-side dedupe or size limit on `guests`",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts:3-6",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Any attendee may add guests, and calendar sync uses the caller's credentials",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:52-56",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Email recipients are split on raw input, and standard-email opt-outs are ignored",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:168",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Attendees are persisted before the calendar update, and failures are swallowed",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:165-171",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dialog error handling shows untranslated keys and stale validation state",
+      "location": "apps/web/components/dialog/AddGuestsDialog.tsx:42-45",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`MultiEmail` duplicates the form-builder implementation",
+      "location": "packages/ui/form/MultiEmail.tsx:12-94",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests for the new mutation or email path",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Organizer email deviates slightly from its sibling template",
+      "location": "packages/emails/templates/organizer-add-guests-email.ts:23",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Handler loads credentials it never uses",
+      "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:35-40",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Router wiring and booking-list integration follow existing conventions",
+      "location": "packages/trpc/server/routers/viewer/bookings/_router.tsx:79-95",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "diff": "727ce43337184249d174cc06314c8cd7209320be...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:53:13.048013",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 30,
+  "injected": [],
+  "files_read": [
+    "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+    "apps/web/components/booking/BookingListItem.tsx",
+    "apps/web/components/dialog/AddGuestsDialog.tsx",
+    "packages/trpc/server/routers/viewer/bookings/_router.tsx",
+    "packages/trpc/server/routers/viewer/bookings/util.ts",
+    "packages/trpc/server/routers/viewer/bookings/editLocation.handler.ts",
+    "packages/emails/templates/organizer-scheduled-email.ts",
+    "packages/emails/templates/attendee-scheduled-email.ts",
+    "packages/emails/email-manager.ts",
+    "packages/ui/form/MultiEmail.tsx",
+    "packages/ui/form/PhoneInputLazy.tsx",
+    "packages/emails/src/templates/OrganizerScheduledEmail.tsx",
+    "packages/emails/templates/organizer-location-change-email.ts",
+    "packages/emails/templates/attendee-location-change-email.ts",
+    "packages/features/form-builder/Components.tsx"
+  ],
+  "searches": [
+    "grep export async function isTeamAdmin|export async function isTeamOwner in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/lib/server/queries/teams/index.ts",
+    "grep updateCalendarAttendees|updateLocation\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages",
+    "grep additional_guests|guests_added|unable_to_add_guests|emails_must_be_unique_valid|new_guests_added|\"add_emails\"|you_do_not_have_permission|booking_not_found|\"add_another\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/apps/web/public/static/locales/en/common.json",
+    "list_files packages/trpc/server/routers/viewer/bookings/* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "grep you_do_not_have_permission|BLACKLISTED_GUEST_EMAILS in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "grep onClickAddon in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/ui",
+    "grep AddGuests|addGuests|MultiEmail in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "grep private async updateAllCalendarEvents in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/core/EventManager.ts",
+    "list_files packages/emails/templates/*location-change* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "grep from \"@calcom/ui\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/ui",
+    "grep MultiEmail|multiemail|add_another in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/features/form-builder/Components.tsx",
+    "grep bookingSeat|attendees in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/trpc/server/routers/viewer/bookings/get.handler.ts",
+    "grep addGuests|AddGuests|add_members|editLocation in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740",
+    "grep EMAIL_FROM_NAME|export const APP_NAME in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca14740/packages/lib/constants.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 26333,
+  "diff_chars_injected": 26333,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 31,
+  "prompt_tokens": 244997,
+  "cached_tokens": 184133,
+  "cache_write_tokens": 60854,
+  "completion_tokens": 11505,
+  "reasoning_tokens": null,
+  "duration_seconds": 109.94968941714615,
+  "cost_usd": 1.4720975,
+  "cost_basis": "provider"
+}

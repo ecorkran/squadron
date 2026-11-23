@@ -1,0 +1,106 @@
+{
+ "case": "discourse-graphite-ai10",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 13,
+  "F15": 14,
+  "F16": 15
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The migration indexes the first query result without checking whether an `embed_category` row exists."
+  ],
+  "F2": [
+   "KEEP",
+   "Raw SQL preserves legacy URL-form entries, but host lookup compares against normalized URI hostnames."
+  ],
+  "F3": [
+   "KEEP",
+   "Interpolating host values directly into SQL can break the insert or alter the query when a value contains an apostrophe."
+  ],
+  "F4": [
+   "KEEP",
+   "The raw SQL operations make this `change` migration irreversible, and its settings deletion cannot be restored."
+  ],
+  "F5": [
+   "KEEP",
+   "The callback calls `sub!` on `host` before validation, so a nil host raises instead of failing validation."
+  ],
+  "F6": [
+   "KEEP",
+   "The validator accepts ports that lookup ignores and rejects valid domains with TLDs longer than five letters."
+  ],
+  "F7": [
+   "KEEP",
+   "Duplicate hosts are allowed and the unordered `first` lookup can select different categories."
+  ],
+  "F8": [
+   "KEEP",
+   "Unlisted-host imports now fall back to the uncategorized category instead of the legacy embed category."
+  ],
+  "F9": [
+   "KEEP",
+   "Missing hosts cause nil dereferences, and `destroy` renders success without checking whether destruction succeeded."
+  ],
+  "F10": [
+   "KEEP",
+   "The exposed update action renders the current state without persisting changes."
+  ],
+  "F11": [
+   "KEEP",
+   "The `_ids` branch can call `map` on null and can replace valid IDs with undefined entries when side-loaded records are absent."
+  ],
+  "F12": [
+   "KEEP",
+   "A successful save leaves the buffered input intact, so later edits can display stale, unnormalized text."
+  ],
+  "F13": [
+   "KEEP",
+   "A failed deletion has no rejection handler and therefore provides no failure feedback."
+  ],
+  "F14": [
+   "DROP",
+   "This finding concerns missing test coverage, not a behavior defect in the changed code."
+  ],
+  "F15": [
+   "DROP",
+   "The mock makes the test ineffective, but that is a test-quality issue rather than a behavior defect."
+  ],
+  "F16": [
+   "DROP",
+   "The fabricator file placement is a structural issue and does not change runtime behavior."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12
+ ],
+ "cost_usd": 0.00542622
+}

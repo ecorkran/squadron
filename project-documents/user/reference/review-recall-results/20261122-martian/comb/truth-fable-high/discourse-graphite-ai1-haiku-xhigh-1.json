@@ -1,0 +1,43 @@
+{
+ "case": "discourse-graphite-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 3,
+  "F3": 4,
+  "F4": 5,
+  "F5": 6
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the second `self.downsize(from, to, dimensions, opts={})` at `optimized_image.rb:149` overrides the first, so the five-argument call at `resize_emoji.rb:14` raises `ArgumentError`."
+  ],
+  "F2": [
+   "KEEP",
+   "utilities.js:182` and `:246` hardcode 10 MB, so the client check and the 413 message no longer follow `max_image_size_kb`/`max_attachment_size_kb`, while the server validator still enforces the settings."
+  ],
+  "F3": [
+   "KEEP",
+   "the loop at `uploads_controller.rb:66-69` discards `downsize`'s `false` return, so a failing convert is retried five times with no log (a non-zero exit returns `false` without logging) and the oversized file goes on to `Upload.create_for`."
+  ],
+  "F4": [
+   "KEEP",
+   "FileHelper.download` returns a truncated file without raising once past the now-fixed `10.megabytes` cap, and that file enters the new downsize loop, which can shrink it under the limit and past the validator; not executed, so it depends on `convert` accepting truncated input."
+  ],
+  "F5": [
+   "KEEP",
+   "the loop passes `allow_animation: SiteSetting.allow_animated_thumbnails`, and when that is off `downsize_instructions` converts `#{from}[0]`, so an oversized animated GIF original is stored as its first frame only."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  3,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.3644787
+}

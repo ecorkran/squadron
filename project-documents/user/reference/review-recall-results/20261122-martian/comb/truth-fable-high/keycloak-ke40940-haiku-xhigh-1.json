@@ -1,0 +1,24 @@
+{
+ "case": "keycloak-ke40940",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "getSubGroupsCount()` at GroupAdapter.java:272-276 now returns null when the delegate is gone, breaking the \"Never returns null\" contract in GroupModel.java:296, and `GroupUtils.populateSubGroupCount` passes that null straight into the representation."
+  ],
+  "F2": [
+   "DROP",
+   "the unguarded `modelSupplier.get()` dereferences in the `getSubGroupsStream` overloads (lines 256, 262, 268) appear to be pre-existing code outside this change (no diff tool was available to confirm), and the rest is a consistency complaint, not a defect in changed code."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.2828159
+}

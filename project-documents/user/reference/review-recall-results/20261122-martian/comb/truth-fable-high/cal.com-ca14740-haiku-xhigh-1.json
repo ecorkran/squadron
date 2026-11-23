@@ -1,0 +1,97 @@
+{
+ "case": "cal.com-ca14740",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10,
+  "F12": 11,
+  "F13": 12,
+  "F14": 14
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "isTeamAdmin(...) && isTeamOwner(...)` at addGuests.handler.ts:46-48 only passes OWNER, since `isTeamOwner` matches role OWNER alone, so team ADMINs get FORBIDDEN."
+  ],
+  "F2": [
+   "KEEP",
+   "the blacklist is lowercased but compared with the raw guest via `includes(guest)`, with no lowercasing or `extractBaseEmail`, unlike handleNewBooking.ts:742-743."
+  ],
+  "F3": [
+   "KEEP",
+   "attendees are written first, `updateCalendarAttendees` returns void and `updateAllCalendarEvents` catches its own errors into `success: false` results, so the handler returns \"Guests added\" regardless."
+  ],
+  "F4": [
+   "KEEP",
+   "the catch at addGuests.handler.ts:169-171 discards `err`, logs only a fixed string, and the handler still returns success."
+  ],
+  "F5": [
+   "KEEP",
+   "the server schema has no uniqueness check, the filter only excludes existing attendees case-sensitively, and Attendee has no unique constraint, so `createMany` inserts duplicate rows."
+  ],
+  "F6": [
+   "KEEP",
+   "the handler passes raw `guests` rather than `uniqueGuests` to `sendAddGuestsEmails`, so an existing attendee in the request matches `newGuests.includes` and gets `AttendeeScheduledEmail`."
+  ],
+  "F7": [
+   "KEEP",
+   "sendAddGuestsEmails` takes no event-type metadata and sends host and attendee emails unconditionally, while `sendLocationChangeEmails` beside it applies the disable gates."
+  ],
+  "F8": [
+   "KEEP",
+   "the handler checks only permissions and never looks at `booking.status` or `endTime`, so a direct call on a cancelled or past booking adds attendees and sends emails."
+  ],
+  "F9": [
+   "KEEP",
+   "an attendee-email match is enough to pass, the guests array has no `.max()`, and the mutation runs on plain `authedProcedure` with no rate limiting, so sends to arbitrary addresses are unbounded."
+  ],
+  "F10": [
+   "KEEP",
+   "you_do_not_have_permission` is absent from en/common.json and the dialog shows `t(err.message)`, so the toast displays the raw key."
+  ],
+  "F11": [
+   "KEEP",
+   "both new templates pass the raw key as `subject`, which overrides via `{...props}` and reaches `<title>` through `props.subject || subject` and `EmailHead`."
+  ],
+  "F12": [
+   "KEEP",
+   "organizer-add-guests-email.ts:23 uses `APP_NAME` for the sender, while the parent organizer-scheduled-email.ts:47 uses `EMAIL_FROM_NAME`, so a configured sender name is ignored for this email."
+  ],
+  "F13": [
+   "KEEP",
+   "the dialog is always mounted and `isInvalidEmail` is reset only by Cancel, so the error persists after success or outside-close; the template-literal message is always truthy, making the fallback unreachable."
+  ],
+  "F14": [
+   "KEEP",
+   "the new MultiEmail.tsx:46 hardcodes `content=\"Remove email\"` while the rest of the component uses `t()`, so non-English locales see English text."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  14
+ ],
+ "cost_usd": 1.3116075999999999
+}

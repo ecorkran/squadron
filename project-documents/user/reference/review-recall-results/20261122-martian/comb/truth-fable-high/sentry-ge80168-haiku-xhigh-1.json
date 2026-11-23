@@ -1,0 +1,19 @@
+{
+ "case": "sentry-ge80168",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "MetricAlertDetectorHandler` at `src/sentry/incidents/grouptype.py:11-12` has only `pass` while `StatefulDetectorHandler` leaves four members abstract, so `group_type.detector_handler(self)` at `src/sentry/workflow_engine/models/detector.py:86` raises `TypeError` for a `metric_alert_fire` detector."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0
+ ],
+ "cost_usd": 0.2084417
+}

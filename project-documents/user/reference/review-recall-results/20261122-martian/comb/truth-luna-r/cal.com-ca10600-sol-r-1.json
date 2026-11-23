@@ -1,0 +1,43 @@
+{
+ "case": "cal.com-ca10600",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "A nonempty `totpCode` skips password verification, while a valid backup code is accepted without checking that TOTP value."
+  ],
+  "F2": [
+   "KEEP",
+   "The code validates a previously read backup-code array and updates by user ID, allowing concurrent redemptions to succeed or restore consumed codes."
+  ],
+  "F3": [
+   "KEEP",
+   "The parent\u2019s `onEnable` callback runs only on the explicit Close button, so dismissing after enablement leaves its cached status stale."
+  ],
+  "F4": [
+   "KEEP",
+   "The handler shows a success toast without awaiting `writeText` or handling clipboard failure."
+  ],
+  "F5": [
+   "KEEP",
+   "tabIndex={-1}` removes the password-visibility button from sequential keyboard navigation."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "cost_usd": 0.00202519
+}

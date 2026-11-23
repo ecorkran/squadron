@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The `/fruits/:id` fixture always returns fruit 1, so `find('fruit', 2)` tests the wrong record",
+      "description": "The handler sets `const fruit = fruits[0];` and ignores the `:id` parameter. The updated `find embedded` test calls `store.find('fruit', 2)` (banana, `color_ids: [3]`) but asserts colors `[1, 2]`, which are apple's colors. The test only passes because the fixture ignores the id.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "test/javascripts/helpers/create-pretender.js.es6#/fruits/:id"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Host lookup compares a lowercased column against a non-lowercased input",
+      "description": "The query is `where(\"lower(host) = ?\", host)`, but `host` is `uri.host` and is never downcased. A referer such as `HTTP://EviltRout.com/page` yields `EviltRout.com`, which does not match the stored `eviltrout.com`, so the request is rejected. The fix is to downcase the input before the query.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/embeddable_host.rb#record_for_host"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`before_validation` crashes when `host` is nil",
+      "description": "`self.host.sub!(...)` is called without a nil guard. Building or validating a record with no `host` raises `NoMethodError` instead of producing a validation error. `save_host` in `embeddable_hosts_controller.rb` passes `params[:embeddable_host][:host]` straight through, so a request missing that field hits this path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/models/embeddable_host.rb#before_validation"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fabricator contents are swapped between the two files",
+      "description": "The file named `embeddable_host_fabricator.rb` now holds the `:category`, `:diff_category`, `:happy_category` and `:private_category` fabricators. `spec/fabricators/category_fabricator.rb` holds only the `:embeddable_host` fabricator. The category fabricators were moved out of their file and the new file was given the wrong content.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "spec/fabricators/embeddable_host_fabricator.rb"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The embedding `update` action persists nothing",
+      "description": "`update` only calls `render_serialized(@embedding, ...)`. A PUT to `customize/embedding` returns success without reading `params` or saving any hosts, so the route advertises an update that does not happen.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/admin/embedding_controller.rb#update"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Migration assumes an `embed_category` row exists and builds SQL by string interpolation",
+      "description": "The first query reads `execute(...)[0]['id']`, which raises `NoMethodError` when no `embed_category` setting matches a category. Each legacy host is interpolated directly into `INSERT ... VALUES ('#{h}', ...)`, so any value containing a quote breaks the statement or allows injection. Parameterised inserts or escaping would avoid both problems.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`replace('_', '-')` only replaces the first underscore",
+      "description": "`type.replace('_', '-')` replaces only the first occurrence. Any future type with two or more underscores will not match `ADMIN_MODELS`. Using a global regex (`/_/g`) would cover all cases. No current type in the list is affected.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/adapters/rest.js.es6#basePath"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`pluralize` on the store is used without confirmation that it exists",
+      "description": "`obj[self.pluralize(subType)]` depends on a `pluralize` method on the store. I could not confirm from the diff that it exists. Also, `hydrated || []` is dead code, because `Array.prototype.map` always returns an array, which is truthy.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/models/store.js.es6#_hydrateEmbedded"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Describe block name typo: \"emeddable\"",
+      "description": "The context is titled `'with an emeddable host'`. The spelling should be \"embeddable\".",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "spec/models/topic_spec.rb#expandable_first_post?"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Spec describe block still names the removed method",
+      "description": "The block is titled `\"allows_embeddable_host\"`, but the method under test is now `EmbeddableHost.host_allowed?`. The name no longer matches the code it exercises.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "spec/models/embeddable_host_spec.rb"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The `/fruits/:id` fixture always returns fruit 1, so `find('fruit', 2)` tests the wrong record",
+      "location": "test/javascripts/helpers/create-pretender.js.es6#/fruits/:id",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Host lookup compares a lowercased column against a non-lowercased input",
+      "location": "app/models/embeddable_host.rb#record_for_host",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`before_validation` crashes when `host` is nil",
+      "location": "app/models/embeddable_host.rb#before_validation",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Fabricator contents are swapped between the two files",
+      "location": "spec/fabricators/embeddable_host_fabricator.rb",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The embedding `update` action persists nothing",
+      "location": "app/controllers/admin/embedding_controller.rb#update",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Migration assumes an `embed_category` row exists and builds SQL by string interpolation",
+      "location": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`replace('_', '-')` only replaces the first underscore",
+      "location": "app/assets/javascripts/discourse/adapters/rest.js.es6#basePath",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`pluralize` on the store is used without confirmation that it exists",
+      "location": "app/assets/javascripts/discourse/models/store.js.es6#_hydrateEmbedded",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Describe block name typo: \"emeddable\"",
+      "location": "spec/models/topic_spec.rb#expandable_first_post?",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Spec describe block still names the removed method",
+      "location": "spec/models/embeddable_host_spec.rb",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai10",
+    "diff": "7922902c7f148c6ed71d530b47565a9c106175f1...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:56:36.400852",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 32611,
+  "diff_chars_injected": 32611,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 17986,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 16013,
+  "completion_tokens": 8253,
+  "reasoning_tokens": null,
+  "duration_seconds": 36.44646704103798,
+  "cost_usd": 0.00901591,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

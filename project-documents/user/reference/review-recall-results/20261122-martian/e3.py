@@ -16,7 +16,8 @@ def table(ev, tools):
                 if g.get("category") in STRICT: tot[g["severity"]] += 1
         out[t] = (hit, tot, fp, n)
     return out
-rows = {**table(ours, ["sq-haiku-t", "sq-solr-t", "sq-pair-t", "sq-pair-luna-t", "sq-recipe-t"]), **table(theirs, ["augment", "qodo-extended-v2", "cubic-v2", "copilot-v2", "coderabbit", "greptile-v4-1", "bugbot", "claude-code", "devin"])}
+ours_tools = sorted({t for by in ours.values() for t in by if t.endswith("-t")})  # every titles-only squadron entry judged so far
+rows = {**table(ours, ours_tools), **table(theirs, ["augment", "qodo-extended-v2", "cubic-v2", "copilot-v2", "coderabbit", "greptile-v4-1", "bugbot", "claude-code", "devin"])}
 print(f"{'entry':18}{'Critical':>10}{'High':>10}{'Crit+High':>11}{'Medium':>10}{'Low':>9}{'false flags':>13}{'PRs':>5}")
 for t, (hit, tot, fp, n) in rows.items():
     ch = hit["Critical"] + hit["High"]; cht = tot["Critical"] + tot["High"]

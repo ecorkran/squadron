@@ -1,0 +1,25 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "sol-r",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` is serialized without the anonymous-user restriction, exposing TL0 users\u2019 website details."
+  ],
+  "F2": [
+   "KEEP",
+   "Saving preferences updates `website` but not `website_name`, leaving the displayed label stale until reload."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.00200071
+}

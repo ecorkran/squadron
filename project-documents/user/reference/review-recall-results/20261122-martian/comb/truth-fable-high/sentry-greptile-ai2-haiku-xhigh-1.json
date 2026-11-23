@@ -1,0 +1,55 @@
+{
+ "case": "sentry-greptile-ai2",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 5,
+  "F6": 6,
+  "F7": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "OptimizedCursorPaginator.get_item_key` calls `math.ceil`/`math.floor` on the `datetime` field, so `build_cursor` raises `TypeError` for any non-empty page, and `value_from_cursor` returns a raw int."
+  ],
+  "F2": [
+   "KEEP",
+   "enable_advanced` is evaluated on every GET and dereferences `organization_context.member`, which is `None` for API-key callers (`AnonymousUser`, `user_id=None`), giving an `AttributeError`."
+  ],
+  "F3": [
+   "KEEP",
+   "the code now runs `zadd`/`zcard`/`zunionstore`/`zscan` on the unchanged `span-buf:s:` key names, so set keys left from before the change return WRONGTYPE until they expire."
+  ],
+  "F4": [
+   "KEEP",
+   "zpopmin` in `add-buffer.lua` drops spans over 1000 with no metric or log, and `max_segment_spans` is no longer checked anywhere in `buffer.py`, so the loss is silent."
+  ],
+  "F5": [
+   "KEEP",
+   "the changed line clamps negative offsets for next cursors while `build_cursor` still uses the negative value, and passes them unclamped to the queryset slice for prev cursors, where Django raises an uncaught error."
+  ],
+  "F6": [
+   "KEEP",
+   "the `enable_advanced_features` branch slices the queryset with a negative start, which Django rejects, so the branch always raises."
+  ],
+  "F7": [
+   "KEEP",
+   "zunionstore` is called without `AGGREGATE`, so a payload present in both source sets gets summed scores and skews which spans `zpopmin` evicts."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  5,
+  6,
+  8
+ ],
+ "cost_usd": 1.0799016
+}

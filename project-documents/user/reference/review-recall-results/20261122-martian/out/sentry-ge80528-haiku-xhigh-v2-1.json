@@ -1,0 +1,117 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Monitor context builds a translated config copy but returns the untranslated `monitor.config`",
+      "description": "Line 160 copies the config, and lines 161-162 replace `schedule_type` in that copy with its display name (for example \"interval\"). The returned dict on line 168 uses `monitor_environment.monitor.config` rather than `config`, so the translated copy is discarded. The event's `contexts.monitor.config.schedule_type` therefore carries the raw integer (`2` for INTERVAL, per `ScheduleType` in src/sentry/monitors/models.py:211-214). The existing test at tests/sentry/monitors/logic/test_mark_failed.py:118-119 asserts `\"schedule_type\": 2`, so it passes against the defect. A fix will need to update that expectation. The same code was removed verbatim from `mark_failed.py`, so the defect predates this change. It is reported here because the change places it in a new file.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:160-168"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Moved logic matches the removed code, and the imports and call sites are consistent",
+      "description": "I compared the new `try_incident_threshold`, `create_incident_occurrence`, `get_failure_reason`, and `get_monitor_environment_context` with the removed versions in the diff, and only the names differ. Every import kept or added in the four files is used. `types.py` already imports `datetime` and `TypedDict`, so the new `SimpleCheckIn` class resolves. I grepped the repo, and no caller or test references `mark_failed_threshold`, `mark_failed.SimpleCheckIn`, or the old `create_issue_platform_occurrence` name in the monitors package. The `create_issue_platform_occurrence` references in the uptime package are a separate function. The attributes used by the moved code (`get_schedule_type_display`, `get_status_display`, `get_type_display`, `get_last_successful_checkin`, `active_incident`, `grouphash`) all exist on the models.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/sentry/monitors/logic/incidents.py:14"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Monitor context builds a translated config copy but returns the untranslated `monitor.config`",
+      "location": "src/sentry/monitors/logic/incident_occurrence.py:160-168",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Moved logic matches the removed code, and the imports and call sites are consistent",
+      "location": "src/sentry/monitors/logic/incidents.py:14",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "diff": "b695d416e601becddb96a381968cc3b5c8f1bd40...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:04:40.664832",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "injected": [],
+  "files_read": [
+    "src/sentry/monitors/logic/mark_failed.py",
+    "src/sentry/monitors/logic/incidents.py",
+    "src/sentry/monitors/logic/incident_occurrence.py",
+    "src/sentry/monitors/types.py",
+    "src/sentry/monitors/models.py",
+    "tests/sentry/monitors/logic/test_mark_failed.py"
+  ],
+  "searches": [
+    "grep mark_failed_threshold|create_issue_platform_occurrence|SimpleCheckIn|try_incident_threshold|create_incident_occurrence|get_failure_reason|get_monitor_environment_context in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "grep def get_schedule_type_display|schedule_type = |def get_type_display|type = models|def get_status_display|status = models|def get_last_successful_checkin|def get_environment|def active_incident|is_muted|owner_actor|def grouphash|grouphash = |config = |class MonitorIncident|class Monitor\\(|class Monit\u2026 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/src/sentry/monitors/models.py",
+    "grep mark_failed_threshold|create_issue_platform_occurrence|mark_failed\\.SimpleCheckIn|logic\\.mark_failed import|logic\\.incidents|incident_occurrence|try_incident_threshold in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "list_files **/monitors/**/test_mark_failed*.py in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528",
+    "grep class ScheduleType|def get_name|CRONTAB = |INTERVAL = |schedule_type in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/src/sentry/monitors",
+    "grep contexts|monitor\\\"\\]\\[\\\"config\\\"\\]|\\\"config\\\"|schedule_type|mock\\.patch|patch\\(|caplog in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/tests/sentry/monitors/logic/test_mark_failed.py",
+    "grep mark_failed\\( in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge80528/src/sentry/monitors"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 21046,
+  "diff_chars_injected": 21046,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 285271,
+  "cached_tokens": 240966,
+  "cache_write_tokens": 44289,
+  "completion_tokens": 20607,
+  "reasoning_tokens": null,
+  "duration_seconds": 94.60640929173678,
+  "cost_usd": 0.02259016,
+  "cost_basis": "provider"
+}

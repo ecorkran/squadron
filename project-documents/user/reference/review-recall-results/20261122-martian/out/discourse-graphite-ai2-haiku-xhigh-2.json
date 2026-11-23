@@ -1,0 +1,327 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Unsubscribe template is not attached to the `topicUnsubscribe` route",
+      "description": "The route is declared top-level at `routes/app-route-map.js.es6:13` as `topicUnsubscribe`. Its route file, `routes/topic-unsubscribe.js.es6`, has no `renderTemplate` or `templateName`, so Ember looks for `topic-unsubscribe`. That template does not exist. The file at `templates/topic/unsubscribe.hbs` is only reachable as a nested `topic.unsubscribe` route, and the `topic` resource has only `fromParams` and `fromParamsNear` children (`app-route-map.js.es6:8-11`). This codebase handles the mismatch explicitly elsewhere: `routes/user-badges.js.es6:13-15` calls `this.render(\"user/badges\", {into: \"user\"})`. As written, the page should render no content, so neither the notification text nor the notification button appears. Fix by adding `renderTemplate() { this.render(\"topic/unsubscribe\"); }` to the route, or by moving the file to `templates/topic-unsubscribe.hbs`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Unsubscribe writes the level without the reason field, so auto-tracking can undo it",
+      "description": "`unsubscribe` loads the `TopicUser` row, sets `notification_level`, and calls `save!`. The existing setter, `set_notifications` (`topics_controller.rb:330-334`), uses `TopicUser.change`. That method also sets `notifications_reason_id` to `user_changed` (`app/models/topic_user.rb:87-89`) and publishes the MessageBus `notification_level_change` (`topic_user.rb:112-114`). The unsubscribe path does neither.\n\n`TopicUser.update_last_read` (`topic_user.rb:155-167`) raises the level to tracking when `notifications_reason_id IS NULL` and the user's `total_msecs_viewed` exceeds `auto_track_topics_after`, whose default is 240000 ms (`config/site_settings.yml:285`). That runs on every timings post (`app/models/post_timing.rb:133`, reached from `topics_controller.rb:392-400`). Rows created by the notification mailer (`app/mailers/user_notifications.rb:312`) and by plain visits have a NULL reason. For a recipient who never set a level on that topic, unsubscribe sets muted, and the next timings post over the threshold sets it back to tracking. I have not run this; the mechanism is in the SQL. Fix by replacing the find/save block with `TopicUser.change(current_user.id, topic.id, notification_level: ...)`, as `set_notifications` does.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:105-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Toggle logic does not stop notifications for watching or tracking users",
+      "description": "If the current level is above regular, the action sets regular. Otherwise it sets muted. Regular still notifies on replies and mentions (`config/locales/client.en.yml:1099-1101`). A watching or tracking user who clicks the \"stop receiving notifications\" link (`client.en.yml:985`, `config/locales/server.en.yml:1855`) keeps getting reply notifications after the first click. Only a second click mutes. The action is also not idempotent. Either always set muted, or change the copy to match the two-step behavior.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:107-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A user with no `topic_users` row gets a 500",
+      "description": "`TopicUser.find_by` can return nil, and `tu.notification_level` then raises `NoMethodError`. This is reachable without any email. A logged-in user who opens `/t/<slug>/<id>/unsubscribe` with the correct slug, for a topic they can see but have never opened, gets a 500. `TopicView.new` allows any visible topic (`lib/topic_view.rb:411`), and nothing creates the row. Normal email links are safer, because the mailer creates the row at send time (`user_notifications.rb:312`). The `TopicUser.change` fix in the previous finding also resolves this.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:105-107"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A state change happens on GET with no token",
+      "description": "Both unsubscribe routes are `get` and mutate state. `protect_from_forgery` (`app/controllers/application_controller.rb:21`) does not check GET requests. A third-party page can therefore mute a logged-in user's topic by navigating them to the URL, or by loading it as an image, depending on cookie SameSite behavior. The impact is limited to muting the victim's own topic. The codebase already has a safer pattern: `EmailController#unsubscribe` uses a per-user signed key (`email_controller.rb:12-13`, `DigestUnsubscribeKey`). A tokenized link would also let email recipients unsubscribe without logging in, which `ensure_logged_in` (`topics_controller.rb:28`) currently requires.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "config/routes.rb:440-441"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tests cover the new endpoint or the URL plumbing",
+      "description": "`spec/controllers/topics_controller_spec.rb` has no `unsubscribe` examples. The message builder spec now passes `unsubscribe_url` (`spec/components/email/message_builder_spec.rb:169-179`), but its only body assertion checks `user_preferences_url`, so the new URL is never asserted. `Topic#unsubscribe_url` (`app/models/topic.rb:719-721`) and the Ember route and controller have no tests. Missing cases include logged-out redirect, slug-mismatch 301, each level transition, the no-row case, and the JSON format.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:98-116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unrelated refactors and reformatting are bundled into this change",
+      "description": "The route block is reordered, and the `post_number` constraints are dropped from the summary routes, though those paths have no such segment. Other unrelated churn includes: `routes/topic-from-params.js.es6` rewritten (`var` to `const`, method shorthand, `self` moved); `lib/email/message_builder.rb:24-40` and `58-68` reformatted; `app/models/topic_user.rb` reformatted throughout, including a 3-space indent on the chained `.where` at line 10; and `app/views/email/notification.html.erb` restructured. I see no functional change in these, but they make the feature hard to review and add regression risk. Split them into a separate commit.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "config/routes.rb:434-443"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `List-Unsubscribe` header still points to preferences, not the new URL",
+      "description": "`header_args` still sets `List-Unsubscribe` to `user_preferences_url`. The new `unsubscribe_url` appears only in the body, through the `unsubscribe_link` string (`config/locales/server.en.yml:1852-1855`). If that is intentional, fine. The spec change that adds `unsubscribe_url` to the header test suggests the header may have been expected to use it.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "lib/email/message_builder.rb:107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Title markup changes for existing dropdowns",
+      "description": "The `undefined` guard is correct. But the in-repo subclasses `notifications-button.js.es6:6` and `pinned-button.js.es6:6` default `title` to `''`. They used to render an empty `<h4 class='title'>`, and now they render nothing. Check that no layout depends on it. The title is also still concatenated unescaped. That predates this change and is safe only while callers pass static strings.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/components/dropdown-button.js.es6:27-30"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Title is inserted as HTML and relies on server-side escaping",
+      "description": "`stopNotificiationsText` places `fancyTitle` into a string that the template renders triple-stash (`templates/topic/unsubscribe.hbs:3`). This is safe today. `fancy_title` HTML-escapes the title (`app/models/topic.rb:263-264`), and `Discourse.Emoji.unescape` only swaps shortcodes. But the safety comes entirely from that server method. Escaping the title in this controller would make it independent of the server. The identifier is also misspelled (`Notificiations`) here and in the template.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6:5-7"
+    },
+    {
+      "severity": "PASS",
+      "title": "Access checks are in place for the unsubscribe action",
+      "description": "`unsubscribe` is in the `ensure_logged_in` list, and `TopicView.new` calls `guardian.ensure_can_see!` (`lib/topic_view.rb:411`). The row lookup is keyed on `current_user.id`, so a user can only change their own row.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "app/controllers/topics_controller.rb:28"
+    },
+    {
+      "severity": "PASS",
+      "title": "New unsubscribe routes do not shadow existing topic routes",
+      "description": "Both `get \"t/:slug/:topic_id/unsubscribe\"` and `get \"t/:topic_id/unsubscribe\"` come before `get \"t/:topic_id/:post_number\"` (line 457). That route's `\\d+` constraint would reject `unsubscribe` anyway. I found no path that resolves to a different route after the `moderator-liked` and `summary` reordering.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "config/routes.rb:440-441"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unsubscribe template is not attached to the `topicUnsubscribe` route",
+      "location": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unsubscribe writes the level without the reason field, so auto-tracking can undo it",
+      "location": "app/controllers/topics_controller.rb:105-113",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Toggle logic does not stop notifications for watching or tracking users",
+      "location": "app/controllers/topics_controller.rb:107-111",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A user with no `topic_users` row gets a 500",
+      "location": "app/controllers/topics_controller.rb:105-107",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "A state change happens on GET with no token",
+      "location": "config/routes.rb:440-441",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "No tests cover the new endpoint or the URL plumbing",
+      "location": "app/controllers/topics_controller.rb:98-116",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unrelated refactors and reformatting are bundled into this change",
+      "location": "config/routes.rb:434-443",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "The `List-Unsubscribe` header still points to preferences, not the new URL",
+      "location": "lib/email/message_builder.rb:107",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Title markup changes for existing dropdowns",
+      "location": "app/assets/javascripts/discourse/components/dropdown-button.js.es6:27-30",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Title is inserted as HTML and relies on server-side escaping",
+      "location": "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6:5-7",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Access checks are in place for the unsubscribe action",
+      "location": "app/controllers/topics_controller.rb:28",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "New unsubscribe routes do not shadow existing topic routes",
+      "location": "config/routes.rb:440-441",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "diff": "8ed1eef2746ad2b5bc996a74233852e5d83a765d...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:41:30.974075",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 45,
+  "injected": [],
+  "files_read": [
+    "app/controllers/topics_controller.rb",
+    "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+    "app/assets/javascripts/discourse/routes/topic-from-params.js.es6",
+    "app/assets/javascripts/discourse/components/dropdown-button.js.es6",
+    "app/assets/javascripts/discourse/controllers/topic-unsubscribe.js.es6",
+    "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+    "app/assets/javascripts/discourse/routes/app-route-map.js.es6",
+    "app/assets/javascripts/discourse/views/topic-unsubscribe.js.es6",
+    "lib/email/message_builder.rb",
+    "app/models/topic_user.rb",
+    "app/models/topic.rb",
+    "app/assets/javascripts/discourse/routes/preferences-about.js.es6",
+    "app/assets/javascripts/discourse/routes/user-badges.js.es6",
+    "app/assets/javascripts/discourse/routes/about.js.es6",
+    "app/mailers/user_notifications.rb",
+    "app/controllers/email_controller.rb",
+    "app/mailers/rejection_mailer.rb"
+  ],
+  "searches": [
+    "grep unsubscribe in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "grep unsubscribe in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/config/locales",
+    "grep add_unsubscribe_link|unsubscribe_url in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "grep renderTemplate|templateName|showFooter in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/assets/javascripts",
+    "list_files app/assets/javascripts/discourse/templates/topic* in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "list_files app/assets/javascripts/discourse/{components/topic-notifications-button*,models/post-stream*,models/topic.js.es6} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "grep fancy_title|def fancy_title in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app",
+    "grep fancyTitle in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/assets/javascripts/discourse/models",
+    "grep TopicUser\\.(auto_track|auto_watch|change|create)|TopicUser\\.new|TopicUser\\.create in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/lib /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/disco\u2026",
+    "grep TopicUser\\.(auto_track|auto_watch|change|create)|TopicUser\\.new|TopicUser\\.create|TopicUser\\.get in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "grep unsubscribe|List-Unsubscribe in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/spec",
+    "grep update_last_read|def unsubscribe|DigestUnsubscribeKey|verify_authenticity|protect_from_forgery in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app",
+    "grep t/:|topics#show in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/config/routes.rb",
+    "grep dropdown-button|dropdown_button in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/assets/javascripts",
+    "grep auto_track_topics_after:|auto_track_topics_after in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/config/site_settings.yml",
+    "grep ensure_can_see|def initialize|find_topic|raise Discourse::NotFound|InvalidAccess in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/models/topic_view.rb",
+    "grep title in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/assets/javascripts/discourse/components",
+    "grep loadTopicView in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/assets/javascripts",
+    "grep this\\.store\\b|createRecord\\(|store:main|Ember\\.Application\\.inject|inject\\(['\"]route in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/assets/javascripts",
+    "grep updateFromJson|PreloadStore|preloaded in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app/assets/javascripts/discourse/models",
+    "list_files **/topic_view.rb in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "grep ensure_can_see|guardian in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/lib/topic_view.rb",
+    "list_files app/assets/javascripts/discourse/templates/{topic,user}/*.hbs in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "list_files app/assets/javascripts/discourse/controllers/object.js.es6 in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2",
+    "grep notification-options in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/app",
+    "grep ^\\s+(regular|muted|tracking|watching):\\s*$|regular\\.description|\"You will (receive|be notified)|You will (not|receive) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai2/config/locales/client.en.yml"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 3,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 19364,
+  "diff_chars_injected": 19364,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 46,
+  "prompt_tokens": 1005600,
+  "cached_tokens": 883980,
+  "cache_write_tokens": 121594,
+  "completion_tokens": 76277,
+  "reasoning_tokens": null,
+  "duration_seconds": 334.44330633291975,
+  "cost_usd": 0.18413448,
+  "cost_basis": "provider"
+}

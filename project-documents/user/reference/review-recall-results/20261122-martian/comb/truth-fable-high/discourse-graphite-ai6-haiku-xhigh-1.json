@@ -1,0 +1,31 @@
+{
+ "case": "discourse-graphite-ai6",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "website_name` is not in `untrusted_attributes` and has no working include gate, so the host/path is serialized for TL0 users viewed anonymously while `website` is hidden."
+  ],
+  "F2": [
+   "KEEP",
+   "AMS 0.8.3 only calls `include_<attr>?`, so `include_website_name` at `user_serializer.rb:153` is dead and `website_name` is always emitted (null when there is no website); the gem source is not in the repo, so the AMS behaviour is from knowledge of 0.8.x."
+  ],
+  "F3": [
+   "KEEP",
+   "preferences renders into the `user` template and binds `model.website`, but `save` never refreshes `website_name`, so the header label stays stale while the href updates."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.7456842
+}

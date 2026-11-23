@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`totalPages` adds an extra page when the member count is an exact multiple of the limit",
+      "description": "`totalPages` computes `Math.floor(user_count / limit) + 1`. With 50 members and a limit of 50 this returns 2 pages, so the pager offers a trailing empty page. `Math.ceil(user_count / limit)` is the correct page count. The `currentPage` computation on line 8 is correct, so only `totalPages` needs changing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`next` clamps the offset to `user_count`, which can land past the last page",
+      "description": "`offset = Math.min(group.get(\"offset\") + group.get(\"limit\"), group.get(\"user_count\"))` caps the offset at the total member count, not at the start of the last page. With 120 members and a limit of 50, paging forward from offset 50 sets the offset to 100, which is fine, but from offset 100 it sets 120, which returns an empty page. The clamp should be to the start of the last page, `(totalPages - 1) * limit`. `findMembers` in `group.js` applies the same `Math.min(user_count, ...)` clamp, so it has the same defect.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:32"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Remove-member link checks `automatic` against the member object, not the group",
+      "description": "The item view for each row is rendered with the member as its context, so `{{#unless automatic}}` resolves `automatic` on the `User` object, where it is undefined. The remove link therefore shows for automatic groups, where the server rejects the removal with a 422. The flag needs to come from the group, for example by passing it into the item view or exposing it on the controller.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/javascripts/admin/templates/group_member.hbs:1"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `remove_member` spec for automatic groups uses PUT, but the route is DELETE",
+      "description": "The test \"cannot remove members from automatic groups\" calls `xhr :put, :remove_member`, but `config/routes.rb` maps `remove_member` to `delete \"members\"`. The following test correctly uses `xhr :delete`. The first test should use DELETE too, or it may pass for the wrong reason.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "spec/controllers/admin/groups_controller_spec.rb"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`findMembers` returns `undefined` instead of a promise when the group name is empty",
+      "description": "The original code returned `Ember.RSVP.resolve([])`. The early return is now a bare `return ;`, so any caller that chains `.then` on the result will throw. The current callers do not chain, so this is not a live bug, but the return contract has changed.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "app/assets/javascripts/discourse/models/group.js#findMembers"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`totalPages` adds an extra page when the member count is an exact multiple of the limit",
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`next` clamps the offset to `user_count`, which can land past the last page",
+      "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:32",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Remove-member link checks `automatic` against the member object, not the group",
+      "location": "app/assets/javascripts/admin/templates/group_member.hbs:1",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "The `remove_member` spec for automatic groups uses PUT, but the route is DELETE",
+      "location": "spec/controllers/admin/groups_controller_spec.rb",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`findMembers` returns `undefined` instead of a promise when the group name is empty",
+      "location": "app/assets/javascripts/discourse/models/group.js#findMembers",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai8",
+    "diff": "a9bdd78c37b33118c148364396308b8bba632563...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:56:38.756338",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 29541,
+  "diff_chars_injected": 29541,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 15552,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 13579,
+  "completion_tokens": 5572,
+  "reasoning_tokens": null,
+  "duration_seconds": 24.98787220939994,
+  "cost_usd": 0.006944210000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

@@ -1,0 +1,30 @@
+{
+ "case": "grafana-gr107534",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "runSplitQuery` now applies `applyTemplateVariables` at querySplitting.ts:299 and `runQuery` \u2192 `super.query` applies it again with the same `filters`, so label-filter ad-hoc filters are appended twice and variables re-substituted."
+  ],
+  "F2": [
+   "KEEP",
+   "filtering on `expr` before interpolation lets an empty-resolving target through; the non-sharded group then reaches `runSplitGroupedQueries` with zero requests, which throws at `[0].partition` inside the unhandled `.then`, so the observable never emits."
+  ],
+  "F3": [
+   "DROP",
+   "nothing on the frontend puts `__auto` into `scopedVars`, so the old path also left `$__auto` for the backend to resolve per chunk; the finding asks for confirmation and shows no defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 1.2933051
+}

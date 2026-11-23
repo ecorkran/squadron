@@ -1,0 +1,37 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "desktop/topic-post.scss:291` has `h5 a` at 70% light / 30% dark, a swapped pair where the sibling `.username a` in `common/base/user.scss:119` uses 30/70; the base file could not be read, so the original 30% is inferred."
+  ],
+  "F2": [
+   "KEEP",
+   "mobile/topic-post.scss:182` has `h3` at 50/50, identical to `h4` at line 190, while desktop `h3` at line 321 is 20/80; the original 20% is inferred, not read from the base."
+  ],
+  "F3": [
+   "KEEP",
+   "mobile/modal.scss:102` has `.custom-message-length` at 30/70 while the same rule in `desktop/modal.scss:94` is 70/30, so the mobile hint renders with a different colour; the original 70% is inferred."
+  ],
+  "F4": [
+   "KEEP",
+   "group-member-info .name` is 50/50 in `desktop/user.scss:522` and `mobile/user.scss:497`, matching the sibling `.title`, while `.name` in `common/base/user.scss:124` is 30/70; the original 30% is inferred."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.31738340000000004
+}

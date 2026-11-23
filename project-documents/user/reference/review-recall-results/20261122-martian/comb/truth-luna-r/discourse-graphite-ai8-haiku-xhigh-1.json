@@ -1,0 +1,71 @@
+{
+ "case": "discourse-graphite-ai8",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "Adding an existing member can hit the unique join-table index and raise, leaving earlier additions applied."
+  ],
+  "F2": [
+   "KEEP",
+   "Deleting through `group.users` bypasses join-record callbacks, leaving the counter cache and matching primary-group assignment stale."
+  ],
+  "F3": [
+   "KEEP",
+   "The page count overstates exact multiples, allowing navigation to an empty page."
+  ],
+  "F4": [
+   "KEEP",
+   "The client clamps using the pre-removal count and accepts the empty-page response without correcting the offset."
+  ],
+  "F5": [
+   "KEEP",
+   "The public route fetches only the first 50 members and the template provides no pagination."
+  ],
+  "F6": [
+   "KEEP",
+   "Negative limits or offsets reach the query, and the endpoint does not cap the limit."
+  ],
+  "F7": [
+   "KEEP",
+   "The add and remove calls have no rejection handlers, so failed requests produce no admin-facing message."
+  ],
+  "F8": [
+   "KEEP",
+   "The create action ignores the submitted `alias_level` and saves the group with its default."
+  ],
+  "F9": [
+   "DROP",
+   "This is a missing-test concern, not a behavior defect."
+  ],
+  "F10": [
+   "DROP",
+   "This is a test-coverage concern, not a behavior defect."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.00446216
+}

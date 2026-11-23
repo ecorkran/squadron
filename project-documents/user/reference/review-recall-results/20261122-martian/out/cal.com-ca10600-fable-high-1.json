@@ -1,0 +1,395 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Backup code login skips both the password check and TOTP",
+      "description": "The password is only verified when `credentials.totpCode` is falsy (line 121), and the new branch at line 131 takes precedence over TOTP whenever `credentials.backupCode` is truthy. A request with `email`, any non-empty `totpCode` (never validated in this branch) and one valid `backupCode` therefore authenticates with no password and no TOTP. The identity-provider guard at line 113 is skipped the same way. The codes are offered as a plaintext download and clipboard copy, so one leaked code becomes a complete single-factor credential. The `!credentials.totpCode` skip is pre-existing, but this change extends it to a new credential type. The backup branch should require a verified password (e.g. reject `backupCode` combined with `totpCode`).",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/features/auth/lib/next-auth-options.ts:131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Backup code consumption is a non-atomic read-modify-write",
+      "description": "The code decrypts the list, checks `indexOf`, nulls the entry and writes the whole blob back with an unconditional `prisma.user.update`. Two concurrent logins with the same code both pass the check, so \"used exactly once\" (the `backup_code_instructions` text) is not guaranteed. Concurrent use of two different codes can also resurrect one of them through a lost update. Use a conditional update on the previously read ciphertext, or a transaction.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "packages/features/auth/lib/next-auth-options.ts:139-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unvalidated `backupCode` input and unguarded decrypt/parse",
+      "description": "`req.body.backupCode` comes from a JSON body and is used as `req.body.backupCode.replaceAll(...)` with no type check. A truthy non-string value (`123`, `[\"a\"]`, `{}`) throws a `TypeError` and yields an unhandled 500. `JSON.parse(symmetricDecrypt(...))` is also unguarded and untyped (`any`) here and in `next-auth-options.ts:139-141`, so a corrupt value or rotated key throws a raw error, and a non-array result is not caught. Validate the body with zod, as elsewhere in the repo, and parse the decrypted value into `(string | null)[]`.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:58-61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dismissing the dialog on the backup-codes step leaves the UI stale",
+      "description": "After `enable` succeeds, 2FA is on server-side, but `onEnable()` is now deferred to the Close button (lines 266-270). The parent's `onOpenChange` (`apps/web/pages/settings/security/two-factor-auth.tsx:64`) only toggles `open`. Dismissing with Escape or an overlay click therefore never runs `utils.viewer.me.invalidate()` or `resetState()`. The modal also stays on `DisplayBackupCodes`, so reopening it shows the old codes instead of the password step. Call `onEnable()` when enable succeeds, or route dismissal through the same close handler.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Backup codes and secrets persist in client state; blob URL is never revoked on close",
+      "description": "`resetState` clears only `password`, `errorMessage` and `step`. `backupCodes`, `backupCodesUrl`, `secret`, `dataUri` and the form's `totpCode` survive closing the modal. The object URL holding the plaintext codes is only revoked when setup runs again (line 98), never on close or unmount.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:71-75"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`type=\"password\"` prop disables the visibility toggle in the enable modal",
+      "description": "The field was changed from `TextField` to `PasswordField` but still passes `type=\"password\"`. `PasswordField` sets `type={isPasswordVisible ? \"text\" : \"password\"}` and then spreads `{...props}` (`packages/ui/components/form/inputs/Input.tsx:36-39`), so the caller's `type` always wins. The eye button toggles its icon but the input never becomes visible. Remove the `type` prop.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:174-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Backup-code form constraints are ineffective on login; matching is case-sensitive",
+      "description": "- **Empty submit on login:** the login form is `noValidate` (`apps/web/pages/auth/login.tsx:188`) and the zod schema passes `backupCode` through, so `required`/`minLength` do nothing. An empty code falls into the TOTP branch, returns `SecondFactorRequired`, and `login.tsx:156` only calls `setTwoFactorRequired(true)`. The user gets no error.\n- **Case sensitivity:** codes are lowercase hex (`setup.ts:61`) but the placeholder is `XXXXX-XXXXX`, and the server only strips dashes (`next-auth-options.ts:144`, `disable.ts:61`). Uppercase or whitespace-padded input fails as \"incorrect\". Normalise with `.trim().toLowerCase()`.\n- **Exhausted codes:** once all codes are nulled, the error is `IncorrectBackupCode` rather than `MissingBackupCodes`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "apps/web/components/auth/BackupCode.tsx:17-26"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Backup-code verification duplicated across two endpoints",
+      "description": "The key check, decrypt, `JSON.parse`, dash-strip and `indexOf` sequence is copy-pasted from `next-auth-options.ts:131-145`. The log message at `disable.ts:50` still says \"cannot proceed with backup code login\" in the disable endpoint. Extract a shared helper (e.g. `verifyBackupCode(encrypted, input)`) so normalisation and future hardening live in one place.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:48-64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`BackupCode.tsx` exports a component named `TwoFactor`",
+      "description": "The default export is `function TwoFactor(...)`, copied from `TwoFactor.tsx`. React DevTools and stack traces will show two different `TwoFactor` components. Rename it to `BackupCode`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "apps/web/components/auth/BackupCode.tsx:7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Loose typing of backup-code state",
+      "description": "`useState([])` infers `never[]`. It only compiles because `body` is `any` and `never` is assignable to `string` in `formatBackupCode(code)`. Use `useState<string[]>([])` and type the setup response.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Critical backup-code paths are untested; known-broken assertion left with a FIXME",
+      "description": "- **Missing coverage:** the only new coverage is the download filename and a toast. Login with a backup code, single-use enforcement, incorrect/missing-code errors and disabling 2FA with a backup code are deferred via the TODO at line 12, and there are no unit tests for the `authorize` branch.\n- **Vacuous copy check:** the toast at `EnableTwoFactorModal.tsx:278-279` fires whether or not `clipboard.writeText` succeeds, so lines 120-121 assert nothing about the copy.\n- **Vacuous switch check:** the diff adds a FIXME (lines 50-51) instead of fixing line 53. `expect(locator.isChecked()).toBeTruthy()` asserts on a Promise and always passes; the fix is `await expect(locator).toBeChecked()`.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "apps/web/playwright/login.2fa.e2e.ts:12"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Password visibility toggle removed from keyboard tab order globally",
+      "description": "`tabIndex={-1}` on the show/hide button in the shared `PasswordField` makes it unreachable by keyboard everywhere the component is used (login, signup, settings). This is an accessibility regression in a shared UI primitive, made as a side effect of an unrelated feature.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/ui/components/form/inputs/Input.tsx:49"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Clipboard write is not awaited or error-handled",
+      "description": "`navigator.clipboard.writeText(...)` returns a promise that is neither awaited nor caught. The success toast shows even when the write is rejected (permission denied, insecure context).",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:278-279"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Smaller structural points in the enable modal",
+      "description": "- `DisplayBackupCodes` is inserted second in `SetupStep` although it is the last step, which silently renumbers the enum.\n- `formatBackupCode` (line 163) is a pure helper declared inside the component, after the handler that uses it.\n- The download control nests a `<button>` inside an `<a>` (lines 283-287), which is invalid interactive nesting.\n- The `user` Omit list in `packages/trpc/server/createContext.ts:18-27` excludes `twoFactorSecret` but not the new `backupCodes`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:29-34"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Backup codes are stored reversibly encrypted rather than hashed",
+      "description": "This matches how `twoFactorSecret` is stored, and 5 bytes from `crypto.randomBytes` is adequate entropy. But the codes are only ever compared, so per-code hashes would avoid recoverable plaintext if `CALENDSO_ENCRYPTION_KEY` leaks. The `indexOf` comparison is also not constant-time, which matters little given the rate limiting at `next-auth-options.ts:109`.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "apps/web/pages/api/auth/two-factor/totp/setup.ts:61-68"
+    },
+    {
+      "severity": "PASS",
+      "title": "Schema, migration, fixtures and i18n are consistent",
+      "description": "- The nullable `backupCodes String?` column and the migration are additive and safe.\n- `buildUser` in `packages/lib/test/builder.ts:192` is updated.\n- All new translation keys exist in `apps/web/public/static/locales/en/common.json:2013-2019`.\n- `disable.ts:107` clears `backupCodes` together with the secret.\n- `getUserFromSession` uses an explicit `select` (`packages/trpc/server/middlewares/sessionMiddleware.ts:24-76`), so the encrypted codes are not exposed through the tRPC user context.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "packages/prisma/schema.prisma:205"
+    },
+    {
+      "severity": "PASS",
+      "title": "Error-code handling in the disable modal fixed to an exclusive chain",
+      "description": "The former independent `if` blocks let the final `else` overwrite the `IncorrectPassword` and `SecondFactorRequired` messages with \"something went wrong\". The `else if` chain fixes that and adds the two new codes.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "apps/web/components/settings/DisableTwoFactorModal.tsx:67-79"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Backup code login skips both the password check and TOTP",
+      "location": "packages/features/auth/lib/next-auth-options.ts:131",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Backup code consumption is a non-atomic read-modify-write",
+      "location": "packages/features/auth/lib/next-auth-options.ts:139-156",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Unvalidated `backupCode` input and unguarded decrypt/parse",
+      "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:58-61",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Dismissing the dialog on the backup-codes step leaves the UI stale",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:134-136",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "Backup codes and secrets persist in client state; blob URL is never revoked on close",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:71-75",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`type=\"password\"` prop disables the visibility toggle in the enable modal",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:174-176",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Backup-code form constraints are ineffective on login; matching is case-sensitive",
+      "location": "apps/web/components/auth/BackupCode.tsx:17-26",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Backup-code verification duplicated across two endpoints",
+      "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:48-64",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`BackupCode.tsx` exports a component named `TwoFactor`",
+      "location": "apps/web/components/auth/BackupCode.tsx:7",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Loose typing of backup-code state",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:64",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Critical backup-code paths are untested; known-broken assertion left with a FIXME",
+      "location": "apps/web/playwright/login.2fa.e2e.ts:12",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Password visibility toggle removed from keyboard tab order globally",
+      "location": "packages/ui/components/form/inputs/Input.tsx:49",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Clipboard write is not awaited or error-handled",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:278-279",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Smaller structural points in the enable modal",
+      "location": "apps/web/components/settings/EnableTwoFactorModal.tsx:29-34",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "Backup codes are stored reversibly encrypted rather than hashed",
+      "location": "apps/web/pages/api/auth/two-factor/totp/setup.ts:61-68",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Schema, migration, fixtures and i18n are consistent",
+      "location": "packages/prisma/schema.prisma:205",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Error-code handling in the disable modal fixed to an exclusive chain",
+      "location": "apps/web/components/settings/DisableTwoFactorModal.tsx:67-79",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600",
+    "diff": "a23cab01b20e33a0a8dee9c5d42f07da237335a7...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T16:55:13.213117",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "injected": [],
+  "files_read": [
+    "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+    "apps/web/pages/api/auth/two-factor/totp/setup.ts",
+    "apps/web/components/settings/EnableTwoFactorModal.tsx",
+    "apps/web/components/settings/DisableTwoFactorModal.tsx",
+    "packages/features/auth/lib/next-auth-options.ts",
+    "apps/web/pages/auth/login.tsx",
+    "apps/web/components/auth/TwoFactor.tsx",
+    "packages/ui/components/form/inputs/Input.tsx",
+    "apps/web/pages/api/auth/two-factor/totp/enable.ts",
+    "apps/web/playwright/login.2fa.e2e.ts",
+    "packages/trpc/server/createContext.ts",
+    "packages/trpc/server/middlewares/sessionMiddleware.ts"
+  ],
+  "searches": [
+    "grep backup_code|lost_access|missing_backup_codes|backup_codes_copied|\"go_back\"|\"copy\"|\"download\"|\"close\" in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600/apps/web/public/static/locales/en/common.json",
+    "grep backupCodes|twoFactorSecret in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600",
+    "grep EnableTwoFactorModal|DisableTwoFactorModal in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600/apps/web",
+    "grep type = \"button\"|type: \"button\"|type=\\{|defaultProps|type \\?\\? in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600/packages/ui/components/button/Button.tsx",
+    "grep twoFactorEnabled in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600/packages",
+    "grep noValidate in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600/packages/ui/components/form",
+    "grep createContextInner\\(|CreateInnerContextOptions in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600",
+    "grep handleSubmit|noValidate|<form in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600/packages/ui/components/form/inputs/Form.tsx",
+    "grep export const symmetricDecrypt|export const symmetricEncrypt in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca10600/packages/lib/crypto.ts"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 28845,
+  "diff_chars_injected": 28845,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 189702,
+  "cached_tokens": 131801,
+  "cache_write_tokens": 57893,
+  "completion_tokens": 14933,
+  "reasoning_tokens": null,
+  "duration_seconds": 145.74710220796987,
+  "cost_usd": 1.551452,
+  "cost_basis": "provider"
+}

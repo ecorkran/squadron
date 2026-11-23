@@ -1,0 +1,64 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The date-override early return happens before the busy-time check, so busy slots within an override are accepted."
+  ],
+  "F2": [
+   "KEEP",
+   "The `find` rejects a slot if any working-hours row for that weekday does not contain its start."
+  ],
+  "F3": [
+   "KEEP",
+   "The first same-date override that does not contain a slot causes rejection before later override rows are checked."
+  ],
+  "F4": [
+   "DROP",
+   "The duplication is a code-structure concern; the behavior defects it describes are covered by the other findings."
+  ],
+  "F5": [
+   "KEEP",
+   "The date comparison uses object identity and mixes server-local formatting with UTC, which can misclassify override days."
+  ],
+  "F6": [
+   "DROP",
+   "Slots are already constrained to fit working hours in `getTimeSlots`, so this redundant end check does not establish a behavior defect."
+  ],
+  "F7": [
+   "KEEP",
+   "The override\u2019s shifted minutes are applied to the unshifted invitee day, placing cross-midnight overrides on the wrong date."
+  ],
+  "F8": [
+   "KEEP",
+   "An omitted override timezone is passed to `.tz()` instead of falling back to the organizer timezone, allowing results to depend on the server\u2019s local zone."
+  ],
+  "F9": [
+   "DROP",
+   "Test redundancy and fixture mismatch are test-quality concerns, not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  6,
+  7
+ ],
+ "cost_usd": 0.007695550000000001
+}

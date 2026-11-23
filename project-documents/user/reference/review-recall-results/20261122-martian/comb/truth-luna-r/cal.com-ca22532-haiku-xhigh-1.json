@@ -1,0 +1,59 @@
+{
+ "case": "cal.com-ca22532",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The handler directly constructs the real repository, bypassing the feature-gated mock."
+  ],
+  "F2": [
+   "DROP",
+   "The cited change adds unused database writes and payload fields, but identifies no behavior failure."
+  ],
+  "F3": [
+   "KEEP",
+   "The ownership failure throws a plain error, which surfaces as an internal server error rather than an authorization response."
+  ],
+  "F4": [
+   "DROP",
+   "Missing tests are not a behavior defect."
+  ],
+  "F5": [
+   "KEEP",
+   "The timestamp is formatted with a fixed `en-US` locale instead of the user's locale."
+  ],
+  "F6": [
+   "KEEP",
+   "The unconditional `w-32` wrapper leaves an empty action column when the dropdown returns `null`."
+  ],
+  "F7": [
+   "KEEP",
+   "The relative `.env` path resolves from the caller's working directory, so running from the repository root targets the parent directory."
+  ],
+  "F8": [
+   "KEEP",
+   "The cleanup function exits successfully even when rate limiting or URL extraction causes the script to fail."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  2,
+  4,
+  5,
+  6,
+  7
+ ],
+ "cost_usd": 0.00384945
+}

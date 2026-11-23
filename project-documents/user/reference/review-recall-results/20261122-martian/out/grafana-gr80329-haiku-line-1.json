@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Time-based cleanup logs an `err` that is always nil at that point",
+      "description": "In the `cfg.MaxAge > 0` closure, `ids, err := r.fetchIDs(...)` is followed by `if err != nil { return 0, err }`. The next statement, `r.log.Error(\"Annotations to clean by time\", ..., \"err\", err)`, therefore always logs `err: <nil>`. The field carries no information and should be removed, or the log should report the error that was actually returned.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#CleanAnnotations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tag cleanup logs an `err` that is always nil at that point",
+      "description": "Same slip as above. After `if err != nil { return 0, err }`, the `r.log.Error(\"Tags to clean\", ..., \"err\", err)` call logs a nil error.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#CleanOrphanedAnnotationTags"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-batch progress logs are emitted at Error level and include full ID lists",
+      "description": "Each batch in both `CleanAnnotations` branches and in `CleanOrphanedAnnotationTags` calls `r.log.Error` twice. These are routine progress messages, not errors, so they will flood error logs on every cleanup cycle. The `\"ids\", ids` field can dump up to `AnnotationCleanupJobBatchSize` IDs per line, and the cycle now runs every minute because of the ticker change in `cleanup.go`. These should be Debug-level (or removed), and the ID list should not be logged.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#CleanAnnotations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`strings.Repeat` is used without a matching import in the shown hunk",
+      "description": "`deleteByIDs` calls `strings.Repeat`. The only import added in this diff is `sqlstore/migrator`. The `strings` package may already be imported elsewhere in the file, but I could not confirm that. If it is not, the file will not compile.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#deleteByIDs"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test case name refers to a limit the code does not use",
+      "description": "The case \"should not fail if batch size is larger than SQLITE_MAX_VARIABLE_NUMBER for SQLite >= 3.32.0\" describes the SQLite 3.32+ limit. The implementation in `deleteByIDs` uses a hard-coded `sqliteParameterLimit = 999` and never checks the SQLite version. The name should match the threshold the code actually enforces.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go#TestIntegrationAnnotationCleanUp"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unrelated change to the cleanup service ticker interval",
+      "description": "The ticker interval changes from 10 minutes to `time.Minute * 1`. This is not connected to the annotation fix, it is not explained in the diff, and it increases how often every cleanup job runs. `time.Minute * 1` can be written as `time.Minute`. If the change is intentional, it should be called out separately.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "pkg/services/cleanup/cleanup.go#Run"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Time-based cleanup logs an `err` that is always nil at that point",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#CleanAnnotations",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Tag cleanup logs an `err` that is always nil at that point",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#CleanOrphanedAnnotationTags",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Per-batch progress logs are emitted at Error level and include full ID lists",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#CleanAnnotations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`strings.Repeat` is used without a matching import in the shown hunk",
+      "location": "pkg/services/annotations/annotationsimpl/xorm_store.go#deleteByIDs",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Test case name refers to a limit the code does not use",
+      "location": "pkg/services/annotations/annotationsimpl/cleanup_test.go#TestIntegrationAnnotationCleanUp",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Unrelated change to the cleanup service ticker interval",
+      "location": "pkg/services/cleanup/cleanup.go#Run",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/grafana-gr80329",
+    "diff": "2eb6310b796e3ca92bf2ad7de13cdecacb7c3469...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:55:54.259404",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 15675,
+  "diff_chars_injected": 15675,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10723,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 8750,
+  "completion_tokens": 7507,
+  "reasoning_tokens": null,
+  "duration_seconds": 32.17450474994257,
+  "cost_usd": 0.0064648100000000005,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

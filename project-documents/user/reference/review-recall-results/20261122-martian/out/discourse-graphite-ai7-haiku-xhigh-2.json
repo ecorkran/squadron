@@ -1,0 +1,170 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Topic-meta link light-theme color inverted, leaving near-invisible contrast",
+      "description": "The light arm of `.topic-meta-data h5 a` changed from `scale-color($primary, $lightness: 30%)` to `scale-color($primary, $lightness: 70%)`, so the pair is now 70%/30%. Emphasized text elsewhere uses 30%/70% (for example `.username a` in `common/base/user.scss:119`). With the default colors, the light arm is now about #bdbdbd on white, roughly 1.9:1 contrast, down from about 5.9:1 for the original 30%. This link is bold, so the regression is legibility, not just style. Restore `color: dark-light-choose(scale-color($primary, $lightness: 30%), scale-color($secondary, $lightness: 70%));`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/desktop/topic-post.scss:291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mobile custom-message hint no longer matches desktop",
+      "description": "The light arm of `.custom-message-length` changed from 70% to 30%, so the hint text now renders dark instead of muted. The desktop rule at `app/assets/stylesheets/desktop/modal.scss:94` keeps the original 70%/30% pair. Restore the mobile line to `dark-light-choose(scale-color($primary, $lightness: 70%), scale-color($secondary, $lightness: 30%))` to match desktop.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/mobile/modal.scss:102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mobile topic-map heading loses contrast and breaks the mirror pair",
+      "description": "In `.topic-map h3`, the light arm changed from 20% to 50%, and the dark arm is 50%, so the two arms are no longer mirrored. Light-theme heading contrast drops from about 8.3:1 to about 3.2:1. The desktop equivalent at `app/assets/stylesheets/desktop/topic-post.scss:321` uses 20%/80%. Restore `dark-light-choose(scale-color($primary, $lightness: 20%), scale-color($secondary, $lightness: 80%))`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Group-member name is now the same color as the title",
+      "description": "In `.group-member-info`, `.name` changed its light arm from 30% to 50%. That makes it the same expression as `.title` on line 527, so the name no longer stands out, and its light contrast drops from about 5.9:1 to about 3.2:1. The base `.name` rule in `common/base/user.scss:124` uses 30%/70%. The same change appears in `app/assets/stylesheets/mobile/user.scss:497` (`.group-member-info .name`), and both should be restored to 30%/70%.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/desktop/user.scss:522"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The 50%/50% color pair is hand-copied across many stylesheets",
+      "description": "The expression `dark-light-choose(scale-color($primary, $lightness: 50%), scale-color($secondary, $lightness: 50%))` appears 57 times across 24 stylesheets under `app/assets/stylesheets` (grep count, which includes lines not touched by this diff). The errors in the findings above came from hand-typing these pairs. A shared variable or helper for muted text would make the pairs easier to audit. This is not required for this change.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "app/assets/stylesheets/desktop/topic-list.scss:39-42"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Topic-meta link light-theme color inverted, leaving near-invisible contrast",
+      "location": "app/assets/stylesheets/desktop/topic-post.scss:291",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mobile custom-message hint no longer matches desktop",
+      "location": "app/assets/stylesheets/mobile/modal.scss:102",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Mobile topic-map heading loses contrast and breaks the mirror pair",
+      "location": "app/assets/stylesheets/mobile/topic-post.scss:182",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Group-member name is now the same color as the title",
+      "location": "app/assets/stylesheets/desktop/user.scss:522",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "The 50%/50% color pair is hand-copied across many stylesheets",
+      "location": "app/assets/stylesheets/desktop/topic-list.scss:39-42",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7",
+    "diff": "1e6fee6c7bc61eedeba48dccd25886ba7e31cfe3...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:28:36.938709",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "injected": [],
+  "files_read": [
+    "app/assets/stylesheets/mobile/modal.scss",
+    "app/assets/stylesheets/desktop/topic-post.scss",
+    "app/assets/stylesheets/mobile/topic-post.scss",
+    "app/assets/stylesheets/desktop/user.scss",
+    "app/assets/stylesheets/mobile/user.scss",
+    "app/assets/stylesheets/common/base/user.scss",
+    "app/assets/stylesheets/desktop/modal.scss"
+  ],
+  "searches": [
+    "grep @function dark-light-choose|@function dark-light-diff in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7",
+    "grep foundation/variables in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7",
+    "grep ^\\s*\\$(primary|secondary)\\s*:|primary:\\s*['\"]?#|secondary:\\s*['\"]?# in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7/app",
+    "grep dark-light-choose\\(.*\\); ?\\} in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7/app/assets/stylesheets",
+    "grep dark-light-choose\\(scale-color\\(\\$primary, \\$lightness: 50%\\), scale-color\\(\\$secondary, \\$lightness: 50%\\)\\) in /private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/discourse-graphite-ai7/app/assets/stylesheets"
+  ],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 41052,
+  "diff_chars_injected": 41052,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 215973,
+  "cached_tokens": 164655,
+  "cache_write_tokens": 51308,
+  "completion_tokens": 33288,
+  "reasoning_tokens": null,
+  "duration_seconds": 143.88206829177216,
+  "cost_usd": 0.03060735,
+  "cost_basis": "provider"
+}

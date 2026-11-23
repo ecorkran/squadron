@@ -1,0 +1,73 @@
+{
+ "case": "grafana-gr106778",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5,
+  "F7": 6,
+  "F8": 7,
+  "F9": 8,
+  "F10": 9,
+  "F11": 10
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "List rows omit `rulerRule`, so the Delete and Pause menu items are gated off."
+  ],
+  "F2": [
+   "KEEP",
+   "The list row supplies only `promRule`, so clicking Silence sets state but never mounts the drawer."
+  ],
+  "F3": [
+   "KEEP",
+   "useAllAlertRuleAbilities` delegates to a hook that hardcodes `isFederated` to false, allowing federated rules to appear editable and removable."
+  ],
+  "F4": [
+   "DROP",
+   "The missing key causes a React warning, but the finding establishes no behavior defect."
+  ],
+  "F5": [
+   "KEEP",
+   "The new Grafana rule link omits `returnTo`, so returning from the viewer loses the current list filters."
+  ],
+  "F6": [
+   "KEEP",
+   "The Grafana Prom rule abilities restrict export and pause support to alerting rules, unlike the ruler path that also supports recording rules."
+  ],
+  "F7": [
+   "DROP",
+   "This is a performance concern without a named behavior failure."
+  ],
+  "F8": [
+   "DROP",
+   "The finding describes duplication and code structure, not a behavior defect."
+  ],
+  "F9": [
+   "DROP",
+   "Dead code is a cleanup concern, not a behavior defect."
+  ],
+  "F10": [
+   "DROP",
+   "The warning and null return occur only when callers violate the `RequireAtLeastOne` rule prop contract."
+  ],
+  "F11": [
+   "DROP",
+   "Missing coverage and assertions that could conceal regressions are test-quality concerns, not behavior defects."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.006267850000000001
+}

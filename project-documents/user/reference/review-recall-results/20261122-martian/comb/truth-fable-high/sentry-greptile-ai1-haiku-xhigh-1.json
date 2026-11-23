@@ -1,0 +1,48 @@
+{
+ "case": "sentry-greptile-ai1",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4,
+  "F6": 5
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "OptimizedCursorPaginator.get_item_key` calls `math.floor`/`math.ceil` on `AuditLogEntry.datetime` (a `DateTimeField`), so `build_cursor` raises `TypeError` on any non-empty optimized page."
+  ],
+  "F2": [
+   "KEEP",
+   "organization_context.member.has_global_access` runs on every request, and `member` is `None` when `request.user.id` is `None` (org-token/API-key callers) or the user has no membership, so the default path raises `AttributeError`."
+  ],
+  "F3": [
+   "KEEP",
+   "with `enable_advanced_features` and a client-supplied negative offset, `queryset[cursor.offset:stop]` is sliced with a negative start, which Django rejects (per its documented behaviour; Django source not in the sandbox), and `paginate` only catches `BadPaginationError`."
+  ],
+  "F4": [
+   "DROP",
+   "the clamp is there, but it only turns a malformed negative offset that previously crashed the slice into a valid first-page read; the finding names no wrong result, and the rest is a comment complaint and a revert request."
+  ],
+  "F5": [
+   "KEEP",
+   "value_from_cursor` returns the raw integer, which `build_queryset` binds against the `datetime` column, so any optimized request with a non-zero cursor value produces a bad timestamp-vs-integer comparison."
+  ],
+  "F6": [
+   "KEEP",
+   "the superuser/global-access branch passes the client's cursor offset to the paginator with no `>= 0` check, so a negative offset reaches the ORM slice and fails (same root defect as F3)."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5
+ ],
+ "cost_usd": 0.8540972
+}

@@ -1,0 +1,54 @@
+{
+ "case": "cal.com-ca8330",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 4,
+  "F5": 5,
+  "F6": 6,
+  "F7": 7
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "if (dateOverrideExist) return true` at slots.ts:133-135 returns before `busy.every(...)`, so busy times are never checked for a slot inside an override on the fixed-host and loose-host paths."
+  ],
+  "F2": [
+   "KEEP",
+   "workingHours.find` at slots.ts:138-151 rejects a slot if any same-weekday row does not contain it, so two rows on one weekday (one entry each from `getWorkingHours`) reject every slot that day."
+  ],
+  "F3": [
+   "KEEP",
+   "dateOverrides.find` at slots.ts:105-131 rejects a slot when any same-date override window excludes it, so two disjoint windows (stored as separate rows) reject each other's slots."
+  ],
+  "F4": [
+   "KEEP",
+   "slots.ts:114 compares two fresh dayjs objects with `===` (always false), and lines 109-111 format a local-mode dayjs against the UTC-mode `slotStartTime`, so the day match depends on server timezone."
+  ],
+  "F5": [
+   "KEEP",
+   "slots.ts:142 computes `end` from `slotStartTime`, so a slot that runs past a host's working-hours end passes the check (reachable when another host's override generates the slot)."
+  ],
+  "F6": [
+   "KEEP",
+   "lib/slots.ts:218-223 reduces the shifted override to `hour()*60+minute()` while the day filter uses the unshifted date, so a shift across midnight puts the window on the wrong day."
+  ],
+  "F7": [
+   "DROP",
+   "the only caller that passes `dateOverrides` always sets a string `timeZone`, and the selected-slots branch passes no overrides, so this is a type-design point with no failing path."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  4,
+  5,
+  6
+ ],
+ "cost_usd": 0.913658
+}

@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "NOTE",
+      "title": "`picocli.exit(...)` receiver is not visible in the diff",
+      "description": "The new guard calls `picocli.exit(CompatibilityResult.FEATURE_DISABLED)`. The file imports `picocli.CommandLine` but the diff does not show a `picocli` field, so this assumes one is inherited from `AbstractCommand` or the base class. The same call appears in `UpdateCompatibilityMetadata.java` at about line 48. Confirm that `picocli` is a field of a type that has `exit(int)` before merging.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java:48"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`RECREATE_UPGRADE_EXIT_CODE` changed from 4 to 3 without visible callers",
+      "description": "The recreate exit code moves from 4 to 3, and the new `FEATURE_DISABLED` takes 4. Any code or tests outside this diff that compare against the old value of 4 for the recreate case would now see a different exit code. The diff does not show those references, so check them for consistency.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:31-35"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`picocli.exit(...)` receiver is not visible in the diff",
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/cli/command/UpdateCompatibilityCheck.java:48",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`RECREATE_UPGRADE_EXIT_CODE` changed from 4 to 3 without visible callers",
+      "location": "quarkus/runtime/src/main/java/org/keycloak/quarkus/runtime/compatibility/CompatibilityResult.java:31-35",
+      "location_verified": true
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/keycloak-ke36882",
+    "diff": "bb4a51ac32539ad0d8b9f72bfd201ade75e95361...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:53:17.579056",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 15161,
+  "diff_chars_injected": 15161,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 2,
+    "in_fences": 0,
+    "in_section": 2,
+    "surviving": 2
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 10281,
+  "cached_tokens": 0,
+  "cache_write_tokens": 10279,
+  "completion_tokens": 3357,
+  "reasoning_tokens": null,
+  "duration_seconds": 15.524009917397052,
+  "cost_usd": 0.0046321,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

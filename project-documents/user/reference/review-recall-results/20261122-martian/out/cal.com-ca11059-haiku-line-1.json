@@ -1,0 +1,243 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Google Calendar stores the safeParse wrapper object as the credential key instead of the parsed tokens",
+      "description": "`parseRefreshTokenResponse` returns the `safeParse` result (`{ success, data }`), not the parsed data. The Google caller assigns that return value to `key` and writes `data: { key }` to `prisma.credential.update`. The stored credential becomes `{ success: true, data: {...} }`, so the next read of `credential.key` will not find `access_token`, `refresh_token`, or `expiry_date` at the top level. The previous code stored the output of `googleCredentialSchema.parse`, which was the parsed object. The other callers (Office365, Salesforce, Zoom) read `.success` and `.data` from the result, so the Google call site is the one that is wrong.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#refreshAccessToken"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`refreshOAuthTokens` returns a raw `Response` in sync mode, but callers read token fields from it",
+      "description": "When `CALCOM_CREDENTIAL_SYNC_ENDPOINT` is set, the function returns the `fetch` `Response` from the sync endpoint. The non-sync branch returns whatever `refreshFunction` returns, which is a token object for Google and HubSpot. Callers expect the token object in both cases. Google's `refreshAccessToken` reads `res?.data` and then `token.access_token` and `token.expiry_date`, but a `Response` has no `.data` property. HubSpot types the result as `HubspotToken`, which is also not a `Response`. Because the parameter is `() => any` and the return type is inferred as `any`, TypeScript will not catch this. The sync branch must return the same shape the callers expect, or each caller must branch on the mode.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Zoho Bigin passes `credentialId` where every other call site passes `credential.userId`",
+      "description": "The new `refreshOAuthTokens` call uses `credentialId` as the `userId` argument. The Google, HubSpot, Lark, Office365, Zoho CRM, Zoom, and Webex call sites all pass `credential.userId`. In sync mode this sends a credential ID to the sync endpoint as `calcomUserId`, which identifies the wrong user. It also means the `userId` truthiness check in `refreshOAuthTokens` does not reflect whether the credential belongs to a user.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts#refreshAccessToken"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Office365 video adapter uses the Microsoft Teams app slug",
+      "description": "The `refreshOAuthTokens` call passes `\"msteams\"` as `appSlug`. This file belongs to `office365video`, and the sync endpoint uses `appSlug` to choose which credential to refresh. Refreshes for this app would be sent under the wrong slug.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/office365video/lib/VideoApiAdapter.ts#refreshAccessToken"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Computed-key schema does not express \"any numeric property\"",
+      "description": "The keys `[z.string().toString()]` and `[z.string().optional().toString()]` are computed from the `toString()` of a Zod schema object. That produces a fixed string such as `\"[object Object]\"` or a Zod debug string, not a wildcard. The schema therefore does not validate \"any property with a number is the expiry\" as the comment says, and the `z.unknown()` entry does not allow other properties. The schema should use `.passthrough()` or `z.record`/`.catchall(...)`, with `expiry` validated explicitly.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts#minimumTokenResponseSchema"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Missing `refresh_token` is replaced with the literal string `\"refresh_token\"`",
+      "description": "When the response has no `refresh_token`, the function sets it to the placeholder `\"refresh_token\"` and returns it. Callers persist the returned data as the credential key, so the stored refresh token becomes a meaningless string. The next refresh will fail with an unclear error, and the original refresh token is lost. The Salesforce caller works around this by restoring `credentialKey.refresh_token`, but the other callers do not.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts#parseRefreshTokenResponse"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Salesforce checks `response.statusText !== \"OK\"` instead of `response.ok`",
+      "description": "The status check compares the free-text reason phrase, not the status code. HTTP/2 responses commonly have an empty `statusText`, so a successful refresh would throw. Error responses with a reason phrase other than \"OK\" are also handled inconsistently. `response.ok` (or the numeric status) is the correct check. The following `if (!accessTokenParsed.success)` branch is also unreachable, because `parseRefreshTokenResponse` already throws on failure.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`APP_CREDENTIAL_SHARING_ENABLED` is a string or `undefined`, not a boolean",
+      "description": "The constant is `process.env.CALCOM_WEBHOOK_SECRET && process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY`. Its type is `string | undefined`, and when both variables are set it holds the encryption key itself. The name and the boolean-style checks (`if (!APP_CREDENTIAL_SHARING_ENABLED)`) suggest a boolean. Wrapping it in `Boolean(...)` or `!!` would make the contract explicit.",
+      "file_ref": null,
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "location": "packages/lib/constants.ts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`.env.example` gives a key-generation command that does not match the documented key size",
+      "description": "The comment says `CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY` \"must be 32 bytes for AES256\", but the suggested command is `openssl rand -base64 24`, which produces 24 random bytes. The header comment in the same block uses `openssl rand -base64 32`. One of the two is wrong; the 32-byte requirement implies `-base64 32`.",
+      "file_ref": null,
+      "category": "documentation-drift",
+      "raw_category": null,
+      "location": ".env.example"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The webhook secret comparison is plain `!==` and treats a missing header and an unset secret as equal",
+      "description": "`req.headers[...] !== process.env.CALCOM_WEBHOOK_SECRET` evaluates to `false` when both sides are `undefined`. The `APP_CREDENTIAL_SHARING_ENABLED` gate currently prevents that case, but the handler does not check that the secret is set. A direct comparison of secrets is also not constant-time. An explicit \"secret must be configured\" check and a timing-safe comparison would remove both risks.",
+      "file_ref": null,
+      "category": "security-hygiene",
+      "raw_category": null,
+      "location": "apps/web/pages/api/webhook/app-credential.ts#handler"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Google Calendar stores the safeParse wrapper object as the credential key instead of the parsed tokens",
+      "location": "packages/app-store/googlecalendar/lib/CalendarService.ts#refreshAccessToken",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`refreshOAuthTokens` returns a raw `Response` in sync mode, but callers read token fields from it",
+      "location": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Zoho Bigin passes `credentialId` where every other call site passes `credential.userId`",
+      "location": "packages/app-store/zoho-bigin/lib/CalendarService.ts#refreshAccessToken",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Office365 video adapter uses the Microsoft Teams app slug",
+      "location": "packages/app-store/office365video/lib/VideoApiAdapter.ts#refreshAccessToken",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "Computed-key schema does not express \"any numeric property\"",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts#minimumTokenResponseSchema",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Missing `refresh_token` is replaced with the literal string `\"refresh_token\"`",
+      "location": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts#parseRefreshTokenResponse",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Salesforce checks `response.statusText !== \"OK\"` instead of `response.ok`",
+      "location": "packages/app-store/salesforce/lib/CalendarService.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "type-contract-debt",
+      "raw_category": null,
+      "summary": "`APP_CREDENTIAL_SHARING_ENABLED` is a string or `undefined`, not a boolean",
+      "location": "packages/lib/constants.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "documentation-drift",
+      "raw_category": null,
+      "summary": "`.env.example` gives a key-generation command that does not match the documented key size",
+      "location": ".env.example",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "security-hygiene",
+      "raw_category": null,
+      "summary": "The webhook secret comparison is plain `!==` and treats a missing header and an unset secret as equal",
+      "location": "apps/web/pages/api/webhook/app-credential.ts#handler",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/cal.com-ca11059",
+    "diff": "9a840be7da9c94c1ca453cf0c63bebebe835ab53...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:57:50.259100",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 45943,
+  "diff_chars_injected": 45943,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 23727,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 21754,
+  "completion_tokens": 8668,
+  "reasoning_tokens": null,
+  "duration_seconds": 38.55838641617447,
+  "cost_usd": 0.010943910000000001,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}

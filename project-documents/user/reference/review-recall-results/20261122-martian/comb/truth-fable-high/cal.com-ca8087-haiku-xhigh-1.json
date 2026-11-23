@@ -1,0 +1,25 @@
+{
+ "case": "cal.com-ca8087",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the `forEach` callbacks in both `reschedule.ts` files and in `bookings.tsx` are now `async` and await `getCalendar`, so a failure becomes an unhandled rejection that bypasses the `try/catch` and no longer fails the mutation (that the callbacks were synchronous before rests on the finding's account, since I could not view the diff)."
+  ],
+  "F2": [
+   "KEEP",
+   "the recurring branch's `forEach(async ...)` pushes to `apiDeletes` only after awaits, and nothing awaits before the `Promise.all` snapshot at line 652 on the non-paid path, so the deletes are never awaited; the race predates the change, but the change edits this callback (line 461, per the finding)."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.2954345
+}

@@ -1,0 +1,25 @@
+{
+ "case": "grafana-gr103633",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "the denial key at cache.go:30-32 omits identity type and is checked at service.go:116-121 before type dispatch, so a cached `anonymous:0` denial also denies `render:0` for the same resource."
+  ],
+  "F2": [
+   "KEEP",
+   "the key joins name and folder with an unescaped `_` while UIDs may contain `_`, so distinct name/folder pairs collide and one cached denial falsely denies another resource for 30s."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1
+ ],
+ "cost_usd": 0.3619797
+}

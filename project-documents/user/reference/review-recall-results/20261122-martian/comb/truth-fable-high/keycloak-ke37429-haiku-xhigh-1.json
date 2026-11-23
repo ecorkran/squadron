@@ -1,0 +1,31 @@
+{
+ "case": "keycloak-ke37429",
+ "reviewer": "haiku-xhigh",
+ "comb": "fable-high",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "both Lithuanian bundles (`account/messages_lt.properties:101`, `login/messages_lt.properties:71`) now carry the Italian string `Installa una delle seguenti applicazioni sul tuo cellulare:` between Lithuanian steps, so users see wrong-language text."
+  ],
+  "F2": [
+   "KEEP",
+   "account/messages_zh_CN.properties:112` holds Traditional Chinese (`\u624b\u6a5f`, `\u5b89\u88dd`, `\u61c9\u7528\u7a0b\u5f0f`) while the adjacent `totpStep2` and the zh_CN login string are Simplified, so the changed line shows the wrong script for the locale."
+  ],
+  "F3": [
+   "KEEP",
+   "ANCHOR_PATTERN` at `VerifyMessageProperties.java:145` is `</?a[^>]*>`, which matches any tag starting with \"a\" (e.g. `<abbr>`, `<audio>`), and `santizeAnchors` strips such a tag before the policy check when English has the identical one."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2
+ ],
+ "cost_usd": 0.24266530000000003
+}

@@ -1,0 +1,42 @@
+{
+ "case": "discourse-graphite-ai7",
+ "reviewer": "haiku-xhigh",
+ "comb": "luna-r",
+ "refs": {
+  "F1": 0,
+  "F2": 1,
+  "F3": 2,
+  "F4": 3,
+  "F5": 4
+ },
+ "decisions": {
+  "F1": [
+   "KEEP",
+   "The topic-meta link uses 70% lightness on light themes and 30% on dark themes, reversing the stated pairing."
+  ],
+  "F2": [
+   "KEEP",
+   "Mobile topic-map h3 and h4 both use 50% in both themes, losing their color distinction and changing h3 from the stated desktop pairing."
+  ],
+  "F3": [
+   "KEEP",
+   "The mobile custom-message hint uses the inverse of the desktop 70%/30% light/dark pairing."
+  ],
+  "F4": [
+   "KEEP",
+   "The group-member name uses 50% in both themes, matching the title rather than the stated 30%/70% pairing, in desktop and mobile."
+  ],
+  "F5": [
+   "DROP",
+   "This proposes a helper rather than identifying a behavior defect, and the cited variables file is not among the touched files."
+  ]
+ },
+ "unjudged": [],
+ "kept": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "cost_usd": 0.00252269
+}

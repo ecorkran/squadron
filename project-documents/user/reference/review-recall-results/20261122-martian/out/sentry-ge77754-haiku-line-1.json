@@ -1,0 +1,135 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`queued` default is evaluated once at import, so every AssignmentSource shares one timestamp",
+      "description": "The field `queued: datetime = timezone.now()` calls `timezone.now()` when the class body is executed, not per instance. Every `AssignmentSource` created in the process will carry the module-load time. Use `dataclasses.field(default_factory=timezone.now)` so each instance gets its own timestamp.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/services/assignment_source.py:18"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`to_dict()` puts a datetime into task kwargs that may not serialize",
+      "description": "`AssignmentSource.to_dict()` uses `dataclasses.asdict`, which keeps `queued` as a `datetime`. That dict is passed as `assignment_source_dict` in `apply_async(kwargs=...)`. If the Celery serializer is JSON, which is common, enqueueing will fail. Either serialize `queued` to an ISO string in `to_dict()` and parse it back in `from_dict()`, or leave it out of the payload.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/sentry/integrations/utils/sync.py#sync_group_assignee_outbound"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test name says \"empty_array\" but the input is an empty dict",
+      "description": "The test passes `data: dict[str, Any] = {}`, which is a dict, not an array. Rename it to something like `test_from_dict_empty_dict` so the name matches the input.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/sentry/integrations/services/test_assignment_source.py#TestAssignmentSource.test_from_dict_empty_array"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Typo in test name: \"inalid\"",
+      "description": "The method name `test_from_dict_inalid_data` should read `test_from_dict_invalid_data`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "tests/sentry/integrations/services/test_assignment_source.py#TestAssignmentSource.test_from_dict_inalid_data"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`queued` default is evaluated once at import, so every AssignmentSource shares one timestamp",
+      "location": "src/sentry/integrations/services/assignment_source.py:18",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`to_dict()` puts a datetime into task kwargs that may not serialize",
+      "location": "src/sentry/integrations/utils/sync.py#sync_group_assignee_outbound",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Test name says \"empty_array\" but the input is an empty dict",
+      "location": "tests/sentry/integrations/services/test_assignment_source.py#TestAssignmentSource.test_from_dict_empty_array",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Typo in test name: \"inalid\"",
+      "location": "tests/sentry/integrations/services/test_assignment_source.py#TestAssignmentSource.test_from_dict_inalid_data",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/ecafa5d8-4a71-45e8-a8ae-bd687b2d65c1/scratchpad/martian-work/sandbox/sentry-ge77754",
+    "diff": "06c700a98875e34e9df100fea94d322611e118d0...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-22T17:54:38.757756",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [],
+  "tool_calls_made": 0,
+  "injected": [],
+  "files_read": [],
+  "searches": [],
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "custom",
+  "setting_sources": "none",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 17215,
+  "diff_chars_injected": 17215,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.37",
+  "finding_scan": {
+    "total": 4,
+    "in_fences": 0,
+    "in_section": 4,
+    "surviving": 4
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 1,
+  "prompt_tokens": 9566,
+  "cached_tokens": 1971,
+  "cache_write_tokens": 7593,
+  "completion_tokens": 2970,
+  "reasoning_tokens": null,
+  "duration_seconds": 13.716886875219643,
+  "cost_usd": 0.00384921,
+  "cost_basis": "provider",
+  "tools_suppressed_reason": "run-suppressed"
+}
